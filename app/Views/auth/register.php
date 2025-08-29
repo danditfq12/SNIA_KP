@@ -12,42 +12,66 @@
   <div class="card shadow-lg p-4" style="width: 400px;">
     <h3 class="text-center mb-3">Register</h3>
 
-    <!-- Flash message -->
-    <?php if(session()->getFlashdata('error')): ?>
-      <div class="alert alert-danger">
-        <?= session()->getFlashdata('error') ?>
-      </div>
+    <!-- Flash messages -->
+    <?php if (session()->getFlashdata('success')): ?>
+      <div class="alert alert-success"><?= session()->getFlashdata('success') ?></div>
+    <?php endif; ?>
+    <?php if (session()->getFlashdata('error')): ?>
+      <div class="alert alert-danger"><?= session()->getFlashdata('error') ?></div>
     <?php endif; ?>
 
-    <form action="<?= site_url('auth/register') ?>" method="post">
+    <form action="<?= site_url('auth/register') ?>" method="post" novalidate>
       <?= csrf_field() ?>
 
       <div class="mb-3">
         <label class="form-label">Nama Lengkap</label>
-        <input type="text" name="nama_lengkap" class="form-control" placeholder="Nama lengkap" required>
+        <input
+          type="text"
+          name="nama_lengkap"
+          class="form-control"
+          placeholder="Nama lengkap"
+          value="<?= old('nama_lengkap') ?>"
+          required>
       </div>
 
       <div class="mb-3">
         <label class="form-label">Email</label>
-        <input type="email" name="email" class="form-control" placeholder="Masukkan email" required>
+        <input
+          type="email"
+          name="email"
+          class="form-control"
+          placeholder="Masukkan email"
+          value="<?= old('email') ?>"
+          required>
       </div>
 
       <div class="mb-3">
         <label class="form-label">Password</label>
-        <input type="password" name="password" class="form-control" placeholder="Minimal 6 karakter" required>
+        <input
+          type="password"
+          name="password"
+          class="form-control"
+          placeholder="Minimal 6 karakter"
+          required>
       </div>
 
       <div class="mb-3">
         <label class="form-label">Konfirmasi Password</label>
-        <input type="password" name="password_confirm" class="form-control" placeholder="Ulangi password" required>
+        <!-- Ganti ke name="password2" agar cocok dengan rules controller -->
+        <input
+          type="password"
+          name="password2"
+          class="form-control"
+          placeholder="Ulangi password"
+          required>
       </div>
 
       <div class="mb-3">
         <label class="form-label">Daftar Sebagai</label>
         <select name="role" class="form-select" required>
           <option value="">-- Pilih Role --</option>
-          <option value="presenter">Presenter</option>
-          <option value="audience">Audience</option>
+          <option value="presenter" <?= old('role')==='presenter'?'selected':''; ?>>Presenter</option>
+          <option value="audience"  <?= old('role')==='audience'?'selected':''; ?>>Audience</option>
         </select>
       </div>
 

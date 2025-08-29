@@ -4,7 +4,7 @@ namespace App\Controllers\Auth;
 
 use App\Controllers\BaseController;
 use App\Models\UserModel;
-use CodeIgniter\I18n\Time;
+use App\Models\PendingRegistrationModel;
 
 class Register extends BaseController
 {
@@ -15,43 +15,64 @@ class Register extends BaseController
 
     public function store()
     {
+        $rules = [
+            'nama_lengkap' => 'required|min_length[3]',
+            'email'        => 'required|valid_email',
+            'password'     => 'required|min_length[6]',
+            'password2'    => 'required|matches[password]',
+            'role'         => 'permit_empty|in_list[presenter,audience]'
+        ];
+        if (! $this->validate($rules)) {
+            return redirect()->back()->withInput()->with('error', $this->validator->listErrors());
+        }
+
+        $email = $this->request->getPost('email');
+
+        // 1) Jika email sudah aktif di USERS -> tolak
         $userModel = new UserModel();
+        if ($userModel->where('email', $email)->first()) {
+            return redirect()->back()->withInput()->with('error', 'Email sudah terdaftar & aktif. Silakan login.');
+        }
 
-        // ambil data dari form
-        $nama     = $this->request->getPost('nama_lengkap');
-        $email    = $this->request->getPost('email');
-        $password = $this->request->getPost('password');
-        $role     = $this->request->getPost('role'); // default audience/presenter
+        // 2) Generate OTP & expiry
+        $otp     = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+        $expired = date('Y-m-d H:i:s', strtotime('+10 minutes'));
 
-        // generate token verifikasi
-        $token = bin2hex(random_bytes(32));
+        // 3) Upsert ke PENDING (kalau sudah ada, update saja)
+        $pending = new PendingRegistrationModel();
+        $payload = [
+            'nama_lengkap'  => $this->request->getPost('nama_lengkap'),
+            'email'         => $email,
+            'password_hash' => password_hash($this->request->getPost('password'), PASSWORD_BCRYPT),
+            'role'          => $this->request->getPost('role') ?: 'audience',
+            'otp_code'      => $otp,
+            'otp_expired'   => $expired,
+            'updated_at'    => date('Y-m-d H:i:s'),
+        ];
 
-        // simpan user
-        $userModel->save([
-            'nama_lengkap'      => $nama,
-            'email'             => $email,
-            'password'          => password_hash($password, PASSWORD_DEFAULT),
-            'role'              => $role ?? 'audience',
-            'status'            => 'nonaktif',
-            'verification_token'=> $token,
-            'created_at'        => Time::now(),
-        ]);
+        $existing = $pending->where('email', $email)->first();
+        if ($existing) {
+            $pending->update($existing['id'], $payload);
+        } else {
+            $pending->insert($payload);
+        }
 
-        // kirim email verifikasi
-        $emailService = \Config\Services::email();
-        $emailService->setTo($email);
-        $emailService->setFrom('no-reply@snia.com', 'SNIA System');
-        $emailService->setSubject('Verifikasi Email Akun SNIA');
-        $link = base_url("auth/verify/{$token}");
-        $message = "
-            <h3>Halo, $nama</h3>
-            <p>Terima kasih sudah mendaftar. Klik link di bawah untuk verifikasi akun:</p>
-            <p><a href='$link'>$link</a></p>
-            <p>Jika tidak merasa mendaftar, abaikan email ini.</p>
-        ";
-        $emailService->setMessage($message);
-        $emailService->send();
+        // 4) Kirim OTP via email
+        $mail = \Config\Services::email();
+        $mail->setFrom(config('Email')->fromEmail, config('Email')->fromName);
+        $mail->setTo($email);
+        $mail->setSubject('Kode OTP Verifikasi - SNIA');
+        $mail->setMessage("
+            <p>Halo {$payload['nama_lengkap']},</p>
+            <p>Kode OTP verifikasi akun Anda:</p>
+            <h2 style='letter-spacing:6px;'>{$otp}</h2>
+            <p>Kode berlaku 10 menit.</p>
+        ");
+        $mail->send();
 
-        return redirect()->to('/auth/login')->with('success', 'Registrasi berhasil. Silakan cek email untuk verifikasi.');
+        // 5) Simpan email ke session biasa + redirect ke /auth/verify?email=...
+        session()->set('email_verifikasi', $email);
+        return redirect()->to('/auth/verify?email=' . urlencode($email))
+                         ->with('success', 'Kode OTP telah dikirim ke email Anda.');
     }
 }

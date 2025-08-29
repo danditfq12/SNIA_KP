@@ -17,7 +17,6 @@ $routes->get('/', 'Home::index');
 $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], function ($routes) {
     $routes->get('login', 'Login::index');
     $routes->post('login', 'Login::login');
-
     $routes->get('logout', 'Logout::index');
 
     $routes->get('register', 'Register::index');
