@@ -1,0 +1,66 @@
+ERROR - 2025-08-29 14:33:43 --> Error connecting to the database: ErrorException: pg_connect(): Unable to connect to PostgreSQL server: connection to server at "localhost" (::1), port 5432 failed: FATAL:  password authentication failed for user "root" in C:\laragon\www\SNIA KP\system\Database\Postgre\Connection.php:78
+Stack trace:
+#0 [internal function]: CodeIgniter\Debug\Exceptions->errorHandler(2, 'pg_connect(): U...', 'C:\\laragon\\www\\...', 78)
+#1 C:\laragon\www\SNIA KP\system\Database\Postgre\Connection.php(78): pg_connect('host=localhost ...')
+#2 C:\laragon\www\SNIA KP\system\Database\BaseConnection.php(419): CodeIgniter\Database\Postgre\Connection->connect(false)
+#3 C:\laragon\www\SNIA KP\system\Database\BaseConnection.php(614): CodeIgniter\Database\BaseConnection->initialize()
+#4 C:\laragon\www\SNIA KP\system\Database\BaseConnection.php(1525): CodeIgniter\Database\BaseConnection->query('SELECT "table_n...')
+#5 C:\laragon\www\SNIA KP\system\Database\BaseConnection.php(1545): CodeIgniter\Database\BaseConnection->listTables()
+#6 C:\laragon\www\SNIA KP\system\Database\MigrationRunner.php(768): CodeIgniter\Database\BaseConnection->tableExists('migrations')
+#7 C:\laragon\www\SNIA KP\system\Database\MigrationRunner.php(162): CodeIgniter\Database\MigrationRunner->ensureTable()
+#8 C:\laragon\www\SNIA KP\system\Commands\Database\Migrate.php(85): CodeIgniter\Database\MigrationRunner->latest(NULL)
+#9 C:\laragon\www\SNIA KP\system\CLI\Commands.php(74): CodeIgniter\Commands\Database\Migrate->run(Array)
+#10 C:\laragon\www\SNIA KP\system\CLI\Console.php(47): CodeIgniter\CLI\Commands->run('migrate', Array)
+#11 C:\laragon\www\SNIA KP\system\Boot.php(388): CodeIgniter\CLI\Console->run()
+#12 C:\laragon\www\SNIA KP\system\Boot.php(133): CodeIgniter\Boot::runCommand(Object(CodeIgniter\CLI\Console))
+#13 C:\laragon\www\SNIA KP\spark(87): CodeIgniter\Boot::bootSpark(Object(Config\Paths))
+#14 {main}
+ERROR - 2025-08-29 14:34:53 --> ErrorException: pg_query(): Query failed: ERROR:  invalid input syntax for type timestamp: "CURRENT_TIMESTAMP"
+LINE 10:  "created_at" TIMESTAMP DEFAULT 'CURRENT_TIMESTAMP' NOT NULL...
+                                         ^ in C:\laragon\www\SNIA KP\system\Database\Postgre\Connection.php:206
+Stack trace:
+#0 [internal function]: CodeIgniter\Debug\Exceptions->errorHandler(2, 'pg_query(): Que...', 'C:\\laragon\\www\\...', 206)
+#1 C:\laragon\www\SNIA KP\system\Database\Postgre\Connection.php(206): pg_query(Object(PgSql\Connection), 'CREATE TABLE "u...')
+#2 C:\laragon\www\SNIA KP\system\Database\BaseConnection.php(729): CodeIgniter\Database\Postgre\Connection->execute('CREATE TABLE "u...')
+#3 C:\laragon\www\SNIA KP\system\Database\BaseConnection.php(646): CodeIgniter\Database\BaseConnection->simpleQuery('CREATE TABLE "u...')
+#4 C:\laragon\www\SNIA KP\system\Database\Forge.php(570): CodeIgniter\Database\BaseConnection->query('CREATE TABLE "u...')
+#5 C:\laragon\www\SNIA KP\app\Database\Migrations\2025-08-29-140337_CreateUsersTable.php(24): CodeIgniter\Database\Forge->createTable('users')
+#6 C:\laragon\www\SNIA KP\system\Database\MigrationRunner.php(876): App\Database\Migrations\CreateUsersTable->up()
+#7 C:\laragon\www\SNIA KP\system\Database\MigrationRunner.php(182): CodeIgniter\Database\MigrationRunner->migrate('up', Object(stdClass))
+#8 C:\laragon\www\SNIA KP\system\Commands\Database\Migrate.php(85): CodeIgniter\Database\MigrationRunner->latest(NULL)
+#9 C:\laragon\www\SNIA KP\system\CLI\Commands.php(74): CodeIgniter\Commands\Database\Migrate->run(Array)
+#10 C:\laragon\www\SNIA KP\system\CLI\Console.php(47): CodeIgniter\CLI\Commands->run('migrate', Array)
+#11 C:\laragon\www\SNIA KP\system\Boot.php(388): CodeIgniter\CLI\Console->run()
+#12 C:\laragon\www\SNIA KP\system\Boot.php(133): CodeIgniter\Boot::runCommand(Object(CodeIgniter\CLI\Console))
+#13 C:\laragon\www\SNIA KP\spark(87): CodeIgniter\Boot::bootSpark(Object(Config\Paths))
+#14 {main}
+ERROR - 2025-08-29 14:38:00 --> ErrorException: pg_query(): Query failed: ERROR:  invalid input syntax for type timestamp: "CURRENT_TIMESTAMP"
+LINE 8:  "tanggal_upload" TIMESTAMP DEFAULT 'CURRENT_TIMESTAMP' NOT ...
+                                            ^ in C:\laragon\www\SNIA KP\system\Database\Postgre\Connection.php:206
+Stack trace:
+#0 [internal function]: CodeIgniter\Debug\Exceptions->errorHandler(2, 'pg_query(): Que...', 'C:\\laragon\\www\\...', 206)
+#1 C:\laragon\www\SNIA KP\system\Database\Postgre\Connection.php(206): pg_query(Object(PgSql\Connection), 'CREATE TABLE "a...')
+#2 C:\laragon\www\SNIA KP\system\Database\BaseConnection.php(729): CodeIgniter\Database\Postgre\Connection->execute('CREATE TABLE "a...')
+#3 C:\laragon\www\SNIA KP\system\Database\BaseConnection.php(646): CodeIgniter\Database\BaseConnection->simpleQuery('CREATE TABLE "a...')
+#4 C:\laragon\www\SNIA KP\system\Database\Forge.php(570): CodeIgniter\Database\BaseConnection->query('CREATE TABLE "a...')
+#5 C:\laragon\www\SNIA KP\app\Database\Migrations\2025-08-29-140629_CreateAbstrakTable.php(22): CodeIgniter\Database\Forge->createTable('abstrak')
+#6 C:\laragon\www\SNIA KP\system\Database\MigrationRunner.php(876): App\Database\Migrations\CreateAbstrakTable->up()
+#7 C:\laragon\www\SNIA KP\system\Database\MigrationRunner.php(182): CodeIgniter\Database\MigrationRunner->migrate('up', Object(stdClass))
+#8 C:\laragon\www\SNIA KP\system\Commands\Database\Migrate.php(85): CodeIgniter\Database\MigrationRunner->latest(NULL)
+#9 C:\laragon\www\SNIA KP\system\CLI\Commands.php(74): CodeIgniter\Commands\Database\Migrate->run(Array)
+#10 C:\laragon\www\SNIA KP\system\CLI\Console.php(47): CodeIgniter\CLI\Commands->run('migrate', Array)
+#11 C:\laragon\www\SNIA KP\system\Boot.php(388): CodeIgniter\CLI\Console->run()
+#12 C:\laragon\www\SNIA KP\system\Boot.php(133): CodeIgniter\Boot::runCommand(Object(CodeIgniter\CLI\Console))
+#13 C:\laragon\www\SNIA KP\spark(87): CodeIgniter\Boot::bootSpark(Object(Config\Paths))
+#14 {main}
+CRITICAL - 2025-08-29 16:38:35 --> CodeIgniter\Filters\Exceptions\FilterException: "auth" filter must have a matching alias defined.
+[Method: GET, Route: dashboard]
+in SYSTEMPATH\Filters\Filters.php on line 590.
+ 1 SYSTEMPATH\Filters\Filters.php(590): CodeIgniter\Filters\Exceptions\FilterException::forNoAlias('auth')
+ 2 SYSTEMPATH\Filters\Filters.php(641): CodeIgniter\Filters\Filters->enableFilter('auth', 'before')
+ 3 SYSTEMPATH\CodeIgniter.php(467): CodeIgniter\Filters\Filters->enableFilters([...], 'before')
+ 4 SYSTEMPATH\CodeIgniter.php(354): CodeIgniter\CodeIgniter->handleRequest(null, Object(Config\Cache), false)
+ 5 SYSTEMPATH\Boot.php(363): CodeIgniter\CodeIgniter->run()
+ 6 SYSTEMPATH\Boot.php(68): CodeIgniter\Boot::runCodeIgniter(Object(CodeIgniter\CodeIgniter))
+ 7 FCPATH\index.php(59): CodeIgniter\Boot::bootWeb(Object(Config\Paths))
+ 8 SYSTEMPATH\rewrite.php(44): require_once('C:\\laragon\\www\\SNIA KP\\public\\index.php')
