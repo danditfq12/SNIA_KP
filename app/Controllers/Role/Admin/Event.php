@@ -101,10 +101,15 @@ class Event extends BaseController
             'is_active' => true
         ];
 
-        if ($this->eventModel->save($data)) {
-            return redirect()->to('admin/events')->with('success', 'Event berhasil dibuat!');
-        } else {
-            return redirect()->back()->withInput()->with('error', 'Gagal membuat event.');
+        try {
+            if ($this->eventModel->save($data)) {
+                return redirect()->to('admin/event')->with('success', 'Event berhasil dibuat!');
+            } else {
+                $errors = $this->eventModel->errors();
+                return redirect()->back()->withInput()->with('error', 'Gagal membuat event: ' . implode(', ', $errors));
+            }
+        } catch (\Exception $e) {
+            return redirect()->back()->withInput()->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
@@ -113,7 +118,7 @@ class Event extends BaseController
         $event = $this->eventModel->find($id);
         
         if (!$event) {
-            return redirect()->to('admin/events')->with('error', 'Event tidak ditemukan.');
+            return redirect()->to('admin/event')->with('error', 'Event tidak ditemukan.');
         }
 
         return $this->response->setJSON($event);
@@ -124,7 +129,7 @@ class Event extends BaseController
         $event = $this->eventModel->find($id);
         
         if (!$event) {
-            return redirect()->to('admin/events')->with('error', 'Event tidak ditemukan.');
+            return redirect()->to('admin/event')->with('error', 'Event tidak ditemukan.');
         }
 
         $validation = \Config\Services::validation();
@@ -187,7 +192,7 @@ class Event extends BaseController
         ];
 
         if ($this->eventModel->update($id, $data)) {
-            return redirect()->to('admin/events')->with('success', 'Event berhasil diupdate!');
+            return redirect()->to('admin/event')->with('success', 'Event berhasil diupdate!');
         } else {
             return redirect()->back()->withInput()->with('error', 'Gagal mengupdate event.');
         }
@@ -198,7 +203,7 @@ class Event extends BaseController
         $event = $this->eventModel->find($id);
         
         if (!$event) {
-            return redirect()->to('admin/events')->with('error', 'Event tidak ditemukan.');
+            return redirect()->to('admin/event')->with('error', 'Event tidak ditemukan.');
         }
 
         // Check if event has registrations or abstracts
@@ -210,7 +215,7 @@ class Event extends BaseController
         }
 
         if ($this->eventModel->delete($id)) {
-            return redirect()->to('admin/events')->with('success', 'Event berhasil dihapus!');
+            return redirect()->to('admin/event')->with('success', 'Event berhasil dihapus!');
         } else {
             return redirect()->back()->with('error', 'Gagal menghapus event.');
         }
@@ -221,7 +226,7 @@ class Event extends BaseController
         $event = $this->eventModel->find($id);
         
         if (!$event) {
-            return redirect()->to('admin/events')->with('error', 'Event tidak ditemukan.');
+            return redirect()->to('admin/event')->with('error', 'Event tidak ditemukan.');
         }
 
         // Get event statistics
@@ -370,8 +375,9 @@ class Event extends BaseController
             $month = date('Y-m', strtotime("-$i months"));
             $monthName = date('M Y', strtotime($month . '-01'));
             
+            // Fixed for PostgreSQL
             $count = $this->eventModel
-                         ->where('DATE_FORMAT(event_date, "%Y-%m")', $month)
+                         ->where("TO_CHAR(event_date, 'YYYY-MM')", $month)
                          ->countAllResults();
             
             $data[] = [
@@ -393,10 +399,11 @@ class Event extends BaseController
 
     private function getRevenueByEvent()
     {
+        // Fixed for PostgreSQL - use verified_at instead of status
         return $this->pembayaranModel
                    ->select('e.title, SUM(p.jumlah) as total_revenue')
                    ->join('events e', 'e.id = p.event_id')
-                   ->where('p.status', 'verified')
+                   ->where('p.verified_at IS NOT NULL')
                    ->groupBy('e.id, e.title')
                    ->orderBy('total_revenue', 'DESC')
                    ->limit(10)

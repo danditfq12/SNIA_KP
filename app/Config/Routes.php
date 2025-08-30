@@ -57,6 +57,19 @@ $routes->group('admin', [
     $routes->get('reviewer', 'Reviewer::index');
     $routes->post('reviewer/store', 'Reviewer::store');
 
+    // Event Management
+    $routes->get('event', 'Event::index');
+    $routes->post('event/store', 'Event::store');
+    $routes->get('event/edit/(:num)', 'Event::edit/$1');
+    $routes->post('event/update/(:num)', 'Event::update/$1');
+    $routes->get('event/delete/(:num)', 'Event::delete/$1');
+    $routes->get('event/detail/(:num)', 'Event::detail/$1');
+    $routes->post('event/toggle-registration/(:num)', 'Event::toggleRegistration/$1');
+    $routes->post('event/toggle-abstract/(:num)', 'Event::toggleAbstractSubmission/$1');
+    $routes->post('event/toggle-status/(:num)', 'Event::toggleStatus/$1');
+    $routes->get('event/export', 'Event::export');
+    $routes->get('event/statistics', 'Event::statistics');
+
     // Pembayaran
     $routes->get('pembayaran', 'Pembayaran::index');
     $routes->post('pembayaran/verifikasi/(:num)', 'Pembayaran::verifikasi/$1');

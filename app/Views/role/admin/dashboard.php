@@ -185,8 +185,14 @@
                         <a class="nav-link" href="<?= site_url('admin/reviewer') ?>">
                             <i class="fas fa-user-check me-2"></i> Kelola Reviewer
                         </a>
+                        <a class="nav-link" href="<?= site_url('admin/event') ?>">
+                            <i class="fas fa-calendar-alt me-2"></i> Kelola Event
+                        </a>
                         <a class="nav-link" href="<?= site_url('admin/pembayaran') ?>">
                             <i class="fas fa-credit-card me-2"></i> Verifikasi Pembayaran
+                        </a>
+                        <a class="nav-link" href="<?= site_url('admin/voucher') ?>">
+                            <i class="fas fa-ticket-alt me-2"></i> Kelola Voucher
                         </a>
                         <a class="nav-link" href="<?= site_url('admin/dokumen') ?>">
                             <i class="fas fa-folder-open me-2"></i> Dokumen
@@ -226,7 +232,7 @@
                         </div>
                     </div>
 
-                    <!-- Statistics Cards -->
+                    <!-- Statistics Cards (Only 4) -->
                     <div class="row g-4 mb-4">
                         <div class="col-md-6 col-xl-3">
                             <div class="stat-card">
@@ -285,40 +291,9 @@
                         </div>
                     </div>
 
-                    <!-- Role Statistics -->
-                    <div class="row g-4 mb-4">
-                        <div class="col-md-4">
-                            <div class="stat-card text-center">
-                                <div class="stat-icon mx-auto mb-3" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
-                                    <i class="fas fa-microphone"></i>
-                                </div>
-                                <div class="stat-number"><?= $total_presenter ?? 0 ?></div>
-                                <div class="text-muted">Presenter</div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="stat-card text-center">
-                                <div class="stat-icon mx-auto mb-3" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
-                                    <i class="fas fa-users"></i>
-                                </div>
-                                <div class="stat-number"><?= $total_audience ?? 0 ?></div>
-                                <div class="text-muted">Audience</div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="stat-card text-center">
-                                <div class="stat-icon mx-auto mb-3" style="background: linear-gradient(135deg, #10b981, #059669);">
-                                    <i class="fas fa-check-circle"></i>
-                                </div>
-                                <div class="stat-number"><?= $pembayaran_verified ?? 0 ?></div>
-                                <div class="text-muted">Pembayaran Verified</div>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Recent Activities -->
                     <div class="row g-4">
-                        <div class="col-lg-6">
+                        <div class="col-lg-4">
                             <div class="recent-card">
                                 <div class="recent-card-header">
                                     <i class="fas fa-user-plus me-2"></i>
@@ -356,7 +331,7 @@
                             </div>
                         </div>
 
-                        <div class="col-lg-6">
+                        <div class="col-lg-4">
                             <div class="recent-card">
                                 <div class="recent-card-header">
                                     <i class="fas fa-file-alt me-2"></i>
@@ -399,6 +374,46 @@
                                         <div class="list-item text-center text-muted">
                                             <i class="fas fa-inbox fa-2x mb-2"></i>
                                             <div>Belum ada abstrak</div>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4">
+                            <div class="recent-card">
+                                <div class="recent-card-header">
+                                    <i class="fas fa-calendar me-2"></i>
+                                    Event Terbaru
+                                </div>
+                                <div class="card-body p-0">
+                                    <?php if (!empty($recent_events)): ?>
+                                        <?php foreach ($recent_events as $event): ?>
+                                            <div class="list-item">
+                                                <div class="d-flex align-items-start">
+                                                    <div class="flex-shrink-0">
+                                                        <div class="bg-info rounded-circle p-2" style="width: 40px; height: 40px;">
+                                                            <i class="fas fa-calendar text-white"></i>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex-grow-1 ms-3">
+                                                        <div class="fw-semibold"><?= esc(substr($event['title'], 0, 40)) ?>...</div>
+                                                        <div class="text-muted small">
+                                                            <?= date('d M Y', strtotime($event['event_date'])) ?> | <?= ucfirst($event['format']) ?>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex-shrink-0">
+                                                        <span class="badge-custom <?= $event['is_active'] ? 'bg-success' : 'bg-secondary' ?>">
+                                                            <?= $event['is_active'] ? 'Aktif' : 'Nonaktif' ?>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <div class="list-item text-center text-muted">
+                                            <i class="fas fa-inbox fa-2x mb-2"></i>
+                                            <div>Belum ada event</div>
                                         </div>
                                     <?php endif; ?>
                                 </div>

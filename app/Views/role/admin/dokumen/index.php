@@ -256,6 +256,9 @@
                         <a class="nav-link" href="<?= site_url('admin/users') ?>">
                             <i class="fas fa-users me-2"></i> Manajemen User
                         </a>
+                        <a class="nav-link" href="<?= site_url('admin/event') ?>">
+                            <i class="fas fa-calendar me-2"></i> Kelola Event
+                        </a>
                         <a class="nav-link" href="<?= site_url('admin/abstrak') ?>">
                             <i class="fas fa-file-alt me-2"></i> Manajemen Abstrak
                         </a>
@@ -264,6 +267,9 @@
                         </a>
                         <a class="nav-link" href="<?= site_url('admin/pembayaran') ?>">
                             <i class="fas fa-credit-card me-2"></i> Verifikasi Pembayaran
+                        </a>
+                        <a class="nav-link" href="<?= site_url('admin/voucher') ?>">
+                            <i class="fas fa-ticket-alt me-2"></i> Kelola Voucher
                         </a>
                         <a class="nav-link active" href="<?= site_url('admin/dokumen') ?>">
                             <i class="fas fa-folder-open me-2"></i> Dokumen

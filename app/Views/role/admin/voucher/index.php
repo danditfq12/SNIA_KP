@@ -204,6 +204,9 @@
                         <a class="nav-link" href="<?= site_url('admin/users') ?>">
                             <i class="fas fa-users me-2"></i> Manajemen User
                         </a>
+                        <a class="nav-link" href="<?= site_url('admin/event') ?>">
+                            <i class="fas fa-calendar me-2"></i> Kelola Event
+                        </a>
                         <a class="nav-link" href="<?= site_url('admin/abstrak') ?>">
                             <i class="fas fa-file-alt me-2"></i> Manajemen Abstrak
                         </a>
