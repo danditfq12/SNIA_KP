@@ -34,39 +34,86 @@
 
         /* ===== NAVIGATION ===== */
         .navbar {
-            background: var(--white) !important;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.1) !important;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .navbar.scrolled {
+            background: rgba(255, 255, 255, 0.95) !important;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
         }
 
         .navbar-brand {
             font-size: 1.8rem;
             font-weight: 700;
+            color: var(--white) !important;
+            transition: var(--transition);
+        }
+
+        .navbar.scrolled .navbar-brand {
             color: var(--primary-blue) !important;
         }
 
-        .navbar .btn {
+        .navbar-nav .nav-link {
+            color: var(--white) !important;
+            font-weight: 500;
+            margin: 0 10px;
+            transition: var(--transition);
+        }
+
+        .navbar.scrolled .navbar-nav .nav-link {
+            color: var(--text-dark) !important;
+        }
+
+        .navbar-nav .nav-link:hover {
+            color: var(--accent-blue) !important;
+        }
+
+        .navbar .btn-primary {
+            background: var(--primary-blue);
+            border: 2px solid var(--primary-blue);
+            color: var(--white);
             border-radius: 20px;
             padding: 8px 20px;
             font-weight: 600;
             transition: var(--transition);
+            margin-right: 10px;
         }
 
-        .btn-outline-primary {
-            border-color: var(--primary-blue);
-            color: var(--primary-blue);
+        .navbar .btn-primary:hover {
+            background: var(--dark-blue);
+            border-color: var(--dark-blue);
+            color: var(--white);
         }
 
-        .btn-outline-primary:hover {
-            background: var(--primary-blue);
-            border-color: var(--primary-blue);
+        .navbar .contact-email {
+            color: var(--white) !important;
+            text-decoration: none;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        .navbar.scrolled .contact-email {
+            color: var(--primary-blue) !important;
+        }
+
+        .navbar .contact-email:hover {
+            color: var(--accent-blue) !important;
         }
 
         /* ===== HERO SECTION ===== */
         .hero-section {
             background: linear-gradient(rgba(0, 61, 130, 0.8), rgba(0, 86, 179, 0.8)), 
-                        url('https://images.unsplash.com/photo-1562774053-701939374585?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80') center/cover no-repeat;
+                        linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: var(--white);
-            padding: 100px 0;
+            padding: 120px 0 100px 0;
             position: relative;
             overflow: hidden;
             min-height: 100vh;
@@ -92,26 +139,45 @@
 
         .hero-title {
             font-size: 3.5rem;
-            font-weight: 800;
-            margin-bottom: 2rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            line-height: 1.1;
         }
 
         .hero-subtitle {
-            font-size: 1.3rem;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+            line-height: 1.2;
+        }
+
+        .hero-year {
+            font-size: 3rem;
+            font-weight: 800;
+            color: #FFC107;
+            margin-bottom: 2rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
+        }
+
+        .hero-description {
+            font-size: 1.1rem;
             font-weight: 300;
             margin-bottom: 2.5rem;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+            opacity: 0.9;
+            max-width: 600px;
         }
 
         .hero-cta {
             background: rgba(255, 255, 255, 0.95);
             color: var(--primary-blue);
             border: none;
-            padding: 18px 40px;
-            border-radius: var(--border-radius-large);
-            font-weight: 700;
-            font-size: 1.1rem;
+            padding: 12px 30px;
+            border-radius: var(--border-radius-small);
+            font-weight: 600;
+            font-size: 1rem;
             transition: var(--transition);
             text-decoration: none;
             display: inline-block;
@@ -119,12 +185,19 @@
         }
 
         .hero-cta:hover {
-            transform: translateY(-3px);
+            transform: translateY(-2px);
             box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
             color: var(--primary-blue);
         }
 
         /* ===== FEATURE CARDS ===== */
+        .features-section {
+            margin-top: 80px;
+            position: relative;
+            z-index: 3;
+            padding: 80px 0;
+        }
+
         .feature-card {
             background: var(--white);
             border-radius: var(--border-radius);
@@ -159,7 +232,15 @@
             padding: 80px 0;
         }
 
-        /* ===== PRICE CARDS ===== */
+        /* ===== PRICE CARDS - FIXED FOR 3 CARDS LAYOUT ===== */
+        .pricing-container {
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
         .price-card {
             background: var(--white);
             border-radius: var(--border-radius);
@@ -169,7 +250,13 @@
             transition: var(--transition);
             position: relative;
             overflow: hidden;
-            height: 100%;
+            cursor: default;
+            flex: 0 0 300px;
+            max-width: 350px;
+            min-height: 400px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
         .price-card:hover {
@@ -180,6 +267,10 @@
         .price-card.featured {
             border: 3px solid var(--primary-blue);
             transform: scale(1.05);
+        }
+
+        .price-card.featured:hover {
+            transform: scale(1.05) translateY(-5px);
         }
 
         .price-card.featured::before {
@@ -202,25 +293,19 @@
             margin: 20px 0;
         }
 
-        /* ===== BUTTONS ===== */
-        .btn-register {
-            background: var(--primary-blue);
-            color: var(--white);
-            border: none;
-            padding: 12px 30px;
-            border-radius: var(--border-radius-small);
-            font-weight: 600;
-            transition: var(--transition);
-            text-decoration: none;
-            display: inline-block;
-            margin-top: 20px;
+        .price-card .feature-icon {
+            margin-bottom: 20px;
         }
 
-        .btn-register:hover {
-            background: var(--dark-blue);
-            color: var(--white);
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 86, 179, 0.3);
+        .price-card h4 {
+            margin-bottom: 15px;
+        }
+
+        .price-card .list-unstyled {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         /* ===== LAYOUT COMPONENTS ===== */
@@ -271,50 +356,151 @@
         }
 
         /* ===== RESPONSIVE DESIGN ===== */
+        @media (max-width: 992px) {
+            .pricing-container {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .price-card {
+                flex: none;
+                width: 100%;
+                max-width: 400px;
+                margin-bottom: 30px;
+            }
+
+            .price-card.featured {
+                transform: none;
+                margin: 0 0 30px 0;
+            }
+
+            .price-card.featured:hover {
+                transform: translateY(-5px);
+            }
+        }
+
         @media (max-width: 768px) {
             .hero-title {
-                font-size: 2.5rem;
+                font-size: 2.2rem;
             }
             
             .hero-subtitle {
-                font-size: 1.1rem;
+                font-size: 1.8rem;
+            }
+
+            .hero-year {
+                font-size: 2rem;
+            }
+
+            .hero-description {
+                font-size: 1rem;
             }
             
-            .feature-card,
-            .price-card {
+            .feature-card {
                 margin-bottom: 30px;
+            }
+
+            .features-section {
+                margin-top: 50px;
+                padding: 50px 0;
+            }
+
+            .navbar-nav {
+                text-align: center;
+                margin-top: 1rem;
+            }
+
+            .animate-on-scroll {
+                padding-left: 0 !important;
+            }
+
+            .navbar .d-flex {
+                flex-direction: column;
+                gap: 10px;
+                margin-top: 1rem;
+            }
+
+            .pricing-container {
+                gap: 20px;
+            }
+
+            .price-card {
+                padding: 30px 20px;
+                min-height: 350px;
+            }
+
+            .price {
+                font-size: 2rem;
+            }
+        }
+
+        @media (min-width: 1200px) {
+            .pricing-container {
+                max-width: 1000px;
+                margin: 0 auto;
             }
         }
     </style>
 </head>
 <body>
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
         <div class="container">
-            <a class="navbar-brand" href="#"><i class="fas fa-graduation-cap me-2"></i>SNIA</a>
-            <div class="d-flex">
-                <a href="<?= base_url('auth/login') ?>" class="btn btn-outline-primary me-2">Login</a>
-                <a href="<?= base_url('auth/register') ?>" class="btn btn-primary">Register</a>
+            <a class="navbar-brand" href="#home"><i class="fas fa-graduation-cap me-2"></i>SNIA</a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav mx-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#home">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#features">Fitur</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#register">Paket</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#location">Lokasi</a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center">
+                    <a href="mailto:snia@unjani.ac.id" class="contact-email">
+                        <i class="fas fa-envelope me-1"></i>snia@unjani.ac.id
+                    </a>
+                </div>
             </div>
         </div>
     </nav>
 
     <!-- Hero Section -->
-    <section class="hero-section">
+    <section class="hero-section" id="home">
         <div class="hero-content">
-            <div class="container text-center">
-                <div class="animate-on-scroll">
-                    <h1 class="display-4 fw-bold mb-4">Seminar Nasional Informatika</h1>
-                    <p class="lead mb-4">Platform digital terdepan untuk registrasi, pengelolaan abstrak, pembayaran, absensi QR, hingga sertifikat elektronik.</p>
-                    <a href="<?= base_url('auth/register') ?>" class="btn btn-light btn-lg px-5 py-3 rounded-pill">Daftar Sekarang</a>
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-lg-8 col-xl-7">
+                        <div class="animate-on-scroll" style="padding-left: 0;">
+                            <h1 class="hero-title">Seminar Nasional Informatika dan Aplikasinya</h1>
+                            <div class="hero-year">(SNIA) 2025</div>
+                            <p class="hero-description">Diselenggarakan oleh Jurusan Informatika Universitas Jenderal Achmad Yani (UNJANI), acara dua tahunan yang mempertemukan akademisi, peneliti, dan praktisi untuk berbagi pengetahuan dan inovasi terdepan di bidang teknologi informasi.</p>
+                            <a href="auth/login" class="hero-cta">DAFTAR SEKARANG</a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Features Section -->
-    <section class="py-5" style="margin-top: -50px; position: relative; z-index: 3;">
+    <section class="features-section" id="features">
         <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="section-title animate-on-scroll">Fitur Platform Digital</h2>
+                <p class="lead animate-on-scroll">Teknologi terdepan untuk mendukung seminar nasional modern</p>
+            </div>
             <div class="row g-4">
                 <div class="col-md-4">
                     <div class="feature-card animate-on-scroll">
@@ -355,80 +541,60 @@
                 <p class="lead animate-on-scroll">Pilih paket yang sesuai dengan kebutuhan Anda</p>
             </div>
             
-            <div class="row g-4 mb-5">
-                <div class="col-lg-3 col-md-6">
-                    <div class="price-card animate-on-scroll">
+            <div class="pricing-container mb-5">
+                <div class="price-card animate-on-scroll">
+                    <div>
                         <div class="feature-icon mb-3">
                             <i class="fas fa-microphone"></i>
                         </div>
                         <h4 class="fw-bold">Presenter</h4>
                         <div class="price">Rp 350K</div>
-                        <ul class="list-unstyled mb-4">
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Submit Abstract</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Present Paper</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Certificate</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Lunch & Coffee</li>
-                        </ul>
-                        <a href="<?= base_url('auth/register') ?>" class="btn-register">Daftar Sekarang</a>
                     </div>
+                    <ul class="list-unstyled mb-4">
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Submit Abstract</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Present Paper</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Certificate</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Lunch & Coffee</li>
+                    </ul>
                 </div>
                 
-                <div class="col-lg-3 col-md-6">
-                    <div class="price-card featured animate-on-scroll">
+                <div class="price-card featured animate-on-scroll">
+                    <div>
                         <div class="feature-icon mb-3">
                             <i class="fas fa-users"></i>
                         </div>
                         <h4 class="fw-bold">Audience Offline</h4>
                         <div class="price">Rp 150K</div>
-                        <ul class="list-unstyled mb-4">
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Attend Seminar</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Certificate</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Lunch & Coffee</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Networking</li>
-                        </ul>
-                        <a href="<?= base_url('auth/register') ?>" class="btn-register">Daftar Sekarang</a>
                     </div>
+                    <ul class="list-unstyled mb-4">
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Attend Seminar</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Certificate</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Lunch & Coffee</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Networking</li>
+                    </ul>
                 </div>
                 
-                <div class="col-lg-3 col-md-6">
-                    <div class="price-card animate-on-scroll">
+                <div class="price-card animate-on-scroll">
+                    <div>
                         <div class="feature-icon mb-3">
                             <i class="fas fa-laptop"></i>
                         </div>
                         <h4 class="fw-bold">Audience Online</h4>
                         <div class="price">Rp 75K</div>
-                        <ul class="list-unstyled mb-4">
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Live Streaming</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Digital Certificate</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Recording Access</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Q&A Session</li>
-                        </ul>
-                        <a href="<?= base_url('auth/register') ?>" class="btn-register">Daftar Sekarang</a>
                     </div>
-                </div>
-                
-                <div class="col-lg-3 col-md-6">
-                    <div class="price-card animate-on-scroll">
-                        <div class="feature-icon mb-3">
-                            <i class="fas fa-star"></i>
-                        </div>
-                        <h4 class="fw-bold">Premium Package</h4>
-                        <div class="price">Rp 500K</div>
-                        <ul class="list-unstyled mb-4">
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>All Features</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>VIP Seating</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Workshop Access</li>
-                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Premium Kit</li>
-                        </ul>
-                        <a href="<?= base_url('auth/register') ?>" class="btn-register">Daftar Sekarang</a>
-                    </div>
+                    <ul class="list-unstyled mb-4">
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Live Streaming</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Digital Certificate</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Recording Access</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Q&A Session</li>
+                    </ul>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Location Section -->
-    <section class="py-5">
+    <section class="py-5" id="location">
         <div class="container">
             <div class="text-center mb-5">
                 <h2 class="section-title animate-on-scroll">Lokasi Acara</h2>
@@ -463,22 +629,11 @@
                             <h5><i class="fas fa-car text-primary me-2"></i>Transportasi</h5>
                             <p class="text-muted ms-4">Tersedia shuttle bus dari Stasiun Cimahi dan area parkir yang luas untuk peserta.</p>
                         </div>
-                        <a href="https://www.google.com/maps/dir//Unjani+(Universitas+Jenderal+Achmad+Yani),+Jl.+Terusan+Jend.+Sudirman,+Cimahi+Utara,+Kota+Cimahi,+Jawa+Barat+40285/@-6.8792936,107.5291975,17z/data=!4m8!4m7!1m0!1m5!1m1!1s0x2e68e569e4b3b5a5:0x401e8f1fc28b750!2m2!1d107.5317724!2d-6.8792936" class="btn-register" target="_blank" rel="noopener noreferrer">
+                        <a href="https://www.google.com/maps/dir//Unjani+(Universitas+Jenderal+Achmad+Yani),+Jl.+Terusan+Jend.+Sudirman,+Cimahi+Utara,+Kota+Cimahi,+Jawa+Barat+40285/@-6.8792936,107.5291975,17z/data=!4m8!4m7!1m0!1m5!1m1!1s0x2e68e569e4b3b5a5:0x401e8f1fc28b750!2m2!1d107.5317724!2d-6.8792936" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
                             <i class="fas fa-directions me-2"></i>Lihat Rute
                         </a>
                     </div>
                 </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- CTA Section -->
-    <section class="py-5" style="background: var(--primary-blue);">
-        <div class="container text-center text-white">
-            <div class="animate-on-scroll">
-                <h2 class="fw-bold mb-4">Siap Bergabung dengan SNIA 2025?</h2>
-                <p class="lead mb-4">Jangan lewatkan kesempatan untuk berbagi pengetahuan dan bernetworking dengan para ahli informatika terkemuka.</p>
-                <a href="<?= base_url('auth/register') ?>" class="btn btn-light btn-lg px-5 py-3 rounded-pill">Daftar Sekarang</a>
             </div>
         </div>
     </section>
@@ -489,17 +644,20 @@
             <div class="row">
                 <div class="col-lg-4 mb-4">
                     <h5 class="fw-bold mb-3">SNIA 2025</h5>
-                    <p class="text-light">Seminar Nasional Informatika yang menghubungkan akademisi, peneliti, dan praktisi IT se-Indonesia.</p>
+                    <p class="text-light">Seminar Nasional Informatika & Aplikasi yang diselenggarakan oleh Jurusan Informatika UNJANI Cimahi. Kegiatan dua tahunan untuk membahas perkembangan informatika dan aplikasinya.</p>
                 </div>
                 <div class="col-lg-4 mb-4">
-                    <h5 class="fw-bold mb-3">Kontak</h5>
-                    <p class="text-light mb-2"><i class="fas fa-envelope me-2"></i>info@snia2025.id</p>
-                    <p class="text-light mb-2"><i class="fas fa-phone me-2"></i>+62 21 1234 5678</p>
-                    <p class="text-light"><i class="fas fa-map-marker-alt me-2"></i>Universitas Jenderal Achmad Yani, Cimahi</p>
+                    <h5 class="fw-bold mb-3">Penyelenggara</h5>
+                    <p class="text-light mb-2"><i class="fas fa-university me-2"></i>Jurusan Informatika UNJANI</p>
+                    <p class="text-light mb-2"><i class="fas fa-map-marker-alt me-2"></i>Universitas Jenderal Achmad Yani, Cimahi</p>
+                    <p class="text-light"><i class="fas fa-calendar me-2"></i>Setiap 2 tahun sekali</p>
                 </div>
                 <div class="col-lg-4 mb-4">
-                    <h5 class="fw-bold mb-3">Follow Us</h5>
-                    <div class="d-flex gap-3">
+                    <h5 class="fw-bold mb-3">Kontak Informasi</h5>
+                    <p class="text-light mb-2"><i class="fas fa-envelope me-2"></i>snia@unjani.ac.id</p>
+                    <p class="text-light mb-2"><i class="fas fa-phone me-2"></i>+62 22 6656 186</p>
+                    <p class="text-light"><i class="fas fa-globe me-2"></i>www.unjani.ac.id</p>
+                    <div class="d-flex gap-3 mt-3">
                         <a href="#" class="text-light fs-4"><i class="fab fa-facebook"></i></a>
                         <a href="#" class="text-light fs-4"><i class="fab fa-twitter"></i></a>
                         <a href="#" class="text-light fs-4"><i class="fab fa-instagram"></i></a>
@@ -509,7 +667,7 @@
             </div>
             <hr class="my-4" style="border-color: rgba(255,255,255,0.2);">
             <div class="text-center">
-                <p class="mb-0 text-light">© 2024 SNIA. All rights reserved. | Made with <i class="fas fa-heart text-danger"></i> for Indonesian IT Community</p>
+                <p class="mb-0 text-light">© 2025 SNIA - Jurusan Informatika UNJANI</p>
             </div>
         </div>
     </footer>
@@ -549,15 +707,13 @@
             observer.observe(el);
         });
 
-        // Navbar background on scroll
+        // Enhanced navbar background on scroll with glass effect
         window.addEventListener('scroll', () => {
             const navbar = document.querySelector('.navbar');
             if (window.scrollY > 50) {
-                navbar.style.background = 'rgba(255, 255, 255, 0.95)';
-                navbar.style.backdropFilter = 'blur(10px)';
+                navbar.classList.add('scrolled');
             } else {
-                navbar.style.background = 'white';
-                navbar.style.backdropFilter = 'none';
+                navbar.classList.remove('scrolled');
             }
         });
     </script>
