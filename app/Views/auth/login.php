@@ -431,11 +431,11 @@
             </label>
           </div>
 
-          <button type="submit" class="btn-signin">Sign In</button>
+          <button type="submit" class="btn-signin">Masuk</button>
         </form>
 
         <div class="create-account">
-          Don't have an account? <a href="<?= site_url('auth/register') ?>">Buat Akun</a>
+          Tidak Punya Akun? <a href="<?= site_url('auth/register') ?>">Buat Akun</a>
         </div>
       </div>
     </div>
