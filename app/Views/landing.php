@@ -641,6 +641,177 @@
         </div>
     </section>
 
+    <!-- Features Section -->
+    <section class="py-5" style="margin-top: -50px; position: relative; z-index: 3;">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="feature-card animate-on-scroll">
+                        <div class="feature-icon">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <h4 class="fw-bold mb-3">Abstrak & Paper</h4>
+                        <p class="text-muted">Upload abstrak & full paper dengan mudah, pantau status review secara real-time dengan sistem yang terintegrasi.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card animate-on-scroll">
+                        <div class="feature-icon">
+                            <i class="fas fa-credit-card"></i>
+                        </div>
+                        <h4 class="fw-bold mb-3">Pembayaran Digital</h4>
+                        <p class="text-muted">Integrasi payment gateway lengkap & sistem voucher, pembayaran lebih cepat, aman, dan mudah.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-card animate-on-scroll">
+                        <div class="feature-icon">
+                            <i class="fas fa-certificate"></i>
+                        </div>
+                        <h4 class="fw-bold mb-3">Sertifikat Digital</h4>
+                        <p class="text-muted">Dapatkan LOA & sertifikat kehadiran otomatis dengan QR code verification setelah seminar selesai.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Registration Section -->
+    <section class="registration-section" id="register">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="section-title animate-on-scroll">Paket Registrasi</h2>
+                <p class="lead animate-on-scroll">Pilih paket yang sesuai dengan kebutuhan Anda</p>
+            </div>
+            
+            <div class="row g-4 mb-5">
+                <div class="col-lg-3 col-md-6">
+                    <div class="price-card animate-on-scroll">
+                        <div class="feature-icon mb-3">
+                            <i class="fas fa-microphone"></i>
+                        </div>
+                        <h4 class="fw-bold">Presenter</h4>
+                        <div class="price">Rp 350K</div>
+                        <ul class="list-unstyled mb-4">
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Submit Abstract</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Present Paper</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Certificate</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Lunch & Coffee</li>
+                        </ul>
+                        <a href="<?= base_url('auth/register') ?>" class="btn-register">Daftar Sekarang</a>
+                    </div>
+                </div>
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="price-card featured animate-on-scroll">
+                        <div class="feature-icon mb-3">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <h4 class="fw-bold">Audience Offline</h4>
+                        <div class="price">Rp 150K</div>
+                        <ul class="list-unstyled mb-4">
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Attend Seminar</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Certificate</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Lunch & Coffee</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Networking</li>
+                        </ul>
+                        <a href="<?= base_url('auth/register') ?>" class="btn-register">Daftar Sekarang</a>
+                    </div>
+                </div>
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="price-card animate-on-scroll">
+                        <div class="feature-icon mb-3">
+                            <i class="fas fa-laptop"></i>
+                        </div>
+                        <h4 class="fw-bold">Audience Online</h4>
+                        <div class="price">Rp 75K</div>
+                        <ul class="list-unstyled mb-4">
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Live Streaming</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Digital Certificate</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Recording Access</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Q&A Session</li>
+                        </ul>
+                        <a href="<?= base_url('auth/register') ?>" class="btn-register">Daftar Sekarang</a>
+                    </div>
+                </div>
+                
+                <div class="col-lg-3 col-md-6">
+                    <div class="price-card animate-on-scroll">
+                        <div class="feature-icon mb-3">
+                            <i class="fas fa-star"></i>
+                        </div>
+                        <h4 class="fw-bold">Premium Package</h4>
+                        <div class="price">Rp 500K</div>
+                        <ul class="list-unstyled mb-4">
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>All Features</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>VIP Seating</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Workshop Access</li>
+                            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Premium Kit</li>
+                        </ul>
+                        <a href="<?= base_url('auth/register') ?>" class="btn-register">Daftar Sekarang</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Location Section -->
+    <section class="py-5">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="section-title animate-on-scroll">Lokasi Acara</h2>
+                <p class="lead animate-on-scroll">Universitas Jenderal Achmad Yani, Cimahi - Jawa Barat</p>
+            </div>
+            
+            <div class="row g-5 align-items-center">
+                <div class="col-lg-6">
+                    <div class="map-container animate-on-scroll">
+                        <iframe 
+                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3961.0244864384695!2d107.5291975147727!3d-6.8792935950655935!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e68e569e4b3b5a5%3A0x401e8f1fc28b750!2sUnjani%20(Universitas%20Jenderal%20Achmad%20Yani)!5e0!3m2!1sen!2sid!4v1640234567890!5m2!1sen!2sid"
+                            width="100%" 
+                            height="400" 
+                            style="border:0;" 
+                            allowfullscreen="" 
+                            loading="lazy">
+                        </iframe>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="animate-on-scroll">
+                        <h3 class="fw-bold mb-4">Detail Lokasi</h3>
+                        <div class="mb-4">
+                            <h5><i class="fas fa-map-marker-alt text-primary me-2"></i>Alamat</h5>
+                            <p class="text-muted ms-4">Jl. Terusan Jend. Sudirman, Cimahi Utara, Kota Cimahi, Jawa Barat 40285</p>
+                        </div>
+                        <div class="mb-4">
+                            <h5><i class="fas fa-calendar text-primary me-2"></i>Tanggal & Waktu</h5>
+                            <p class="text-muted ms-4">15 Desember 2025<br>08:00 - 17:00 WIB</p>
+                        </div>
+                        <div class="mb-4">
+                            <h5><i class="fas fa-car text-primary me-2"></i>Transportasi</h5>
+                            <p class="text-muted ms-4">Tersedia shuttle bus dari Stasiun Cimahi dan area parkir yang luas untuk peserta.</p>
+                        </div>
+                        <a href="https://www.google.com/maps/dir//Unjani+(Universitas+Jenderal+Achmad+Yani),+Jl.+Terusan+Jend.+Sudirman,+Cimahi+Utara,+Kota+Cimahi,+Jawa+Barat+40285/@-6.8792936,107.5291975,17z/data=!4m8!4m7!1m0!1m5!1m1!1s0x2e68e569e4b3b5a5:0x401e8f1fc28b750!2m2!1d107.5317724!2d-6.8792936" class="btn-register" target="_blank" rel="noopener noreferrer">
+                            <i class="fas fa-directions me-2"></i>Lihat Rute
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-5" style="background: var(--primary-blue);">
+        <div class="container text-center text-white">
+            <div class="animate-on-scroll">
+                <h2 class="fw-bold mb-4">Siap Bergabung dengan SNIA 2025?</h2>
+                <p class="lead mb-4">Jangan lewatkan kesempatan untuk berbagi pengetahuan dan bernetworking dengan para ahli informatika terkemuka.</p>
+                <a href="<?= base_url('auth/register') ?>" class="btn btn-light btn-lg px-5 py-3 rounded-pill">Daftar Sekarang</a>
+            </div>
+        </div>
+    </section>
+
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
