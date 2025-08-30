@@ -416,12 +416,12 @@
           
           <div class="form-group">
             <label for="email">Email Address</label>
-            <input type="email" name="email" id="email" class="form-control" placeholder="daus07022004@gmail.com" required>
+            <input type="email" name="email" id="email" class="form-control" placeholder="Masukan Email" required>
           </div>
 
           <div class="form-group">
             <label for="password">Password</label>
-            <input type="password" name="password" id="password" class="form-control" placeholder="••••••" required>
+            <input type="password" name="password" id="password" class="form-control" placeholder="Masukan Password" required>
           </div>
 
           <div class="form-options">
@@ -435,7 +435,7 @@
         </form>
 
         <div class="create-account">
-          Don't have an account? <a href="<?= site_url('auth/register') ?>">Create one</a>
+          Don't have an account? <a href="<?= site_url('auth/register') ?>">Buat Akun</a>
         </div>
       </div>
     </div>

@@ -110,8 +110,11 @@
 
         /* ===== HERO SECTION ===== */
         .hero-section {
-            background: linear-gradient(rgba(0, 61, 130, 0.8), rgba(0, 86, 179, 0.8)), 
-                        linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(rgba(0, 61, 130, 0.7), rgba(0, 86, 179, 0.7)), 
+                        url('assets/img/Background.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
             color: var(--white);
             padding: 120px 0 100px 0;
             position: relative;
@@ -486,7 +489,7 @@
                             <h1 class="hero-title">Seminar Nasional Informatika dan Aplikasinya</h1>
                             <div class="hero-year">(SNIA) 2025</div>
                             <p class="hero-description">Diselenggarakan oleh Jurusan Informatika Universitas Jenderal Achmad Yani (UNJANI), acara dua tahunan yang mempertemukan akademisi, peneliti, dan praktisi untuk berbagi pengetahuan dan inovasi terdepan di bidang teknologi informasi.</p>
-                            <a href="auth/login" class="hero-cta">DAFTAR SEKARANG</a>
+                            <a href="auth/login" class="hero-cta">MASUK SEKARANG</a>
                         </div>
                     </div>
                 </div>
