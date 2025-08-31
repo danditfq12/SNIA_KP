@@ -27,6 +27,7 @@ $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], function ($route
     $routes->get('resend', 'Verify::resend');      // kirim ulang kode
 });
 
+$routes->get('notif/read-all', 'Notif::readAll', ['filter' => 'auth']);
 
 // ---------------------------------------------------
 // Dashboard redirect (wajib login)
@@ -130,9 +131,23 @@ $routes->group('reviewer', [
     'filter' => 'role:reviewer',
     'namespace' => 'App\Controllers\Role\Reviewer'
 ], function ($routes) {
+    // Dashboard
     $routes->get('dashboard', 'Dashboard::index');
+
+    // Abstrak
     $routes->get('abstrak', 'Abstrak::index');
     $routes->get('abstrak/(:num)', 'Abstrak::detail/$1');
-    $routes->post('review/(:num)', 'Review::store/$1');
-    $routes->get('riwayat', 'Review::riwayat');
+    $routes->post('abstrak/review/save', 'Abstrak::saveReview'); // simpan hasil review
+
+    // Riwayat Review
+    $routes->get('riwayat', 'Review::index');
+});
+
+// ---------------------------------------------------
+// Profile
+// ---------------------------------------------------
+$routes->group('profile', ['filter' => 'auth'], function($routes) {
+    $routes->get('/', 'Profile::index');
+    $routes->post('update', 'Profile::update');
+    $routes->post('changePassword', 'Profile::changePassword');
 });

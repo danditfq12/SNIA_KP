@@ -11,6 +11,7 @@ class Dashboard extends BaseController
         }
 
         $role = session()->get('role');
+        
 
         switch ($role) {
             case 'admin':

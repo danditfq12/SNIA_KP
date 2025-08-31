@@ -9,16 +9,9 @@ use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
 use Psr\Log\LoggerInterface;
 
-/**
- * Class BaseController
- *
- * BaseController provides a convenient place for loading components
- * and performing functions that are needed by all your controllers.
- * Extend this class in any new controllers:
- *     class Home extends BaseController
- *
- * For security be sure to declare any new methods as protected or private.
- */
+// tambahkan Library NotificationService
+use App\Libraries\NotificationService;
+
 abstract class BaseController extends Controller
 {
     /**
@@ -38,10 +31,9 @@ abstract class BaseController extends Controller
     protected $helpers = [];
 
     /**
-     * Be sure to declare properties for any property fetch you initialized.
-     * The creation of dynamic property is deprecated in PHP 8.2.
+     * Data global yang bisa dikirim ke semua view
      */
-    // protected $session;
+    protected $data = [];
 
     /**
      * @return void
@@ -51,8 +43,15 @@ abstract class BaseController extends Controller
         // Do Not Edit This Line
         parent::initController($request, $response, $logger);
 
-        // Preload any models, libraries, etc, here.
+        // Session
+        $this->session = service('session');
 
-        // E.g.: $this->session = service('session');
+        // Load notifikasi global (hanya kalau user login)
+        if ($this->session->get('id_user')) {
+            $notifService = new NotificationService();
+            $this->data['notifs'] = $notifService->getForCurrentUser();
+        } else {
+            $this->data['notifs'] = [];
+        }
     }
 }
