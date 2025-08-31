@@ -27,7 +27,6 @@ $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], function ($route
     $routes->get('resend', 'Verify::resend');      // kirim ulang kode
 });
 
-
 // ---------------------------------------------------
 // Dashboard redirect (wajib login)
 // ---------------------------------------------------
@@ -48,31 +47,52 @@ $routes->group('admin', [
     $routes->get('users/edit/(:num)', 'User::edit/$1');
     $routes->post('users/update/(:num)', 'User::update/$1');
     $routes->get('users/delete/(:num)', 'User::delete/$1');
+    $routes->get('users/detail/(:num)', 'User::detail/$1');
 
-    // Abstrak
+    // Enhanced Abstrak Management
     $routes->get('abstrak', 'Abstrak::index');
+    $routes->get('abstrak/detail/(:num)', 'Abstrak::detail/$1');
     $routes->post('abstrak/assign/(:num)', 'Abstrak::assign/$1');
+    $routes->post('abstrak/update-status', 'Abstrak::updateStatus');
+    $routes->post('abstrak/bulk-update-status', 'Abstrak::bulkUpdateStatus');
+    $routes->get('abstrak/delete/(:num)', 'Abstrak::delete/$1');
+    $routes->get('abstrak/download/(:num)', 'Abstrak::downloadFile/$1');
+    $routes->get('abstrak/export', 'Abstrak::export');
+    $routes->get('abstrak/statistics', 'Abstrak::statistics');
+    $routes->get('abstrak/reviewers-by-category/(:num)', 'Abstrak::getReviewersByCategory/$1');
 
     // Reviewer
     $routes->get('reviewer', 'Reviewer::index');
     $routes->post('reviewer/store', 'Reviewer::store');
+    $routes->post('reviewer/assign-category', 'Reviewer::assignCategory');
+    $routes->get('reviewer/remove-category/(:num)', 'Reviewer::removeCategory/$1');
+    $routes->get('reviewer/toggle-status/(:num)', 'Reviewer::toggleStatus/$1');
+    $routes->get('reviewer/detail/(:num)', 'Reviewer::detail/$1');
+    $routes->get('reviewer/delete/(:num)', 'Reviewer::delete/$1');
+    $routes->get('reviewer/performance', 'Reviewer::performance');
+    $routes->get('reviewer/by-category/(:num)', 'Reviewer::getByCategory/$1');
 
-    // Event Management
+    // Event Management - Enhanced with role-based pricing
     $routes->get('event', 'Event::index');
     $routes->post('event/store', 'Event::store');
     $routes->get('event/edit/(:num)', 'Event::edit/$1');
     $routes->post('event/update/(:num)', 'Event::update/$1');
     $routes->get('event/delete/(:num)', 'Event::delete/$1');
     $routes->get('event/detail/(:num)', 'Event::detail/$1');
-    $routes->post('event/toggle-registration/(:num)', 'Event::toggleRegistration/$1');
-    $routes->post('event/toggle-abstract/(:num)', 'Event::toggleAbstractSubmission/$1');
-    $routes->post('event/toggle-status/(:num)', 'Event::toggleStatus/$1');
+    $routes->get('event/toggle-registration/(:num)', 'Event::toggleRegistration/$1');
+    $routes->get('event/toggle-abstract/(:num)', 'Event::toggleAbstractSubmission/$1');
+    $routes->get('event/toggle-status/(:num)', 'Event::toggleStatus/$1');
     $routes->get('event/export', 'Event::export');
     $routes->get('event/statistics', 'Event::statistics');
+    $routes->get('event/pricing-matrix/(:num)', 'Event::getPricingMatrix/$1');
 
     // Pembayaran
     $routes->get('pembayaran', 'Pembayaran::index');
     $routes->post('pembayaran/verifikasi/(:num)', 'Pembayaran::verifikasi/$1');
+    $routes->get('pembayaran/detail/(:num)', 'Pembayaran::detail/$1');
+    $routes->get('pembayaran/download-bukti/(:num)', 'Pembayaran::downloadBukti/$1');
+    $routes->get('pembayaran/export', 'Pembayaran::export');
+    $routes->get('pembayaran/statistik', 'Pembayaran::statistik');
 
     // Absensi
     $routes->get('absensi', 'Absensi::index');
@@ -82,45 +102,101 @@ $routes->group('admin', [
     $routes->get('dokumen', 'Dokumen::index');
     $routes->post('dokumen/loa/(:num)', 'Dokumen::uploadLoa/$1');
     $routes->post('dokumen/sertifikat/(:num)', 'Dokumen::uploadSertifikat/$1');
+    $routes->get('dokumen/download/(:num)', 'Dokumen::download/$1');
+    $routes->get('dokumen/delete/(:num)', 'Dokumen::delete/$1');
+    $routes->post('dokumen/generate-bulk-loa', 'Dokumen::generateBulkLOA');
+    $routes->post('dokumen/generate-bulk-sertifikat', 'Dokumen::generateBulkSertifikat');
 
     // Voucher
     $routes->get('voucher', 'Voucher::index');
     $routes->post('voucher/store', 'Voucher::store');
+    $routes->get('voucher/edit/(:num)', 'Voucher::edit/$1');
+    $routes->post('voucher/update/(:num)', 'Voucher::update/$1');
+    $routes->get('voucher/delete/(:num)', 'Voucher::delete/$1');
+    $routes->get('voucher/toggle-status/(:num)', 'Voucher::toggleStatus/$1');
+    $routes->get('voucher/detail/(:num)', 'Voucher::detail/$1');
+    $routes->get('voucher/generate-code', 'Voucher::generateCode');
+    $routes->post('voucher/validate', 'Voucher::validateVoucher');
+    $routes->get('voucher/export', 'Voucher::export');
 
     // Laporan
     $routes->get('laporan', 'Laporan::index');
     $routes->get('laporan/export', 'Laporan::export');
+    $routes->get('laporan/chart-data', 'Laporan::getChartData');
 });
 
 // ---------------------------------------------------
-// Presenter Routes
+// Presenter Routes - Enhanced with role-based pricing
 // ---------------------------------------------------
 $routes->group('presenter', [
     'filter' => 'role:presenter',
     'namespace' => 'App\Controllers\Role\Presenter'
 ], function ($routes) {
+    // Dashboard
     $routes->get('dashboard', 'Dashboard::index');
+    
+    // Event Registration with participation type selection
+    $routes->get('events', 'Event::index');
+    $routes->get('events/detail/(:num)', 'Event::detail/$1');
+    $routes->get('events/register/(:num)', 'Event::showRegistrationForm/$1');
+    $routes->post('events/register/(:num)', 'Event::register/$1');
+    
+    // Abstrak Management
     $routes->get('abstrak', 'Abstrak::index');
+    $routes->get('abstrak/submit/(:num)', 'Abstrak::showSubmitForm/$1');
     $routes->post('abstrak/upload', 'Abstrak::upload');
     $routes->get('abstrak/status', 'Abstrak::status');
+    $routes->get('abstrak/download/(:segment)', 'Abstrak::download/$1');
+    $routes->get('abstrak/detail/(:num)', 'Abstrak::detail/$1');
+    
+    // Pembayaran Management with participation type
     $routes->get('pembayaran', 'Pembayaran::index');
+    $routes->get('pembayaran/form/(:num)/(:alpha)', 'Pembayaran::showPaymentForm/$1/$2'); // eventId/participationType
     $routes->post('pembayaran/store', 'Pembayaran::store');
+    $routes->post('pembayaran/checkVoucher', 'Pembayaran::checkVoucher');
+    $routes->get('pembayaran/status', 'Pembayaran::status');
+    
+    // Absensi Management
     $routes->get('absensi', 'Absensi::index');
+    $routes->post('absensi/scan', 'Absensi::scan');
+    
+    // Dokumen Management
     $routes->get('dokumen/loa', 'Dokumen::loa');
+    $routes->get('dokumen/loa/download/(:segment)', 'Dokumen::downloadLoa/$1');
+    $routes->get('dokumen/sertifikat', 'Dokumen::sertifikat');
+    $routes->get('dokumen/sertifikat/download/(:segment)', 'Dokumen::downloadSertifikat/$1');
 });
 
 // ---------------------------------------------------
-// Audience Routes
+// Audience Routes - Enhanced with role-based pricing
 // ---------------------------------------------------
 $routes->group('audience', [
     'filter' => 'role:audience',
     'namespace' => 'App\Controllers\Role\Audience'
 ], function ($routes) {
+    // Dashboard
     $routes->get('dashboard', 'Dashboard::index');
+    
+    // Event Registration with participation type selection
+    $routes->get('events', 'Event::index');
+    $routes->get('events/detail/(:num)', 'Event::detail/$1');
+    $routes->get('events/register/(:num)', 'Event::showRegistrationForm/$1');
+    $routes->post('events/register/(:num)', 'Event::register/$1');
+    
+    // Pembayaran Management with participation type
     $routes->get('pembayaran', 'Pembayaran::index');
+    $routes->get('pembayaran/form/(:num)/(:alpha)', 'Pembayaran::showPaymentForm/$1/$2'); // eventId/participationType
     $routes->post('pembayaran/store', 'Pembayaran::store');
+    $routes->post('pembayaran/checkVoucher', 'Pembayaran::checkVoucher');
+    $routes->get('pembayaran/status', 'Pembayaran::status');
+    
+    // Absensi Management
     $routes->get('absensi', 'Absensi::index');
+    $routes->post('absensi/scan', 'Absensi::scan');
+    
+    // Dokumen Management
     $routes->get('dokumen/sertifikat', 'Dokumen::sertifikat');
+    $routes->get('dokumen/sertifikat/download/(:segment)', 'Dokumen::downloadSertifikat/$1');
 });
 
 // ---------------------------------------------------
@@ -135,4 +211,24 @@ $routes->group('reviewer', [
     $routes->get('abstrak/(:num)', 'Abstrak::detail/$1');
     $routes->post('review/(:num)', 'Review::store/$1');
     $routes->get('riwayat', 'Review::riwayat');
+});
+
+// ---------------------------------------------------
+// Public API Routes for Event Information
+// ---------------------------------------------------
+$routes->group('api/v1', function ($routes) {
+    $routes->get('events/active', 'Api\Event::getActiveEvents');
+    $routes->get('events/(:num)/pricing', 'Api\Event::getPricing/$1');
+    $routes->get('events/(:num)/details', 'Api\Event::getEventDetails/$1');
+    $routes->post('events/calculate-price', 'Api\Event::calculatePrice');
+});
+
+// ---------------------------------------------------
+// User Profile Routes (untuk semua role yang login)
+// ---------------------------------------------------
+$routes->group('profile', ['filter' => 'auth'], function ($routes) {
+    $routes->get('/', 'Profile::index');
+    $routes->post('update', 'Profile::update');
+    $routes->post('change-password', 'Profile::changePassword');
+    $routes->post('upload-photo', 'Profile::uploadPhoto');
 });

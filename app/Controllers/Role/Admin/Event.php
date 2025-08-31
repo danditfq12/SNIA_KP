@@ -49,8 +49,10 @@ class Event extends BaseController
             'description' => 'max_length[1000]',
             'event_date' => 'required|valid_date',
             'event_time' => 'required',
-            'format' => 'required|in_list[online,offline]',
-            'registration_fee' => 'required|numeric|greater_than_equal_to[0]',
+            'format' => 'required|in_list[both,online,offline]',
+            'presenter_fee_offline' => 'required|numeric|greater_than_equal_to[0]',
+            'audience_fee_online' => 'required|numeric|greater_than_equal_to[0]',
+            'audience_fee_offline' => 'required|numeric|greater_than_equal_to[0]',
             'max_participants' => 'integer|greater_than[0]',
             'registration_deadline' => 'valid_date',
             'abstract_deadline' => 'valid_date'
@@ -59,7 +61,10 @@ class Event extends BaseController
         // Additional validation based on format
         if ($this->request->getPost('format') === 'offline') {
             $rules['location'] = 'required|min_length[5]|max_length[255]';
-        } else {
+        } else if ($this->request->getPost('format') === 'online') {
+            $rules['zoom_link'] = 'valid_url|max_length[500]';
+        } else if ($this->request->getPost('format') === 'both') {
+            $rules['location'] = 'required|min_length[5]|max_length[255]';
             $rules['zoom_link'] = 'valid_url|max_length[500]';
         }
 
@@ -92,7 +97,9 @@ class Event extends BaseController
             'format' => $this->request->getPost('format'),
             'location' => $this->request->getPost('location'),
             'zoom_link' => $this->request->getPost('zoom_link'),
-            'registration_fee' => $this->request->getPost('registration_fee'),
+            'presenter_fee_offline' => $this->request->getPost('presenter_fee_offline'),
+            'audience_fee_online' => $this->request->getPost('audience_fee_online'),
+            'audience_fee_offline' => $this->request->getPost('audience_fee_offline'),
             'max_participants' => $this->request->getPost('max_participants') ?: null,
             'registration_deadline' => $registrationDeadline ?: null,
             'abstract_deadline' => $abstractDeadline ?: null,
@@ -139,8 +146,10 @@ class Event extends BaseController
             'description' => 'max_length[1000]',
             'event_date' => 'required|valid_date',
             'event_time' => 'required',
-            'format' => 'required|in_list[online,offline]',
-            'registration_fee' => 'required|numeric|greater_than_equal_to[0]',
+            'format' => 'required|in_list[both,online,offline]',
+            'presenter_fee_offline' => 'required|numeric|greater_than_equal_to[0]',
+            'audience_fee_online' => 'required|numeric|greater_than_equal_to[0]',
+            'audience_fee_offline' => 'required|numeric|greater_than_equal_to[0]',
             'max_participants' => 'integer|greater_than[0]',
             'registration_deadline' => 'valid_date',
             'abstract_deadline' => 'valid_date'
@@ -149,7 +158,10 @@ class Event extends BaseController
         // Additional validation based on format
         if ($this->request->getPost('format') === 'offline') {
             $rules['location'] = 'required|min_length[5]|max_length[255]';
-        } else {
+        } else if ($this->request->getPost('format') === 'online') {
+            $rules['zoom_link'] = 'valid_url|max_length[500]';
+        } else if ($this->request->getPost('format') === 'both') {
+            $rules['location'] = 'required|min_length[5]|max_length[255]';
             $rules['zoom_link'] = 'valid_url|max_length[500]';
         }
 
@@ -182,7 +194,9 @@ class Event extends BaseController
             'format' => $this->request->getPost('format'),
             'location' => $this->request->getPost('location'),
             'zoom_link' => $this->request->getPost('zoom_link'),
-            'registration_fee' => $this->request->getPost('registration_fee'),
+            'presenter_fee_offline' => $this->request->getPost('presenter_fee_offline'),
+            'audience_fee_online' => $this->request->getPost('audience_fee_online'),
+            'audience_fee_offline' => $this->request->getPost('audience_fee_offline'),
             'max_participants' => $this->request->getPost('max_participants') ?: null,
             'registration_deadline' => $registrationDeadline ?: null,
             'abstract_deadline' => $abstractDeadline ?: null,
@@ -229,12 +243,12 @@ class Event extends BaseController
             return redirect()->to('admin/event')->with('error', 'Event tidak ditemukan.');
         }
 
-        // Get event statistics
+        // Get event statistics with new breakdown
         $stats = $this->eventModel->getEventStats($id);
         
         // Get recent registrations
         $recentRegistrations = $this->pembayaranModel
-                                   ->select('pembayaran.*, users.nama_lengkap, users.email')
+                                   ->select('pembayaran.*, users.nama_lengkap, users.email, users.role')
                                    ->join('users', 'users.id_user = pembayaran.id_user')
                                    ->where('pembayaran.event_id', $id)
                                    ->orderBy('pembayaran.tanggal_bayar', 'DESC')
@@ -250,11 +264,15 @@ class Event extends BaseController
                                ->limit(10)
                                ->findAll();
 
+        // Get pricing matrix
+        $pricingMatrix = $this->eventModel->getPricingMatrix($id);
+
         $data = [
             'event' => $event,
             'stats' => $stats,
             'recent_registrations' => $recentRegistrations,
             'recent_abstracts' => $recentAbstracts,
+            'pricing_matrix' => $pricingMatrix,
             'registration_open' => $this->eventModel->isRegistrationOpen($id),
             'abstract_open' => $this->eventModel->isAbstractSubmissionOpen($id)
         ];
@@ -329,9 +347,10 @@ class Event extends BaseController
         
         // CSV Headers
         fputcsv($output, [
-            'ID', 'Judul', 'Tanggal', 'Waktu', 'Format', 'Lokasi', 
-            'Biaya Registrasi', 'Max Peserta', 'Total Registrasi', 
-            'Registrasi Verified', 'Total Abstrak', 'Status'
+            'ID', 'Judul', 'Tanggal', 'Waktu', 'Format', 'Lokasi', 'Zoom Link',
+            'Fee Presenter (Offline)', 'Fee Audience (Online)', 'Fee Audience (Offline)',
+            'Max Peserta', 'Total Registrasi', 'Online Registrasi', 'Offline Registrasi',
+            'Registrasi Verified', 'Total Abstrak', 'Total Revenue', 'Status'
         ]);
         
         // CSV Data
@@ -342,12 +361,18 @@ class Event extends BaseController
                 date('d/m/Y', strtotime($event['event_date'])),
                 $event['event_time'],
                 ucfirst($event['format']),
-                $event['location'] ?: $event['zoom_link'],
-                'Rp ' . number_format($event['registration_fee'], 0, ',', '.'),
+                $event['location'] ?? '',
+                $event['zoom_link'] ?? '',
+                'Rp ' . number_format($event['presenter_fee_offline'], 0, ',', '.'),
+                'Rp ' . number_format($event['audience_fee_online'], 0, ',', '.'),
+                'Rp ' . number_format($event['audience_fee_offline'], 0, ',', '.'),
                 $event['max_participants'] ?: 'Unlimited',
                 $event['total_registrations'],
+                $event['online_registrations'],
+                $event['offline_registrations'],
                 $event['verified_registrations'],
                 $event['total_abstracts'],
+                'Rp ' . number_format($event['total_revenue'], 0, ',', '.'),
                 $event['is_active'] ? 'Aktif' : 'Nonaktif'
             ]);
         }
@@ -362,7 +387,8 @@ class Event extends BaseController
             'events_by_month' => $this->getEventsByMonth(),
             'registration_stats' => $this->getRegistrationStats(),
             'revenue_by_event' => $this->getRevenueByEvent(),
-            'abstract_submission_stats' => $this->getAbstractSubmissionStats()
+            'abstract_submission_stats' => $this->getAbstractSubmissionStats(),
+            'participation_breakdown' => $this->getParticipationBreakdown()
         ];
 
         return $this->response->setJSON($data);
@@ -375,7 +401,6 @@ class Event extends BaseController
             $month = date('Y-m', strtotime("-$i months"));
             $monthName = date('M Y', strtotime($month . '-01'));
             
-            // Fixed for PostgreSQL
             $count = $this->eventModel
                          ->where("TO_CHAR(event_date, 'YYYY-MM')", $month)
                          ->countAllResults();
@@ -392,19 +417,18 @@ class Event extends BaseController
     private function getRegistrationStats()
     {
         return $this->pembayaranModel
-                   ->select('COUNT(*) as total, status')
-                   ->groupBy('status')
+                   ->select('COUNT(*) as total, status, participation_type')
+                   ->groupBy('status, participation_type')
                    ->findAll();
     }
 
     private function getRevenueByEvent()
     {
-        // Fixed for PostgreSQL - use verified_at instead of status
         return $this->pembayaranModel
-                   ->select('e.title, SUM(p.jumlah) as total_revenue')
+                   ->select('e.title, SUM(p.jumlah) as total_revenue, COUNT(*) as registrations, p.participation_type')
                    ->join('events e', 'e.id = p.event_id')
                    ->where('p.verified_at IS NOT NULL')
-                   ->groupBy('e.id, e.title')
+                   ->groupBy('e.id, e.title, p.participation_type')
                    ->orderBy('total_revenue', 'DESC')
                    ->limit(10)
                    ->findAll();
@@ -415,6 +439,16 @@ class Event extends BaseController
         return $this->abstrakModel
                    ->select('COUNT(*) as total, status')
                    ->groupBy('status')
+                   ->findAll();
+    }
+
+    private function getParticipationBreakdown()
+    {
+        return $this->pembayaranModel
+                   ->select('u.role, p.participation_type, COUNT(*) as count, SUM(p.jumlah) as revenue')
+                   ->join('users u', 'u.id_user = p.id_user')
+                   ->where('p.verified_at IS NOT NULL')
+                   ->groupBy('u.role, p.participation_type')
                    ->findAll();
     }
 }
