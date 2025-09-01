@@ -107,7 +107,7 @@ class Abstrak extends BaseController
         ];
 
         // Check if file exists
-        $filePath = WRITEPATH . 'uploads/abstrak/' . $abstrak['file_abstrak'];
+        $filePath = WRITEPATH . 'uploads/abstraks/' . $abstrak['file_abstrak'];
         $fileExists = file_exists($filePath);
         $fileSize = $fileExists ? filesize($filePath) : 0;
 
@@ -126,6 +126,52 @@ class Abstrak extends BaseController
         ];
 
         return view('role/admin/abstrak/detail', $data);
+    }
+
+    public function downloadFile($id_abstrak)
+    {
+        $abstrak = $this->abstrakModel->find($id_abstrak);
+        
+        if (!$abstrak) {
+            throw new \CodeIgniter\Exceptions\PageNotFoundException('Abstrak tidak ditemukan.');
+        }
+
+        $filePath = WRITEPATH . 'uploads/abstraks/' . $abstrak['file_abstrak'];
+        
+        if (!file_exists($filePath)) {
+            log_message('error', 'File not found at: ' . $filePath);
+            throw new \CodeIgniter\Exceptions\PageNotFoundException('File tidak ditemukan di server: ' . $filePath);
+        }
+
+        // Validate file is actually a PDF by checking its MIME type
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $filePath);
+        finfo_close($finfo);
+        
+        $allowedMimeTypes = ['application/pdf', 'application/x-pdf'];
+        
+        if (!in_array($mimeType, $allowedMimeTypes)) {
+            // Additional check by file signature for PDF
+            $fileContent = file_get_contents($filePath);
+            if (substr($fileContent, 0, 4) !== '%PDF') {
+                log_message('error', 'Invalid PDF file. MIME: ' . $mimeType . ', File: ' . $filePath);
+                throw new \CodeIgniter\Exceptions\PageNotFoundException('File bukan PDF yang valid. MIME type: ' . $mimeType);
+            }
+        }
+
+        // Set proper filename for download
+        $fileName = 'Abstrak_' . $abstrak['id_abstrak'] . '_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $abstrak['judul']) . '.pdf';
+        $fileName = substr($fileName, 0, 200) . '.pdf'; // Limit filename length
+
+        // Log activity
+        $this->logActivity(session('id_user'), "Mengunduh file abstrak: {$abstrak['judul']} (ID: {$abstrak['id_abstrak']})");
+
+        // Force download with proper headers for PDF
+        return $this->response
+                    ->download($filePath, null)
+                    ->setFileName($fileName)
+                    ->setContentType('application/pdf')
+                    ->setHeader('Content-Disposition', 'attachment; filename="' . $fileName . '"');
     }
 
     public function assign($id_abstrak)
@@ -177,7 +223,7 @@ class Abstrak extends BaseController
             $this->abstrakModel->update($id_abstrak, ['status' => 'sedang_direview']);
             
             // Log activity
-            $this->logActivity($id_reviewer, "Ditugaskan untuk review abstrak: {$abstrak['judul']}");
+            $this->logActivity(session('id_user'), "Menugaskan reviewer {$reviewer['nama_lengkap']} untuk abstrak: {$abstrak['judul']}");
             
             return redirect()->to('admin/abstrak/detail/' . $id_abstrak)->with('success', 'Reviewer berhasil ditugaskan!');
         } else {
@@ -276,9 +322,10 @@ class Abstrak extends BaseController
 
         try {
             // Delete associated file if exists
-            $filePath = WRITEPATH . 'uploads/abstrak/' . $abstrak['file_abstrak'];
+            $filePath = WRITEPATH . 'uploads/abstraks/' . $abstrak['file_abstrak'];
             if (file_exists($filePath)) {
                 unlink($filePath);
+                log_message('info', 'Deleted file: ' . $filePath);
             }
 
             // Delete reviews first (foreign key constraint)
@@ -288,7 +335,7 @@ class Abstrak extends BaseController
             $this->abstrakModel->delete($id_abstrak);
 
             // Log activity
-            $this->logActivity(session('id_user'), "Menghapus abstrak: {$abstrak['judul']}");
+            $this->logActivity(session('id_user'), "Menghapus abstrak: {$abstrak['judul']} (ID: {$id_abstrak})");
 
             $db->transComplete();
 
@@ -300,28 +347,9 @@ class Abstrak extends BaseController
 
         } catch (\Exception $e) {
             $db->transRollback();
+            log_message('error', 'Error deleting abstrak: ' . $e->getMessage());
             return redirect()->to('admin/abstrak')->with('error', 'Error: ' . $e->getMessage());
         }
-    }
-
-    public function downloadFile($id_abstrak)
-    {
-        $abstrak = $this->abstrakModel->find($id_abstrak);
-        
-        if (!$abstrak) {
-            throw new \CodeIgniter\Exceptions\PageNotFoundException('Abstrak tidak ditemukan.');
-        }
-
-        $filePath = WRITEPATH . 'uploads/abstrak/' . $abstrak['file_abstrak'];
-        
-        if (!file_exists($filePath)) {
-            throw new \CodeIgniter\Exceptions\PageNotFoundException('File tidak ditemukan.');
-        }
-
-        // Log activity
-        $this->logActivity(session('id_user'), "Mengunduh file abstrak: {$abstrak['judul']}");
-
-        return $this->response->download($filePath, null);
     }
 
     public function export()
@@ -330,10 +358,13 @@ class Abstrak extends BaseController
         
         $filename = 'abstrak_' . date('Y-m-d_H-i-s') . '.csv';
         
-        header('Content-Type: text/csv');
+        header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
         
         $output = fopen('php://output', 'w');
+        
+        // Add BOM for UTF-8
+        fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
         
         // CSV Headers
         fputcsv($output, [
@@ -469,12 +500,19 @@ class Abstrak extends BaseController
         $monthlyStats = [];
         for ($i = 11; $i >= 0; $i--) {
             $month = date('Y-m', strtotime("-{$i} months"));
+            $monthName = date('M Y', strtotime($month . '-01'));
+            
+            // PostgreSQL compatible date filtering
+            $startDate = $month . '-01';
+            $endDate = $month . '-' . date('t', strtotime($startDate));
+            
             $count = $this->abstrakModel
-                         ->where('DATE_FORMAT(tanggal_upload, "%Y-%m")', $month)
+                         ->where('tanggal_upload >=', $startDate)
+                         ->where('tanggal_upload <=', $endDate . ' 23:59:59')
                          ->countAllResults();
             
             $monthlyStats[] = [
-                'month' => date('M Y', strtotime($month . '-01')),
+                'month' => $monthName,
                 'count' => $count
             ];
         }

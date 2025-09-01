@@ -22,9 +22,9 @@ $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], function ($route
     $routes->get('register', 'Register::index');
     $routes->post('register', 'Register::store');
 
-    $routes->get('verify', 'Verify::index');       // tampilkan form
-    $routes->post('verify', 'Verify::check');      // proses cek OTP
-    $routes->get('resend', 'Verify::resend');      // kirim ulang kode
+    $routes->get('verify', 'Verify::index');
+    $routes->post('verify', 'Verify::check');
+    $routes->get('resend', 'Verify::resend');
 });
 
 // ---------------------------------------------------
@@ -33,7 +33,7 @@ $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], function ($route
 $routes->get('dashboard', 'Dashboard::index', ['filter' => 'auth']);
 
 // ---------------------------------------------------
-// Admin Routes
+// Admin Routes - Enhanced Payment Management
 // ---------------------------------------------------
 $routes->group('admin', [
     'filter' => 'role:admin',
@@ -49,7 +49,7 @@ $routes->group('admin', [
     $routes->get('users/delete/(:num)', 'User::delete/$1');
     $routes->get('users/detail/(:num)', 'User::detail/$1');
 
-    // Enhanced Abstrak Management
+    // Enhanced Abstrak Management with PDF support
     $routes->get('abstrak', 'Abstrak::index');
     $routes->get('abstrak/detail/(:num)', 'Abstrak::detail/$1');
     $routes->post('abstrak/assign/(:num)', 'Abstrak::assign/$1');
@@ -61,18 +61,17 @@ $routes->group('admin', [
     $routes->get('abstrak/statistics', 'Abstrak::statistics');
     $routes->get('abstrak/reviewers-by-category/(:num)', 'Abstrak::getReviewersByCategory/$1');
 
-    // Reviewer
+    // Reviewer Management
     $routes->get('reviewer', 'Reviewer::index');
     $routes->post('reviewer/store', 'Reviewer::store');
-    $routes->post('reviewer/assign-category', 'Reviewer::assignCategory');
-    $routes->get('reviewer/remove-category/(:num)', 'Reviewer::removeCategory/$1');
-    $routes->get('reviewer/toggle-status/(:num)', 'Reviewer::toggleStatus/$1');
+    $routes->post('reviewer/assignCategory', 'Reviewer::assignCategory');
+    $routes->get('reviewer/removeCategory/(:num)', 'Reviewer::removeCategory/$1');
+    $routes->get('reviewer/toggleStatus/(:num)', 'Reviewer::toggleStatus/$1');
     $routes->get('reviewer/detail/(:num)', 'Reviewer::detail/$1');
     $routes->get('reviewer/delete/(:num)', 'Reviewer::delete/$1');
     $routes->get('reviewer/performance', 'Reviewer::performance');
-    $routes->get('reviewer/by-category/(:num)', 'Reviewer::getByCategory/$1');
 
-    // Event Management - Enhanced with role-based pricing
+    // Event Management with role-based pricing
     $routes->get('event', 'Event::index');
     $routes->post('event/store', 'Event::store');
     $routes->get('event/edit/(:num)', 'Event::edit/$1');
@@ -84,30 +83,31 @@ $routes->group('admin', [
     $routes->get('event/toggle-status/(:num)', 'Event::toggleStatus/$1');
     $routes->get('event/export', 'Event::export');
     $routes->get('event/statistics', 'Event::statistics');
-    $routes->get('event/pricing-matrix/(:num)', 'Event::getPricingMatrix/$1');
 
-    // Pembayaran
+    // Enhanced Pembayaran Management with Auto-Verification
     $routes->get('pembayaran', 'Pembayaran::index');
     $routes->post('pembayaran/verifikasi/(:num)', 'Pembayaran::verifikasi/$1');
     $routes->get('pembayaran/detail/(:num)', 'Pembayaran::detail/$1');
     $routes->get('pembayaran/download-bukti/(:num)', 'Pembayaran::downloadBukti/$1');
+    $routes->post('pembayaran/bulk-verifikasi', 'Pembayaran::bulkVerifikasi');
     $routes->get('pembayaran/export', 'Pembayaran::export');
     $routes->get('pembayaran/statistik', 'Pembayaran::statistik');
 
-    // Absensi
+    // Absensi Management
     $routes->get('absensi', 'Absensi::index');
     $routes->get('absensi/export', 'Absensi::export');
 
-    // Dokumen
+    // Dokumen Management - FIXED ROUTES
     $routes->get('dokumen', 'Dokumen::index');
-    $routes->post('dokumen/loa/(:num)', 'Dokumen::uploadLoa/$1');
-    $routes->post('dokumen/sertifikat/(:num)', 'Dokumen::uploadSertifikat/$1');
+    $routes->post('dokumen/uploadLoa/(:num)', 'Dokumen::uploadLoa/$1');
+    $routes->post('dokumen/uploadSertifikat/(:num)', 'Dokumen::uploadSertifikat/$1');
     $routes->get('dokumen/download/(:num)', 'Dokumen::download/$1');
     $routes->get('dokumen/delete/(:num)', 'Dokumen::delete/$1');
-    $routes->post('dokumen/generate-bulk-loa', 'Dokumen::generateBulkLOA');
-    $routes->post('dokumen/generate-bulk-sertifikat', 'Dokumen::generateBulkSertifikat');
+    // Changed from POST to GET to match JavaScript calls
+    $routes->get('dokumen/generateBulkLOA', 'Dokumen::generateBulkLOA');
+    $routes->get('dokumen/generateBulkSertifikat', 'Dokumen::generateBulkSertifikat');
 
-    // Voucher
+    // Voucher Management
     $routes->get('voucher', 'Voucher::index');
     $routes->post('voucher/store', 'Voucher::store');
     $routes->get('voucher/edit/(:num)', 'Voucher::edit/$1');
@@ -126,7 +126,7 @@ $routes->group('admin', [
 });
 
 // ---------------------------------------------------
-// Presenter Routes - Enhanced with role-based pricing
+// Presenter Routes - Enhanced with Complete Payment Flow
 // ---------------------------------------------------
 $routes->group('presenter', [
     'filter' => 'role:presenter',
@@ -135,32 +135,38 @@ $routes->group('presenter', [
     // Dashboard
     $routes->get('dashboard', 'Dashboard::index');
     
-    // Event Registration with participation type selection
+    // Event Management
     $routes->get('events', 'Event::index');
     $routes->get('events/detail/(:num)', 'Event::detail/$1');
     $routes->get('events/register/(:num)', 'Event::showRegistrationForm/$1');
     $routes->post('events/register/(:num)', 'Event::register/$1');
+    $routes->post('events/calculate-price', 'Event::calculatePrice');
     
-    // Abstrak Management
+    // Abstrak Management - Fixed for PDF upload
     $routes->get('abstrak', 'Abstrak::index');
-    $routes->get('abstrak/submit/(:num)', 'Abstrak::showSubmitForm/$1');
     $routes->post('abstrak/upload', 'Abstrak::upload');
     $routes->get('abstrak/status', 'Abstrak::status');
-    $routes->get('abstrak/download/(:segment)', 'Abstrak::download/$1');
     $routes->get('abstrak/detail/(:num)', 'Abstrak::detail/$1');
+    $routes->get('abstrak/download/(:segment)', 'Abstrak::download/$1');
     
-    // Pembayaran Management with participation type
+    // Debug routes (remove in production)
+    $routes->get('abstrak/debug/test', 'AbstractDebug::testUpload');
+    $routes->post('abstrak/debug/simple', 'AbstractDebug::simpleUpload');
+    
+    // Enhanced Pembayaran Management - Complete Flow
     $routes->get('pembayaran', 'Pembayaran::index');
-    $routes->get('pembayaran/form/(:num)/(:alpha)', 'Pembayaran::showPaymentForm/$1/$2'); // eventId/participationType
+    $routes->get('pembayaran/create/(:num)', 'Pembayaran::create/$1');
     $routes->post('pembayaran/store', 'Pembayaran::store');
-    $routes->post('pembayaran/checkVoucher', 'Pembayaran::checkVoucher');
-    $routes->get('pembayaran/status', 'Pembayaran::status');
+    $routes->get('pembayaran/detail/(:num)', 'Pembayaran::detail/$1');
+    $routes->get('pembayaran/download-bukti/(:num)', 'Pembayaran::downloadBukti/$1');
+    $routes->get('pembayaran/cancel/(:num)', 'Pembayaran::cancel/$1');
+    $routes->post('pembayaran/validate-voucher', 'Pembayaran::validateVoucher');
     
-    // Absensi Management
+    // Absensi Management (unlocked after payment verification)
     $routes->get('absensi', 'Absensi::index');
     $routes->post('absensi/scan', 'Absensi::scan');
     
-    // Dokumen Management
+    // Dokumen Management (unlocked after payment verification)
     $routes->get('dokumen/loa', 'Dokumen::loa');
     $routes->get('dokumen/loa/download/(:segment)', 'Dokumen::downloadLoa/$1');
     $routes->get('dokumen/sertifikat', 'Dokumen::sertifikat');
@@ -168,7 +174,7 @@ $routes->group('presenter', [
 });
 
 // ---------------------------------------------------
-// Audience Routes - Enhanced with role-based pricing
+// Audience Routes - Enhanced with Payment Integration
 // ---------------------------------------------------
 $routes->group('audience', [
     'filter' => 'role:audience',
@@ -177,24 +183,27 @@ $routes->group('audience', [
     // Dashboard
     $routes->get('dashboard', 'Dashboard::index');
     
-    // Event Registration with participation type selection
+    // Event Registration
     $routes->get('events', 'Event::index');
     $routes->get('events/detail/(:num)', 'Event::detail/$1');
     $routes->get('events/register/(:num)', 'Event::showRegistrationForm/$1');
     $routes->post('events/register/(:num)', 'Event::register/$1');
+    $routes->post('events/calculate-price', 'Event::calculatePrice');
     
-    // Pembayaran Management with participation type
+    // Pembayaran Management
     $routes->get('pembayaran', 'Pembayaran::index');
-    $routes->get('pembayaran/form/(:num)/(:alpha)', 'Pembayaran::showPaymentForm/$1/$2'); // eventId/participationType
+    $routes->get('pembayaran/create/(:num)', 'Pembayaran::create/$1');
     $routes->post('pembayaran/store', 'Pembayaran::store');
-    $routes->post('pembayaran/checkVoucher', 'Pembayaran::checkVoucher');
-    $routes->get('pembayaran/status', 'Pembayaran::status');
+    $routes->get('pembayaran/detail/(:num)', 'Pembayaran::detail/$1');
+    $routes->get('pembayaran/download-bukti/(:num)', 'Pembayaran::downloadBukti/$1');
+    $routes->get('pembayaran/cancel/(:num)', 'Pembayaran::cancel/$1');
+    $routes->post('pembayaran/validate-voucher', 'Pembayaran::validateVoucher');
     
-    // Absensi Management
+    // Absensi Management (unlocked after payment verification)
     $routes->get('absensi', 'Absensi::index');
     $routes->post('absensi/scan', 'Absensi::scan');
     
-    // Dokumen Management
+    // Dokumen Management (unlocked after payment verification)
     $routes->get('dokumen/sertifikat', 'Dokumen::sertifikat');
     $routes->get('dokumen/sertifikat/download/(:segment)', 'Dokumen::downloadSertifikat/$1');
 });
@@ -221,6 +230,7 @@ $routes->group('api/v1', function ($routes) {
     $routes->get('events/(:num)/pricing', 'Api\Event::getPricing/$1');
     $routes->get('events/(:num)/details', 'Api\Event::getEventDetails/$1');
     $routes->post('events/calculate-price', 'Api\Event::calculatePrice');
+    $routes->post('vouchers/validate', 'Api\Voucher::validateVoucher');
 });
 
 // ---------------------------------------------------
@@ -231,4 +241,12 @@ $routes->group('profile', ['filter' => 'auth'], function ($routes) {
     $routes->post('update', 'Profile::update');
     $routes->post('change-password', 'Profile::changePassword');
     $routes->post('upload-photo', 'Profile::uploadPhoto');
+});
+
+// ---------------------------------------------------
+// Payment Verification Middleware Routes (Auto-Check)
+// ---------------------------------------------------
+$routes->group('middleware', ['filter' => 'auth'], function ($routes) {
+    $routes->get('check-payment-status', 'Middleware\PaymentCheck::checkStatus');
+    $routes->get('unlock-features', 'Middleware\FeatureUnlock::process');
 });

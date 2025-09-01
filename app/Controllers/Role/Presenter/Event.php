@@ -7,6 +7,7 @@ use App\Models\EventModel;
 use App\Models\PembayaranModel;
 use App\Models\AbstrakModel;
 use App\Models\VoucherModel;
+use App\Models\UserModel;
 
 class Event extends BaseController
 {
@@ -14,6 +15,7 @@ class Event extends BaseController
     protected $pembayaranModel;
     protected $abstrakModel;
     protected $voucherModel;
+    protected $userModel;
 
     public function __construct()
     {
@@ -21,23 +23,29 @@ class Event extends BaseController
         $this->pembayaranModel = new PembayaranModel();
         $this->abstrakModel = new AbstrakModel();
         $this->voucherModel = new VoucherModel();
+        $this->userModel = new UserModel();
     }
 
     public function index()
     {
-        // Get active events with open registration
+        // Get active events with open registration for presenters
         $events = $this->eventModel->getEventsWithOpenRegistration();
         
         // Get user's registration status for each event
         $userId = session('id_user');
         foreach ($events as &$event) {
+            // Get user's registration for this event
             $event['user_registration'] = $this->pembayaranModel
                 ->where('event_id', $event['id'])
                 ->where('id_user', $userId)
                 ->first();
                 
+            // Get pricing matrix (presenter can only participate offline)
             $event['pricing_matrix'] = $this->eventModel->getPricingMatrix($event['id']);
-            $event['participation_options'] = $this->eventModel->getParticipationOptions($event['id']);
+            $event['participation_options'] = ['offline']; // Presenter only offline
+            
+            // Get event statistics
+            $event['stats'] = $this->eventModel->getEventStats($event['id']);
         }
 
         $data = [
@@ -76,9 +84,9 @@ class Event extends BaseController
         // Get event statistics
         $stats = $this->eventModel->getEventStats($eventId);
         
-        // Get pricing matrix
+        // Get pricing matrix (presenter only offline)
         $pricingMatrix = $this->eventModel->getPricingMatrix($eventId);
-        $participationOptions = $this->eventModel->getParticipationOptions($eventId);
+        $participationOptions = ['offline'];
 
         $data = [
             'event' => $event,
@@ -120,14 +128,16 @@ class Event extends BaseController
                 ->with('info', 'Anda sudah terdaftar untuk event ini.');
         }
 
-        // Get pricing matrix and participation options
+        // Get pricing matrix (presenter only offline)
         $pricingMatrix = $this->eventModel->getPricingMatrix($eventId);
-        $participationOptions = $this->eventModel->getParticipationOptions($eventId);
+        $participationOptions = ['offline']; // Presenter can only participate offline
         
         // Get active vouchers
         $activeVouchers = $this->voucherModel
             ->where('status', 'aktif')
             ->where('masa_berlaku >=', date('Y-m-d'))
+            ->where('kuota >', 0)
+            ->orderBy('masa_berlaku', 'ASC')
             ->findAll();
 
         $data = [
@@ -135,7 +145,8 @@ class Event extends BaseController
             'pricing_matrix' => $pricingMatrix,
             'participation_options' => $participationOptions,
             'user_role' => session('role'),
-            'active_vouchers' => $activeVouchers
+            'active_vouchers' => $activeVouchers,
+            'base_amount' => $event['presenter_fee_offline'] ?? 0
         ];
 
         return view('role/presenter/event/registration_form', $data);
@@ -157,9 +168,9 @@ class Event extends BaseController
         $validation = \Config\Services::validation();
         
         $rules = [
-            'participation_type' => 'required|in_list[online,offline]',
-            'payment_method' => 'required|in_list[transfer,ewallet,cash]',
-            'payment_proof' => 'uploaded[payment_proof]|max_size[payment_proof,5120]|ext_in[payment_proof,jpg,jpeg,png,pdf]'
+            'payment_method' => 'required|in_list[bank_transfer,e_wallet,credit_card]',
+            'payment_proof' => 'uploaded[payment_proof]|max_size[payment_proof,5120]|ext_in[payment_proof,jpg,jpeg,png,pdf]',
+            'voucher_code' => 'permit_empty|max_length[50]'
         ];
 
         if (!$this->validate($rules)) {
@@ -168,7 +179,7 @@ class Event extends BaseController
 
         $userId = session('id_user');
         $userRole = session('role');
-        $participationType = $this->request->getPost('participation_type');
+        $participationType = 'offline'; // Presenter can only participate offline
         $voucherCode = $this->request->getPost('voucher_code');
 
         // Check if user already registered
@@ -182,22 +193,15 @@ class Event extends BaseController
                 ->with('error', 'Anda sudah terdaftar untuk event ini.');
         }
 
-        // Validate participation type is available for this event
-        $participationOptions = $this->eventModel->getParticipationOptions($eventId);
-        if (!in_array($participationType, $participationOptions)) {
-            return redirect()->back()->withInput()
-                ->with('error', 'Tipe partisipasi tidak tersedia untuk event ini.');
-        }
-
-        // Get price for user role and participation type
-        $basePrice = $this->eventModel->getEventPrice($eventId, $userRole, $participationType);
+        // Get base price for presenter (always offline)
+        $basePrice = $event['presenter_fee_offline'] ?? 0;
         $finalPrice = $basePrice;
         $voucherId = null;
         $discount = 0;
 
         // Apply voucher if provided
         if ($voucherCode) {
-            $voucher = $this->voucherModel->where('kode_voucher', strtoupper($voucherCode))->first();
+            $voucher = $this->voucherModel->where('kode_voucher', strtoupper(trim($voucherCode)))->first();
             
             if ($voucher && $voucher['status'] === 'aktif' && strtotime($voucher['masa_berlaku']) > time()) {
                 // Check quota
@@ -213,7 +217,11 @@ class Event extends BaseController
                     }
                     
                     $finalPrice = max(0, $basePrice - $discount);
+                } else {
+                    return redirect()->back()->withInput()->with('error', 'Kuota voucher sudah habis.');
                 }
+            } else {
+                return redirect()->back()->withInput()->with('error', 'Kode voucher tidak valid atau sudah expired.');
             }
         }
 
@@ -222,46 +230,91 @@ class Event extends BaseController
         $fileName = '';
         
         if ($file->isValid() && !$file->hasMoved()) {
+            // Create upload directory if not exists
+            $uploadPath = WRITEPATH . 'uploads/pembayaran/';
+            if (!is_dir($uploadPath)) {
+                mkdir($uploadPath, 0755, true);
+            }
+
             $fileName = 'payment_' . $userId . '_' . $eventId . '_' . time() . '.' . $file->getExtension();
-            $file->move(WRITEPATH . 'uploads/pembayaran/', $fileName);
+            
+            if (!$file->move($uploadPath, $fileName)) {
+                return redirect()->back()->withInput()->with('error', 'Gagal mengupload bukti pembayaran.');
+            }
         } else {
-            return redirect()->back()->withInput()->with('error', 'Gagal mengupload bukti pembayaran.');
+            return redirect()->back()->withInput()->with('error', 'File bukti pembayaran tidak valid.');
         }
 
-        // Save payment record
-        $paymentData = [
-            'id_user' => $userId,
-            'event_id' => $eventId,
-            'participation_type' => $participationType,
-            'metode' => $this->request->getPost('payment_method'),
-            'jumlah' => $finalPrice,
-            'bukti_bayar' => $fileName,
-            'status' => 'pending',
-            'id_voucher' => $voucherId,
-            'tanggal_bayar' => date('Y-m-d H:i:s')
-        ];
+        // Begin database transaction
+        $db = \Config\Database::connect();
+        $db->transStart();
 
-        if ($this->pembayaranModel->save($paymentData)) {
-            return redirect()->to('presenter/events/detail/' . $eventId)
-                ->with('success', 'Pendaftaran berhasil! Silakan tunggu verifikasi pembayaran.');
-        } else {
-            // Remove uploaded file if database save fails
-            if (file_exists(WRITEPATH . 'uploads/pembayaran/' . $fileName)) {
-                unlink(WRITEPATH . 'uploads/pembayaran/' . $fileName);
+        try {
+            // Save payment record
+            $paymentData = [
+                'id_user' => $userId,
+                'event_id' => $eventId,
+                'participation_type' => $participationType,
+                'metode' => $this->request->getPost('payment_method'),
+                'jumlah' => $finalPrice,
+                'original_amount' => $basePrice,
+                'discount_amount' => $discount,
+                'bukti_bayar' => $fileName,
+                'status' => 'pending',
+                'id_voucher' => $voucherId,
+                'tanggal_bayar' => date('Y-m-d H:i:s')
+            ];
+
+            $paymentId = $this->pembayaranModel->insert($paymentData);
+
+            if (!$paymentId) {
+                throw new \Exception('Failed to create payment record.');
             }
-            return redirect()->back()->withInput()->with('error', 'Gagal menyimpan data pendaftaran.');
+
+            // Log activity
+            $this->logActivity($userId, "Submitted event registration payment for: {$event['title']} (Amount: Rp " . number_format($finalPrice, 0, ',', '.') . ")");
+
+            $db->transComplete();
+
+            if ($db->transStatus() === FALSE) {
+                throw new \Exception('Transaction failed.');
+            }
+
+            return redirect()->to('presenter/events/detail/' . $eventId)
+                ->with('success', 'Pendaftaran berhasil! Silakan tunggu verifikasi pembayaran dari admin.');
+
+        } catch (\Exception $e) {
+            $db->transRollback();
+            
+            // Remove uploaded file on error
+            if (!empty($fileName) && file_exists($uploadPath . $fileName)) {
+                unlink($uploadPath . $fileName);
+            }
+
+            log_message('error', 'Event registration error: ' . $e->getMessage());
+            
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
     public function calculatePrice()
     {
         $eventId = $this->request->getPost('event_id');
-        $participationType = $this->request->getPost('participation_type');
         $voucherCode = $this->request->getPost('voucher_code');
         $userRole = session('role');
 
-        // Get base price
-        $basePrice = $this->eventModel->getEventPrice($eventId, $userRole, $participationType);
+        // Get base price for presenter (always offline)
+        $event = $this->eventModel->find($eventId);
+        if (!$event) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Event tidak ditemukan'
+            ]);
+        }
+
+        $basePrice = $event['presenter_fee_offline'] ?? 0;
         $finalPrice = $basePrice;
         $discount = 0;
         $voucherValid = false;
@@ -269,7 +322,7 @@ class Event extends BaseController
 
         // Apply voucher if provided
         if ($voucherCode) {
-            $voucher = $this->voucherModel->where('kode_voucher', strtoupper($voucherCode))->first();
+            $voucher = $this->voucherModel->where('kode_voucher', strtoupper(trim($voucherCode)))->first();
             
             if (!$voucher) {
                 $voucherMessage = 'Kode voucher tidak ditemukan.';
@@ -299,6 +352,7 @@ class Event extends BaseController
         }
 
         return $this->response->setJSON([
+            'success' => true,
             'base_price' => $basePrice,
             'discount' => $discount,
             'final_price' => $finalPrice,
@@ -308,5 +362,20 @@ class Event extends BaseController
             'formatted_discount' => 'Rp ' . number_format($discount, 0, ',', '.'),
             'formatted_final_price' => 'Rp ' . number_format($finalPrice, 0, ',', '.')
         ]);
+    }
+
+    private function logActivity($userId, $activity)
+    {
+        $db = \Config\Database::connect();
+        try {
+            $db->table('log_aktivitas')->insert([
+                'id_user' => $userId,
+                'aktivitas' => $activity,
+                'waktu' => date('Y-m-d H:i:s')
+            ]);
+        } catch (\Exception $e) {
+            // Silent fail for logging
+            log_message('error', 'Failed to log activity: ' . $e->getMessage());
+        }
     }
 }
