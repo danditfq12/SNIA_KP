@@ -6,7 +6,6 @@
     <title>Kelola Event - SNIA Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.12/sweetalert2.min.css" rel="stylesheet">
     <style>
         :root {
             --primary-color: #2563eb;
@@ -117,50 +116,6 @@
             font-weight: 600;
         }
 
-        .badge-custom {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .btn-custom {
-            border-radius: 8px;
-            padding: 8px 16px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        .btn-custom:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        .modal-content {
-            border-radius: 16px;
-            border: none;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-
-        .modal-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
-            color: white;
-            border-radius: 16px 16px 0 0;
-            border-bottom: none;
-        }
-
-        .form-control, .form-select {
-            border-radius: 8px;
-            border: 2px solid #e2e8f0;
-            padding: 12px 16px;
-            transition: all 0.3s ease;
-        }
-
-        .form-control:focus, .form-select:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
-        }
-
         .event-card {
             background: white;
             border-radius: 12px;
@@ -189,6 +144,112 @@
             border-radius: 12px;
             font-size: 0.75rem;
             font-weight: 600;
+        }
+
+        .pricing-section {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+            border: 1px solid #e2e8f0;
+        }
+
+        .pricing-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .pricing-header i {
+            margin-right: 8px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .price-display {
+            font-size: 0.85rem;
+            margin-top: 8px;
+        }
+
+        .price-display .price {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .modal-content {
+            border-radius: 16px;
+            border: none;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
+            color: white;
+            border-radius: 16px 16px 0 0;
+            border-bottom: none;
+        }
+
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 2px solid #e2e8f0;
+            padding: 12px 16px;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
+        }
+
+        .btn-custom {
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-custom:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .participant-breakdown {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+        }
+
+        .participant-type {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .participant-type:last-child {
+            border-bottom: none;
+        }
+
+        .participant-label {
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
+
+        .participant-count {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .revenue-section {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 12px 0;
         }
     </style>
 </head>
@@ -253,7 +314,8 @@
                                     <i class="fas fa-calendar me-3"></i>Kelola Event
                                 </h1>
                                 <p class="text-muted mb-0">
-                                    Kelola semua event konferensi dan workshop SNIA
+                                    Kelola semua event konferensi dan workshop SNIA<br>
+                                    <small><strong>Presenter:</strong> Hanya offline | <strong>Audience:</strong> Online & Offline terpisah</small>
                                 </p>
                             </div>
                             <div class="col-auto">
@@ -360,8 +422,12 @@
                                                                 <?= date('H:i', strtotime($event['event_time'])) ?>
                                                             </small>
                                                         </div>
-                                                        <span class="format-badge <?= $event['format'] == 'online' ? 'bg-info text-white' : 'bg-success text-white' ?>">
-                                                            <i class="fas fa-<?= $event['format'] == 'online' ? 'video' : 'map-marker-alt' ?> me-1"></i>
+                                                        <span class="format-badge <?php
+                                                            if ($event['format'] == 'online') echo 'bg-info text-white';
+                                                            elseif ($event['format'] == 'offline') echo 'bg-success text-white';
+                                                            else echo 'bg-primary text-white';
+                                                        ?>">
+                                                            <i class="fas fa-<?= $event['format'] == 'online' ? 'video' : ($event['format'] == 'offline' ? 'map-marker-alt' : 'globe') ?> me-1"></i>
                                                             <?= ucfirst($event['format']) ?>
                                                         </span>
                                                     </div>
@@ -381,24 +447,120 @@
                                                 <div class="event-body">
                                                     <p class="small text-muted mb-3"><?= esc(substr($event['description'] ?? '', 0, 100)) ?>...</p>
                                                     
-                                                    <div class="row text-center mb-3">
-                                                        <div class="col-4">
-                                                            <div class="fw-bold text-primary"><?= $event['total_registrations'] ?? 0 ?></div>
-                                                            <small class="text-muted">Registrasi</small>
+                                                    <!-- Enhanced Pricing Display -->
+                                                    <div class="pricing-section">
+                                                        <div class="pricing-header">
+                                                            <i class="fas fa-money-bill-wave text-success"></i>
+                                                            Harga Registrasi
                                                         </div>
-                                                        <div class="col-4">
-                                                            <div class="fw-bold text-success"><?= $event['verified_registrations'] ?? 0 ?></div>
-                                                            <small class="text-muted">Verified</small>
-                                                        </div>
-                                                        <div class="col-4">
-                                                            <div class="fw-bold text-info"><?= $event['total_abstracts'] ?? 0 ?></div>
-                                                            <small class="text-muted">Abstrak</small>
+                                                        <div class="row">
+                                                            <div class="col-6">
+                                                                <div class="text-center">
+                                                                    <div class="fw-bold text-primary">
+                                                                        <i class="fas fa-microphone me-1"></i>Presenter
+                                                                    </div>
+                                                                    <div class="price-display">
+                                                                        <div class="badge bg-primary mb-1">Offline Only</div>
+                                                                        <div><span class="price">Rp <?= number_format($event['presenter_fee_offline'] ?? 0, 0, ',', '.') ?></span></div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-6">
+                                                                <div class="text-center">
+                                                                    <div class="fw-bold text-info">
+                                                                        <i class="fas fa-users me-1"></i>Audience
+                                                                    </div>
+                                                                    <div class="price-display">
+                                                                        <?php if ($event['format'] != 'offline'): ?>
+                                                                            <div class="badge bg-info text-white mb-1">Online</div>
+                                                                            <div><span class="price">Rp <?= number_format($event['audience_fee_online'] ?? 0, 0, ',', '.') ?></span></div>
+                                                                        <?php endif; ?>
+                                                                        <?php if ($event['format'] != 'online'): ?>
+                                                                            <div class="badge bg-success text-white mb-1">Offline</div>
+                                                                            <div><span class="price">Rp <?= number_format($event['audience_fee_offline'] ?? 0, 0, ',', '.') ?></span></div>
+                                                                        <?php endif; ?>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     
-                                                    <div class="mb-3">
-                                                        <small class="text-muted d-block">Biaya Registrasi:</small>
-                                                        <strong class="text-success">Rp <?= number_format($event['registration_fee'], 0, ',', '.') ?></strong>
+                                                    <!-- Enhanced Participant Breakdown -->
+                                                    <div class="participant-breakdown">
+                                                        <div class="fw-bold text-secondary mb-2">
+                                                            <i class="fas fa-chart-pie me-1"></i>Breakdown Peserta
+                                                        </div>
+                                                        
+                                                        <div class="participant-type">
+                                                            <span class="participant-label">
+                                                                <i class="fas fa-microphone text-primary me-1"></i>Presenter
+                                                            </span>
+                                                            <span class="participant-count text-primary">
+                                                                <?= $event['presenter_registrations'] ?? 0 ?>
+                                                            </span>
+                                                        </div>
+                                                        
+                                                        <?php if ($event['format'] != 'offline'): ?>
+                                                        <div class="participant-type">
+                                                            <span class="participant-label">
+                                                                <i class="fas fa-video text-info me-1"></i>Audience Online
+                                                            </span>
+                                                            <span class="participant-count text-info">
+                                                                <?= $event['audience_online_registrations'] ?? 0 ?>
+                                                            </span>
+                                                        </div>
+                                                        <?php endif; ?>
+                                                        
+                                                        <?php if ($event['format'] != 'online'): ?>
+                                                        <div class="participant-type">
+                                                            <span class="participant-label">
+                                                                <i class="fas fa-map-marker-alt text-success me-1"></i>Audience Offline
+                                                            </span>
+                                                            <span class="participant-count text-success">
+                                                                <?= $event['audience_offline_registrations'] ?? 0 ?>
+                                                            </span>
+                                                        </div>
+                                                        <?php endif; ?>
+                                                        
+                                                        <div class="participant-type border-top pt-2 mt-2">
+                                                            <span class="participant-label fw-bold">
+                                                                <i class="fas fa-users me-1"></i>Total Verified
+                                                            </span>
+                                                            <span class="participant-count fw-bold">
+                                                                <?= $event['verified_registrations'] ?? 0 ?>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Revenue Section -->
+                                                    <div class="revenue-section">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <div>
+                                                                <i class="fas fa-chart-line me-2"></i>
+                                                                <strong>Total Revenue</strong>
+                                                            </div>
+                                                            <div class="text-end">
+                                                                <div class="fw-bold">Rp <?= number_format($event['total_revenue'] ?? 0, 0, ',', '.') ?></div>
+                                                                <small><?= $event['total_abstracts'] ?? 0 ?> Abstrak</small>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <?php if (($event['online_revenue'] ?? 0) > 0 || ($event['offline_revenue'] ?? 0) > 0): ?>
+                                                        <div class="row mt-2 pt-2 border-top border-light">
+                                                            <?php if (($event['online_revenue'] ?? 0) > 0): ?>
+                                                            <div class="col-6 text-center">
+                                                                <small>Online</small><br>
+                                                                <strong>Rp <?= number_format($event['online_revenue'], 0, ',', '.') ?></strong>
+                                                            </div>
+                                                            <?php endif; ?>
+                                                            <?php if (($event['offline_revenue'] ?? 0) > 0): ?>
+                                                            <div class="col-6 text-center">
+                                                                <small>Offline</small><br>
+                                                                <strong>Rp <?= number_format($event['offline_revenue'], 0, ',', '.') ?></strong>
+                                                            </div>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                        <?php endif; ?>
                                                     </div>
                                                     
                                                     <div class="d-flex gap-1">
@@ -453,7 +615,7 @@
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form action="<?= site_url('admin/event/store') ?>" method="POST">
+                <form action="/admin/event/store" method="POST">
                     <?= csrf_field() ?>
                     <div class="modal-body">
                         <div class="row">
@@ -468,9 +630,11 @@
                                     <label class="form-label">Format Event *</label>
                                     <select class="form-select" name="format" id="eventFormat" required>
                                         <option value="">-- Pilih Format --</option>
-                                        <option value="online">Online</option>
-                                        <option value="offline">Offline</option>
+                                        <option value="online">Online Only</option>
+                                        <option value="offline">Offline Only</option>
+                                        <option value="both">Online & Offline (Terpisah)</option>
                                     </select>
+                                    <div class="form-text">Presenter selalu offline. Audience bisa pilih sesuai format.</div>
                                 </div>
                             </div>
                         </div>
@@ -500,20 +664,78 @@
                                 <div class="mb-3">
                                     <label class="form-label">Lokasi Event</label>
                                     <input type="text" class="form-control" name="location" maxlength="255">
+                                    <div class="form-text">Untuk peserta offline (presenter + audience offline)</div>
                                 </div>
                             </div>
                             <div class="col-md-6" id="zoomField" style="display: none;">
                                 <div class="mb-3">
-                                    <label class="form-label">Link Zoom</label>
+                                    <label class="form-label">Link Zoom/Meeting</label>
                                     <input type="url" class="form-control" name="zoom_link" maxlength="500">
+                                    <div class="form-text">Untuk audience online</div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Biaya Registrasi *</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">Rp</span>
-                                        <input type="number" class="form-control" name="registration_fee" required min="0" value="0">
+                        </div>
+
+                        <!-- Enhanced Pricing Section -->
+                        <div class="pricing-section">
+                            <div class="pricing-header">
+                                <i class="fas fa-money-bill-wave text-success"></i>
+                                Pengaturan Harga Registrasi
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Penting:</strong> Presenter hanya bisa offline. Audience bisa memilih online/offline secara terpisah.
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card border-primary">
+                                        <div class="card-header bg-primary text-white">
+                                            <h6 class="mb-0">
+                                                <i class="fas fa-microphone me-2"></i>
+                                                Presenter (Offline Only)
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">Harga Offline *</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">Rp</span>
+                                                    <input type="number" class="form-control" name="presenter_fee_offline" required min="0" value="0">
+                                                </div>
+                                                <div class="form-text">Presenter wajib hadir secara fisik untuk presentasi</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card border-info">
+                                        <div class="card-header bg-info text-white">
+                                            <h6 class="mb-0">
+                                                <i class="fas fa-users me-2"></i>
+                                                Audience (Pilihan Terpisah)
+                                            </h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">Harga Online *</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">Rp</span>
+                                                    <input type="number" class="form-control" name="audience_fee_online" required min="0" value="0">
+                                                </div>
+                                                <div class="form-text">Untuk audience yang ikut via online</div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Harga Offline *</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">Rp</span>
+                                                    <input type="number" class="form-control" name="audience_fee_offline" required min="0" value="0">
+                                                </div>
+                                                <div class="form-text">Untuk audience yang hadir secara fisik</div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -524,19 +746,21 @@
                                 <div class="mb-3">
                                     <label class="form-label">Maksimal Peserta</label>
                                     <input type="number" class="form-control" name="max_participants" min="1">
-                                    <div class="form-text">Kosongkan untuk unlimited</div>
+                                    <div class="form-text">Total gabungan semua tipe. Kosongkan untuk unlimited</div>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3">
                                     <label class="form-label">Batas Pendaftaran</label>
                                     <input type="datetime-local" class="form-control" name="registration_deadline">
+                                    <div class="form-text">Berlaku untuk semua tipe peserta</div>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="mb-3">
                                     <label class="form-label">Batas Submit Abstrak</label>
                                     <input type="datetime-local" class="form-control" name="abstract_deadline">
+                                    <div class="form-text">Hanya untuk presenter</div>
                                 </div>
                             </div>
                         </div>
@@ -548,6 +772,7 @@
                                     <label class="form-check-label">
                                         Aktifkan Pendaftaran
                                     </label>
+                                    <div class="form-text">Berlaku untuk semua tipe peserta</div>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -556,6 +781,7 @@
                                     <label class="form-check-label">
                                         Aktifkan Submit Abstrak
                                     </label>
+                                    <div class="form-text">Hanya untuk presenter</div>
                                 </div>
                             </div>
                         </div>
@@ -581,17 +807,32 @@
             // Handle format change
             $('#eventFormat').on('change', function() {
                 const format = $(this).val();
+                
+                // Reset visibility
+                $('#locationField, #zoomField').hide();
+                
                 if (format === 'online') {
-                    $('#locationField').hide();
                     $('#zoomField').show();
                 } else if (format === 'offline') {
                     $('#locationField').show();
-                    $('#zoomField').hide();
-                } else {
-                    $('#locationField').hide();
-                    $('#zoomField').hide();
+                } else if (format === 'both') {
+                    $('#locationField, #zoomField').show();
                 }
+                
+                // Update field requirements
+                updateFieldRequirements(format);
             });
+
+            function updateFieldRequirements(format) {
+                // Remove all required attributes first
+                $('input[name="location"], input[name="zoom_link"]').removeAttr('required');
+                
+                if (format === 'offline') {
+                    $('input[name="location"]').attr('required', true);
+                } else if (format === 'both') {
+                    $('input[name="location"]').attr('required', true);
+                }
+            }
 
             // Animate numbers on page load
             const numbers = document.querySelectorAll('.stat-number');
@@ -613,11 +854,10 @@
         });
 
         function viewDetail(eventId) {
-            window.open('<?= site_url('admin/event/detail') ?>/' + eventId, '_blank');
+            window.open('/admin/event/detail/' + eventId, '_blank');
         }
 
         function editEvent(eventId) {
-            // Implementation for edit event
             Swal.fire('Info', 'Fitur edit event akan segera tersedia', 'info');
         }
 
@@ -635,7 +875,7 @@
                 cancelButtonText: 'Batal'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = '<?= site_url('admin/event/toggle-status') ?>/' + eventId;
+                    window.location.href = '/admin/event/toggle-status/' + eventId;
                 }
             });
         }
@@ -652,13 +892,13 @@
                 cancelButtonText: 'Batal'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = '<?= site_url('admin/event/delete') ?>/' + eventId;
+                    window.location.href = '/admin/event/delete/' + eventId;
                 }
             });
         }
 
         function exportData() {
-            window.open('<?= site_url('admin/event/export') ?>', '_blank');
+            window.open('/admin/event/export', '_blank');
         }
 
         // Show alerts for flash messages
@@ -677,18 +917,6 @@
                 icon: 'error',
                 title: 'Error!',
                 text: '<?= session('error') ?>',
-            });
-        <?php endif; ?>
-
-        <?php if (session('errors')): ?>
-            let errorList = '';
-            <?php foreach (session('errors') as $error): ?>
-                errorList += '<?= $error ?>\n';
-            <?php endforeach; ?>
-            Swal.fire({
-                icon: 'error',
-                title: 'Validation Error!',
-                text: errorList,
             });
         <?php endif; ?>
     </script>
