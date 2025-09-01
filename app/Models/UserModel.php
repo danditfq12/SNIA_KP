@@ -7,11 +7,7 @@ use CodeIgniter\Model;
 class UserModel extends Model
 {
     protected $table         = 'users';
-<<<<<<< HEAD
-    protected $primaryKey    = 'id_user';   // ✅ fix di sini
-=======
-    protected $primaryKey    = 'id_user'; // Diperbaiki dari 'id' ke 'id_user'
->>>>>>> feature/presenter
+    protected $primaryKey    = 'id_user';
     protected $returnType    = 'array';
     protected $useTimestamps = false;
 
