@@ -1,11 +1,135 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-    <meta charset="utf-8">
-    <title>Manajemen Abstrak - Presenter Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presenter Dashboard - SNIA</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #06b6d4;
+            --dark-color: #1e293b;
+            --light-color: #f8fafc;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--light-color) 0%, #e2e8f0 100%);
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            background: linear-gradient(180deg, var(--primary-color) 0%, #1e40af 100%);
+            min-height: 100vh;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 250px;
+            z-index: 1000;
+        }
+
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.8);
+            padding: 12px 20px;
+            margin: 4px 0;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .sidebar .nav-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .sidebar .nav-link.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .page-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
+            color: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.3);
+        }
+
+        .card {
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            border: 1px solid rgba(255,255,255,0.2);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 20px;
+            font-weight: 600;
+        }
+
+        .btn-custom {
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+        }
+
+        .btn-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .btn-primary-custom {
+            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 250px;
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+
+            .mobile-toggle {
+                display: block;
+                position: fixed;
+                top: 20px;
+                left: 20px;
+                z-index: 1001;
+            }
+        }
+
+        .mobile-toggle {
+            display: none;
+        }
+
+        /* Existing styles for specific pages */
         .file-upload-area {
             border: 2px dashed #dee2e6;
             border-radius: 8px;
@@ -42,29 +166,116 @@
             border-radius: 6px;
             border-left: 4px solid #dc3545;
         }
+
+        .review-card {
+            border-left: 4px solid;
+        }
+        .review-accepted {
+            border-left-color: #28a745;
+        }
+        .review-rejected {
+            border-left-color: #dc3545;
+        }
+        .review-pending {
+            border-left-color: #ffc107;
+        }
+        .timeline-item {
+            border-left: 2px solid #dee2e6;
+            padding-left: 20px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -8px;
+            top: 0;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: #dee2e6;
+        }
+        .timeline-item.accepted::before {
+            background-color: #28a745;
+        }
+        .timeline-item.rejected::before {
+            background-color: #dc3545;
+        }
+        .timeline-item.pending::before {
+            background-color: #ffc107;
+        }
     </style>
 </head>
-<body class="bg-light">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="<?= site_url('presenter/dashboard') ?>">
-                <i class="fas fa-microphone me-2"></i>SNIA Presenter
+<body>
+    <!-- Mobile Toggle Button -->
+    <button class="btn btn-primary mobile-toggle" onclick="toggleSidebar()">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="p-4 text-center">
+            <h4 class="text-white mb-0">
+                <i class="fas fa-microphone-alt me-2"></i>
+                SNIA Presenter
+            </h4>
+            <small class="text-white-50">Dashboard</small>
+        </div>
+        
+        <nav class="nav flex-column px-3">
+            <a class="nav-link" href="<?= site_url('presenter/dashboard') ?>">
+                <i class="fas fa-tachometer-alt me-2"></i> Dashboard
             </a>
-            <div class="navbar-nav ms-auto">
-                <a href="<?= site_url('presenter/dashboard') ?>" class="nav-link">
-                    <i class="fas fa-home me-1"></i>Dashboard
-                </a>
-                <a href="<?= site_url('presenter/abstrak/status') ?>" class="nav-link">
-                    <i class="fas fa-chart-line me-1"></i>Status
-                </a>
-                <a href="<?= site_url('auth/logout') ?>" class="btn btn-outline-light btn-sm ms-2">
-                    <i class="fas fa-sign-out-alt me-1"></i>Logout
-                </a>
+            <a class="nav-link" href="<?= site_url('presenter/events') ?>">
+                <i class="fas fa-calendar me-2"></i> Events
+            </a>
+            <a class="nav-link active" href="<?= site_url('presenter/abstrak') ?>">
+                <i class="fas fa-file-alt me-2"></i> My Abstracts
+            </a>
+            <a class="nav-link" href="<?= site_url('presenter/pembayaran') ?>">
+                <i class="fas fa-credit-card me-2"></i> Payments
+            </a>
+            <a class="nav-link" href="<?= site_url('presenter/absensi') ?>">
+                <i class="fas fa-qrcode me-2"></i> Attendance
+            </a>
+            <a class="nav-link" href="<?= site_url('presenter/dokumen/loa') ?>">
+                <i class="fas fa-file-contract me-2"></i> LOA
+            </a>
+            <a class="nav-link" href="<?= site_url('presenter/dokumen/sertifikat') ?>">
+                <i class="fas fa-certificate me-2"></i> Certificate
+            </a>
+            <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
+            <a class="nav-link" href="<?= site_url('profile') ?>">
+                <i class="fas fa-user me-2"></i> Profile
+            </a>
+            <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
+                <i class="fas fa-sign-out-alt me-2"></i> Logout
+            </a>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Page Header -->
+        <div class="page-header animate__animated animate__fadeInDown">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h2 class="mb-2">
+                        <i class="fas fa-file-alt me-2"></i>
+                        Manajemen Abstrak
+                    </h2>
+                    <p class="mb-0 opacity-90">
+                        Submit dan kelola abstrak presentasi Anda untuk berbagai event SNIA.
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="<?= site_url('presenter/abstrak/status') ?>" class="btn btn-light">
+                        <i class="fas fa-chart-line me-1"></i>Lihat Status
+                    </a>
+                </div>
             </div>
         </div>
-    </nav>
 
-    <div class="container py-4">
         <!-- Display Flash Messages -->
         <?php if (session('success')): ?>
             <div class="alert alert-success alert-dismissible fade show">
@@ -176,10 +387,10 @@
                                 <small class="text-muted mt-1">Uploading...</small>
                             </div>
                         </div>
-                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <button type="submit" class="btn btn-primary btn-custom" id="submitBtn">
                             <i class="fas fa-upload me-1"></i>Upload Abstrak
                         </button>
-                        <button type="reset" class="btn btn-outline-secondary ms-2">
+                        <button type="reset" class="btn btn-outline-secondary btn-custom ms-2">
                             <i class="fas fa-undo me-1"></i>Reset
                         </button>
                     </form>
@@ -257,7 +468,7 @@
                         <h5 class="text-muted">Belum Ada Abstrak</h5>
                         <p class="text-muted">Anda belum mengirim abstrak PDF apapun</p>
                         <?php if (!empty($activeEvents)): ?>
-                            <button class="btn btn-primary" onclick="scrollToSubmitForm()">
+                            <button class="btn btn-primary btn-custom" onclick="scrollToSubmitForm()">
                                 <i class="fas fa-plus me-1"></i>Submit Abstrak Pertama
                             </button>
                         <?php endif; ?>
@@ -269,6 +480,10 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function toggleSidebar() {
+            document.querySelector('.sidebar').classList.toggle('show');
+        }
+
         function scrollToSubmitForm() {
             const submitCard = document.querySelector('.card');
             if (submitCard) {
@@ -286,117 +501,121 @@
             const form = document.getElementById('uploadForm');
             const submitBtn = document.getElementById('submitBtn');
 
-            // Drag and drop functionality
-            fileUploadArea.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                fileUploadArea.classList.add('dragover');
-            });
-
-            fileUploadArea.addEventListener('dragleave', function(e) {
-                e.preventDefault();
-                fileUploadArea.classList.remove('dragover');
-            });
-
-            fileUploadArea.addEventListener('drop', function(e) {
-                e.preventDefault();
-                fileUploadArea.classList.remove('dragover');
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    handleFile(files[0]);
-                }
-            });
-
-            // File input change
-            fileInput.addEventListener('change', function(e) {
-                if (e.target.files.length > 0) {
-                    handleFile(e.target.files[0]);
-                }
-            });
-
-            function handleFile(file) {
-                hideMessages();
-
-                // Validate file type
-                if (file.type !== 'application/pdf') {
-                    showError('File harus berformat PDF. File Anda: ' + file.name + ' (' + file.type + ')');
-                    return;
-                }
-
-                // Validate file size (5MB)
-                if (file.size > 5 * 1024 * 1024) {
-                    showError('Ukuran file terlalu besar: ' + (file.size / 1024 / 1024).toFixed(2) + 'MB. Maksimal 5MB');
-                    return;
-                }
-
-                // Show file info
-                document.getElementById('fileName').textContent = file.name;
-                document.getElementById('fileSize').textContent = formatFileSize(file.size);
-                fileInfo.style.display = 'block';
-                fileUploadArea.style.display = 'none';
-            }
-
-            function removeFile() {
-                fileInput.value = '';
-                hideMessages();
-                fileUploadArea.style.display = 'block';
-            }
-
-            function showError(message) {
-                document.getElementById('errorMessage').textContent = message;
-                errorInfo.style.display = 'block';
-                fileInput.value = '';
-            }
-
-            function hideMessages() {
-                fileInfo.style.display = 'none';
-                errorInfo.style.display = 'none';
-                progressContainer.style.display = 'none';
-            }
-
-            function formatFileSize(bytes) {
-                if (bytes === 0) return '0 Bytes';
-                const k = 1024;
-                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-            }
-
-            // Form submission handling
-            form.addEventListener('submit', function(e) {
-                if (!fileInput.files.length) {
+            if (fileInput && fileUploadArea) {
+                // Drag and drop functionality
+                fileUploadArea.addEventListener('dragover', function(e) {
                     e.preventDefault();
-                    showError('Silakan pilih file PDF terlebih dahulu');
-                    return false;
-                }
+                    fileUploadArea.classList.add('dragover');
+                });
 
-                const file = fileInput.files[0];
-                
-                // Final validation before submit
-                if (file.type !== 'application/pdf') {
+                fileUploadArea.addEventListener('dragleave', function(e) {
                     e.preventDefault();
-                    showError('File harus berformat PDF');
-                    return false;
-                }
+                    fileUploadArea.classList.remove('dragover');
+                });
 
-                if (file.size > 5 * 1024 * 1024) {
+                fileUploadArea.addEventListener('drop', function(e) {
                     e.preventDefault();
-                    showError('Ukuran file terlalu besar. Maksimal 5MB');
-                    return false;
+                    fileUploadArea.classList.remove('dragover');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        handleFile(files[0]);
+                    }
+                });
+
+                // File input change
+                fileInput.addEventListener('change', function(e) {
+                    if (e.target.files.length > 0) {
+                        handleFile(e.target.files[0]);
+                    }
+                });
+
+                function handleFile(file) {
+                    hideMessages();
+
+                    // Validate file type
+                    if (file.type !== 'application/pdf') {
+                        showError('File harus berformat PDF. File Anda: ' + file.name + ' (' + file.type + ')');
+                        return;
+                    }
+
+                    // Validate file size (5MB)
+                    if (file.size > 5 * 1024 * 1024) {
+                        showError('Ukuran file terlalu besar: ' + (file.size / 1024 / 1024).toFixed(2) + 'MB. Maksimal 5MB');
+                        return;
+                    }
+
+                    // Show file info
+                    document.getElementById('fileName').textContent = file.name;
+                    document.getElementById('fileSize').textContent = formatFileSize(file.size);
+                    fileInfo.style.display = 'block';
+                    fileUploadArea.style.display = 'none';
                 }
 
-                // Show loading state
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Uploading PDF...';
-                submitBtn.disabled = true;
-                progressContainer.style.display = 'block';
-            });
+                window.removeFile = function() {
+                    fileInput.value = '';
+                    hideMessages();
+                    fileUploadArea.style.display = 'block';
+                }
 
-            // Reset form handling
-            form.addEventListener('reset', function() {
-                hideMessages();
-                fileUploadArea.style.display = 'block';
-                submitBtn.innerHTML = '<i class="fas fa-upload me-1"></i>Upload Abstrak';
-                submitBtn.disabled = false;
-            });
+                function showError(message) {
+                    document.getElementById('errorMessage').textContent = message;
+                    errorInfo.style.display = 'block';
+                    fileInput.value = '';
+                }
+
+                function hideMessages() {
+                    fileInfo.style.display = 'none';
+                    errorInfo.style.display = 'none';
+                    progressContainer.style.display = 'none';
+                }
+
+                function formatFileSize(bytes) {
+                    if (bytes === 0) return '0 Bytes';
+                    const k = 1024;
+                    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                }
+
+                // Form submission handling
+                if (form) {
+                    form.addEventListener('submit', function(e) {
+                        if (!fileInput.files.length) {
+                            e.preventDefault();
+                            showError('Silakan pilih file PDF terlebih dahulu');
+                            return false;
+                        }
+
+                        const file = fileInput.files[0];
+                        
+                        // Final validation before submit
+                        if (file.type !== 'application/pdf') {
+                            e.preventDefault();
+                            showError('File harus berformat PDF');
+                            return false;
+                        }
+
+                        if (file.size > 5 * 1024 * 1024) {
+                            e.preventDefault();
+                            showError('Ukuran file terlalu besar. Maksimal 5MB');
+                            return false;
+                        }
+
+                        // Show loading state
+                        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Uploading PDF...';
+                        submitBtn.disabled = true;
+                        progressContainer.style.display = 'block';
+                    });
+
+                    // Reset form handling
+                    form.addEventListener('reset', function() {
+                        hideMessages();
+                        fileUploadArea.style.display = 'block';
+                        submitBtn.innerHTML = '<i class="fas fa-upload me-1"></i>Upload Abstrak';
+                        submitBtn.disabled = false;
+                    });
+                }
+            }
         });
 
         // Auto-refresh for pending abstracts
@@ -412,18 +631,12 @@
             if (hasPending) {
                 console.log('Auto-refreshing due to pending abstracts...');
                 // Only refresh if no form is being filled
-                if (!document.getElementById('uploadForm').classList.contains('was-validated')) {
+                const uploadForm = document.getElementById('uploadForm');
+                if (uploadForm && !uploadForm.classList.contains('was-validated')) {
                     location.reload();
                 }
             }
-        }, 60000); // Check every 1 minute instead of 45 seconds
-
-        // Make download links open in new tab for PDF viewing
-        document.addEventListener('click', function(e) {
-            if (e.target.closest('a[href*="/download/"]')) {
-                e.target.closest('a').setAttribute('target', '_blank');
-            }
-        });
+        }, 60000);
     </script>
 </body>
 </html>
