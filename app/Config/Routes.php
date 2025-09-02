@@ -255,3 +255,5 @@ $routes->group('middleware', ['filter' => 'auth'], function ($routes) {
     $routes->get('check-payment-status', 'Middleware\PaymentCheck::checkStatus');
     $routes->get('unlock-features', 'Middleware\FeatureUnlock::process');
 });
+
+$routes->get('absensi/ticket/(:num)', 'Absensi::ticket/$1');
