@@ -18,7 +18,7 @@
     <div class="container-fluid p-3 p-md-4">
 
       <div class="mb-3">
-        <h3 class="mb-0">Halo, <?= esc(session('nama_lengkap') ?? 'Audience') ?> 👋</h3>
+        <h3 class="mb-0">Halo, <?= esc(session('nama') ?? 'Audience') ?> 👋</h3>
         <small class="text-muted">Berikut ringkasan event untukmu.</small>
       </div>
 

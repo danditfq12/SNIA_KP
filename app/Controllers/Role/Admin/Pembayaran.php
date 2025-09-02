@@ -6,229 +6,225 @@ use App\Controllers\BaseController;
 use App\Models\PembayaranModel;
 use App\Models\UserModel;
 use App\Models\VoucherModel;
+use App\Models\EventRegistrationModel;
 
 class Pembayaran extends BaseController
 {
-    protected $pembayaranModel;
-    protected $userModel;
-    protected $voucherModel;
+    protected PembayaranModel $pembayaranModel;
+    protected UserModel $userModel;
+    protected VoucherModel $voucherModel;
 
     public function __construct()
     {
         $this->pembayaranModel = new PembayaranModel();
-        $this->userModel = new UserModel();
-        $this->voucherModel = new VoucherModel();
+        $this->userModel       = new UserModel();
+        $this->voucherModel    = new VoucherModel();
     }
 
     public function index()
     {
-        // Get pembayaran with user details
+        // daftar pembayaran + info user & event
         $pembayarans = $this->pembayaranModel->getPembayaranWithUser();
-        
-        // Add voucher info if exists
-        foreach ($pembayarans as &$pembayaran) {
-            if ($pembayaran['id_voucher']) {
-                $voucher = $this->voucherModel->find($pembayaran['id_voucher']);
-                $pembayaran['voucher_info'] = $voucher;
+
+        // sisipkan info voucher (jika ada)
+        foreach ($pembayarans as &$row) {
+            if (!empty($row['id_voucher'])) {
+                $row['voucher_info'] = $this->voucherModel->find($row['id_voucher']);
             } else {
-                $pembayaran['voucher_info'] = null;
+                $row['voucher_info'] = null;
             }
         }
+        unset($row);
 
-        // Get statistics
+        // statistik ringkas
         $data = [
-            'pembayarans' => $pembayarans,
-            'total_pembayaran' => $this->pembayaranModel->countAll(),
-            'pembayaran_pending' => $this->pembayaranModel->where('status', 'pending')->countAllResults(),
-            'pembayaran_verified' => $this->pembayaranModel->where('status', 'verified')->countAllResults(),
-            'pembayaran_rejected' => $this->pembayaranModel->where('status', 'rejected')->countAllResults(),
-            'total_revenue' => $this->pembayaranModel
-                                   ->selectSum('jumlah')
-                                   ->where('status', 'verified')
-                                   ->first()['jumlah'] ?? 0,
+            'pembayarans'          => $pembayarans,
+            'total_pembayaran'     => $this->pembayaranModel->countAll(),
+            'pembayaran_pending'   => $this->pembayaranModel->where('status', 'pending')->countAllResults(),
+            'pembayaran_verified'  => $this->pembayaranModel->where('status', 'verified')->countAllResults(),
+            'pembayaran_rejected'  => $this->pembayaranModel->where('status', 'rejected')->countAllResults(),
+            'total_revenue'        => $this->pembayaranModel
+                                            ->selectSum('jumlah')
+                                            ->where('status', 'verified')
+                                            ->first()['jumlah'] ?? 0,
         ];
 
         return view('role/admin/pembayaran/index', $data);
     }
 
-    public function verifikasi($id_pembayaran)
+    public function verifikasi(int $id_pembayaran)
     {
         $pembayaran = $this->pembayaranModel->find($id_pembayaran);
-        
         if (!$pembayaran) {
             return redirect()->to('admin/pembayaran')->with('error', 'Pembayaran tidak ditemukan.');
         }
 
-        $status = $this->request->getPost('status');
-        $keterangan = $this->request->getPost('keterangan');
+        $status     = (string) $this->request->getPost('status');
+        $keterangan = (string) $this->request->getPost('keterangan');
 
-        // Validate status
-        if (!in_array($status, ['verified', 'rejected'])) {
+        if (!in_array($status, ['verified', 'rejected'], true)) {
             return redirect()->back()->with('error', 'Status tidak valid.');
         }
 
-        // Update pembayaran status
-        $updateData = [
-            'status' => $status,
+        // update status pembayaran
+        $ok = $this->pembayaranModel->update($id_pembayaran, [
+            'status'      => $status,
             'verified_at' => ($status === 'verified') ? date('Y-m-d H:i:s') : null,
-            'verified_by' => session('id_user'),
-            'keterangan' => $keterangan
-        ];
+            'verified_by' => (int) session('id_user'),
+            'keterangan'  => $keterangan,
+        ]);
 
-        if ($this->pembayaranModel->update($id_pembayaran, $updateData)) {
-            // If verified and there's voucher, decrease voucher quota
-            if ($status === 'verified' && $pembayaran['id_voucher']) {
-                $voucher = $this->voucherModel->find($pembayaran['id_voucher']);
-                if ($voucher && $voucher['kuota'] > 0) {
-                    $this->voucherModel->update($pembayaran['id_voucher'], [
-                        'kuota' => $voucher['kuota'] - 1
-                    ]);
-                    
-                    // Deactivate voucher if quota is 0
-                    if ($voucher['kuota'] - 1 <= 0) {
-                        $this->voucherModel->update($pembayaran['id_voucher'], [
-                            'status' => 'habis'
-                        ]);
-                    }
+        if (!$ok) {
+            return redirect()->back()->with('error', 'Gagal memperbarui status pembayaran.');
+        }
+
+        // jika diverifikasi: tandai registrasi event menjadi lunas
+        if ($status === 'verified') {
+            $regM = new EventRegistrationModel();
+            if (method_exists($regM, 'findUserReg')) {
+                $reg = $regM->findUserReg((int) $pembayaran['event_id'], (int) $pembayaran['id_user']);
+                if ($reg) {
+                    $regM->markPaid((int) $reg['id']);
                 }
             }
 
-            $message = $status === 'verified' ? 'Pembayaran berhasil diverifikasi!' : 'Pembayaran berhasil ditolak!';
-            return redirect()->to('admin/pembayaran')->with('success', $message);
-        } else {
-            return redirect()->back()->with('error', 'Gagal memperbarui status pembayaran.');
+            // kurangi kuota voucher bila ada
+            if (!empty($pembayaran['id_voucher'])) {
+                $voucher = $this->voucherModel->find($pembayaran['id_voucher']);
+                if ($voucher && (int) $voucher['kuota'] > 0) {
+                    $sisa = (int) $voucher['kuota'] - 1;
+                    $this->voucherModel->update($pembayaran['id_voucher'], ['kuota' => $sisa]);
+                    if ($sisa <= 0) {
+                        $this->voucherModel->update($pembayaran['id_voucher'], ['status' => 'habis']);
+                    }
+                }
+            }
         }
+
+        $msg = ($status === 'verified') ? 'Pembayaran berhasil diverifikasi!' : 'Pembayaran berhasil ditolak!';
+        return redirect()->to('admin/pembayaran')->with('success', $msg);
     }
 
-    public function detail($id_pembayaran)
+    public function detail(int $id_pembayaran)
     {
-        $pembayaran = $this->pembayaranModel->select('pembayaran.*, users.nama_lengkap, users.email, users.role')
-                                           ->join('users', 'users.id_user = pembayaran.id_user')
-                                           ->where('pembayaran.id_pembayaran', $id_pembayaran)
-                                           ->first();
+        $pembayaran = $this->pembayaranModel
+            ->select('pembayaran.*, users.nama_lengkap, users.email, users.role')
+            ->join('users', 'users.id_user = pembayaran.id_user')
+            ->where('pembayaran.id_pembayaran', $id_pembayaran)
+            ->first();
 
         if (!$pembayaran) {
             return redirect()->to('admin/pembayaran')->with('error', 'Pembayaran tidak ditemukan.');
         }
 
-        // Get voucher info if exists
-        $voucher = null;
-        if ($pembayaran['id_voucher']) {
-            $voucher = $this->voucherModel->find($pembayaran['id_voucher']);
-        }
+        $voucher    = !empty($pembayaran['id_voucher']) ? $this->voucherModel->find($pembayaran['id_voucher']) : null;
+        $verifiedBy = !empty($pembayaran['verified_by']) ? $this->userModel->find($pembayaran['verified_by']) : null;
 
-        // Get verification info
-        $verifiedBy = null;
-        if ($pembayaran['verified_by']) {
-            $verifiedBy = $this->userModel->find($pembayaran['verified_by']);
-        }
-
-        $data = [
-            'pembayaran' => $pembayaran,
-            'voucher' => $voucher,
-            'verified_by' => $verifiedBy
-        ];
-
-        return view('role/admin/pembayaran/detail', $data);
+        return view('role/admin/pembayaran/detail', [
+            'pembayaran'  => $pembayaran,
+            'voucher'     => $voucher,
+            'verified_by' => $verifiedBy,
+        ]);
     }
 
-    public function downloadBukti($id_pembayaran)
+    public function downloadBukti(int $id_pembayaran)
     {
         $pembayaran = $this->pembayaranModel->find($id_pembayaran);
-        
-        if (!$pembayaran) {
-            throw new \CodeIgniter\Exceptions\PageNotFoundException('Pembayaran tidak ditemukan.');
+        if (!$pembayaran || empty($pembayaran['bukti_bayar'])) {
+            throw new \CodeIgniter\Exceptions\PageNotFoundException('Bukti pembayaran tidak tersedia.');
         }
 
-        $filePath = WRITEPATH . 'uploads/pembayaran/' . $pembayaran['bukti_bayar'];
-        
-        if (!file_exists($filePath)) {
+        // dukung dua lokasi penyimpanan
+        $pathA = WRITEPATH . 'uploads/bukti/' . $pembayaran['bukti_bayar'];
+        $pathB = WRITEPATH . 'uploads/pembayaran/' . $pembayaran['bukti_bayar'];
+        $file  = is_file($pathA) ? $pathA : $pathB;
+
+        if (!is_file($file)) {
             throw new \CodeIgniter\Exceptions\PageNotFoundException('File bukti pembayaran tidak ditemukan.');
         }
 
-        return $this->response->download($filePath, null);
+        return $this->response->download($file, null)->setFileName($pembayaran['bukti_bayar']);
     }
 
     public function export()
     {
-        $pembayarans = $this->pembayaranModel->getPembayaranWithUser();
-        
+        $rows = $this->pembayaranModel->getPembayaranWithUser();
         $filename = 'laporan_pembayaran_' . date('Y-m-d') . '.csv';
-        
+
         header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        
-        $output = fopen('php://output', 'w');
-        
-        // CSV Headers
-        fputcsv($output, [
-            'ID Pembayaran',
-            'Nama User',
-            'Email',
-            'Role',
-            'Metode Pembayaran',
-            'Jumlah',
-            'Status',
-            'Tanggal Bayar',
-            'Tanggal Verifikasi',
-            'Keterangan'
+        header('Content-Disposition: attachment; filename="'.$filename.'"');
+
+        $out = fopen('php://output', 'w');
+        fputcsv($out, [
+            'ID Pembayaran','Nama User','Email','Role','Metode',
+            'Jumlah','Status','Tanggal Bayar','Tanggal Verifikasi','Keterangan'
         ]);
-        
-        // CSV Data
-        foreach ($pembayarans as $pembayaran) {
-            fputcsv($output, [
-                $pembayaran['id_pembayaran'],
-                $pembayaran['nama_lengkap'],
-                $pembayaran['email'],
-                ucfirst($pembayaran['role']),
-                $pembayaran['metode'],
-                'Rp ' . number_format($pembayaran['jumlah'], 0, ',', '.'),
-                ucfirst($pembayaran['status']),
-                date('d/m/Y H:i', strtotime($pembayaran['tanggal_bayar'])),
-                $pembayaran['verified_at'] ? date('d/m/Y H:i', strtotime($pembayaran['verified_at'])) : '-',
-                $pembayaran['keterangan'] ?? '-'
+
+        foreach ($rows as $r) {
+            fputcsv($out, [
+                $r['id_pembayaran'],
+                $r['nama_lengkap'],
+                $r['email'],
+                ucfirst((string) $r['role']),
+                $r['metode'],
+                $r['jumlah'],
+                ucfirst((string) $r['status']),
+                $r['tanggal_bayar'],
+                $r['verified_at'] ?: '-',
+                $r['keterangan']  ?: '-',
             ]);
         }
-        
-        fclose($output);
+        fclose($out);
+        exit; // pastikan tidak render view
     }
 
     public function statistik()
     {
-        // Revenue per bulan (12 bulan terakhir)
-        $revenueData = [];
-        for ($i = 11; $i >= 0; $i--) {
-            $month = date('Y-m', strtotime("-$i months"));
-            $revenue = $this->pembayaranModel
-                           ->selectSum('jumlah')
-                           ->where('status', 'verified')
-                           ->where('DATE_FORMAT(tanggal_bayar, "%Y-%m")', $month)
-                           ->first()['jumlah'] ?? 0;
-            
-            $revenueData[] = [
-                'month' => date('M Y', strtotime($month . '-01')),
-                'revenue' => $revenue
-            ];
+        $db       = \Config\Database::connect();
+        $driver   = strtolower($db->DBDriver);
+
+        // Revenue 12 bulan terakhir (Postgres/MySQL compatible)
+        if ($driver === 'postgre') {
+            $rev = $db->query("
+                SELECT to_char(date_trunc('month', tanggal_bayar), 'Mon YYYY') AS label,
+                       date_trunc('month', tanggal_bayar) AS bulan,
+                       SUM(jumlah) AS revenue
+                FROM pembayaran
+                WHERE status = 'verified'
+                  AND tanggal_bayar >= (current_date - INTERVAL '11 month')
+                GROUP BY 1,2
+                ORDER BY bulan
+            ")->getResultArray();
+        } else {
+            // MySQL fallback
+            $rev = $db->query("
+                SELECT DATE_FORMAT(tanggal_bayar, '%b %Y') AS label,
+                       DATE_FORMAT(tanggal_bayar, '%Y-%m-01') AS bulan,
+                       SUM(jumlah) AS revenue
+                FROM pembayaran
+                WHERE status = 'verified'
+                  AND tanggal_bayar >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)
+                GROUP BY 1,2
+                ORDER BY bulan
+            ")->getResultArray();
         }
 
-        // Pembayaran per metode
-        $metodePembayaran = $this->pembayaranModel
-                                ->select('metode, COUNT(*) as total, SUM(jumlah) as total_amount')
-                                ->where('status', 'verified')
-                                ->groupBy('metode')
-                                ->findAll();
+        $metode = $this->pembayaranModel
+            ->select('metode, COUNT(*) AS total, SUM(jumlah) AS total_amount')
+            ->where('status', 'verified')
+            ->groupBy('metode')
+            ->findAll();
 
-        // Status distribution
         $statusData = [
-            'pending' => $this->pembayaranModel->where('status', 'pending')->countAllResults(),
-            'verified' => $this->pembayaranModel->where('status', 'verified')->countAllResults(),
-            'rejected' => $this->pembayaranModel->where('status', 'rejected')->countAllResults(),
+            'pending'  => $this->pembayaranModel->where('status','pending')->countAllResults(),
+            'verified' => $this->pembayaranModel->where('status','verified')->countAllResults(),
+            'rejected' => $this->pembayaranModel->where('status','rejected')->countAllResults(),
         ];
 
         return $this->response->setJSON([
-            'revenue_chart' => $revenueData,
-            'metode_pembayaran' => $metodePembayaran,
-            'status_distribution' => $statusData
+            'revenue_chart'       => $rev,
+            'metode_pembayaran'   => $metode,
+            'status_distribution' => $statusData,
         ]);
     }
 }

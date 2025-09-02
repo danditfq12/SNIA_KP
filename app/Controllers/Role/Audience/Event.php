@@ -8,110 +8,131 @@ use App\Models\EventRegistrationModel;
 
 class Event extends BaseController
 {
-    // GET /audience/events
+    /** List event aktif (dengan optional pencarian) */
     public function index()
     {
+        $q      = trim((string) $this->request->getGet('q'));
+        $format = trim((string) $this->request->getGet('format')); // 'online'|'offline'|'both'|''
+
         $eventM = new EventModel();
 
-        // Ambil event yang sedang membuka pendaftaran
-        try {
-            $events = $eventM->getEventsWithOpenRegistration();
-        } catch (\Throwable $e) {
-            // fallback sederhana jika helper tidak ada
-            $events = $eventM->where('is_active', true)
-                             ->where('event_date >=', date('Y-m-d'))
-                             ->orderBy('event_date', 'ASC')
-                             ->findAll();
+        if ($q !== '') {
+            $events = $eventM->searchEvents($q);
+        } elseif (in_array($format, ['online','offline','both'], true)) {
+            $events = $eventM->getEventsByFormat($format);
+        } else {
+            $events = $eventM->getActiveEvents();
         }
 
-        return view('role/audience/events/index', compact('events'));
+        return view('role/audience/events/index', [
+            'events' => $events,
+            'q'      => $q,
+            'format' => $format,
+        ]);
     }
 
-    // GET /audience/events/detail/{id}
+    /** Detail event + opsi audience */
     public function detail(int $id)
     {
         $eventM = new EventModel();
-        $event  = $eventM->find($id);
-        if (!$event) {
-            return redirect()->to('/audience/events')->with('error', 'Event tidak ditemukan.');
+        $ev     = $eventM->find($id);
+        if (!$ev || !($ev['is_active'] ?? false)) {
+            return redirect()->to('/audience/events')->with('error','Event tidak ditemukan atau tidak aktif.');
         }
 
-        $options = $eventM->getParticipationOptions($id, 'audience'); // ['online','offline'] sesuai format
-        $pricing = $eventM->getPricingMatrix($id);                     // harga audience online/offline
+        $idUser   = (int) (session()->get('id_user') ?? 0);
+        $regM     = new EventRegistrationModel();
+        $myReg    = $regM->findUserReg($id, $idUser);
+        $options  = $eventM->getParticipationOptions($id, 'audience');
+        $pricing  = $eventM->getPricingMatrix($id);
+        $isOpen   = $eventM->isRegistrationOpen($id);
 
-        return view('role/audience/events/detail', compact('event','options','pricing'));
-    }
-
-    // GET /audience/events/register/{id}
-    public function showRegistrationForm(int $id)
-    {
-        $eventM = new EventModel();
-
-        if (!$eventM->isRegistrationOpen($id)) {
-            return redirect()->to('/audience/events')->with('error', 'Pendaftaran event ditutup.');
-        }
-
-        $event   = $eventM->find($id);
-        $options = $eventM->getParticipationOptions($id, 'audience');
-        $pricing = $eventM->getPricingMatrix($id);
-
-        return view('role/audience/events/register', compact('event','options','pricing'));
-    }
-
-    // POST /audience/events/register/{id}
-    public function register(int $id)
-    {
-        $rules = ['mode_kehadiran' => 'required|in_list[online,offline]'];
-        if (! $this->validate($rules)) {
-            return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
-        }
-
-        $eventM = new EventModel();
-        if (!$eventM->isRegistrationOpen($id)) {
-            return redirect()->to('/audience/events')->with('error', 'Pendaftaran event ditutup.');
-        }
-
-        $idUser = (int) (session()->get('id_user') ?? 0);
-        if ($idUser <= 0) {
-            return redirect()->to('/auth/login')->with('error', 'Silakan login terlebih dahulu.');
-        }
-
-        $mode    = (string) $this->request->getPost('mode_kehadiran');
-        $allowed = $eventM->getParticipationOptions($id, 'audience');
-        if (!in_array($mode, $allowed, true)) {
-            return redirect()->back()->with('error', 'Mode kehadiran tidak tersedia untuk event ini.');
-        }
-
-        $regM = new EventRegistrationModel();
-        try {
-            // Model menghindari duplikasi (unique id_event+id_user)
-            $idReg = $regM->createRegistration($id, $idUser, $mode);
-        } catch (\Throwable $e) {
-            return redirect()->back()->withInput()->with('error', 'Gagal mendaftar: '.$e->getMessage());
-        }
-
-        return redirect()->to('/audience/pembayaran/create/'.$idReg)
-                         ->with('message', 'Pendaftaran berhasil. Lanjutkan pembayaran.');
-    }
-
-    // POST /audience/events/calculate-price (AJAX)
-    public function calculatePrice()
-    {
-        $idEvent = (int) $this->request->getPost('id_event');
-        $mode    = (string) ($this->request->getPost('mode') ?? 'online');
-        $voucher = trim((string) ($this->request->getPost('voucher') ?? ''));
-
-        $eventM = new EventModel();
-        $price  = (float) $eventM->getEventPrice($idEvent, 'audience', $mode);
-
-        // TODO: terapkan voucher jika perlu (sementara belum)
-        return $this->response->setJSON([
-            'ok'               => true,
-            'price'            => $price,
-            'base'             => $price,
-            'mode'             => $mode,
-            'voucher'          => $voucher,
-            'voucher_applied'  => false,
+        return view('role/audience/events/detail', [
+            'event'   => $ev,
+            'options' => $options,
+            'pricing' => $pricing,
+            'isOpen'  => $isOpen,
+            'myReg'   => $myReg,
         ]);
     }
+
+    /** Form daftar (tanpa tombol hitung) */
+    public function showRegistrationForm(int $id)
+{
+    $eventM = new EventModel();
+    $ev     = $eventM->find($id);
+    if (!$ev || !($ev['is_active'] ?? false)) {
+        return redirect()->to('/audience/events')->with('error','Event tidak ditemukan atau tidak aktif.');
+    }
+    if (!$eventM->isRegistrationOpen($id)) {
+        return redirect()->to('/audience/events/detail/'.$id)->with('error','Pendaftaran event telah ditutup.');
+    }
+
+    // ⛔️ Cek: sudah terdaftar?
+    $idUser = (int) (session()->get('id_user') ?? 0);
+    $regM   = new EventRegistrationModel();
+    $existing = $regM->findUserReg($id, $idUser);
+    if ($existing) {
+        // arahkan user ke langkah berikutnya sesuai status
+        if (($existing['status'] ?? '') === 'menunggu_pembayaran') {
+            return redirect()->to('/audience/pembayaran/instruction/'.$existing['id'])
+                             ->with('warning','Kamu sudah terdaftar pada event ini. Lanjutkan ke pembayaran.');
+        }
+        return redirect()->to('/audience/events/detail/'.$id)
+                         ->with('warning','Kamu sudah terdaftar pada event ini.');
+    }
+
+    $options = $eventM->getParticipationOptions($id, 'audience');
+    $pricing = $eventM->getPricingMatrix($id);
+
+    return view('role/audience/events/register', [
+        'event'   => $ev,
+        'options' => $options,
+        'pricing' => $pricing,
+    ]);
+}
+
+
+    /** Proses daftar → arahkan ke instruksi rekening */
+    public function register(int $id)
+{
+    $idUser = (int) (session()->get('id_user') ?? 0);
+    if ($idUser <= 0) {
+        return redirect()->to('/auth/login')->with('error','Silakan login.');
+    }
+
+    $eventM = new EventModel();
+    $ev     = $eventM->find($id);
+    if (!$ev || !($ev['is_active'] ?? false)) {
+        return redirect()->to('/audience/events')->with('error','Event tidak ditemukan atau tidak aktif.');
+    }
+    if (!$eventM->isRegistrationOpen($id)) {
+        return redirect()->to('/audience/events/detail/'.$id)->with('error','Pendaftaran event telah ditutup.');
+    }
+
+    $regM = new EventRegistrationModel();
+    $existing = $regM->findUserReg($id, $idUser);
+    if ($existing) {
+        if (($existing['status'] ?? '') === 'menunggu_pembayaran') {
+            return redirect()->to('/audience/pembayaran/instruction/'.$existing['id'])
+                             ->with('warning','Kamu sudah terdaftar. Lanjutkan ke pembayaran.');
+        }
+        return redirect()->to('/audience/events/detail/'.$id)
+                         ->with('warning','Kamu sudah terdaftar pada event ini.');
+    }
+
+    $mode  = (string) $this->request->getPost('mode_kehadiran');
+    $valid = $eventM->getParticipationOptions($id, 'audience');
+    if (!in_array($mode, $valid, true)) {
+        return redirect()->back()->withInput()->with('error','Mode kehadiran tidak valid.');
+    }
+    if ($eventM->hasReachedMaxParticipants($id, $mode)) {
+        return redirect()->to('/audience/events/detail/'.$id)->with('error','Kuota peserta telah penuh.');
+    }
+
+    $idReg = $regM->createRegistration($id, $idUser, $mode);
+
+    return redirect()->to('/audience/pembayaran/instruction/'.$idReg)
+                     ->with('message','Pendaftaran berhasil. Silakan ikuti instruksi pembayaran.');
+        }
 }

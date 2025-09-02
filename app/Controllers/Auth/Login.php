@@ -24,14 +24,24 @@ class Login extends BaseController
         $user = $userModel->where('email', $email)->first();
 
         if ($user && password_verify($password, $user['password'])) {
+            // Regenerate untuk cegah session fixation
+            session()->regenerate();
+
+            // Simpan data yang dipakai header (nama_lengkap, email, foto, foto_ver)
             session()->set([
-                'isLoggedIn' => true,
-                'id_user'    => $user['id_user'],
-                'role'       => $user['role'],
-                'nama'       => $user['nama_lengkap']
+                'isLoggedIn'   => true,
+                'id_user'      => $user['id_user'],
+                'role'         => $user['role'],
+                'nama_lengkap' => $user['nama_lengkap'],          // dipakai header
+                'nama'         => $user['nama_lengkap'],          // backward-compat
+                'email'        => $user['email'] ?? '',
+                'foto'         => $user['foto'] ?: 'default.png', // nama file saja
+                'foto_ver'     => time(),                         // cache-buster avatar
             ]);
+
             return redirect()->to('/dashboard');
         }
+
         return redirect()->back()->with('error', 'Email atau password salah.');
     }
 

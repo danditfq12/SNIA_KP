@@ -15,22 +15,30 @@ class EventRegistrationModel extends Model
         'created_at', 'updated_at'
     ];
 
+    // Ambil registrasi user utk event tertentu (ambil yg terbaru kalau ada duplikat)
     public function findUserReg(int $idEvent, int $idUser): ?array
     {
-        return $this->where(['id_event'=>$idEvent, 'id_user'=>$idUser])->first();
+        return $this->where(['id_event' => $idEvent, 'id_user' => $idUser])
+                    ->orderBy('id', 'DESC')
+                    ->first();
     }
 
+    // Ambil registrasi + info event (lengkap untuk tampilan)
     public function getByIdWithEvent(int $id): ?array
     {
-        return $this->select('event_registrations.*, e.title AS event_title, e.zoom_link, e.location')
-                    ->join('events e', 'e.id = event_registrations.id_event', 'left')
-                    ->where('event_registrations.id', $id)
-                    ->first();
+        return $this->select(
+                    'event_registrations.*,
+                     e.title AS event_title,
+                     e.zoom_link, e.location, e.event_date, e.event_time, e.format'
+                )
+                ->join('events e', 'e.id = event_registrations.id_event', 'left')
+                ->where('event_registrations.id', $id)
+                ->first();
     }
 
     public function listByUser(int $idUser): array
     {
-        return $this->select('event_registrations.*, e.title AS event_title')
+        return $this->select('event_registrations.*, e.title AS event_title, e.event_date, e.event_time')
                     ->join('events e', 'e.id = event_registrations.id_event', 'left')
                     ->where('event_registrations.id_user', $idUser)
                     ->orderBy('event_registrations.id','DESC')
@@ -50,13 +58,13 @@ class EventRegistrationModel extends Model
             'id_user'        => $idUser,
             'mode_kehadiran' => $mode,
             'status'         => 'menunggu_pembayaran',
-            'qr_token'       => $mode==='offline' ? bin2hex(random_bytes(16)) : null,
+            'qr_token'       => $mode === 'offline' ? bin2hex(random_bytes(16)) : null,
         ]);
         return (int)$this->getInsertID();
     }
 
     public function markPaid(int $id): bool
     {
-        return $this->update($id, ['status'=>'lunas']);
+        return $this->update($id, ['status' => 'lunas']);
     }
 }

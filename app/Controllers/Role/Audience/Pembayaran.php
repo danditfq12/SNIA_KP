@@ -3,28 +3,49 @@
 namespace App\Controllers\Role\Audience;
 
 use App\Controllers\BaseController;
-use App\Models\PembayaranModel;
-use App\Models\EventRegistrationModel;
 use App\Models\EventModel;
+use App\Models\EventRegistrationModel;
+use App\Models\PembayaranModel;
 
 class Pembayaran extends BaseController
 {
-    // GET /audience/pembayaran
+    /** Riwayat pembayaran saya */
     public function index()
     {
         $idUser = (int) (session()->get('id_user') ?? 0);
 
-        $payM = new PembayaranModel();
-        $rows = $payM->select('pembayaran.*, e.title AS event_title')
-                     ->join('events e', 'e.id = pembayaran.event_id', 'left')
-                     ->where('pembayaran.id_user', $idUser)
-                     ->orderBy('pembayaran.id_pembayaran', 'DESC')
-                     ->findAll();
+        $rows = (new PembayaranModel())
+            ->select('pembayaran.*, e.title AS event_title, e.event_date, e.event_time')
+            ->join('events e', 'e.id = pembayaran.event_id', 'left')
+            ->where('pembayaran.id_user', $idUser)
+            ->orderBy('pembayaran.id_pembayaran','DESC')
+            ->findAll();
 
-        return view('role/audience/pembayaran/index', ['payments' => $rows]);
+        return view('role/audience/pembayaran/index', ['payments'=>$rows]);
     }
 
-    // GET /audience/pembayaran/create/{idReg}
+    /** Halaman instruksi rekening (HARD-CODED di view) */
+    public function instruction(int $idReg)
+    {
+        $idUser = (int) (session()->get('id_user') ?? 0);
+
+        $regM = new EventRegistrationModel();
+        $reg  = $regM->getByIdWithEvent($idReg);
+        if (!$reg || (int)$reg['id_user'] !== $idUser) {
+            return redirect()->to('/audience/events')->with('error','Registrasi tidak valid.');
+        }
+
+        $eventM = new EventModel();
+        $amount = (float) $eventM->getEventPrice((int)$reg['id_event'], 'audience', $reg['mode_kehadiran']);
+        if ($amount < 0) $amount = 0;
+
+        return view('role/audience/pembayaran/instruction', [
+            'reg'    => $reg,
+            'amount' => $amount,
+        ]);
+    }
+
+    /** Form upload bukti */
     public function create(int $idReg)
     {
         $idUser = (int) (session()->get('id_user') ?? 0);
@@ -32,159 +53,156 @@ class Pembayaran extends BaseController
         $regM = new EventRegistrationModel();
         $reg  = $regM->getByIdWithEvent($idReg);
         if (!$reg || (int)$reg['id_user'] !== $idUser) {
-            return redirect()->to('/audience/pembayaran')->with('error', 'Registrasi tidak valid.');
+            return redirect()->to('/audience/pembayaran')->with('error','Registrasi tidak valid.');
         }
 
-        // Cegah duplikasi: kalau sudah ada pending utk event yang sama, arahkan ke detail
+        // Jika sudah ada pending untuk event ini → ke detail
         $payM  = new PembayaranModel();
         $exist = $payM->where('id_user', $idUser)
                       ->where('event_id', (int)$reg['id_event'])
                       ->where('status', 'pending')
-                      ->orderBy('id_pembayaran', 'DESC')
                       ->first();
         if ($exist) {
             return redirect()->to('/audience/pembayaran/detail/'.$exist['id_pembayaran'])
-                             ->with('message','Kamu sudah mengajukan pembayaran. Lihat detailnya.');
+                             ->with('message','Kamu sudah mengirim pembayaran. Lihat detailnya.');
         }
 
-        // Hitung harga resmi dari server (jangan percaya input user)
-        $eventM = new EventModel();
-        $amount = (float) $eventM->getEventPrice((int)$reg['id_event'], 'audience', $reg['mode_kehadiran']);
+        $amount = (float) (new EventModel())->getEventPrice((int)$reg['id_event'], 'audience', $reg['mode_kehadiran']);
+        if ($amount < 0) $amount = 0;
 
         return view('role/audience/pembayaran/create', [
-            'reg'    => $reg,      // berisi event_title, zoom_link, location, mode_kehadiran
+            'reg'    => $reg,
             'amount' => $amount,
         ]);
     }
 
-    // POST /audience/pembayaran/store
+    /** Simpan pembayaran (pending) */
     public function store()
     {
         $idUser = (int) (session()->get('id_user') ?? 0);
 
         $rules = [
-            'id_reg' => 'required|integer',
-            'metode' => 'required|in_list[transfer,gateway]',
-            // 'bukti_bayar' -> validasi di bawah hanya jika metode transfer
+            'id_reg'      => 'required|integer',
+            'bukti_bayar' => 'uploaded[bukti_bayar]|max_size[bukti_bayar,5120]|ext_in[bukti_bayar,jpg,jpeg,png,pdf]',
         ];
-        if (! $this->validate($rules)) {
+        if (!$this->validate($rules)) {
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
 
-        $idReg = (int) $this->request->getPost('id_reg');
-        $metode = (string) $this->request->getPost('metode');
-
         $regM = new EventRegistrationModel();
-        $reg  = $regM->getByIdWithEvent($idReg);
+        $reg  = $regM->getByIdWithEvent((int) $this->request->getPost('id_reg'));
         if (!$reg || (int)$reg['id_user'] !== $idUser) {
             return redirect()->to('/audience/pembayaran')->with('error','Registrasi tidak valid.');
         }
 
-        // Hitung ulang nominal dari server
+        // Hindari duplikasi
+        $payM  = new PembayaranModel();
+        $exist = $payM->where('id_user', $idUser)
+                      ->where('event_id', (int)$reg['id_event'])
+                      ->where('status', 'pending')
+                      ->first();
+        if ($exist) {
+            return redirect()->to('/audience/pembayaran/detail/'.$exist['id_pembayaran'])
+                             ->with('message','Kamu sudah mengirim pembayaran. Lihat detailnya.');
+        }
+
         $eventM = new EventModel();
         $amount = (float) $eventM->getEventPrice((int)$reg['id_event'], 'audience', $reg['mode_kehadiran']);
+        if ($amount < 0) $amount = 0;
 
-        $payload = [
+        // Upload bukti
+        $file = $this->request->getFile('bukti_bayar');
+        if (!$file || !$file->isValid()) {
+            return redirect()->back()->with('error','File bukti tidak valid.');
+        }
+
+        $dir = WRITEPATH . 'uploads/bukti';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+        $newName = time().'_'.$file->getRandomName();
+        try {
+            $file->move($dir, $newName);
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error','Gagal menyimpan file: '.$e->getMessage());
+        }
+
+        // Simpan record pembayaran
+        $payM->insert([
             'id_user'            => $idUser,
             'event_id'           => (int) $reg['id_event'],
             'jumlah'             => $amount,
-            'metode'             => $metode,
+            'metode'             => 'transfer',
             'status'             => 'pending',
-            'participation_type' => $reg['mode_kehadiran'],
             'tanggal_bayar'      => date('Y-m-d H:i:s'),
-        ];
+            'bukti_bayar'        => $newName,
+            'participation_type' => $reg['mode_kehadiran'] ?? null,
+        ]);
 
-        // Upload bukti kalau transfer
-        if ($metode === 'transfer') {
-            $file = $this->request->getFile('bukti_bayar');
-            if (!$file || !$file->isValid()) {
-                return redirect()->back()->withInput()->with('error','Bukti pembayaran wajib diunggah.');
-            }
-            $dir = WRITEPATH.'uploads/bukti';
-            if (!is_dir($dir)) @mkdir($dir, 0777, true);
-
-            $newName = time().'_'.$file->getRandomName();
-            $file->move($dir, $newName);
-            $payload['bukti_bayar'] = $newName;
-        }
-
-        $payM = new PembayaranModel();
-        $payM->insert($payload);
         $payId = (int) $payM->getInsertID();
 
-        // (Opsional) set invoice_no kalau kolomnya ada
-        try {
-            if (in_array('invoice_no', $payM->allowedFields ?? [], true)) {
-                $payM->update($payId, [
-                    'invoice_no' => sprintf('INV-%s-%03d-%06d', date('Ymd'), (int)$reg['id_event'], $payId)
-                ]);
-            }
-        } catch (\Throwable $e) {}
-
         return redirect()->to('/audience/pembayaran/detail/'.$payId)
-                         ->with('message','Pembayaran berhasil dikirim. Menunggu verifikasi.');
+                         ->with('message','Bukti terkirim. Menunggu verifikasi admin.');
     }
 
-    // GET /audience/pembayaran/detail/{id}
+    /** Detail pembayaran saya */
     public function detail(int $id)
     {
         $idUser = (int) (session()->get('id_user') ?? 0);
 
-        $payM = new PembayaranModel();
-        $row  = $payM->select('pembayaran.*, e.title AS event_title')
-                     ->join('events e', 'e.id = pembayaran.event_id', 'left')
-                     ->where('pembayaran.id_pembayaran', $id)
-                     ->first();
+        $p = (new PembayaranModel())
+            ->select('pembayaran.*, e.title AS event_title, e.event_date, e.event_time')
+            ->join('events e', 'e.id = pembayaran.event_id', 'left')
+            ->find($id);
 
-        if (!$row || (int)$row['id_user'] !== $idUser) {
+        if (!$p || (int)$p['id_user'] !== $idUser) {
             return redirect()->to('/audience/pembayaran')->with('error','Data tidak ditemukan.');
         }
 
-        // fallback nomor invoice kalau kolom belum ada
-        $row['invoice_display'] = $row['invoice_no'] ?? ('PAY-'.date('Ymd', strtotime($row['tanggal_bayar'] ?? 'now')).'-'.$row['id_pembayaran']);
+        $p['invoice_display'] = 'PAY-'.date('Ymd', strtotime($p['tanggal_bayar'] ?? 'now')).'-'.$p['id_pembayaran'];
 
-        return view('role/audience/pembayaran/detail', ['p' => $row]);
+        return view('role/audience/pembayaran/detail', ['p' => $p]);
     }
 
-    // GET /audience/pembayaran/download-bukti/{id}
+    /** Unduh bukti milik sendiri */
     public function downloadBukti(int $id)
     {
         $idUser = (int) (session()->get('id_user') ?? 0);
-        $payM   = new PembayaranModel();
-        $row    = $payM->find($id);
+        $p      = (new PembayaranModel())->find($id);
 
-        if (!$row || (int)$row['id_user'] !== $idUser) {
-            return redirect()->to('/audience/pembayaran')->with('error','Tidak boleh mengakses berkas ini.');
-        }
-        if (empty($row['bukti_bayar'])) {
-            return redirect()->back()->with('error','Bukti belum tersedia.');
+        if (!$p || (int)$p['id_user'] !== $idUser) {
+            return redirect()->back()->with('error','Tidak diizinkan.');
         }
 
-        $path = WRITEPATH.'uploads/bukti/'.$row['bukti_bayar'];
-        if (!is_file($path)) {
+        $pathA = WRITEPATH.'uploads/bukti/'.($p['bukti_bayar'] ?? '');
+        $pathB = WRITEPATH.'uploads/pembayaran/'.($p['bukti_bayar'] ?? '');
+        $file  = is_file($pathA) ? $pathA : $pathB;
+
+        if (!is_file($file)) {
             return redirect()->back()->with('error','File tidak ditemukan.');
         }
-        return $this->response->download($path, null)->setFileName($row['bukti_bayar']);
+
+        return $this->response->download($file, null)->setFileName($p['bukti_bayar']);
     }
 
-    // GET /audience/pembayaran/cancel/{id}
+    /** Batalkan pembayaran pending */
     public function cancel(int $id)
     {
         $idUser = (int) (session()->get('id_user') ?? 0);
         $payM   = new PembayaranModel();
-        $row    = $payM->find($id);
+        $p      = $payM->find($id);
 
-        if (!$row || (int)$row['id_user'] !== $idUser || $row['status'] !== 'pending') {
+        if (!$p || (int)$p['id_user'] !== $idUser || ($p['status'] ?? '') !== 'pending') {
             return redirect()->to('/audience/pembayaran')->with('error','Tidak bisa dibatalkan.');
         }
-        $payM->update($id, ['status' => 'canceled']);
+
+        $payM->update($id, ['status'=>'canceled']);
         return redirect()->to('/audience/pembayaran')->with('message','Pembayaran dibatalkan.');
     }
 
-    // POST /audience/pembayaran/validate-voucher
+    /** Voucher nonaktif (opsional) */
     public function validateVoucher()
     {
-        // placeholder sederhana
-        return $this->response->setJSON(['ok'=>true, 'valid'=>false, 'message'=>'Voucher tidak diterapkan']);
+        return $this->response->setJSON(['ok'=>false,'message'=>'Fitur voucher nonaktif pada mode pembayaran manual.']);
     }
 }
