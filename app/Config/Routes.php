@@ -12,6 +12,34 @@ use CodeIgniter\Router\RouteCollection;
 $routes->get('/', 'Home::index');
 
 // ---------------------------------------------------
+// Enhanced QR System Routes - FIXED ORDER
+// ---------------------------------------------------
+$routes->group('qr', function ($routes) {
+    // SPECIFIC routes MUST come BEFORE generic routes
+    
+    // QR scanner interface (specific routes first)
+    $routes->get('scanner', 'QRAttendance::showScannerInterface');
+    
+    // Mobile-friendly scanner 
+    $routes->get('mobile', 'QRAttendance::showScannerInterface');
+    
+    // Process attendance submission
+    $routes->post('process', 'QRAttendance::process');
+    
+    // QR code generation for admin (with authentication)
+    $routes->post('generate/(:num)', 'QRAttendance::generateEventQRCodes/$1', ['filter' => 'role:admin']);
+    
+    // Debug routes (only in development)
+    if (ENVIRONMENT === 'development') {
+        $routes->get('debug/(:segment)', 'QRAttendance::debugQR/$1');
+        $routes->get('test/(:num)', 'QRAttendance::generateTestQR/$1');
+    }
+    
+    // GENERIC route MUST be LAST to avoid conflicts
+    $routes->get('(:segment)', 'QRAttendance::scan/$1');
+});
+
+// ---------------------------------------------------
 // Auth (halaman publik, tanpa filter login)
 // ---------------------------------------------------
 $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], function ($routes) {
@@ -27,13 +55,29 @@ $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], function ($route
     $routes->get('resend', 'Verify::resend');
 });
 
+$routes->get('notif/read-all', 'Notif::readAll', ['filter' => 'auth']);
+
 // ---------------------------------------------------
 // Dashboard redirect (wajib login)
 // ---------------------------------------------------
 $routes->get('dashboard', 'Dashboard::index', ['filter' => 'auth']);
 
 // ---------------------------------------------------
-// Admin Routes - Enhanced Payment Management
+// Debug Routes (Development Only) - MOVED TO TOP LEVEL
+// ---------------------------------------------------
+if (ENVIRONMENT === 'development') {
+    $routes->group('debug', function ($routes) {
+        $routes->get('system', 'DebugHelper::systemCheck');
+        $routes->get('qr/(:segment)', 'DebugHelper::qrDebug/$1');
+        $routes->get('qr', 'DebugHelper::qrDebug');
+        $routes->get('generate/(:num)', 'DebugHelper::generateTestQR/$1');
+        $routes->get('errors', 'DebugHelper::errorLog');
+        $routes->get('db', 'DebugHelper::dbTest');
+    });
+}
+
+// ---------------------------------------------------
+// Admin Routes - Enhanced QR Management
 // ---------------------------------------------------
 $routes->group('admin', [
     'filter' => 'role:admin',
@@ -93,9 +137,16 @@ $routes->group('admin', [
     $routes->get('pembayaran/export', 'Pembayaran::export');
     $routes->get('pembayaran/statistik', 'Pembayaran::statistik');
 
-    // Absensi Management
+    // Enhanced Absensi Management with Multiple QR Codes
     $routes->get('absensi', 'Absensi::index');
+    $routes->post('absensi/generateMultipleQRCodes', 'Absensi::generateMultipleQRCodes');
+    $routes->post('absensi/markAttendance', 'Absensi::markAttendance');
+    $routes->post('absensi/removeAttendance', 'Absensi::removeAttendance');
+    $routes->post('absensi/bulkMarkAttendance', 'Absensi::bulkMarkAttendance');
+    $routes->get('absensi/getEligibleUsers', 'Absensi::getEligibleUsers');
     $routes->get('absensi/export', 'Absensi::export');
+    $routes->get('absensi/liveStats', 'Absensi::liveStats');
+    $routes->get('absensi/displayQR/(:num)', 'Absensi::displayQRCode/$1');
 
     // Dokumen Management - FIXED ROUTES
     $routes->get('dokumen', 'Dokumen::index');
@@ -103,7 +154,6 @@ $routes->group('admin', [
     $routes->post('dokumen/uploadSertifikat/(:num)', 'Dokumen::uploadSertifikat/$1');
     $routes->get('dokumen/download/(:num)', 'Dokumen::download/$1');
     $routes->get('dokumen/delete/(:num)', 'Dokumen::delete/$1');
-    // Changed from POST to GET to match JavaScript calls
     $routes->get('dokumen/generateBulkLOA', 'Dokumen::generateBulkLOA');
     $routes->get('dokumen/generateBulkSertifikat', 'Dokumen::generateBulkSertifikat');
 
@@ -149,10 +199,6 @@ $routes->group('presenter', [
     $routes->get('abstrak/detail/(:num)', 'Abstrak::detail/$1');
     $routes->get('abstrak/download/(:segment)', 'Abstrak::download/$1');
     
-    // Debug routes (remove in production)
-    $routes->get('abstrak/debug/test', 'AbstractDebug::testUpload');
-    $routes->post('abstrak/debug/simple', 'AbstractDebug::simpleUpload');
-    
     // Enhanced Pembayaran Management - Complete Flow
     $routes->get('pembayaran', 'Pembayaran::index');
     $routes->get('pembayaran/create/(:num)', 'Pembayaran::create/$1');
@@ -162,7 +208,7 @@ $routes->group('presenter', [
     $routes->get('pembayaran/cancel/(:num)', 'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher', 'Pembayaran::validateVoucher');
     
-    // Absensi Management (unlocked after payment verification)
+    // Enhanced Absensi Management (unlocked after payment verification)
     $routes->get('absensi', 'Absensi::index');
     $routes->post('absensi/scan', 'Absensi::scan');
     
@@ -199,7 +245,7 @@ $routes->group('audience', [
     $routes->get('pembayaran/cancel/(:num)', 'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher', 'Pembayaran::validateVoucher');
     
-    // Absensi Management (unlocked after payment verification)
+    // Enhanced Absensi Management (unlocked after payment verification)
     $routes->get('absensi', 'Absensi::index');
     $routes->post('absensi/scan', 'Absensi::scan');
     
@@ -215,7 +261,10 @@ $routes->group('reviewer', [
     'filter' => 'role:reviewer',
     'namespace' => 'App\Controllers\Role\Reviewer'
 ], function ($routes) {
+    // Dashboard
     $routes->get('dashboard', 'Dashboard::index');
+
+    // Abstrak
     $routes->get('abstrak', 'Abstrak::index');
     $routes->get('abstrak/(:num)', 'Abstrak::detail/$1');
     $routes->post('review/(:num)', 'Review::store/$1');
@@ -231,6 +280,11 @@ $routes->group('api/v1', function ($routes) {
     $routes->get('events/(:num)/details', 'Api\Event::getEventDetails/$1');
     $routes->post('events/calculate-price', 'Api\Event::calculatePrice');
     $routes->post('vouchers/validate', 'Api\Voucher::validateVoucher');
+    
+    // QR Code API endpoints
+    $routes->get('qr/validate/(:segment)', 'Api\QR::validateQRCode/$1');
+    $routes->post('qr/scan', 'Api\QR::processScan');
+    $routes->get('events/(:num)/qr-codes', 'Api\Event::getQRCodes/$1', ['filter' => 'role:admin']);
 });
 
 // ---------------------------------------------------
@@ -250,3 +304,50 @@ $routes->group('middleware', ['filter' => 'auth'], function ($routes) {
     $routes->get('check-payment-status', 'Middleware\PaymentCheck::checkStatus');
     $routes->get('unlock-features', 'Middleware\FeatureUnlock::process');
 });
+
+// ---------------------------------------------------
+// Mobile App Routes (Optional - for future mobile app)
+// ---------------------------------------------------
+$routes->group('mobile/api/v1', ['namespace' => 'App\Controllers\Mobile'], function ($routes) {
+    // Authentication
+    $routes->post('auth/login', 'Auth::login');
+    $routes->post('auth/logout', 'Auth::logout', ['filter' => 'auth']);
+    $routes->post('auth/refresh', 'Auth::refreshToken');
+    
+    // QR Scanning
+    $routes->post('qr/scan', 'QR::scanQRCode', ['filter' => 'auth']);
+    $routes->get('qr/validate/(:segment)', 'QR::validateQRCode/$1');
+    
+    // Events
+    $routes->get('events', 'Event::getActiveEvents', ['filter' => 'auth']);
+    $routes->get('events/(:num)', 'Event::getEventDetail/$1', ['filter' => 'auth']);
+    
+    // Attendance
+    $routes->get('attendance/history', 'Attendance::getHistory', ['filter' => 'auth']);
+    $routes->get('attendance/event/(:num)', 'Attendance::getEventAttendance/$1', ['filter' => 'auth']);
+});
+
+// ---------------------------------------------------
+// Webhook Routes (for payment gateways, etc.)
+// ---------------------------------------------------
+$routes->group('webhook', ['namespace' => 'App\Controllers\Webhook'], function ($routes) {
+    // Payment gateway webhooks
+    $routes->post('midtrans', 'Midtrans::handle');
+    $routes->post('xendit', 'Xendit::handle');
+    $routes->post('gopay', 'Gopay::handle');
+    
+    // QR Code analytics webhook (optional)
+    $routes->post('qr-analytics', 'QRAnalytics::track');
+});
+
+// ---------------------------------------------------
+// Error Pages
+// ---------------------------------------------------
+$routes->set404Override(function() {
+    return view('errors/404');
+});
+
+// ---------------------------------------------------
+// Maintenance Mode (uncomment when needed)
+// ---------------------------------------------------
+// $routes->add('.*', 'Maintenance::index');

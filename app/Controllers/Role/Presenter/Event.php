@@ -46,6 +46,9 @@ class Event extends BaseController
             
             // Get event statistics
             $event['stats'] = $this->eventModel->getEventStats($event['id']);
+            
+            // Add registration status check for view
+            $event['is_registration_open'] = $this->isRegistrationOpen($event);
         }
 
         $data = [
@@ -65,8 +68,8 @@ class Event extends BaseController
         }
 
         // Check if registration is still open
-        $registrationOpen = $this->eventModel->isRegistrationOpen($eventId);
-        $abstractOpen = $this->eventModel->isAbstractSubmissionOpen($eventId);
+        $registrationOpen = $this->isRegistrationOpen($event);
+        $abstractOpen = $this->isAbstractSubmissionOpen($event);
         
         // Get user's registration status
         $userId = session('id_user');
@@ -82,10 +85,10 @@ class Event extends BaseController
             ->findAll();
 
         // Get event statistics
-        $stats = $this->eventModel->getEventStats($eventId);
+        $stats = $this->getEventStats($eventId);
         
         // Get pricing matrix (presenter only offline)
-        $pricingMatrix = $this->eventModel->getPricingMatrix($eventId);
+        $pricingMatrix = $this->getPricingMatrix($eventId);
         $participationOptions = ['offline'];
 
         $data = [
@@ -112,7 +115,7 @@ class Event extends BaseController
         }
 
         // Check if registration is still open
-        if (!$this->eventModel->isRegistrationOpen($eventId)) {
+        if (!$this->isRegistrationOpen($event)) {
             return redirect()->to('presenter/events')->with('error', 'Pendaftaran untuk event ini sudah ditutup.');
         }
 
@@ -129,7 +132,7 @@ class Event extends BaseController
         }
 
         // Get pricing matrix (presenter only offline)
-        $pricingMatrix = $this->eventModel->getPricingMatrix($eventId);
+        $pricingMatrix = $this->getPricingMatrix($eventId);
         $participationOptions = ['offline']; // Presenter can only participate offline
         
         // Get active vouchers
@@ -161,7 +164,7 @@ class Event extends BaseController
         }
 
         // Check if registration is still open
-        if (!$this->eventModel->isRegistrationOpen($eventId)) {
+        if (!$this->isRegistrationOpen($event)) {
             return redirect()->to('presenter/events')->with('error', 'Pendaftaran untuk event ini sudah ditutup.');
         }
 
@@ -364,6 +367,127 @@ class Event extends BaseController
         ]);
     }
 
+    /**
+     * Check if registration is open for an event
+     */
+    private function isRegistrationOpen($event)
+    {
+        // If event is not active, registration is closed
+        if (!($event['is_active'] ?? true)) {
+            return false;
+        }
+        
+        // Check registration deadline
+        if (!empty($event['registration_deadline'])) {
+            return (strtotime($event['registration_deadline']) > time());
+        }
+        
+        // If no deadline is set, check against event date
+        if (!empty($event['event_date'])) {
+            $eventDate = strtotime($event['event_date']);
+            $currentTime = time();
+            
+            // Allow registration until 1 day before event
+            return ($eventDate > ($currentTime + 86400));
+        }
+        
+        // Default: registration is open
+        return true;
+    }
+
+    /**
+     * Check if abstract submission is open for an event
+     */
+    private function isAbstractSubmissionOpen($event)
+    {
+        // Check abstract submission deadline
+        if (!empty($event['abstract_deadline'])) {
+            return (strtotime($event['abstract_deadline']) > time());
+        }
+        
+        // If no abstract deadline, use registration deadline
+        if (!empty($event['registration_deadline'])) {
+            return (strtotime($event['registration_deadline']) > time());
+        }
+        
+        // Default: submission is open if registration is open
+        return $this->isRegistrationOpen($event);
+    }
+
+    /**
+     * Get event statistics
+     */
+    private function getEventStats($eventId)
+    {
+        $db = \Config\Database::connect();
+        
+        try {
+            // Get total registrations
+            $totalRegistrations = $this->pembayaranModel
+                ->where('event_id', $eventId)
+                ->countAllResults();
+            
+            // Get total verified registrations
+            $verifiedRegistrations = $this->pembayaranModel
+                ->where('event_id', $eventId)
+                ->where('status', 'verified')
+                ->countAllResults();
+            
+            // Get total abstracts
+            $totalAbstracts = $this->abstrakModel
+                ->where('event_id', $eventId)
+                ->countAllResults();
+            
+            // Get total revenue
+            $revenueResult = $this->pembayaranModel
+                ->select('SUM(jumlah) as total_revenue')
+                ->where('event_id', $eventId)
+                ->where('status', 'verified')
+                ->first();
+            
+            $totalRevenue = $revenueResult['total_revenue'] ?? 0;
+            
+            return [
+                'total_registrations' => $totalRegistrations,
+                'verified_registrations' => $verifiedRegistrations,
+                'total_abstracts' => $totalAbstracts,
+                'total_revenue' => $totalRevenue
+            ];
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Error getting event stats: ' . $e->getMessage());
+            
+            return [
+                'total_registrations' => 0,
+                'verified_registrations' => 0,
+                'total_abstracts' => 0,
+                'total_revenue' => 0
+            ];
+        }
+    }
+
+    /**
+     * Get pricing matrix for an event
+     */
+    private function getPricingMatrix($eventId)
+    {
+        $event = $this->eventModel->find($eventId);
+        
+        if (!$event) {
+            return [];
+        }
+        
+        // For presenter, only offline pricing is relevant
+        return [
+            'presenter' => [
+                'offline' => $event['presenter_fee_offline'] ?? 0
+            ]
+        ];
+    }
+
+    /**
+     * Log user activity
+     */
     private function logActivity($userId, $activity)
     {
         $db = \Config\Database::connect();

@@ -140,13 +140,28 @@ class Pembayaran extends BaseController
             throw new \CodeIgniter\Exceptions\PageNotFoundException('Pembayaran tidak ditemukan.');
         }
 
-        $filePath = WRITEPATH . 'uploads/pembayaran/' . $pembayaran['bukti_bayar'];
+        // Fix: Use the correct path to uploads folder
+        $filePath = ROOTPATH . 'writable/uploads/pembayaran/' . $pembayaran['bukti_bayar'];
         
+        // Check if file exists
         if (!file_exists($filePath)) {
-            throw new \CodeIgniter\Exceptions\PageNotFoundException('File bukti pembayaran tidak ditemukan.');
+            // Try alternative path in case uploads is in public
+            $alternativePath = FCPATH . 'uploads/pembayaran/' . $pembayaran['bukti_bayar'];
+            if (file_exists($alternativePath)) {
+                $filePath = $alternativePath;
+            } else {
+                throw new \CodeIgniter\Exceptions\PageNotFoundException('File bukti pembayaran tidak ditemukan.');
+            }
         }
 
-        return $this->response->download($filePath, null);
+        // Get file info for proper headers
+        $fileInfo = pathinfo($filePath);
+        $mimeType = mime_content_type($filePath);
+        
+        // Set proper filename for download
+        $downloadName = 'bukti_pembayaran_' . $id_pembayaran . '.' . $fileInfo['extension'];
+
+        return $this->response->download($filePath, $downloadName);
     }
 
     public function export()
