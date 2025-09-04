@@ -219,6 +219,9 @@
                         <a class="nav-link" href="<?= site_url('admin/pembayaran') ?>">
                             <i class="fas fa-credit-card me-2"></i> Verifikasi Pembayaran
                         </a>
+                        <a class="nav-link" href="<?= site_url('admin/absensi') ?>">
+                            <i class="fas fa-qrcode me-2"></i> Kelola Absensi
+                        </a>
                         <a class="nav-link" href="<?= site_url('admin/voucher') ?>">
                             <i class="fas fa-ticket-alt me-2"></i> Kelola Voucher
                         </a>

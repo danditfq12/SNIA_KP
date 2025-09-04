@@ -7,6 +7,7 @@ use App\Models\EventModel;
 use App\Models\UserModel;
 use App\Models\AbstrakModel;
 use App\Models\PembayaranModel;
+use App\Models\AbsensiModel;
 
 class Event extends BaseController
 {
@@ -14,6 +15,7 @@ class Event extends BaseController
     protected $userModel;
     protected $abstrakModel;
     protected $pembayaranModel;
+    protected $absensiModel;
 
     public function __construct()
     {
@@ -21,6 +23,7 @@ class Event extends BaseController
         $this->userModel = new UserModel();
         $this->abstrakModel = new AbstrakModel();
         $this->pembayaranModel = new PembayaranModel();
+        $this->absensiModel = new AbsensiModel();
     }
 
     public function index()
@@ -45,6 +48,56 @@ class Event extends BaseController
                 ->orderBy('pembayaran.tanggal_bayar', 'DESC')
                 ->limit(3)
                 ->findAll();
+
+            // Get role-based registration counts
+            $db = \Config\Database::connect();
+            $roleStats = $db->query("
+                SELECT 
+                    u.role,
+                    p.participation_type,
+                    COUNT(*) as count
+                FROM pembayaran p
+                JOIN users u ON u.id_user = p.id_user
+                WHERE p.event_id = ? AND p.status = 'verified'
+                GROUP BY u.role, p.participation_type
+            ", [$event['id']])->getResultArray();
+
+            $event['presenter_registrations'] = 0;
+            $event['audience_online_registrations'] = 0;
+            $event['audience_offline_registrations'] = 0;
+
+            foreach ($roleStats as $stat) {
+                if ($stat['role'] === 'presenter') {
+                    $event['presenter_registrations'] += $stat['count'];
+                } elseif ($stat['role'] === 'audience') {
+                    if ($stat['participation_type'] === 'online') {
+                        $event['audience_online_registrations'] += $stat['count'];
+                    } else {
+                        $event['audience_offline_registrations'] += $stat['count'];
+                    }
+                }
+            }
+
+            // Get revenue breakdown
+            $revenueStats = $db->query("
+                SELECT 
+                    p.participation_type,
+                    SUM(p.jumlah) as revenue
+                FROM pembayaran p
+                WHERE p.event_id = ? AND p.status = 'verified'
+                GROUP BY p.participation_type
+            ", [$event['id']])->getResultArray();
+
+            $event['online_revenue'] = 0;
+            $event['offline_revenue'] = 0;
+
+            foreach ($revenueStats as $revenue) {
+                if ($revenue['participation_type'] === 'online') {
+                    $event['online_revenue'] = $revenue['revenue'];
+                } else {
+                    $event['offline_revenue'] = $revenue['revenue'];
+                }
+            }
         }
         
         $data = [
@@ -72,19 +125,19 @@ class Event extends BaseController
             'presenter_fee_offline' => 'required|numeric|greater_than_equal_to[0]',
             'audience_fee_online' => 'required|numeric|greater_than_equal_to[0]',
             'audience_fee_offline' => 'required|numeric|greater_than_equal_to[0]',
-            'max_participants' => 'integer|greater_than[0]',
-            'registration_deadline' => 'valid_date',
-            'abstract_deadline' => 'valid_date'
+            'max_participants' => 'permit_empty|integer|greater_than[0]',
+            'registration_deadline' => 'permit_empty|valid_date',
+            'abstract_deadline' => 'permit_empty|valid_date'
         ];
 
         // Additional validation based on format
         if ($this->request->getPost('format') === 'offline') {
             $rules['location'] = 'required|min_length[5]|max_length[255]';
         } else if ($this->request->getPost('format') === 'online') {
-            $rules['zoom_link'] = 'valid_url|max_length[500]';
+            $rules['zoom_link'] = 'permit_empty|valid_url|max_length[500]';
         } else if ($this->request->getPost('format') === 'both') {
             $rules['location'] = 'required|min_length[5]|max_length[255]';
-            $rules['zoom_link'] = 'valid_url|max_length[500]';
+            $rules['zoom_link'] = 'permit_empty|valid_url|max_length[500]';
         }
 
         if (!$this->validate($rules)) {
@@ -132,9 +185,7 @@ class Event extends BaseController
                 'is_active' => true
             ];
 
-            $eventId = $this->eventModel->save($data);
-
-            if (!$eventId) {
+            if (!$this->eventModel->save($data)) {
                 throw new \Exception('Failed to create event: ' . implode(', ', $this->eventModel->errors()));
             }
 
@@ -186,19 +237,19 @@ class Event extends BaseController
             'presenter_fee_offline' => 'required|numeric|greater_than_equal_to[0]',
             'audience_fee_online' => 'required|numeric|greater_than_equal_to[0]',
             'audience_fee_offline' => 'required|numeric|greater_than_equal_to[0]',
-            'max_participants' => 'integer|greater_than[0]',
-            'registration_deadline' => 'valid_date',
-            'abstract_deadline' => 'valid_date'
+            'max_participants' => 'permit_empty|integer|greater_than[0]',
+            'registration_deadline' => 'permit_empty|valid_date',
+            'abstract_deadline' => 'permit_empty|valid_date'
         ];
 
         // Additional validation based on format
         if ($this->request->getPost('format') === 'offline') {
             $rules['location'] = 'required|min_length[5]|max_length[255]';
         } else if ($this->request->getPost('format') === 'online') {
-            $rules['zoom_link'] = 'valid_url|max_length[500]';
+            $rules['zoom_link'] = 'permit_empty|valid_url|max_length[500]';
         } else if ($this->request->getPost('format') === 'both') {
             $rules['location'] = 'required|min_length[5]|max_length[255]';
-            $rules['zoom_link'] = 'valid_url|max_length[500]';
+            $rules['zoom_link'] = 'permit_empty|valid_url|max_length[500]';
         }
 
         if (!$this->validate($rules)) {
@@ -276,12 +327,21 @@ class Event extends BaseController
             return redirect()->to('admin/event')->with('error', 'Event tidak ditemukan.');
         }
 
-        // Check if event has registrations or abstracts
+        // Check if event has registrations or abstracts or attendance
         $hasRegistrations = $this->pembayaranModel->where('event_id', $id)->countAllResults() > 0;
         $hasAbstracts = $this->abstrakModel->where('event_id', $id)->countAllResults() > 0;
+        $hasAttendance = $this->absensiModel->where('event_id', $id)->countAllResults() > 0;
 
-        if ($hasRegistrations || $hasAbstracts) {
-            return redirect()->back()->with('error', 'Tidak dapat menghapus event yang sudah memiliki pendaftar atau abstrak.');
+        if ($hasRegistrations || $hasAbstracts || $hasAttendance) {
+            $relatedData = [];
+            if ($hasRegistrations) $relatedData[] = 'pendaftaran';
+            if ($hasAbstracts) $relatedData[] = 'abstrak';
+            if ($hasAttendance) $relatedData[] = 'data absensi';
+            
+            return redirect()->back()->with('error', 
+                'Tidak dapat menghapus event yang sudah memiliki ' . implode(', ', $relatedData) . '. ' .
+                'Silakan hapus data terkait terlebih dahulu atau nonaktifkan event ini.'
+            );
         }
 
         // Begin transaction
@@ -307,7 +367,7 @@ class Event extends BaseController
         } catch (\Exception $e) {
             $db->transRollback();
             log_message('error', 'Event deletion error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error menghapus event: ' . $e->getMessage());
         }
     }
 
@@ -374,13 +434,18 @@ class Event extends BaseController
 
         $newStatus = !$event['registration_active'];
         
-        if ($this->eventModel->update($id, ['registration_active' => $newStatus])) {
-            $this->logActivity(session('id_user'), "Changed registration status for event '{$event['title']}' to " . ($newStatus ? 'active' : 'inactive'));
-            
-            $message = $newStatus ? 'Pendaftaran berhasil dibuka!' : 'Pendaftaran berhasil ditutup!';
-            return redirect()->back()->with('success', $message);
-        } else {
-            return redirect()->back()->with('error', 'Gagal mengubah status pendaftaran.');
+        try {
+            if ($this->eventModel->update($id, ['registration_active' => $newStatus])) {
+                $this->logActivity(session('id_user'), "Changed registration status for event '{$event['title']}' to " . ($newStatus ? 'active' : 'inactive'));
+                
+                $message = $newStatus ? 'Pendaftaran berhasil dibuka!' : 'Pendaftaran berhasil ditutup!';
+                return redirect()->back()->with('success', $message);
+            } else {
+                return redirect()->back()->with('error', 'Gagal mengubah status pendaftaran: ' . implode(', ', $this->eventModel->errors()));
+            }
+        } catch (\Exception $e) {
+            log_message('error', 'Toggle registration error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
@@ -394,35 +459,58 @@ class Event extends BaseController
 
         $newStatus = !$event['abstract_submission_active'];
         
-        if ($this->eventModel->update($id, ['abstract_submission_active' => $newStatus])) {
-            $this->logActivity(session('id_user'), "Changed abstract submission status for event '{$event['title']}' to " . ($newStatus ? 'active' : 'inactive'));
-            
-            $message = $newStatus ? 'Submit abstrak berhasil dibuka!' : 'Submit abstrak berhasil ditutup!';
-            return redirect()->back()->with('success', $message);
-        } else {
-            return redirect()->back()->with('error', 'Gagal mengubah status submit abstrak.');
+        try {
+            if ($this->eventModel->update($id, ['abstract_submission_active' => $newStatus])) {
+                $this->logActivity(session('id_user'), "Changed abstract submission status for event '{$event['title']}' to " . ($newStatus ? 'active' : 'inactive'));
+                
+                $message = $newStatus ? 'Submit abstrak berhasil dibuka!' : 'Submit abstrak berhasil ditutup!';
+                return redirect()->back()->with('success', $message);
+            } else {
+                return redirect()->back()->with('error', 'Gagal mengubah status submit abstrak: ' . implode(', ', $this->eventModel->errors()));
+            }
+        } catch (\Exception $e) {
+            log_message('error', 'Toggle abstract submission error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
     public function toggleStatus($id)
-    {
-        $event = $this->eventModel->find($id);
-        
-        if (!$event) {
-            return redirect()->back()->with('error', 'Event tidak ditemukan.');
-        }
+{
+    $event = $this->eventModel->find($id);
+    
+    if (!$event) {
+        return redirect()->back()->with('error', 'Event tidak ditemukan.');
+    }
 
-        $newStatus = !$event['is_active'];
+    $newStatus = !$event['is_active'];
+    
+    // Debug: Log sebelum update
+    log_message('info', "Event ID {$id}: Current status = " . ($event['is_active'] ? 'true' : 'false') . ", New status = " . ($newStatus ? 'true' : 'false'));
+    
+    try {
+        $updateResult = $this->eventModel->update($id, ['is_active' => $newStatus]);
         
-        if ($this->eventModel->update($id, ['is_active' => $newStatus])) {
-            $this->logActivity(session('id_user'), "Changed event status for '{$event['title']}' to " . ($newStatus ? 'active' : 'inactive'));
+        // Debug: Log hasil update
+        log_message('info', "Update result: " . ($updateResult ? 'success' : 'failed'));
+        
+        if ($updateResult) {
+            // Verify update berhasil
+            $updatedEvent = $this->eventModel->find($id);
+            log_message('info', "Verified status after update: " . ($updatedEvent['is_active'] ? 'true' : 'false'));
+            
+            $this->logActivity(session('id_user'), "Changed status for event '{$event['title']}' to " . ($newStatus ? 'active' : 'inactive'));
             
             $message = $newStatus ? 'Event berhasil diaktifkan!' : 'Event berhasil dinonaktifkan!';
             return redirect()->back()->with('success', $message);
         } else {
-            return redirect()->back()->with('error', 'Gagal mengubah status event.');
+            log_message('error', "Failed to update event status: " . implode(', ', $this->eventModel->errors()));
+            return redirect()->back()->with('error', 'Gagal mengubah status event: ' . implode(', ', $this->eventModel->errors()));
         }
+    } catch (\Exception $e) {
+        log_message('error', 'Toggle status error: ' . $e->getMessage());
+        return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
     }
+}
 
     public function export()
     {
@@ -472,7 +560,9 @@ class Event extends BaseController
                 $event['abstract_submission_active'] ? 'Yes' : 'No',
                 date('d/m/Y H:i', strtotime($event['created_at']))
             ]);
-        }fclose($output);
+        }
+        
+        fclose($output);
     }
 
     public function statistics()
@@ -545,7 +635,7 @@ class Event extends BaseController
             
             $count = $this->eventModel
                          ->where('event_date >=', $startDate)
-                         ->where('event_date <=', $endDate . ' 23:59:59')
+                         ->where('event_date <=', $endDate)
                          ->countAllResults();
             
             $data[] = [

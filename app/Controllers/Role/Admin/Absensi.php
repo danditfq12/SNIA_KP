@@ -97,14 +97,9 @@ class Absensi extends BaseController
                     'by_role' => array_column($attendanceByRole, 'count', 'role')
                 ];
 
-                // Check if event is currently ongoing for QR generation
-                $eventStart = $currentEvent['event_date'] . ' ' . $currentEvent['event_time'];
-                $eventStartTime = strtotime($eventStart);
-                $eventEndTime = $eventStartTime + (6 * 3600);
-                $currentTime = time();
-                
-                $eventStats['is_ongoing'] = ($currentTime >= ($eventStartTime - 3600) && $currentTime <= $eventEndTime);
-                $eventStats['event_status'] = $this->getEventStatus($eventStartTime, $eventEndTime, $currentTime);
+                // Enhanced event status calculation
+                $eventStatus = $this->calculateEventStatus($currentEvent);
+                $eventStats = array_merge($eventStats, $eventStatus);
             }
         }
 
@@ -124,6 +119,82 @@ class Absensi extends BaseController
         ];
 
         return view('role/admin/absensi/index', $data);
+    }
+
+    /**
+     * Enhanced event status calculation
+     */
+    private function calculateEventStatus($event)
+    {
+        if (!$event) {
+            return [
+                'is_ongoing' => false,
+                'event_status' => 'Unknown',
+                'badge_class' => 'bg-secondary'
+            ];
+        }
+
+        try {
+            // Set timezone
+            date_default_timezone_set('Asia/Jakarta');
+            
+            // Create event datetime
+            $eventDateTime = new \DateTime($event['event_date'] . ' ' . $event['event_time']);
+            $currentDateTime = new \DateTime();
+            
+            // Calculate time differences in seconds
+            $timeDiff = $currentDateTime->getTimestamp() - $eventDateTime->getTimestamp();
+            $hoursDiff = $timeDiff / 3600;
+            
+            // Debug logging
+            log_message('info', 'Event Status Calculation - Event: ' . $event['title']);
+            log_message('info', 'Event DateTime: ' . $eventDateTime->format('Y-m-d H:i:s'));
+            log_message('info', 'Current DateTime: ' . $currentDateTime->format('Y-m-d H:i:s'));
+            log_message('info', 'Hours Difference: ' . round($hoursDiff, 2));
+            
+            if ($hoursDiff < -1) {
+                // More than 1 hour before event
+                return [
+                    'is_ongoing' => false,
+                    'event_status' => 'Belum Dimulai',
+                    'badge_class' => 'bg-secondary',
+                    'can_scan' => false
+                ];
+            } elseif ($hoursDiff < 0) {
+                // Less than 1 hour before event
+                return [
+                    'is_ongoing' => false,
+                    'event_status' => 'Segera Dimulai',
+                    'badge_class' => 'bg-warning',
+                    'can_scan' => true
+                ];
+            } elseif ($hoursDiff <= 4) {
+                // Within 4 hours after start
+                return [
+                    'is_ongoing' => true,
+                    'event_status' => 'Sedang Berlangsung',
+                    'badge_class' => 'bg-success',
+                    'can_scan' => true
+                ];
+            } else {
+                // More than 4 hours after start
+                return [
+                    'is_ongoing' => false,
+                    'event_status' => 'Sudah Selesai',
+                    'badge_class' => 'bg-danger',
+                    'can_scan' => false
+                ];
+            }
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Error calculating event status: ' . $e->getMessage());
+            return [
+                'is_ongoing' => false,
+                'event_status' => 'Error',
+                'badge_class' => 'bg-secondary',
+                'can_scan' => false
+            ];
+        }
     }
 
     /**
@@ -152,14 +223,8 @@ class Absensi extends BaseController
         // Generate multiple QR codes for different combinations
         $qrCodes = $this->generateEventQRCodes($eventId, $event);
         
-        // Check event status
-        $eventStart = $event['event_date'] . ' ' . $event['event_time'];
-        $eventStartTime = strtotime($eventStart);
-        $eventEndTime = $eventStartTime + (6 * 3600);
-        $currentTime = time();
-        
-        $eventStatus = $this->getEventStatus($eventStartTime, $eventEndTime, $currentTime);
-        $isOngoing = ($currentTime >= ($eventStartTime - 3600) && $currentTime <= $eventEndTime);
+        // Get accurate event status
+        $eventStatus = $this->calculateEventStatus($event);
 
         // Log QR generation
         $this->logActivity(session('id_user'), "Generated multiple QR codes for event: {$event['title']} (ID: {$eventId})");
@@ -170,8 +235,10 @@ class Absensi extends BaseController
             'event_title' => $event['title'],
             'event_date' => $event['event_date'],
             'event_time' => $event['event_time'],
-            'event_status' => $eventStatus,
-            'is_ongoing' => $isOngoing,
+            'event_status' => $eventStatus['event_status'],
+            'is_ongoing' => $eventStatus['is_ongoing'],
+            'badge_class' => $eventStatus['badge_class'],
+            'can_scan' => $eventStatus['can_scan'],
             'message' => 'QR Codes generated successfully',
             'scanner_url' => site_url('qr/scanner')
         ]);
@@ -302,6 +369,40 @@ class Absensi extends BaseController
                 {$token}
             </text>
         </svg>";
+    }
+
+    /**
+     * Get current event status via AJAX
+     */
+    public function getEventStatus()
+    {
+        $eventId = $this->request->getGet('event_id');
+        
+        if (!$eventId) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Event ID is required'
+            ]);
+        }
+
+        $event = $this->eventModel->find($eventId);
+        
+        if (!$event) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Event not found'
+            ]);
+        }
+
+        $eventStatus = $this->calculateEventStatus($event);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'status' => $eventStatus['event_status'],
+            'is_ongoing' => $eventStatus['is_ongoing'],
+            'badge_class' => $eventStatus['badge_class'],
+            'can_scan' => $eventStatus['can_scan']
+        ]);
     }
 
     public function markAttendance()
@@ -818,17 +919,6 @@ class Absensi extends BaseController
                 'success' => false,
                 'message' => 'Failed to get live statistics'
             ]);
-        }
-    }
-
-    private function getEventStatus($eventStartTime, $eventEndTime, $currentTime)
-    {
-        if ($currentTime < ($eventStartTime - 3600)) {
-            return 'Belum Dimulai';
-        } elseif ($currentTime >= ($eventStartTime - 3600) && $currentTime <= $eventEndTime) {
-            return 'Sedang Berlangsung';
-        } else {
-            return 'Sudah Selesai';
         }
     }
 

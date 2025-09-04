@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <title>Kelola Event - SNIA Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.12/sweetalert2.min.css" rel="stylesheet">
     <style>
         :root {
             --primary-color: #2563eb;
@@ -268,35 +270,38 @@
                     </div>
                     
                     <nav class="nav flex-column px-3">
-                        <a class="nav-link" href="<?= site_url('admin/dashboard') ?>">
+                        <a class="nav-link" href="<?= base_url('admin/dashboard') ?>">
                             <i class="fas fa-tachometer-alt me-2"></i> Dashboard
                         </a>
-                        <a class="nav-link" href="<?= site_url('admin/users') ?>">
+                        <a class="nav-link" href="<?= base_url('admin/users') ?>">
                             <i class="fas fa-users me-2"></i> Manajemen User
                         </a>
-                        <a class="nav-link" href="<?= site_url('admin/abstrak') ?>">
+                        <a class="nav-link" href="<?= base_url('admin/abstrak') ?>">
                             <i class="fas fa-file-alt me-2"></i> Manajemen Abstrak
                         </a>
-                        <a class="nav-link" href="<?= site_url('admin/reviewer') ?>">
+                        <a class="nav-link" href="<?= base_url('admin/reviewer') ?>">
                             <i class="fas fa-user-check me-2"></i> Kelola Reviewer
                         </a>
-                        <a class="nav-link active" href="<?= site_url('admin/event') ?>">
+                        <a class="nav-link active" href="<?= base_url('admin/event') ?>">
                             <i class="fas fa-calendar-alt me-2"></i> Kelola Event
                         </a>
-                        <a class="nav-link" href="<?= site_url('admin/pembayaran') ?>">
+                        <a class="nav-link" href="<?= base_url('admin/pembayaran') ?>">
                             <i class="fas fa-credit-card me-2"></i> Verifikasi Pembayaran
                         </a>
-                        <a class="nav-link" href="<?= site_url('admin/voucher') ?>">
+                        <a class="nav-link" href="<?= base_url('admin/absensi') ?>">
+                            <i class="fas fa-qrcode me-2"></i> Kelola Absensi
+                        </a>
+                        <a class="nav-link" href="<?= base_url('admin/voucher') ?>">
                             <i class="fas fa-ticket-alt me-2"></i> Kelola Voucher
                         </a>
-                        <a class="nav-link" href="<?= site_url('admin/dokumen') ?>">
+                        <a class="nav-link" href="<?= base_url('admin/dokumen') ?>">
                             <i class="fas fa-folder-open me-2"></i> Dokumen
                         </a>
-                        <a class="nav-link" href="<?= site_url('admin/laporan') ?>">
+                        <a class="nav-link" href="<?= base_url('admin/laporan') ?>">
                             <i class="fas fa-chart-line me-2"></i> Laporan
                         </a>
                         <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
-                        <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
+                        <a class="nav-link text-warning" href="<?= base_url('auth/logout') ?>">
                             <i class="fas fa-sign-out-alt me-2"></i> Logout
                         </a>
                     </nav>
@@ -615,7 +620,7 @@
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form action="/admin/event/store" method="POST">
+                <form action="<?= base_url('admin/event/store') ?>" method="POST">
                     <?= csrf_field() ?>
                     <div class="modal-body">
                         <div class="row">
@@ -803,6 +808,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.12/sweetalert2.min.js"></script>
 
     <script>
+        // Get CSRF token from meta tag
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        
         $(document).ready(function() {
             // Handle format change
             $('#eventFormat').on('change', function() {
@@ -854,7 +862,7 @@
         });
 
         function viewDetail(eventId) {
-            window.open('/admin/event/detail/' + eventId, '_blank');
+            window.open('<?= base_url("admin/event/detail/") ?>' + eventId, '_blank');
         }
 
         function editEvent(eventId) {
@@ -875,7 +883,20 @@
                 cancelButtonText: 'Batal'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = '/admin/event/toggle-status/' + eventId;
+                    // Use POST method with form submission
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '<?= base_url("admin/event/toggle-status/") ?>' + eventId;
+                    
+                    // Add CSRF token
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = 'hidden';
+                    csrfInput.name = '<?= csrf_token() ?>';
+                    csrfInput.value = csrfToken;
+                    form.appendChild(csrfInput);
+                    
+                    document.body.appendChild(form);
+                    form.submit();
                 }
             });
         }
@@ -883,22 +904,40 @@
         function deleteEvent(eventId) {
             Swal.fire({
                 title: 'Hapus Event?',
-                text: 'Data event dan semua registrasi terkait akan terhapus!',
+                text: 'Apakah Anda yakin ingin menghapus event ini? Event yang memiliki data registrasi atau abstrak tidak dapat dihapus.',
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#ef4444',
                 cancelButtonColor: '#6b7280',
                 confirmButtonText: 'Ya, Hapus!',
-                cancelButtonText: 'Batal'
+                cancelButtonText: 'Batal',
+                input: 'checkbox',
+                inputPlaceholder: 'Saya yakin ingin menghapus event ini',
+                inputValidator: (result) => {
+                    return !result && 'Anda harus mencentang checkbox untuk konfirmasi'
+                }
             }).then((result) => {
                 if (result.isConfirmed) {
-                    window.location.href = '/admin/event/delete/' + eventId;
+                    // Use POST method with form submission
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '<?= base_url("admin/event/delete/") ?>' + eventId;
+                    
+                    // Add CSRF token
+                    const csrfInput = document.createElement('input');
+                    csrfInput.type = 'hidden';
+                    csrfInput.name = '<?= csrf_token() ?>';
+                    csrfInput.value = csrfToken;
+                    form.appendChild(csrfInput);
+                    
+                    document.body.appendChild(form);
+                    form.submit();
                 }
             });
         }
 
         function exportData() {
-            window.open('/admin/event/export', '_blank');
+            window.open('<?= base_url("admin/event/export") ?>', '_blank');
         }
 
         // Show alerts for flash messages
@@ -906,7 +945,7 @@
             Swal.fire({
                 icon: 'success',
                 title: 'Berhasil!',
-                text: '<?= session('success') ?>',
+                text: '<?= addslashes(session('success')) ?>',
                 timer: 3000,
                 showConfirmButton: false
             });
@@ -916,7 +955,7 @@
             Swal.fire({
                 icon: 'error',
                 title: 'Error!',
-                text: '<?= session('error') ?>',
+                text: '<?= addslashes(session('error')) ?>',
             });
         <?php endif; ?>
     </script>

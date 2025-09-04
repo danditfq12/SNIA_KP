@@ -23,6 +23,46 @@
             min-height: 100vh;
         }
 
+        .sidebar {
+            background: linear-gradient(180deg, var(--primary-color) 0%, #1e40af 100%);
+            min-height: 100vh;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+        }
+
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.8);
+            padding: 12px 20px;
+            margin: 4px 0;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar .nav-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .sidebar .nav-link.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        .main-content {
+            background: white;
+            border-radius: 20px 0 0 0;
+            min-height: 100vh;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.05);
+        }
+
+        .header-section {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            margin-bottom: 30px;
+        }
+
         .qr-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -103,24 +143,6 @@
             max-height: 90vh;
         }
 
-        .print-qr-page {
-            padding: 40px;
-            text-align: center;
-            background: white;
-        }
-
-        .print-header {
-            border-bottom: 2px solid #333;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-
-        @media print {
-            .no-print { display: none !important; }
-            .print-break { page-break-after: always; }
-            body { background: white; }
-        }
-
         .loading-overlay {
             position: absolute;
             top: 0;
@@ -181,14 +203,90 @@
             color: #6b7280;
             margin-top: 5px;
         }
+
+        /* Event status badges */
+        .event-status-badge {
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .event-status-badge.status-upcoming {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        .event-status-badge.status-starting-soon {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .event-status-badge.status-ongoing {
+            background: #d1fae5;
+            color: #065f46;
+            animation: pulse 2s infinite;
+        }
+
+        .event-status-badge.status-finished {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            .print-break { page-break-after: always; }
+            body { background: white; }
+        }
     </style>
 </head>
 <body>
     <div class="container-fluid">
         <div class="row">
-            <!-- Sidebar (reusing from previous) -->
+            <!-- Sidebar -->
             <div class="col-md-3 col-lg-2 px-0">
-                <!-- Sidebar content same as before -->
+                <div class="sidebar">
+                    <div class="p-4 text-center">
+                        <h4 class="text-white mb-0">
+                            <i class="fas fa-cogs me-2"></i>
+                            SNIA Admin
+                        </h4>
+                        <small class="text-white-50">Attendance System</small>
+                    </div>
+                    
+                    <nav class="nav flex-column px-3">
+                        <a class="nav-link" href="<?= base_url('admin/dashboard') ?>">
+                            <i class="fas fa-tachometer-alt me-2"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="<?= base_url('admin/users') ?>">
+                            <i class="fas fa-users me-2"></i> Manajemen User
+                        </a>
+                        <a class="nav-link" href="<?= base_url('admin/event') ?>">
+                            <i class="fas fa-calendar-alt me-2"></i> Kelola Event
+                        </a>
+                        <a class="nav-link active" href="<?= base_url('admin/absensi') ?>">
+                            <i class="fas fa-qrcode me-2"></i> QR Attendance
+                        </a>
+                        <a class="nav-link" href="<?= base_url('admin/pembayaran') ?>">
+                            <i class="fas fa-credit-card me-2"></i> Verifikasi Pembayaran
+                        </a>
+                        <a class="nav-link" href="<?= base_url('admin/laporan') ?>">
+                            <i class="fas fa-chart-line me-2"></i> Laporan
+                        </a>
+                        <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
+                        <a class="nav-link text-warning" href="<?= base_url('auth/logout') ?>">
+                            <i class="fas fa-sign-out-alt me-2"></i> Logout
+                        </a>
+                    </nav>
+                </div>
             </div>
 
             <!-- Main Content -->
@@ -211,11 +309,15 @@
                                     <i class="fas fa-qrcode me-2"></i>Enhanced QR Attendance Management
                                 </h2>
                                 <p class="mb-0 opacity-90">
-                                    Generate multiple QR codes for different roles and participation types
+                                    Generate multiple QR codes for different roles and participation types with real-time status
                                 </p>
                             </div>
                             <div class="col-md-4 text-end">
-                                <a href="<?= site_url('qr/scanner') ?>" class="scanner-link" target="_blank">
+                                <div class="text-end">
+                                    <small class="text-muted d-block">Current Time</small>
+                                    <strong id="currentTime"><?= date('d F Y, H:i:s') ?></strong>
+                                </div>
+                                <a href="<?= site_url('qr/scanner') ?>" class="scanner-link mt-2" target="_blank">
                                     <i class="fas fa-camera me-2"></i>Open QR Scanner
                                 </a>
                             </div>
@@ -256,6 +358,52 @@
                                             </div>
                                         </div>
                                     </form>
+
+                                    <!-- Current Event Status Display -->
+                                    <?php if ($currentEvent): ?>
+                                        <div class="alert alert-info">
+                                            <div class="row align-items-center">
+                                                <div class="col-md-8">
+                                                    <h6 class="mb-1">Selected Event: <?= esc($currentEvent['title']) ?></h6>
+                                                    <small>
+                                                        <i class="fas fa-calendar me-1"></i><?= date('d F Y', strtotime($currentEvent['event_date'])) ?>
+                                                        <i class="fas fa-clock ms-3 me-1"></i><?= date('H:i', strtotime($currentEvent['event_time'])) ?> WIB
+                                                    </small>
+                                                </div>
+                                                <div class="col-md-4 text-end">
+                                                    <div id="eventStatusDisplay">
+                                                        <?php 
+                                                        $statusClass = 'status-upcoming';
+                                                        $statusText = 'Belum Dimulai';
+                                                        $statusIcon = 'fa-clock';
+                                                        
+                                                        if (!empty($eventStats)) {
+                                                            switch($eventStats['event_status']) {
+                                                                case 'Segera Dimulai':
+                                                                    $statusClass = 'status-starting-soon';
+                                                                    $statusIcon = 'fa-play-circle';
+                                                                    break;
+                                                                case 'Sedang Berlangsung':
+                                                                    $statusClass = 'status-ongoing';
+                                                                    $statusIcon = 'fa-broadcast-tower';
+                                                                    break;
+                                                                case 'Sudah Selesai':
+                                                                    $statusClass = 'status-finished';
+                                                                    $statusIcon = 'fa-check-circle';
+                                                                    break;
+                                                            }
+                                                            $statusText = $eventStats['event_status'];
+                                                        }
+                                                        ?>
+                                                        <div class="event-status-badge <?= $statusClass ?>">
+                                                            <i class="fas <?= $statusIcon ?>"></i>
+                                                            <span><?= $statusText ?></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
@@ -269,9 +417,26 @@
                                 </div>
                                 <div class="card-body">
                                     <div id="quickStats">
-                                        <div class="text-center text-muted">
-                                            Select an event to view statistics
-                                        </div>
+                                        <?php if (!empty($eventStats)): ?>
+                                            <div class="row text-center">
+                                                <div class="col-6 mb-2">
+                                                    <div class="stat-number"><?= $eventStats['total_registered'] ?></div>
+                                                    <div class="stat-label">Registered</div>
+                                                </div>
+                                                <div class="col-6 mb-2">
+                                                    <div class="stat-number"><?= $eventStats['total_attended'] ?></div>
+                                                    <div class="stat-label">Attended</div>
+                                                </div>
+                                                <div class="col-12">
+                                                    <div class="stat-number"><?= $eventStats['attendance_rate'] ?>%</div>
+                                                    <div class="stat-label">Attendance Rate</div>
+                                                </div>
+                                            </div>
+                                        <?php else: ?>
+                                            <div class="text-center text-muted">
+                                                Select an event to view statistics
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </div>
@@ -327,17 +492,17 @@
                                     <div class="card-body">
                                         <div class="row">
                                             <div class="col-md-4">
-                                                <button class="btn btn-outline-primary w-100" onclick="showBulkMarkModal()">
+                                                <button class="btn btn-outline-primary w-100 mb-2" onclick="showBulkMarkModal()">
                                                     <i class="fas fa-users-check me-1"></i>Bulk Mark Attendance
                                                 </button>
                                             </div>
                                             <div class="col-md-4">
-                                                <button class="btn btn-outline-success w-100" onclick="exportAttendance()">
+                                                <button class="btn btn-outline-success w-100 mb-2" onclick="exportAttendance()">
                                                     <i class="fas fa-file-excel me-1"></i>Export to Excel
                                                 </button>
                                             </div>
                                             <div class="col-md-4">
-                                                <button class="btn btn-outline-warning w-100" onclick="showManualMarkModal()">
+                                                <button class="btn btn-outline-warning w-100 mb-2" onclick="showManualMarkModal()">
                                                     <i class="fas fa-user-plus me-1"></i>Manual Mark
                                                 </button>
                                             </div>
@@ -363,6 +528,7 @@
                                                 Auto-refresh (2 min)
                                             </label>
                                         </div>
+                                        <small class="text-muted">Last update: <span id="lastUpdate"><?= date('H:i:s') ?></span></small>
                                     </div>
                                 </div>
                             </div>
@@ -567,6 +733,19 @@
         let currentModalQR = null;
         let autoRefreshInterval = null;
 
+        // Update current time every second
+        function updateCurrentTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleString('id-ID', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
         // Generate multiple QR codes
         function generateMultipleQRCodes() {
             if (!currentEventId) {
@@ -608,6 +787,49 @@
             });
         }
 
+        // Calculate event status on frontend
+        function calculateEventStatus(eventDate, eventTime) {
+            const now = new Date();
+            const eventDateTime = new Date(eventDate + ' ' + eventTime);
+            
+            const timeDiff = now.getTime() - eventDateTime.getTime();
+            const hoursDiff = timeDiff / (1000 * 60 * 60);
+            
+            if (hoursDiff < -1) {
+                return { 
+                    status: 'Belum Dimulai', 
+                    class: 'status-upcoming', 
+                    ongoing: false, 
+                    icon: 'fa-clock',
+                    canScan: false
+                };
+            } else if (hoursDiff < 0) {
+                return { 
+                    status: 'Segera Dimulai', 
+                    class: 'status-starting-soon', 
+                    ongoing: false, 
+                    icon: 'fa-play-circle',
+                    canScan: true
+                };
+            } else if (hoursDiff <= 4) {
+                return { 
+                    status: 'Sedang Berlangsung', 
+                    class: 'status-ongoing', 
+                    ongoing: true, 
+                    icon: 'fa-broadcast-tower',
+                    canScan: true
+                };
+            } else {
+                return { 
+                    status: 'Sudah Selesai', 
+                    class: 'status-finished', 
+                    ongoing: false, 
+                    icon: 'fa-check-circle',
+                    canScan: false
+                };
+            }
+        }
+
         // Display QR codes in grid
         function displayQRCodes(data) {
             const qrCodesArea = document.getElementById('qrCodesArea');
@@ -615,7 +837,10 @@
             const qrStats = document.getElementById('qrStats');
             const qrGrid = document.getElementById('qrGrid');
 
-            // Show event info
+            // Calculate real-time status
+            const eventStatus = calculateEventStatus(data.event_date, data.event_time);
+            
+            // Show event info with accurate status
             eventInfo.innerHTML = `
                 <div class="row align-items-center">
                     <div class="col-md-8">
@@ -623,16 +848,25 @@
                         <p class="mb-0 text-muted">
                             <i class="fas fa-calendar me-1"></i>${formatDate(data.event_date)}
                             <i class="fas fa-clock ms-3 me-1"></i>${formatTime(data.event_time)}
-                            <span class="ms-3 badge bg-${data.is_ongoing ? 'success' : 'secondary'}">${data.event_status}</span>
                         </p>
                     </div>
                     <div class="col-md-4 text-end">
-                        <a href="${data.scanner_url}" target="_blank" class="btn btn-outline-primary btn-sm">
-                            <i class="fas fa-camera me-1"></i>Open Scanner
-                        </a>
+                        <div class="event-status-badge ${eventStatus.class}">
+                            <i class="fas ${eventStatus.icon}"></i>
+                            <span>${eventStatus.status}</span>
+                        </div>
+                        <div class="mt-2">
+                            <a href="${data.scanner_url}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-camera me-1"></i>Open Scanner
+                            </a>
+                        </div>
                     </div>
                 </div>
             `;
+
+            // Set global variable
+            window.isEventOngoing = eventStatus.ongoing;
+            window.canScanQR = eventStatus.canScan;
 
             // Show stats
             qrStats.innerHTML = `
@@ -711,7 +945,7 @@
             setTimeout(() => {
                 generateQRCode(`qr-canvas-${index}`, qr.url, qr.color);
                 document.getElementById(`loading-${index}`).classList.remove('show');
-            }, index * 200); // Stagger generation
+            }, index * 200);
 
             return div;
         }
@@ -732,7 +966,6 @@
                 }, function(error) {
                     if (error) {
                         console.error('QR generation error:', error);
-                        // Fallback to API
                         generateQRCodeFallback(canvas, text);
                     }
                 });
@@ -750,7 +983,6 @@
                 ctx.drawImage(img, 0, 0, 200, 200);
             };
             img.onerror = function() {
-                // Final fallback - draw placeholder
                 const ctx = canvas.getContext('2d');
                 ctx.fillStyle = '#f3f4f6';
                 ctx.fillRect(0, 0, 200, 200);
@@ -917,6 +1149,7 @@
                     document.getElementById('totalRegistered').textContent = data.stats.total_registered;
                     document.getElementById('totalAttended').textContent = data.stats.total_attended;
                     document.getElementById('attendanceRate').textContent = data.stats.attendance_rate + '%';
+                    document.getElementById('lastUpdate').textContent = data.stats.last_updated;
                 }
             })
             .catch(error => {
@@ -924,31 +1157,61 @@
             });
         }
 
+        // Update event status display
+        function updateEventStatus() {
+            if (!currentEventId) return;
+            
+            fetch(`<?= site_url('admin/absensi/getEventStatus') ?>?event_id=${currentEventId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const statusDisplay = document.getElementById('eventStatusDisplay');
+                    if (statusDisplay) {
+                        const badge = statusDisplay.querySelector('.event-status-badge');
+                        if (badge) {
+                            // Update badge class
+                            badge.className = `event-status-badge ${data.badge_class.replace('bg-', 'status-')}`;
+                            
+                            // Update icon and text
+                            const icon = badge.querySelector('i');
+                            const text = badge.querySelector('span');
+                            
+                            if (icon && text) {
+                                const iconClass = data.status === 'Segera Dimulai' ? 'fa-play-circle' :
+                                                data.status === 'Sedang Berlangsung' ? 'fa-broadcast-tower' :
+                                                data.status === 'Sudah Selesai' ? 'fa-check-circle' : 'fa-clock';
+                                
+                                icon.className = `fas ${iconClass}`;
+                                text.textContent = data.status;
+                            }
+                        }
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Failed to update event status:', error);
+            });
+        }
+
         // Remove attendance record with modal confirmation
         function removeAttendanceWithModal(attendanceId, participantName) {
-            // Set the message
             document.getElementById('deleteMessage').innerHTML = `
                 Are you sure you want to remove the attendance record for 
                 <strong>${participantName}</strong>?
             `;
             
-            // Set up the confirm button
             const confirmBtn = document.getElementById('confirmDeleteBtn');
             confirmBtn.onclick = function() {
                 confirmRemoveAttendance(attendanceId);
             };
             
-            // Show modal
             new bootstrap.Modal(document.getElementById('deleteConfirmModal')).show();
         }
 
         // Confirm and execute removal
         function confirmRemoveAttendance(attendanceId) {
-            // Hide modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
             modal.hide();
-            
-            // Execute removal
             removeAttendance(attendanceId);
         }
 
@@ -959,7 +1222,6 @@
                 return;
             }
 
-            // Send delete request
             fetch('<?= site_url('admin/absensi/removeAttendance') ?>', {
                 method: 'POST',
                 headers: {
@@ -972,12 +1234,10 @@
             .then(data => {
                 if (data.success) {
                     showAlert('Attendance record removed successfully!', 'success');
-                    // Remove the row from table
                     const row = document.querySelector(`[onclick*="removeAttendanceWithModal(${attendanceId}"]`).closest('tr');
                     if (row) {
                         row.remove();
                     }
-                    // Update stats
                     loadLiveStats();
                 } else {
                     showAlert('Error: ' + (data.message || 'Failed to remove attendance record'), 'danger');
@@ -996,8 +1256,8 @@
             if (checkbox.checked) {
                 autoRefreshInterval = setInterval(() => {
                     loadLiveStats();
+                    updateEventStatus();
                     if (!document.querySelector('.modal.show')) {
-                        // Only refresh if no modals are open
                         refreshAttendanceData(true);
                     }
                 }, 120000); // 2 minutes
@@ -1018,13 +1278,11 @@
             }
             
             loadLiveStats();
+            updateEventStatus();
             
-            // Refresh attendance table if present
-            if (document.getElementById('attendanceTable')) {
+            if (document.getElementById('attendanceTable') && !silent) {
                 setTimeout(() => {
-                    if (!silent) {
-                        location.reload();
-                    }
+                    location.reload();
                 }, 1000);
             }
         }
@@ -1088,7 +1346,7 @@
             }, 5000);
         }
 
-        // Export attendance function (placeholder)
+        // Export attendance function
         function exportAttendance() {
             if (!currentEventId) {
                 showAlert('Please select an event first', 'warning');
@@ -1097,10 +1355,30 @@
             window.open(`<?= site_url('admin/absensi/export') ?>?event_id=${currentEventId}`, '_blank');
         }
 
+        // Placeholder functions for future implementation
+        function showBulkMarkModal() {
+            showAlert('Bulk mark feature will be implemented soon', 'info');
+        }
+
+        function showManualMarkModal() {
+            showAlert('Manual mark feature will be implemented soon', 'info');
+        }
+
+        function downloadAllQRCodes() {
+            showAlert('Download feature will be implemented soon', 'info');
+        }
+
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
+            // Update time every second
+            setInterval(updateCurrentTime, 1000);
+            
+            // Load initial stats if event is selected
             if (currentEventId) {
                 loadLiveStats();
+                
+                // Update event status every 30 seconds
+                setInterval(updateEventStatus, 30000);
             }
         });
     </script>

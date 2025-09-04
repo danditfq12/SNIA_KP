@@ -77,7 +77,7 @@ if (ENVIRONMENT === 'development') {
 }
 
 // ---------------------------------------------------
-// Admin Routes - Enhanced QR Management
+// Admin Routes - FIXED EVENT ROUTES
 // ---------------------------------------------------
 $routes->group('admin', [
     'filter' => 'role:admin',
@@ -115,16 +115,19 @@ $routes->group('admin', [
     $routes->get('reviewer/delete/(:num)', 'Reviewer::delete/$1');
     $routes->get('reviewer/performance', 'Reviewer::performance');
 
-    // Event Management with role-based pricing
+    // FIXED: Event Management Routes - All toggle routes now use POST
     $routes->get('event', 'Event::index');
     $routes->post('event/store', 'Event::store');
     $routes->get('event/edit/(:num)', 'Event::edit/$1');
     $routes->post('event/update/(:num)', 'Event::update/$1');
-    $routes->get('event/delete/(:num)', 'Event::delete/$1');
+    $routes->post('event/delete/(:num)', 'Event::delete/$1');
     $routes->get('event/detail/(:num)', 'Event::detail/$1');
-    $routes->get('event/toggle-registration/(:num)', 'Event::toggleRegistration/$1');
-    $routes->get('event/toggle-abstract/(:num)', 'Event::toggleAbstractSubmission/$1');
-    $routes->get('event/toggle-status/(:num)', 'Event::toggleStatus/$1');
+    
+    // FIXED: Changed to POST methods for all toggle functions
+    $routes->post('event/toggle-registration/(:num)', 'Event::toggleRegistration/$1');
+    $routes->post('event/toggle-abstract-submission/(:num)', 'Event::toggleAbstractSubmission/$1'); // Fixed route name
+    $routes->post('event/toggle-status/(:num)', 'Event::toggleStatus/$1');
+    
     $routes->get('event/export', 'Event::export');
     $routes->get('event/statistics', 'Event::statistics');
 
@@ -154,16 +157,16 @@ $routes->group('admin', [
     $routes->post('dokumen/uploadSertifikat/(:num)', 'Dokumen::uploadSertifikat/$1');
     $routes->get('dokumen/download/(:num)', 'Dokumen::download/$1');
     $routes->get('dokumen/delete/(:num)', 'Dokumen::delete/$1');
-    $routes->get('dokumen/generateBulkLOA', 'Dokumen::generateBulkLOA');
-    $routes->get('dokumen/generateBulkSertifikat', 'Dokumen::generateBulkSertifikat');
+    $routes->post('dokumen/generateBulkLOA', 'Dokumen::generateBulkLOA');
+    $routes->post('dokumen/generateBulkSertifikat', 'Dokumen::generateBulkSertifikat');
 
     // Voucher Management
     $routes->get('voucher', 'Voucher::index');
     $routes->post('voucher/store', 'Voucher::store');
     $routes->get('voucher/edit/(:num)', 'Voucher::edit/$1');
     $routes->post('voucher/update/(:num)', 'Voucher::update/$1');
-    $routes->get('voucher/delete/(:num)', 'Voucher::delete/$1');
-    $routes->get('voucher/toggle-status/(:num)', 'Voucher::toggleStatus/$1');
+    $routes->post('voucher/delete/(:num)', 'Voucher::delete/$1');
+    $routes->post('voucher/toggle-status/(:num)', 'Voucher::toggleStatus/$1');
     $routes->get('voucher/detail/(:num)', 'Voucher::detail/$1');
     $routes->get('voucher/generate-code', 'Voucher::generateCode');
     $routes->post('voucher/validate', 'Voucher::validateVoucher');
@@ -205,7 +208,7 @@ $routes->group('presenter', [
     $routes->post('pembayaran/store', 'Pembayaran::store');
     $routes->get('pembayaran/detail/(:num)', 'Pembayaran::detail/$1');
     $routes->get('pembayaran/download-bukti/(:num)', 'Pembayaran::downloadBukti/$1');
-    $routes->get('pembayaran/cancel/(:num)', 'Pembayaran::cancel/$1');
+    $routes->post('pembayaran/cancel/(:num)', 'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher', 'Pembayaran::validateVoucher');
     
     // Enhanced Absensi Management (unlocked after payment verification)
@@ -242,7 +245,7 @@ $routes->group('audience', [
     $routes->post('pembayaran/store', 'Pembayaran::store');
     $routes->get('pembayaran/detail/(:num)', 'Pembayaran::detail/$1');
     $routes->get('pembayaran/download-bukti/(:num)', 'Pembayaran::downloadBukti/$1');
-    $routes->get('pembayaran/cancel/(:num)', 'Pembayaran::cancel/$1');
+    $routes->post('pembayaran/cancel/(:num)', 'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher', 'Pembayaran::validateVoucher');
     
     // Enhanced Absensi Management (unlocked after payment verification)
