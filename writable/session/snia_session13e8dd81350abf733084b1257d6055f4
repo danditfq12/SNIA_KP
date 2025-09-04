@@ -1,1 +1,0 @@
-__ci_last_regenerate|i:1756981165;csrf_test_name|s:32:"6c3b112194de31ce23a090d0df1329e2";_ci_previous_url|s:33:"http://localhost:8080/admin/event";isLoggedIn|b:1;id_user|s:1:"1";role|s:5:"admin";nama|s:10:"SuperAdmin";error|s:71:"Tidak dapat menghapus event yang sudah memiliki pendaftar atau abstrak.";__ci_vars|a:1:{s:5:"error";s:3:"old";}
