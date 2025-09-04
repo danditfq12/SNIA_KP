@@ -190,7 +190,8 @@ $routes->group('reviewer', [
     $routes->get('abstrak',            'Abstrak::index');
     $routes->get('abstrak/(:num)',     'Abstrak::detail/$1');
     $routes->post('review/(:num)',     'Review::store/$1');
-    $routes->get('riwayat',            'Review::riwayat');
+    $routes->get('riwayat',            'Riwayat::index');
+
 });
 
 // ---------------------------------------------------
