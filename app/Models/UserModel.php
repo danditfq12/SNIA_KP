@@ -7,7 +7,7 @@ use CodeIgniter\Model;
 class UserModel extends Model
 {
     protected $table         = 'users';
-    protected $primaryKey    = 'id_user'; // Diperbaiki dari 'id' ke 'id_user'
+    protected $primaryKey    = 'id_user';
     protected $returnType    = 'array';
     protected $useTimestamps = false;
 
