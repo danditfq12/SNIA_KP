@@ -6,6 +6,8 @@ use App\Controllers\BaseController;
 use App\Models\EventModel;
 use App\Models\EventRegistrationModel;
 use App\Models\PembayaranModel;
+use App\Models\UserModel;
+use App\Services\NotificationService;
 
 class Pembayaran extends BaseController
 {
@@ -32,7 +34,8 @@ class Pembayaran extends BaseController
         $regM = new EventRegistrationModel();
         $reg  = $regM->getByIdWithEvent($idReg);
         if (!$reg || (int)$reg['id_user'] !== $idUser) {
-            return redirect()->to('/audience/events')->with('error','Registrasi tidak valid.');
+            return redirect()->to(site_url('audience/events'))
+                ->with('error','Registrasi tidak valid.');
         }
 
         $eventM = new EventModel();
@@ -53,7 +56,8 @@ class Pembayaran extends BaseController
         $regM = new EventRegistrationModel();
         $reg  = $regM->getByIdWithEvent($idReg);
         if (!$reg || (int)$reg['id_user'] !== $idUser) {
-            return redirect()->to('/audience/pembayaran')->with('error','Registrasi tidak valid.');
+            return redirect()->to(site_url('audience/pembayaran'))
+                ->with('error','Registrasi tidak valid.');
         }
 
         // Jika sudah ada pending untuk event ini → ke detail
@@ -63,8 +67,8 @@ class Pembayaran extends BaseController
                       ->where('status', 'pending')
                       ->first();
         if ($exist) {
-            return redirect()->to('/audience/pembayaran/detail/'.$exist['id_pembayaran'])
-                             ->with('message','Kamu sudah mengirim pembayaran. Lihat detailnya.');
+            return redirect()->to(site_url('audience/pembayaran/detail/'.$exist['id_pembayaran']))
+                ->with('info','Kamu sudah mengirim pembayaran. Lihat detailnya.');
         }
 
         $amount = (float) (new EventModel())->getEventPrice((int)$reg['id_event'], 'audience', $reg['mode_kehadiran']);
@@ -86,13 +90,15 @@ class Pembayaran extends BaseController
             'bukti_bayar' => 'uploaded[bukti_bayar]|max_size[bukti_bayar,5120]|ext_in[bukti_bayar,jpg,jpeg,png,pdf]',
         ];
         if (!$this->validate($rules)) {
-            return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
+            return redirect()->back()->withInput()
+                ->with('error', 'Validasi gagal. Pastikan file adalah JPG/PNG/PDF maks 5MB.');
         }
 
         $regM = new EventRegistrationModel();
         $reg  = $regM->getByIdWithEvent((int) $this->request->getPost('id_reg'));
         if (!$reg || (int)$reg['id_user'] !== $idUser) {
-            return redirect()->to('/audience/pembayaran')->with('error','Registrasi tidak valid.');
+            return redirect()->to(site_url('audience/pembayaran'))
+                ->with('error','Registrasi tidak valid.');
         }
 
         // Hindari duplikasi
@@ -102,8 +108,8 @@ class Pembayaran extends BaseController
                       ->where('status', 'pending')
                       ->first();
         if ($exist) {
-            return redirect()->to('/audience/pembayaran/detail/'.$exist['id_pembayaran'])
-                             ->with('message','Kamu sudah mengirim pembayaran. Lihat detailnya.');
+            return redirect()->to(site_url('audience/pembayaran/detail/'.$exist['id_pembayaran']))
+                ->with('info','Kamu sudah mengirim pembayaran. Lihat detailnya.');
         }
 
         $eventM = new EventModel();
@@ -141,8 +147,42 @@ class Pembayaran extends BaseController
 
         $payId = (int) $payM->getInsertID();
 
-        return redirect()->to('/audience/pembayaran/detail/'.$payId)
-                         ->with('message','Bukti terkirim. Menunggu verifikasi admin.');
+        // === NOTIF ADMIN ===
+        try {
+            $admins = (new UserModel())
+                ->where('role', 'admin')
+                ->where('status', 'aktif')
+                ->select('id_user')
+                ->findAll();
+
+            if (!empty($admins)) {
+                $notif = new NotificationService();
+                $eventTitle = $reg['title'] ?? 'Event SNIA';
+                foreach ($admins as $a) {
+                    $notif->notify(
+                        (int) $a['id_user'],
+                        'payment',
+                        'Pembayaran baru menunggu verifikasi',
+                        "Audience mengunggah bukti pembayaran untuk {$eventTitle}.",
+                        site_url('admin/pembayaran/detail/' . $payId)
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Gagal kirim notifikasi ke admin (audience payment pending): ' . $e->getMessage());
+        }
+        // === END NOTIF ===
+
+        return redirect()->to(site_url('audience/pembayaran/detail/'.$payId))
+            ->with('swal', [
+                'icon'  => 'success',
+                'title' => 'Bukti terkirim',
+                'text'  => 'Menunggu verifikasi admin.',
+                'toast' => true,
+                'position' => 'top-end',
+                'timer' => 1800,
+                'showConfirmButton' => false,
+            ]);
     }
 
     /** Detail pembayaran saya */
@@ -156,7 +196,8 @@ class Pembayaran extends BaseController
             ->find($id);
 
         if (!$p || (int)$p['id_user'] !== $idUser) {
-            return redirect()->to('/audience/pembayaran')->with('error','Data tidak ditemukan.');
+            return redirect()->to(site_url('audience/pembayaran'))
+                ->with('error','Data tidak ditemukan.');
         }
 
         $p['invoice_display'] = 'PAY-'.date('Ymd', strtotime($p['tanggal_bayar'] ?? 'now')).'-'.$p['id_pembayaran'];
@@ -193,16 +234,29 @@ class Pembayaran extends BaseController
         $p      = $payM->find($id);
 
         if (!$p || (int)$p['id_user'] !== $idUser || ($p['status'] ?? '') !== 'pending') {
-            return redirect()->to('/audience/pembayaran')->with('error','Tidak bisa dibatalkan.');
+            return redirect()->to(site_url('audience/pembayaran'))
+                ->with('error','Tidak bisa dibatalkan.');
         }
 
         $payM->update($id, ['status'=>'canceled']);
-        return redirect()->to('/audience/pembayaran')->with('message','Pembayaran dibatalkan.');
+
+        return redirect()->to(site_url('audience/pembayaran'))
+            ->with('swal', [
+                'icon'  => 'success',
+                'title' => 'Pembayaran dibatalkan',
+                'toast' => true,
+                'position' => 'top-end',
+                'timer' => 1600,
+                'showConfirmButton' => false,
+            ]);
     }
 
     /** Voucher nonaktif (opsional) */
     public function validateVoucher()
     {
-        return $this->response->setJSON(['ok'=>false,'message'=>'Fitur voucher nonaktif pada mode pembayaran manual.']);
+        return $this->response->setJSON([
+            'ok' => false,
+            'message' => 'Fitur voucher nonaktif pada mode pembayaran manual.'
+        ]);
     }
 }

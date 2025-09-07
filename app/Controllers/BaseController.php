@@ -9,49 +9,45 @@ use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
 use Psr\Log\LoggerInterface;
 
-// tambahkan Library NotificationService
-use App\Libraries\NotificationService;
+// Library NotificationService
+use App\Services\NotificationService;
 
 abstract class BaseController extends Controller
 {
-    /**
-     * Instance of the main Request object.
-     *
-     * @var CLIRequest|IncomingRequest
-     */
+    /** @var CLIRequest|IncomingRequest */
     protected $request;
 
-    /**
-     * An array of helpers to be loaded automatically upon
-     * class instantiation. These helpers will be available
-     * to all other controllers that extend BaseController.
-     *
-     * @var list<string>
-     */
+    /** @var list<string> */
     protected $helpers = [];
 
-    /**
-     * Data global yang bisa dikirim ke semua view
-     */
+    /** Data global untuk view */
     protected $data = [];
 
-    /**
-     * @return void
-     */
+    /** @var \CodeIgniter\Session\Session */
+    protected $session;
+
     public function initController(RequestInterface $request, ResponseInterface $response, LoggerInterface $logger)
     {
-        // Do Not Edit This Line
         parent::initController($request, $response, $logger);
 
         // Session
         $this->session = service('session');
 
+        // Default
+        $this->data['notifs'] = [];
+
         // Load notifikasi global (hanya kalau user login)
         if ($this->session->get('id_user')) {
-            $notifService = new NotificationService();
-            $this->data['notifs'] = $notifService->getForCurrentUser();
-        } else {
-            $this->data['notifs'] = [];
+            try {
+                $notifService = new NotificationService();
+                $this->data['notifs'] = $notifService->getForCurrentUser();
+            } catch (\Throwable $e) {
+                log_message('error', 'Load notif error: ' . $e->getMessage());
+                $this->data['notifs'] = [];
+            }
         }
+
+        // 👉 Inject supaya variabel "notifs" tersedia di SEMUA view (termasuk header)
+        service('renderer')->setVar('notifs', $this->data['notifs']);
     }
 }

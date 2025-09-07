@@ -7,7 +7,8 @@ use App\Models\PembayaranModel;
 use App\Models\EventModel;
 use App\Models\VoucherModel;
 use App\Models\AbstrakModel;
-use App\Models\UserModel;
+use App\Models\UserModel;                 // <-- ADD
+use App\Services\NotificationService;     // <-- ADD
 
 class Pembayaran extends BaseController
 {
@@ -68,7 +69,6 @@ class Pembayaran extends BaseController
         // Get available events for payment (events with accepted abstracts but no payment yet)
         $availableEvents = [];
         foreach ($acceptedAbstracts as $abstract) {
-            // Check if payment already exists for this event
             $existingPayment = array_filter($payments, function($payment) use ($abstract) {
                 return $payment['event_id'] == $abstract['event_id'];
             });
@@ -106,12 +106,10 @@ class Pembayaran extends BaseController
             return redirect()->to('auth/login')->with('error', 'Please login first');
         }
         
-        // Validate event selection
         if (!$eventId) {
             return redirect()->back()->with('error', 'Event ID is required.');
         }
 
-        // Check if user has accepted abstract for this event
         $acceptedAbstract = $this->abstrakModel
             ->where('id_user', $userId)
             ->where('event_id', $eventId)
@@ -123,7 +121,6 @@ class Pembayaran extends BaseController
                 ->with('error', 'You must have an accepted abstract for this event before making payment.');
         }
 
-        // Check if payment already exists for this event
         $existingPayment = $this->pembayaranModel
             ->where('id_user', $userId)
             ->where('event_id', $eventId)
@@ -134,16 +131,13 @@ class Pembayaran extends BaseController
                 ->with('info', 'Payment already exists for this event.');
         }
 
-        // Get event details
         $event = $this->eventModel->find($eventId);
         if (!$event) {
             return redirect()->back()->with('error', 'Event not found.');
         }
 
-        // Get presenter fee (always offline for presenters)
         $baseAmount = $event['presenter_fee_offline'] ?? 0;
 
-        // Get active vouchers
         $activeVouchers = $this->voucherModel
             ->where('status', 'aktif')
             ->where('masa_berlaku >=', date('Y-m-d'))
@@ -192,7 +186,6 @@ class Pembayaran extends BaseController
         $metode = $this->request->getPost('metode');
         $kodeVoucher = $this->request->getPost('kode_voucher');
 
-        // Verify user has accepted abstract for this event
         $acceptedAbstract = $this->abstrakModel
             ->where('id_user', $userId)
             ->where('event_id', $eventId)
@@ -204,7 +197,6 @@ class Pembayaran extends BaseController
                 ->with('error', 'No accepted abstract found for this event.');
         }
 
-        // Check for existing payment
         $existingPayment = $this->pembayaranModel
             ->where('id_user', $userId)
             ->where('event_id', $eventId)
@@ -215,7 +207,6 @@ class Pembayaran extends BaseController
                 ->with('error', 'Payment already exists for this event.');
         }
 
-        // Get event and calculate amount
         $event = $this->eventModel->find($eventId);
         if (!$event) {
             return redirect()->back()->with('error', 'Event not found.');
@@ -226,7 +217,6 @@ class Pembayaran extends BaseController
         $voucherId = null;
         $discount = 0;
 
-        // Process voucher if provided
         if (!empty($kodeVoucher)) {
             $voucher = $this->voucherModel
                 ->where('kode_voucher', strtoupper(trim($kodeVoucher)))
@@ -235,7 +225,6 @@ class Pembayaran extends BaseController
                 ->first();
 
             if ($voucher) {
-                // Check voucher quota
                 $usedCount = $this->pembayaranModel
                     ->where('id_voucher', $voucher['id_voucher'])
                     ->countAllResults();
@@ -267,7 +256,6 @@ class Pembayaran extends BaseController
         $fileName = '';
 
         if ($file->isValid() && !$file->hasMoved()) {
-            // Create upload directory if not exists
             $uploadPath = WRITEPATH . 'uploads/pembayaran/';
             if (!is_dir($uploadPath)) {
                 mkdir($uploadPath, 0755, true);
@@ -294,7 +282,7 @@ class Pembayaran extends BaseController
             $paymentData = [
                 'id_user' => $userId,
                 'event_id' => $eventId,
-                'participation_type' => 'offline', // Presenters are always offline
+                'participation_type' => 'presenter', // <-- penting untuk link
                 'metode' => $metode,
                 'jumlah' => $finalAmount,
                 'bukti_bayar' => $fileName,
@@ -308,6 +296,32 @@ class Pembayaran extends BaseController
             if (!$paymentId) {
                 throw new \Exception('Failed to create payment record.');
             }
+
+            // === TRIGGER NOTIF: pembayaran pending (ke admin) ===
+            try {
+                $admins = (new UserModel())
+                    ->where('role', 'admin')
+                    ->where('status', 'aktif')
+                    ->select('id_user')
+                    ->findAll();
+
+                if (!empty($admins)) {
+                    $notif = new NotificationService();
+                    $eventTitle = $event['title'] ?? 'Event SNIA';
+                    foreach ($admins as $a) {
+                        $notif->notify(
+                            (int) $a['id_user'],
+                            'payment',
+                            'Pembayaran baru (Presenter) menunggu verifikasi',
+                            "Presenter mengunggah bukti pembayaran untuk {$eventTitle}.",
+                            site_url('admin/pembayaran/detail/' . $paymentId)
+                        );
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('error', 'Gagal kirim notifikasi ke admin (presenter payment pending): ' . $e->getMessage());
+            }
+            // === END TRIGGER ===
 
             // Log activity
             $this->logActivity($userId, "Submitted payment for event: {$event['title']} (Amount: Rp " . number_format($finalAmount, 0, ',', '.') . ")");
@@ -490,20 +504,16 @@ class Pembayaran extends BaseController
                 ->with('error', 'Payment not found or cannot be cancelled.');
         }
 
-        // Begin transaction
         $this->db->transStart();
 
         try {
-            // Delete payment file
             $filePath = WRITEPATH . 'uploads/pembayaran/' . $payment['bukti_bayar'];
             if (file_exists($filePath)) {
                 unlink($filePath);
             }
 
-            // Delete payment record
             $this->pembayaranModel->delete($paymentId);
 
-            // Log activity
             $this->logActivity($userId, "Cancelled payment (ID: {$paymentId})");
 
             $this->db->transComplete();

@@ -67,5 +67,8 @@
       }
     });
   </script>
+
+  <?= $this->include('partials/alerts') ?>
+  
 </body>
 </html>

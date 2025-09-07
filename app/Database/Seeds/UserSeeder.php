@@ -8,9 +8,9 @@ class UserSeeder extends Seeder
 {
     public function run()
     {
-        $now     = date('Y-m-d H:i:s');
-        $hash    = '$2y$10$UPEyGpZdfQr5cJqv1OtRoOZE6tfvu1XVFFRBGUFnJq/Ep3jlRom1G'; // Teamkp123
-        $plain   = 'Teamkp123';
+        $now   = date('Y-m-d H:i:s');
+        $pass  = 'Teamkp123';
+        $hash  = password_hash($pass, PASSWORD_BCRYPT);
 
         $users = [
             [
@@ -24,13 +24,8 @@ class UserSeeder extends Seeder
                 'role'         => 'presenter',
             ],
             [
-                'nama_lengkap' => 'Audience Online',
-                'email'        => 'audience_online@gmail.com',
-                'role'         => 'audience',
-            ],
-            [
-                'nama_lengkap' => 'Audience Offline',
-                'email'        => 'audience_offline@gmail.com',
+                'nama_lengkap' => 'Audience',
+                'email'        => 'audience@gmail.com',
                 'role'         => 'audience',
             ],
             [
@@ -40,18 +35,34 @@ class UserSeeder extends Seeder
             ],
         ];
 
+        $builder = $this->db->table('users');
+
         foreach ($users as $u) {
+            // Cek jika sudah ada (agar idempotent)
+            $exists = $builder->where('email', $u['email'])->get()->getRowArray();
+
             $data = [
                 'nama_lengkap' => $u['nama_lengkap'],
                 'email'        => $u['email'],
                 'password'     => $hash,
                 'role'         => $u['role'],
                 'status'       => 'aktif',
+                'foto'         => 'default.png',   // pastikan file default.png tersedia
+                'no_hp'        => null,            // opsional: sesuaikan jika kolom ada
+                'institusi'    => null,            // opsional
+                'nim'          => null,            // opsional (nullable & unique di migration terbaru)
                 'created_at'   => $now,
+                'updated_at'   => $now,
             ];
-            $this->db->table('users')->insert($data);
 
-            echo "User created: {$u['email']} | role: {$u['role']} | password: {$plain}\n";
+            if ($exists) {
+                // update supaya aman kalau seed dijalankan ulang
+                $builder->where('email', $u['email'])->update($data);
+                echo "User updated: {$u['email']} | role: {$u['role']} | password: {$pass}\n";
+            } else {
+                $builder->insert($data);
+                echo "User created: {$u['email']} | role: {$u['role']} | password: {$pass}\n";
+            }
         }
     }
 }

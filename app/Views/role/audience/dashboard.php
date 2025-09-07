@@ -18,8 +18,7 @@
     <div class="container-fluid p-3 p-md-4">
 
       <div class="mb-3">
-        <h3 class="mb-0">Halo, <?= esc(session('nama') ?? 'Audience') ?> 👋</h3>
-        <small class="text-muted">Berikut ringkasan event untukmu.</small>
+        <h3 class="mb-0">Selamat Datang, <?= esc(session('nama') ?? 'Audience') ?></h3>
       </div>
 
       <div class="row g-3">

@@ -27,8 +27,23 @@ $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], function ($route
     $routes->get('resend',   'Verify::resend');
 });
 
+// ---------------------------------------------------
+// QR Attendance (public – dipakai semua role)
+// ---------------------------------------------------
+$routes->get ('qr',          'QRAttendance::showScannerInterface'); // /qr
+$routes->get ('qr/(:any)',   'QRAttendance::scan/$1');              // /qr/{token}
+$routes->post('qr/process',  'QRAttendance::process');              // POST /qr/process
+
+// ---------------------------------------------------
 // Notifikasi (butuh login)
-$routes->get('notif/read-all', 'Notif::readAll', ['filter' => 'auth']);
+// ---------------------------------------------------
+$routes->group('notif', ['filter' => 'auth'], static function($routes) {
+    $routes->get('recent',      'Notif::recent');
+    $routes->get('list',        'Notif::list');
+    $routes->get('count',       'Notif::count');
+    $routes->post('read/(:num)','Notif::markRead/$1');
+    $routes->get('read-all',    'Notif::readAll');
+});
 
 // ---------------------------------------------------
 // Default dashboard redirect (must login)
@@ -97,9 +112,18 @@ $routes->group('admin', [
     $routes->get ('pembayaran/export',                'Pembayaran::export');
     $routes->get ('pembayaran/statistik',             'Pembayaran::statistik');
 
-    // Absensi
-    $routes->get ('absensi',          'Absensi::index');
-    $routes->get ('absensi/export',   'Absensi::export');
+    // Absensi (admin)
+    $routes->get ('absensi',                          'Absensi::index');
+    $routes->get ('absensi/export',                   'Absensi::export');
+    $routes->post('absensi/generateMultipleQRCodes',  'Absensi::generateMultipleQRCodes');
+    $routes->get ('absensi/getEventStatus',           'Absensi::getEventStatus');
+    $routes->post('absensi/markAttendance',           'Absensi::markAttendance');
+    $routes->post('absensi/removeAttendance',         'Absensi::removeAttendance');
+    $routes->post('absensi/bulkMarkAttendance',       'Absensi::bulkMarkAttendance');
+    $routes->get ('absensi/getEligibleUsers',         'Absensi::getEligibleUsers');
+    $routes->get ('absensi/liveStats',                'Absensi::liveStats');
+
+    // (Tidak perlu menaruh route /qr lagi di sini karena sudah global di atas)
 
     // Dokumen
     $routes->get ('dokumen',                        'Dokumen::index');
@@ -129,13 +153,12 @@ $routes->group('admin', [
 });
 
 // ---------------------------------------------------
-// Presenter Routes (tanpa 'calculate-price' di UI)
+// Presenter Routes
 // ---------------------------------------------------
 $routes->group('presenter', [
     'filter'    => 'role:presenter',
     'namespace' => 'App\Controllers\Role\Presenter',
 ], function ($routes) {
-
     $routes->get('dashboard', 'Dashboard::index');
 
     // Event
@@ -143,7 +166,6 @@ $routes->group('presenter', [
     $routes->get ('events/detail/(:num)',        'Event::detail/$1');
     $routes->get ('events/register/(:num)',      'Event::showRegistrationForm/$1');
     $routes->post('events/register/(:num)',      'Event::register/$1');
-    // $routes->post('events/calculate-price',    'Event::calculatePrice'); // dihapus sesuai alur baru
 
     // Abstrak
     $routes->get ('abstrak',                   'Abstrak::index');
@@ -152,11 +174,11 @@ $routes->group('presenter', [
     $routes->get ('abstrak/detail/(:num)',     'Abstrak::detail/$1');
     $routes->get ('abstrak/download/(:segment)','Abstrak::download/$1');
 
-    // Debug (opsional)
+    // Debug
     $routes->get ('abstrak/debug/test',  'AbstractDebug::testUpload');
     $routes->post('abstrak/debug/simple','AbstractDebug::simpleUpload');
 
-    // Pembayaran (flow manual)
+    // Pembayaran
     $routes->get ('pembayaran',                       'Pembayaran::index');
     $routes->get ('pembayaran/create/(:num)',         'Pembayaran::create/$1');
     $routes->post('pembayaran/store',                 'Pembayaran::store');
@@ -177,44 +199,38 @@ $routes->group('presenter', [
 });
 
 // ---------------------------------------------------
-// Reviewer Portal (harus login sebagai reviewer)
+// Reviewer Routes
 // ---------------------------------------------------
 $routes->group('reviewer', [
     'filter'    => 'role:reviewer',
     'namespace' => 'App\Controllers\Role\Reviewer',
 ], function ($routes) {
-    // Dashboard
     $routes->get('dashboard', 'Dashboard::index');
 
-    // Abstrak untuk reviewer
-    $routes->get('abstrak',            'Abstrak::index');
-    $routes->get('abstrak/(:num)',     'Abstrak::detail/$1');
-    $routes->post('review/(:num)',     'Review::store/$1');
-    $routes->get('riwayat',            'Riwayat::index');
-
+    $routes->get('abstrak',        'Abstrak::index');
+    $routes->get('abstrak/(:num)', 'Abstrak::detail/$1');
+    $routes->post('review/(:num)', 'Review::store/$1');
+    $routes->get('riwayat',        'Riwayat::index');
 });
 
 // ---------------------------------------------------
-// Audience Routes (flow manual: instruksi → upload bukti)
+// Audience Routes
 // ---------------------------------------------------
 $routes->group('audience', [
     'filter'    => 'role:audience',
     'namespace' => 'App\Controllers\Role\Audience',
 ], function ($routes) {
-
-    // Dashboard
     $routes->get('dashboard', 'Dashboard::index');
 
-    // Event (tanpa calculate-price di UI)
+    // Event
     $routes->get ('events',                      'Event::index');
     $routes->get ('events/detail/(:num)',        'Event::detail/$1');
     $routes->get ('events/register/(:num)',      'Event::showRegistrationForm/$1');
     $routes->post('events/register/(:num)',      'Event::register/$1');
-    // $routes->post('events/calculate-price',    'Event::calculatePrice'); // dihapus sesuai alur baru
 
-    // Pembayaran (manual transfer)
+    // Pembayaran
     $routes->get ('pembayaran',                       'Pembayaran::index');
-    $routes->get ('pembayaran/instruction/(:num)',    'Pembayaran::instruction/$1'); 
+    $routes->get ('pembayaran/instruction/(:num)',    'Pembayaran::instruction/$1');
     $routes->get ('pembayaran/create/(:num)',         'Pembayaran::create/$1');
     $routes->post('pembayaran/store',                 'Pembayaran::store');
     $routes->get ('pembayaran/detail/(:num)',         'Pembayaran::detail/$1');
@@ -222,17 +238,20 @@ $routes->group('audience', [
     $routes->get ('pembayaran/cancel/(:num)',         'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher',      'Pembayaran::validateVoucher');
 
-    // Absensi (tiket muncul setelah verified)
-    $routes->get ('absensi',     'Absensi::index');
-    $routes->post('absensi/scan','Absensi::scan'); // jika tidak dipakai, boleh dihapus
+    // Absensi (audience)
+    $routes->get ('absensi',                    'Absensi::index');       // list event yang bisa diabsen + riwayat
+    $routes->get ('absensi/event/(:num)',       'Absensi::show/$1');     // detail event + tombol scan/token
+    $routes->get ('absensi/token',              'Absensi::token');       // form token (opsional GET)
+    $routes->post('absensi/scan',               'Absensi::scan');        // submit token
+    // (Scan QR pakai route global /qr)
 
-    // Dokumen (sertifikat)
-    $routes->get ('dokumen/sertifikat',                     'Dokumen::sertifikat');
-    $routes->get ('dokumen/sertifikat/download/(:segment)', 'Dokumen::downloadSertifikat/$1');
+    // Dokumen
+     $routes->get ('dokumen/sertifikat',                       'Dokumen::sertifikat');
+    $routes->get ('dokumen/sertifikat/download/(:segment)',   'Dokumen::downloadSertifikat/$1');
 });
 
 // ---------------------------------------------------
-// Public API (opsional untuk integrasi)
+// Public API
 // ---------------------------------------------------
 $routes->group('api/v1', function ($routes) {
     $routes->get ('events/active',          'Api\Event::getActiveEvents');
@@ -253,7 +272,7 @@ $routes->group('profile', ['filter' => 'auth'], function ($routes) {
 });
 
 // ---------------------------------------------------
-// Payment Verification Middleware (if any)
+// Middleware
 // ---------------------------------------------------
 $routes->group('middleware', ['filter' => 'auth'], function ($routes) {
     $routes->get('check-payment-status', 'Middleware\PaymentCheck::checkStatus');

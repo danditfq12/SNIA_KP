@@ -31,7 +31,9 @@ class Verify extends BaseController
 
     public function check()
     {
+        // normalisasi email
         $email = $this->request->getPost('email') ?: session()->get('email_verifikasi');
+        $email = strtolower(trim((string) $email));
 
         // Ambil OTP dari 6 input code[] atau fallback ke otp
         $codes = $this->request->getPost('code');
@@ -64,14 +66,15 @@ class Verify extends BaseController
         $userModel = new UserModel();
         $user = $userModel->where('email', $email)->first();
 
-        // kalau belum ada → buat akun baru
+        // Kalau belum ada → buat akun baru, set foto default
         if (!$user) {
             $userId = $userModel->insert([
                 'nama_lengkap' => $row['nama_lengkap'],
-                'email'        => $row['email'],
+                'email'        => strtolower(trim($row['email'])),
                 'password'     => $row['password_hash'],
                 'role'         => $row['role'],
                 'status'       => 'aktif',
+                'foto'         => 'default.png', // foto default
             ]);
             $user = $userModel->find($userId);
         }
@@ -80,10 +83,11 @@ class Verify extends BaseController
         $pending->where('email', $email)->delete();
         session()->remove('email_verifikasi');
 
-        // === AUTO LOGIN ===
+        // === AUTO LOGIN === (tambahkan alias 'nama')
         session()->set([
             'id_user'      => $user['id_user'],
             'nama_lengkap' => $user['nama_lengkap'],
+            'nama'         => $user['nama_lengkap'], // alias untuk view lama
             'email'        => $user['email'],
             'role'         => $user['role'],
             'logged_in'    => true,
@@ -106,7 +110,10 @@ class Verify extends BaseController
 
     public function resend()
     {
+        // normalisasi email
         $email = $this->request->getGet('email') ?: session()->get('email_verifikasi');
+        $email = strtolower(trim((string) $email));
+
         if (!$email) {
             return redirect()->to('/auth/login')->with('error', 'Email verifikasi tidak ditemukan.');
         }
@@ -125,16 +132,29 @@ class Verify extends BaseController
             'otp_expired' => $expired,
         ]);
 
-        $mail = \Config\Services::email();
-        $mail->setFrom(config('Email')->fromEmail, config('Email')->fromName);
-        $mail->setTo($email);
-        $mail->setSubject('Kode OTP Baru - SNIA');
-        $mail->setMessage("
-            <p>Kode OTP baru Anda:</p>
-            <h2 style='letter-spacing:6px;'>{$otp}</h2>
-            <p>Berlaku 10 menit.</p>
-        ");
-        $mail->send();
+        // kirim email (dengan mailType & newline/CRLF)
+        try {
+            $mail = \Config\Services::email();
+            $mail->setFrom(config('Email')->fromEmail, config('Email')->fromName);
+            $mail->setTo($email);
+            $mail->setSubject('Kode OTP Baru - SNIA');
+
+            $html = "
+                <p>Kode OTP baru Anda:</p>
+                <h2 style='letter-spacing:6px;'>{$otp}</h2>
+                <p>Berlaku 10 menit.</p>
+            ";
+            $mail->setMessage($html);
+            $mail->setMailType('html');
+            $mail->setNewline("\r\n");
+            $mail->setCRLF("\r\n");
+
+            if (!$mail->send()) {
+                log_message('error', 'Email OTP (resend) gagal: ' . print_r($mail->printDebugger(['headers','subject','body']), true));
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Exception kirim email OTP (resend): ' . $e->getMessage());
+        }
 
         session()->set('email_verifikasi', $email);
         return redirect()->to('/auth/verify?email=' . urlencode($email))

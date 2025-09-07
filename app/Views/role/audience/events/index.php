@@ -34,7 +34,7 @@
     <div class="container-fluid p-3 p-md-4">
 
       <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
-        <h3 class="mb-0">Event Tersedia</h3>
+        <h3 class="mb-0">Event</h3>
         <a href="<?= site_url('audience/dashboard') ?>" class="btn btn-sm btn-outline-secondary d-none d-md-inline-flex">
           <i class="bi bi-house me-1"></i> Dashboard
         </a>

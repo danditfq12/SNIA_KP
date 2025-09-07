@@ -19,7 +19,7 @@
       display:flex; align-items:center; justify-content:space-between; padding:0 1rem;
     }
     .btn-ghost{ background:transparent; border:0; box-shadow:none; }
-    .avatar{ width:36px; height:36px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:.95rem; }
+    .avatar{ width:36px; height:36px; border-radius:50%; object-fit:cover; }
     .notif-badge{ position:absolute; top:-6px; right:-6px; min-width:16px; height:16px; border-radius:999px; background:#ef4444; color:#fff; font-size:.65rem; line-height:16px; text-align:center }
 
     #content{ padding-top:var(--topbar-h) !important; }
@@ -51,46 +51,48 @@
         $email = session('email') ?? '';
       ?>
 
+      <!-- Notifikasi -->
       <div class="dropdown">
-        <button class="btn btn-ghost position-relative" data-bs-toggle="dropdown" aria-expanded="false" type="button" aria-label="Notifikasi">
+        <button id="btnNotif" class="btn btn-ghost position-relative" data-bs-toggle="dropdown" aria-expanded="false" type="button" aria-label="Notifikasi">
           <i class="bi bi-bell fs-5"></i>
-          <?php if ($unreadCount > 0): ?>
-            <span class="notif-badge"><?= $unreadCount ?></span>
-          <?php endif; ?>
+          <span id="notifBadge" class="notif-badge" style="<?= $unreadCount>0?'':'display:none;' ?>"><?= $unreadCount ?></span>
         </button>
-        <ul class="dropdown-menu dropdown-menu-end p-0 dropdown-menu-notif">
+        <ul class="dropdown-menu dropdown-menu-end p-0 dropdown-menu-notif" id="notifMenu">
           <li class="px-3 py-2 fw-semibold">Notifikasi</li>
           <li><hr class="dropdown-divider my-1"></li>
 
-          <?php if (!empty($notifs)): ?>
-            <?php foreach ($notifs as $n):
-              $isRead = !empty($n['read']);
-              $icon   = ($n['type'] ?? '') === 'deadline'
-                        ? 'bi-exclamation-triangle text-warning'
-                        : 'bi-info-circle text-primary';
-            ?>
-              <li>
-                <a class="dropdown-item d-flex align-items-start gap-2 <?= $isRead ? 'text-muted' : '' ?>"
-                   href="<?= site_url($n['link'] ?? '#') ?>">
-                  <i class="bi <?= $icon ?> mt-1"></i>
-                  <div class="small">
-                    <div class="fw-semibold"><?= esc($n['title'] ?? '-') ?></div>
-                    <div class="text-muted"><?= esc($n['time'] ?? '') ?></div>
-                  </div>
-                </a>
-              </li>
-            <?php endforeach; ?>
-          <?php else: ?>
-            <li class="px-3 py-2 text-muted small">Tidak ada notifikasi</li>
-          <?php endif; ?>
+          <div id="notifItems">
+            <?php if (!empty($notifs)): ?>
+              <?php foreach ($notifs as $n):
+                $isRead = !empty($n['read']);
+                $icon   = ($n['type'] ?? '') === 'deadline'
+                          ? 'bi-exclamation-triangle text-warning'
+                          : 'bi-info-circle text-primary';
+              ?>
+                <li>
+                  <a class="dropdown-item d-flex align-items-start gap-2 <?= $isRead ? 'text-muted' : '' ?>"
+                     href="<?= site_url($n['link'] ?? '#') ?>">
+                    <i class="bi <?= $icon ?> mt-1"></i>
+                    <div class="small">
+                      <div class="fw-semibold"><?= esc($n['title'] ?? '-') ?></div>
+                      <div class="text-muted"><?= esc($n['time'] ?? '') ?></div>
+                    </div>
+                  </a>
+                </li>
+              <?php endforeach; ?>
+            <?php else: ?>
+              <li class="px-3 py-2 text-muted small">Tidak ada notifikasi</li>
+            <?php endif; ?>
+          </div>
 
           <li><hr class="dropdown-divider my-1"></li>
           <li class="text-center">
-            <a class="dropdown-item small" href="<?= site_url('notif/read-all') ?>">Tandai semua terbaca</a>
+            <a href="#" class="dropdown-item small js-mark-all-read">Tandai semua terbaca</a>
           </li>
         </ul>
       </div>
 
+      <!-- Profile -->
       <div class="dropdown">
         <button class="btn btn-ghost dropdown-toggle d-flex align-items-center gap-2" data-bs-toggle="dropdown" type="button" aria-label="Profil">
           <div class="nameblock d-none d-sm-block text-end">
@@ -103,7 +105,7 @@
             $avatarUrl= base_url('uploads/profile/' . $foto) . '?v=' . $fotoVer;
           ?>
           <img src="<?= $avatarUrl ?>" class="avatar" alt="Avatar"
-               onerror="this.outerHTML='<span class=&quot;avatar bg-primary text-white&quot;><i class=&quot;bi bi-person&quot;></i></span>';">
+               onerror="this.outerHTML='<span class=&quot;avatar bg-primary text-white d-inline-flex justify-content-center align-items-center&quot; style=&quot;width:36px;height:36px;border-radius:50%;&quot;><i class=&quot;bi bi-person&quot;></i></span>';">
         </button>
 
         <ul class="dropdown-menu dropdown-menu-end dropdown-menu-prof">
@@ -128,3 +130,83 @@
       </div>
     </div>
   </header>
+
+  <script>
+    async function refreshNotifUI() {
+      try {
+        const res = await fetch('<?= site_url('notif/recent?limit=10') ?>', {headers:{'X-Requested-With':'XMLHttpRequest'}});
+        const json = await res.json();
+        if (!json.ok) return;
+
+        const items = json.items || [];
+        const unread = items.filter(i => !i.read).length;
+
+        // badge
+        const badge = document.getElementById('notifBadge');
+        if (badge){
+          if (unread > 0){ badge.style.display = ''; badge.textContent = unread; }
+          else { badge.style.display = 'none'; }
+        }
+
+        // list
+        const wrap = document.getElementById('notifItems');
+        if (!wrap) return;
+        wrap.innerHTML = '';
+        if (items.length === 0){
+          wrap.innerHTML = '<li class="px-3 py-2 text-muted small">Tidak ada notifikasi</li>';
+          return;
+        }
+        items.forEach(n => {
+          const icon = (n.type === 'deadline')
+            ? 'bi-exclamation-triangle text-warning'
+            : 'bi-info-circle text-primary';
+          const muted = n.read ? 'text-muted' : '';
+          const link  = n.link ? n.link : '#';
+          wrap.insertAdjacentHTML('beforeend', `
+            <li>
+              <a class="dropdown-item d-flex align-items-start gap-2 ${muted}" href="${link}">
+                <i class="bi ${icon} mt-1"></i>
+                <div class="small">
+                  <div class="fw-semibold">${(n.title||'-')
+                      .replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>
+                  <div class="text-muted">${n.time||''}</div>
+                </div>
+              </a>
+            </li>
+          `);
+        });
+      } catch (e) {
+        console.error('refreshNotifUI failed', e);
+      }
+    }
+
+    document.addEventListener('click', async (e)=>{
+      const a = e.target.closest('.js-mark-all-read');
+      if (!a) return;
+
+      e.preventDefault();
+
+      try {
+        // pakai POST kalau route sudah ditambahkan; kalau belum, GET juga oke.
+        const res = await fetch('<?= site_url('notif/read-all') ?>', {
+          method: 'POST',
+          headers: {'X-Requested-With':'XMLHttpRequest'}
+        });
+        const j = await res.json().catch(()=>({ok:false}));
+
+        if (j.ok){
+          await refreshNotifUI();
+        } else {
+          // fallback: kalau server redirect (GET), tetap refresh list
+          await refreshNotifUI();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    // Optional: refresh ketika dropdown dibuka
+    document.getElementById('btnNotif')?.addEventListener('click', ()=> {
+      setTimeout(refreshNotifUI, 50);
+    });
+  </script>

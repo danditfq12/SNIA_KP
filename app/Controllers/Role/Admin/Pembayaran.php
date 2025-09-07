@@ -7,6 +7,7 @@ use App\Models\PembayaranModel;
 use App\Models\UserModel;
 use App\Models\VoucherModel;
 use App\Models\EventRegistrationModel;
+use App\Services\NotificationService; // <-- ADD
 
 class Pembayaran extends BaseController
 {
@@ -101,6 +102,47 @@ class Pembayaran extends BaseController
             }
         }
 
+        /* =======================
+         * TRIGGER NOTIFIKASI USER
+         * ======================= */
+        try {
+            // ambil detail + judul event
+            $p = $this->pembayaranModel->select('pembayaran.*, e.title AS event_title')
+                                       ->join('events e', 'e.id = pembayaran.event_id', 'left')
+                                       ->find($id_pembayaran);
+
+            if ($p) {
+                $notif    = new NotificationService();
+                $userId   = (int) $p['id_user'];
+                $event    = $p['event_title'] ?? 'Event SNIA';
+                $isPresenter = ($p['participation_type'] ?? '') === 'presenter';
+
+                // link detail sesuai role
+                $detailLink = site_url(($isPresenter ? 'presenter' : 'audience') . '/pembayaran/detail/' . $p['id_pembayaran']);
+
+                if ($status === 'verified') {
+                    $notif->notify(
+                        $userId,
+                        'payment',
+                        'Pembayaran diverifikasi',
+                        "Pembayaran Anda untuk {$event} sudah diverifikasi.",
+                        $detailLink
+                    );
+                } else { // rejected
+                    $notif->notify(
+                        $userId,
+                        'payment',
+                        'Pembayaran ditolak',
+                        "Mohon maaf, pembayaran Anda untuk {$event} ditolak. " . ($keterangan ? "Catatan: {$keterangan}" : ''),
+                        $detailLink
+                    );
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Gagal kirim notifikasi pembayaran: ' . $e->getMessage());
+        }
+        /* === END TRIGGER === */
+
         $msg = ($status === 'verified') ? 'Pembayaran berhasil diverifikasi!' : 'Pembayaran berhasil ditolak!';
         return redirect()->to('admin/pembayaran')->with('success', $msg);
     }
@@ -173,7 +215,7 @@ class Pembayaran extends BaseController
             ]);
         }
         fclose($out);
-        exit; // pastikan tidak render view
+        exit;
     }
 
     public function statistik()
