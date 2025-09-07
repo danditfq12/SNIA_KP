@@ -132,81 +132,60 @@
   </header>
 
   <script>
-    async function refreshNotifUI() {
-      try {
-        const res = await fetch('<?= site_url('notif/recent?limit=10') ?>', {headers:{'X-Requested-With':'XMLHttpRequest'}});
-        const json = await res.json();
-        if (!json.ok) return;
+(function () {
+  // pastikan hanya sekali (kalau header pernah di-load ulang lewat PJAX/Turbo)
+  if (window.__notifPollStarted) return;
+  window.__notifPollStarted = true;
 
-        const items = json.items || [];
-        const unread = items.filter(i => !i.read).length;
+  const BADGE = document.querySelector('.notif-badge');
+  const ICON_BTN = document.querySelector('[aria-label="Notifikasi"]');
+  const COUNT_URL = '<?= site_url('notif/count') ?>';
 
-        // badge
-        const badge = document.getElementById('notifBadge');
-        if (badge){
-          if (unread > 0){ badge.style.display = ''; badge.textContent = unread; }
-          else { badge.style.display = 'none'; }
-        }
+  const POLL_MS = 30000; // 30s; bisa 60000 (1 menit) kalau mau lebih ringan
+  let ctrl = null, timer = null;
 
-        // list
-        const wrap = document.getElementById('notifItems');
-        if (!wrap) return;
-        wrap.innerHTML = '';
-        if (items.length === 0){
-          wrap.innerHTML = '<li class="px-3 py-2 text-muted small">Tidak ada notifikasi</li>';
-          return;
-        }
-        items.forEach(n => {
-          const icon = (n.type === 'deadline')
-            ? 'bi-exclamation-triangle text-warning'
-            : 'bi-info-circle text-primary';
-          const muted = n.read ? 'text-muted' : '';
-          const link  = n.link ? n.link : '#';
-          wrap.insertAdjacentHTML('beforeend', `
-            <li>
-              <a class="dropdown-item d-flex align-items-start gap-2 ${muted}" href="${link}">
-                <i class="bi ${icon} mt-1"></i>
-                <div class="small">
-                  <div class="fw-semibold">${(n.title||'-')
-                      .replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>
-                  <div class="text-muted">${n.time||''}</div>
-                </div>
-              </a>
-            </li>
-          `);
-        });
-      } catch (e) {
-        console.error('refreshNotifUI failed', e);
-      }
-    }
+  async function updateBadge() {
+    try {
+      if (ctrl) ctrl.abort();
+      ctrl = new AbortController();
+      const res = await fetch(COUNT_URL, {
+        signal: ctrl.signal,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        cache: 'no-store'
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const unread = (data && typeof data.unread === 'number') ? data.unread : 0;
 
-    document.addEventListener('click', async (e)=>{
-      const a = e.target.closest('.js-mark-all-read');
-      if (!a) return;
-
-      e.preventDefault();
-
-      try {
-        // pakai POST kalau route sudah ditambahkan; kalau belum, GET juga oke.
-        const res = await fetch('<?= site_url('notif/read-all') ?>', {
-          method: 'POST',
-          headers: {'X-Requested-With':'XMLHttpRequest'}
-        });
-        const j = await res.json().catch(()=>({ok:false}));
-
-        if (j.ok){
-          await refreshNotifUI();
+      // render badge
+      if (unread > 0) {
+        if (!BADGE) {
+          // bila markup badge tidak ada, buat cepat
+          const span = document.createElement('span');
+          span.className = 'notif-badge';
+          span.textContent = unread;
+          ICON_BTN && ICON_BTN.appendChild(span);
         } else {
-          // fallback: kalau server redirect (GET), tetap refresh list
-          await refreshNotifUI();
+          BADGE.textContent = unread;
+          BADGE.style.display = '';
         }
-      } catch (err) {
-        console.error(err);
+      } else if (BADGE) {
+        BADGE.style.display = 'none';
       }
-    });
+    } catch (e) {
+      // diamkan saja / console.warn(e)
+    } finally {
+      timer = setTimeout(updateBadge, POLL_MS);
+    }
+  }
 
-    // Optional: refresh ketika dropdown dibuka
-    document.getElementById('btnNotif')?.addEventListener('click', ()=> {
-      setTimeout(refreshNotifUI, 50);
-    });
-  </script>
+  // mulai sedikit ditunda (hindari spike saat page load)
+  setTimeout(updateBadge, 1500);
+
+  // bersih-bersih jika halaman diunload
+  window.addEventListener('beforeunload', () => {
+    if (ctrl) ctrl.abort();
+    if (timer) clearTimeout(timer);
+  });
+})();
+</script>

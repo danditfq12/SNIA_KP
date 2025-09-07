@@ -30,7 +30,6 @@
           <a href="<?= site_url('audience/pembayaran/create/'.($reg['id'] ?? 0)) ?>" class="btn btn-success">
             Upload Bukti Pembayaran
           </a>
-          <a href="<?= site_url('audience/pembayaran') ?>" class="btn btn-light">Lihat Riwayat</a>
         </div>
       </div>
 

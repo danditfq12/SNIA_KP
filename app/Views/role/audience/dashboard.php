@@ -52,7 +52,7 @@
               <?php else: ?>
                 <div class="p-4 text-center border rounded-3 bg-light-subtle">
                   <div class="mb-2"><i class="bi bi-calendar2-event fs-3 text-secondary"></i></div>
-                  <div class="fw-semibold">Belum ada event yang membuka pendaftaran</div>
+                  <div class="fw-semibold">Event belum tersedia</div>
                   <div class="text-muted small">Tunggu informasi berikutnya ya.</div>
                 </div>
               <?php endif; ?>

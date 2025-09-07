@@ -1,8 +1,13 @@
 <?php
   $title   = 'Pilih Mode Kehadiran';
   $event   = $event ?? [];
-  $options = $options ?? []; // ['online','offline'] sesuai event
-  $pricing = $pricing ?? [];
+  $options = $options ?? [];    // contoh: ['online','offline']
+  $pricing = $pricing ?? [];    // dari EventModel::getPricingMatrix()
+
+  $rupiah = function($n){
+    if ($n === null || $n === '' ) return '—';
+    return 'Rp ' . number_format((float)$n, 0, ',', '.');
+  };
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -23,21 +28,19 @@
             <?php if (empty($options)): ?>
               <div class="alert alert-warning mb-0">Mode kehadiran tidak tersedia.</div>
             <?php else: ?>
-              <?php foreach ($options as $opt): ?>
+              <?php foreach ($options as $opt):
+                // Ambil harga sesuai struktur matrix:
+                // $pricing = [
+                //   'presenter' => ['offline' => ...],
+                //   'audience'  => ['online' => ..., 'offline' => ...]
+                // ];
+                $price = $pricing['audience'][$opt] ?? 0;
+              ?>
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="radio" name="mode_kehadiran"
                          id="mode_<?= esc($opt) ?>" value="<?= esc($opt) ?>" required>
                   <label for="mode_<?= esc($opt) ?>" class="form-check-label">
-                    <?= strtoupper(esc($opt)) ?>
-                    <?php
-                      $price = 0;
-                      foreach ($pricing as $p) {
-                        if (($p['role'] ?? '')==='audience' && ($p['participation_type'] ?? '')===$opt) {
-                          $price = (float)($p['price'] ?? 0); break;
-                        }
-                      }
-                    ?>
-                    <span class="text-muted small">· Rp <?= number_format($price,0,',','.') ?></span>
+                    <?= strtoupper(esc($opt)) ?> <span class="text-muted small">· <?= $rupiah($price) ?></span>
                   </label>
                 </div>
               <?php endforeach; ?>
