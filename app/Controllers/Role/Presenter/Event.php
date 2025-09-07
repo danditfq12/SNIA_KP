@@ -4,619 +4,501 @@ namespace App\Controllers\Role\Presenter;
 
 use App\Controllers\BaseController;
 use App\Models\EventModel;
-use App\Models\AbstrakModel;
 use App\Models\PembayaranModel;
-use App\Models\EventRegistrationModel;
+use App\Models\AbstrakModel;
 use App\Models\VoucherModel;
+use App\Models\UserModel;
 
 class Event extends BaseController
 {
     protected $eventModel;
-    protected $abstrakModel;
     protected $pembayaranModel;
-    protected $eventRegistrationModel;
+    protected $abstrakModel;
     protected $voucherModel;
-    protected $db;
+    protected $userModel;
 
     public function __construct()
     {
         $this->eventModel = new EventModel();
-        $this->abstrakModel = new AbstrakModel();
         $this->pembayaranModel = new PembayaranModel();
-        $this->eventRegistrationModel = new EventRegistrationModel();
+        $this->abstrakModel = new AbstrakModel();
         $this->voucherModel = new VoucherModel();
-        $this->db = \Config\Database::connect();
+        $this->userModel = new UserModel();
     }
 
-    /**
-     * Display all available events for presenter
-     */
     public function index()
     {
-        $userId = session('id_user');
+        // Get active events with open registration for presenters
+        $events = $this->eventModel->getEventsWithOpenRegistration();
         
-        try {
-            // Get active events with presenter's status
-            $events = $this->getEventsWithPresenterStatus($userId);
-            
-            // Filter events by status for easier navigation
-            $availableEvents = array_filter($events, fn($e) => $e['can_participate']);
-            $participatingEvents = array_filter($events, fn($e) => $e['has_abstract'] || $e['has_payment']);
-            $completedEvents = array_filter($events, fn($e) => $e['is_completed']);
-
-            $data = [
-                'events' => $events,
-                'available_events' => $availableEvents,
-                'participating_events' => $participatingEvents,
-                'completed_events' => $completedEvents,
-                'total_events' => count($events),
-                'available_count' => count($availableEvents),
-                'participating_count' => count($participatingEvents),
-                'completed_count' => count($completedEvents)
-            ];
-
-            return view('role/presenter/event/index', $data);
-
-        } catch (\Exception $e) {
-            log_message('error', 'Presenter event index error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat memuat daftar event.');
-        }
-    }
-
-    /**
-     * Get events with presenter's participation status
-     */
-    private function getEventsWithPresenterStatus($userId)
-    {
-        $events = $this->eventModel
-            ->where('is_active', true)
-            ->orderBy('event_date', 'ASC')
-            ->findAll();
-
+        // Get user's registration status for each event
+        $userId = session('id_user');
         foreach ($events as &$event) {
-            // Check abstract status
-            $abstract = $this->abstrakModel
-                ->where('id_user', $userId)
+            // Get user's registration for this event
+            $event['user_registration'] = $this->pembayaranModel
                 ->where('event_id', $event['id'])
-                ->orderBy('tanggal_upload', 'DESC')
-                ->first();
-
-            $event['abstract'] = $abstract;
-            $event['has_abstract'] = !empty($abstract);
-            $event['abstract_status'] = $abstract['status'] ?? null;
-
-            // Check payment status
-            $payment = $this->pembayaranModel
                 ->where('id_user', $userId)
-                ->where('event_id', $event['id'])
-                ->orderBy('tanggal_bayar', 'DESC')
                 ->first();
-
-            $event['payment'] = $payment;
-            $event['has_payment'] = !empty($payment);
-            $event['payment_status'] = $payment['status'] ?? null;
-
-            // Determine workflow status
-            $event['workflow_status'] = $this->determineWorkflowStatus($event);
-            
-            // Check if can participate
-            $event['can_participate'] = $this->canParticipateInEvent($event);
-            
-            // Check if completed (payment verified)
-            $event['is_completed'] = $payment && $payment['status'] === 'verified';
-            
-            // Calculate presenter price (always offline)
-            $event['presenter_price'] = $event['presenter_fee_offline'] ?? 0;
-            
-            // Check deadlines
-            $event['registration_open'] = $this->eventModel->isRegistrationOpen($event['id']);
-            $event['abstract_submission_open'] = $this->eventModel->isAbstractSubmissionOpen($event['id']);
-            
-            // Format dates
-            $event['formatted_date'] = date('d F Y', strtotime($event['event_date']));
-            $event['formatted_time'] = date('H:i', strtotime($event['event_time']));
-            
-            // Days until event
-            $eventTimestamp = strtotime($event['event_date']);
-            $currentTimestamp = time();
-            $event['days_until'] = max(0, ceil(($eventTimestamp - $currentTimestamp) / (60 * 60 * 24)));
-        }
-
-        return $events;
-    }
-
-    /**
-     * Determine workflow status for an event
-     */
-    private function determineWorkflowStatus($event)
-    {
-        if (!$event['has_abstract']) {
-            return 'need_abstract';
-        }
-
-        switch ($event['abstract_status']) {
-            case 'menunggu':
-            case 'sedang_direview':
-                return 'abstract_pending';
-            case 'revisi':
-                return 'abstract_revision';
-            case 'ditolak':
-                return 'abstract_rejected';
-            case 'diterima':
-                if (!$event['has_payment']) {
-                    return 'need_payment';
-                }
                 
-                switch ($event['payment_status']) {
-                    case 'pending':
-                        return 'payment_pending';
-                    case 'rejected':
-                        return 'payment_rejected';
-                    case 'verified':
-                        return 'completed';
-                }
-                break;
-        }
-
-        return 'unknown';
-    }
-
-    /**
-     * Check if presenter can participate in event
-     */
-    private function canParticipateInEvent($event)
-    {
-        // Must be active and have open submissions
-        if (!$event['is_active'] || !$event['abstract_submission_open']) {
-            return false;
-        }
-
-        // If no abstract yet, can participate
-        if (!$event['has_abstract']) {
-            return true;
-        }
-
-        // If abstract needs revision and submission still open
-        if ($event['abstract_status'] === 'revisi' && $event['abstract_submission_open']) {
-            return true;
-        }
-
-        // If abstract rejected and submission still open
-        if ($event['abstract_status'] === 'ditolak' && $event['abstract_submission_open']) {
-            return true;
-        }
-
-        // If abstract accepted but no payment yet
-        if ($event['abstract_status'] === 'diterima' && !$event['has_payment'] && $event['registration_open']) {
-            return true;
-        }
-
-        // If payment rejected
-        if ($event['payment_status'] === 'rejected' && $event['registration_open']) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Show event detail page
-     */
-    public function detail($eventId)
-    {
-        $userId = session('id_user');
-        
-        try {
-            $event = $this->eventModel->find($eventId);
+            // Get pricing matrix (presenter can only participate offline)
+            $event['pricing_matrix'] = $this->eventModel->getPricingMatrix($event['id']);
+            $event['participation_options'] = ['offline']; // Presenter only offline
             
-            if (!$event || !$event['is_active']) {
-                return redirect()->to('presenter/events')->with('error', 'Event tidak ditemukan atau tidak aktif.');
-            }
-
-            // Get event with presenter status
-            $events = $this->getEventsWithPresenterStatus($userId);
-            $eventData = array_filter($events, fn($e) => $e['id'] == $eventId);
-            $eventData = reset($eventData);
-
-            if (!$eventData) {
-                return redirect()->to('presenter/events')->with('error', 'Data event tidak dapat dimuat.');
-            }
-
             // Get event statistics
-            $eventStats = $this->eventModel->getEventStats($eventId);
+            $event['stats'] = $this->eventModel->getEventStats($event['id']);
             
-            // Get presenter's workflow progress
-            $workflowProgress = $this->getDetailedWorkflowProgress($userId, $eventData);
-
-            $data = [
-                'event' => $eventData,
-                'event_stats' => $eventStats,
-                'workflow_progress' => $workflowProgress,
-                'can_register' => $this->canRegisterForEvent($eventData),
-                'next_action' => $this->getNextAction($eventData)
-            ];
-
-            return view('role/presenter/event/detail', $data);
-
-        } catch (\Exception $e) {
-            log_message('error', 'Presenter event detail error: ' . $e->getMessage());
-            return redirect()->to('presenter/events')->with('error', 'Terjadi kesalahan saat memuat detail event.');
+            // Add registration status check for view
+            $event['is_registration_open'] = $this->isRegistrationOpen($event);
         }
-    }
 
-    /**
-     * Get detailed workflow progress for event detail page
-     */
-    private function getDetailedWorkflowProgress($userId, $event)
-    {
-        $progress = [
-            'current_step' => 1,
-            'total_steps' => 5,
-            'steps' => [
-                1 => [
-                    'title' => 'Submit Abstrak',
-                    'status' => 'pending',
-                    'completed' => false,
-                    'current' => false,
-                    'can_proceed' => false,
-                    'action_url' => site_url('presenter/abstrak?event_id=' . $event['id']),
-                    'action_text' => 'Upload Abstrak'
-                ],
-                2 => [
-                    'title' => 'Review Abstrak',
-                    'status' => 'pending',
-                    'completed' => false,
-                    'current' => false,
-                    'can_proceed' => false,
-                    'action_url' => '',
-                    'action_text' => 'Menunggu Review'
-                ],
-                3 => [
-                    'title' => 'Pembayaran',
-                    'status' => 'pending',
-                    'completed' => false,
-                    'current' => false,
-                    'can_proceed' => false,
-                    'action_url' => site_url('presenter/pembayaran/create/' . $event['id']),
-                    'action_text' => 'Lakukan Pembayaran'
-                ],
-                4 => [
-                    'title' => 'Verifikasi Pembayaran',
-                    'status' => 'pending',
-                    'completed' => false,
-                    'current' => false,
-                    'can_proceed' => false,
-                    'action_url' => '',
-                    'action_text' => 'Menunggu Verifikasi'
-                ],
-                5 => [
-                    'title' => 'Selesai',
-                    'status' => 'pending',
-                    'completed' => false,
-                    'current' => false,
-                    'can_proceed' => false,
-                    'action_url' => '',
-                    'action_text' => 'Akses Fitur Event'
-                ]
-            ]
+        $data = [
+            'events' => $events,
+            'user_role' => session('role')
         ];
 
-        // Update progress based on current status
-        switch ($event['workflow_status']) {
-            case 'need_abstract':
-                $progress['current_step'] = 1;
-                $progress['steps'][1]['current'] = true;
-                $progress['steps'][1]['can_proceed'] = $event['abstract_submission_open'];
-                break;
+        return view('role/presenter/event/index', $data);
+    }
 
-            case 'abstract_pending':
-                $progress['current_step'] = 2;
-                $progress['steps'][1]['completed'] = true;
-                $progress['steps'][1]['status'] = 'completed';
-                $progress['steps'][2]['current'] = true;
-                $progress['steps'][2]['status'] = 'in_progress';
-                break;
+    public function detail($eventId)
+    {
+        $event = $this->eventModel->find($eventId);
+        
+        if (!$event) {
+            return redirect()->to('presenter/events')->with('error', 'Event tidak ditemukan.');
+        }
 
-            case 'abstract_revision':
-                $progress['current_step'] = 1;
-                $progress['steps'][1]['current'] = true;
-                $progress['steps'][1]['status'] = 'needs_revision';
-                $progress['steps'][1]['can_proceed'] = $event['abstract_submission_open'];
-                $progress['steps'][1]['action_text'] = 'Revisi Abstrak';
-                break;
+        // Check if registration is still open
+        $registrationOpen = $this->isRegistrationOpen($event);
+        $abstractOpen = $this->isAbstractSubmissionOpen($event);
+        
+        // Get user's registration status
+        $userId = session('id_user');
+        $userRegistration = $this->pembayaranModel
+            ->where('event_id', $eventId)
+            ->where('id_user', $userId)
+            ->first();
 
-            case 'abstract_rejected':
-                $progress['current_step'] = 1;
-                $progress['steps'][1]['current'] = true;
-                $progress['steps'][1]['status'] = 'rejected';
-                $progress['steps'][1]['can_proceed'] = $event['abstract_submission_open'];
-                $progress['steps'][1]['action_text'] = 'Submit Abstrak Baru';
-                break;
+        // Get user's abstracts for this event
+        $userAbstracts = $this->abstrakModel
+            ->where('event_id', $eventId)
+            ->where('id_user', $userId)
+            ->findAll();
 
-            case 'need_payment':
-                $progress['current_step'] = 3;
-                $progress['steps'][1]['completed'] = true;
-                $progress['steps'][1]['status'] = 'completed';
-                $progress['steps'][2]['completed'] = true;
-                $progress['steps'][2]['status'] = 'completed';
-                $progress['steps'][3]['current'] = true;
-                $progress['steps'][3]['can_proceed'] = $event['registration_open'];
-                break;
+        // Get event statistics
+        $stats = $this->getEventStats($eventId);
+        
+        // Get pricing matrix (presenter only offline)
+        $pricingMatrix = $this->getPricingMatrix($eventId);
+        $participationOptions = ['offline'];
 
-            case 'payment_pending':
-                $progress['current_step'] = 4;
-                $progress['steps'][1]['completed'] = true;
-                $progress['steps'][1]['status'] = 'completed';
-                $progress['steps'][2]['completed'] = true;
-                $progress['steps'][2]['status'] = 'completed';
-                $progress['steps'][3]['completed'] = true;
-                $progress['steps'][3]['status'] = 'completed';
-                $progress['steps'][4]['current'] = true;
-                $progress['steps'][4]['status'] = 'in_progress';
-                break;
+        $data = [
+            'event' => $event,
+            'registration_open' => $registrationOpen,
+            'abstract_open' => $abstractOpen,
+            'user_registration' => $userRegistration,
+            'user_abstracts' => $userAbstracts,
+            'stats' => $stats,
+            'pricing_matrix' => $pricingMatrix,
+            'participation_options' => $participationOptions,
+            'user_role' => session('role')
+        ];
 
-            case 'payment_rejected':
-                $progress['current_step'] = 3;
-                $progress['steps'][1]['completed'] = true;
-                $progress['steps'][1]['status'] = 'completed';
-                $progress['steps'][2]['completed'] = true;
-                $progress['steps'][2]['status'] = 'completed';
-                $progress['steps'][3]['current'] = true;
-                $progress['steps'][3]['status'] = 'rejected';
-                $progress['steps'][3]['can_proceed'] = $event['registration_open'];
-                $progress['steps'][3]['action_text'] = 'Bayar Ulang';
-                break;
+        return view('role/presenter/event/detail', $data);
+    }
 
-            case 'completed':
-                $progress['current_step'] = 5;
-                for ($i = 1; $i <= 5; $i++) {
-                    $progress['steps'][$i]['completed'] = true;
-                    $progress['steps'][$i]['status'] = 'completed';
+    public function showRegistrationForm($eventId)
+    {
+        $event = $this->eventModel->find($eventId);
+        
+        if (!$event) {
+            return redirect()->to('presenter/events')->with('error', 'Event tidak ditemukan.');
+        }
+
+        // Check if registration is still open
+        if (!$this->isRegistrationOpen($event)) {
+            return redirect()->to('presenter/events')->with('error', 'Pendaftaran untuk event ini sudah ditutup.');
+        }
+
+        // Check if user already registered
+        $userId = session('id_user');
+        $existingRegistration = $this->pembayaranModel
+            ->where('event_id', $eventId)
+            ->where('id_user', $userId)
+            ->first();
+
+        if ($existingRegistration) {
+            return redirect()->to('presenter/events/detail/' . $eventId)
+                ->with('info', 'Anda sudah terdaftar untuk event ini.');
+        }
+
+        // Get pricing matrix (presenter only offline)
+        $pricingMatrix = $this->getPricingMatrix($eventId);
+        $participationOptions = ['offline']; // Presenter can only participate offline
+        
+        // Get active vouchers
+        $activeVouchers = $this->voucherModel
+            ->where('status', 'aktif')
+            ->where('masa_berlaku >=', date('Y-m-d'))
+            ->where('kuota >', 0)
+            ->orderBy('masa_berlaku', 'ASC')
+            ->findAll();
+
+        $data = [
+            'event' => $event,
+            'pricing_matrix' => $pricingMatrix,
+            'participation_options' => $participationOptions,
+            'user_role' => session('role'),
+            'active_vouchers' => $activeVouchers,
+            'base_amount' => $event['presenter_fee_offline'] ?? 0
+        ];
+
+        return view('role/presenter/event/registration_form', $data);
+    }
+
+    public function register($eventId)
+    {
+        $event = $this->eventModel->find($eventId);
+        
+        if (!$event) {
+            return redirect()->to('presenter/events')->with('error', 'Event tidak ditemukan.');
+        }
+
+        // Check if registration is still open
+        if (!$this->isRegistrationOpen($event)) {
+            return redirect()->to('presenter/events')->with('error', 'Pendaftaran untuk event ini sudah ditutup.');
+        }
+
+        $validation = \Config\Services::validation();
+        
+        $rules = [
+            'payment_method' => 'required|in_list[bank_transfer,e_wallet,credit_card]',
+            'payment_proof' => 'uploaded[payment_proof]|max_size[payment_proof,5120]|ext_in[payment_proof,jpg,jpeg,png,pdf]',
+            'voucher_code' => 'permit_empty|max_length[50]'
+        ];
+
+        if (!$this->validate($rules)) {
+            return redirect()->back()->withInput()->with('errors', $validation->getErrors());
+        }
+
+        $userId = session('id_user');
+        $userRole = session('role');
+        $participationType = 'offline'; // Presenter can only participate offline
+        $voucherCode = $this->request->getPost('voucher_code');
+
+        // Check if user already registered
+        $existingRegistration = $this->pembayaranModel
+            ->where('event_id', $eventId)
+            ->where('id_user', $userId)
+            ->first();
+
+        if ($existingRegistration) {
+            return redirect()->to('presenter/events/detail/' . $eventId)
+                ->with('error', 'Anda sudah terdaftar untuk event ini.');
+        }
+
+        // Get base price for presenter (always offline)
+        $basePrice = $event['presenter_fee_offline'] ?? 0;
+        $finalPrice = $basePrice;
+        $voucherId = null;
+        $discount = 0;
+
+        // Apply voucher if provided
+        if ($voucherCode) {
+            $voucher = $this->voucherModel->where('kode_voucher', strtoupper(trim($voucherCode)))->first();
+            
+            if ($voucher && $voucher['status'] === 'aktif' && strtotime($voucher['masa_berlaku']) > time()) {
+                // Check quota
+                $usedCount = $this->pembayaranModel->where('id_voucher', $voucher['id_voucher'])->countAllResults();
+                
+                if ($usedCount < $voucher['kuota']) {
+                    $voucherId = $voucher['id_voucher'];
+                    
+                    if ($voucher['tipe'] === 'percentage') {
+                        $discount = ($basePrice * $voucher['nilai'] / 100);
+                    } else {
+                        $discount = min($voucher['nilai'], $basePrice);
+                    }
+                    
+                    $finalPrice = max(0, $basePrice - $discount);
+                } else {
+                    return redirect()->back()->withInput()->with('error', 'Kuota voucher sudah habis.');
                 }
-                $progress['steps'][5]['current'] = true;
-                break;
+            } else {
+                return redirect()->back()->withInput()->with('error', 'Kode voucher tidak valid atau sudah expired.');
+            }
         }
 
-        return $progress;
-    }
+        // Handle file upload
+        $file = $this->request->getFile('payment_proof');
+        $fileName = '';
+        
+        if ($file->isValid() && !$file->hasMoved()) {
+            // Create upload directory if not exists
+            $uploadPath = WRITEPATH . 'uploads/pembayaran/';
+            if (!is_dir($uploadPath)) {
+                mkdir($uploadPath, 0755, true);
+            }
 
-    /**
-     * Check if presenter can register for event
-     */
-    private function canRegisterForEvent($event)
-    {
-        return $event['can_participate'] && in_array($event['workflow_status'], [
-            'need_abstract', 'abstract_revision', 'abstract_rejected', 'need_payment', 'payment_rejected'
-        ]);
-    }
+            $fileName = 'payment_' . $userId . '_' . $eventId . '_' . time() . '.' . $file->getExtension();
+            
+            if (!$file->move($uploadPath, $fileName)) {
+                return redirect()->back()->withInput()->with('error', 'Gagal mengupload bukti pembayaran.');
+            }
+        } else {
+            return redirect()->back()->withInput()->with('error', 'File bukti pembayaran tidak valid.');
+        }
 
-    /**
-     * Get next action for event
-     */
-    private function getNextAction($event)
-    {
-        switch ($event['workflow_status']) {
-            case 'need_abstract':
-                return [
-                    'text' => 'Upload Abstrak',
-                    'url' => site_url('presenter/abstrak?event_id=' . $event['id']),
-                    'class' => 'btn-primary',
-                    'icon' => 'fas fa-upload'
-                ];
+        // Begin database transaction
+        $db = \Config\Database::connect();
+        $db->transStart();
 
-            case 'abstract_revision':
-                return [
-                    'text' => 'Revisi Abstrak',
-                    'url' => site_url('presenter/abstrak/detail/' . $event['abstract']['id_abstrak']),
-                    'class' => 'btn-warning',
-                    'icon' => 'fas fa-edit'
-                ];
+        try {
+            // Save payment record
+            $paymentData = [
+                'id_user' => $userId,
+                'event_id' => $eventId,
+                'participation_type' => $participationType,
+                'metode' => $this->request->getPost('payment_method'),
+                'jumlah' => $finalPrice,
+                'original_amount' => $basePrice,
+                'discount_amount' => $discount,
+                'bukti_bayar' => $fileName,
+                'status' => 'pending',
+                'id_voucher' => $voucherId,
+                'tanggal_bayar' => date('Y-m-d H:i:s')
+            ];
 
-            case 'abstract_rejected':
-                return [
-                    'text' => 'Submit Abstrak Baru',
-                    'url' => site_url('presenter/abstrak?event_id=' . $event['id']),
-                    'class' => 'btn-danger',
-                    'icon' => 'fas fa-redo'
-                ];
+            $paymentId = $this->pembayaranModel->insert($paymentData);
 
-            case 'need_payment':
-                return [
-                    'text' => 'Lakukan Pembayaran',
-                    'url' => site_url('presenter/pembayaran/create/' . $event['id']),
-                    'class' => 'btn-success',
-                    'icon' => 'fas fa-credit-card'
-                ];
+            if (!$paymentId) {
+                throw new \Exception('Failed to create payment record.');
+            }
 
-            case 'payment_rejected':
-                return [
-                    'text' => 'Bayar Ulang',
-                    'url' => site_url('presenter/pembayaran/create/' . $event['id']),
-                    'class' => 'btn-danger',
-                    'icon' => 'fas fa-redo'
-                ];
+            // Log activity
+            $this->logActivity($userId, "Submitted event registration payment for: {$event['title']} (Amount: Rp " . number_format($finalPrice, 0, ',', '.') . ")");
 
-            case 'completed':
-                return [
-                    'text' => 'Akses Fitur Event',
-                    'url' => site_url('presenter/absensi'),
-                    'class' => 'btn-info',
-                    'icon' => 'fas fa-star'
-                ];
+            $db->transComplete();
 
-            default:
-                return [
-                    'text' => 'Tunggu Proses',
-                    'url' => '#',
-                    'class' => 'btn-secondary disabled',
-                    'icon' => 'fas fa-clock'
-                ];
+            if ($db->transStatus() === FALSE) {
+                throw new \Exception('Transaction failed.');
+            }
+
+            return redirect()->to('presenter/events/detail/' . $eventId)
+                ->with('success', 'Pendaftaran berhasil! Silakan tunggu verifikasi pembayaran dari admin.');
+
+        } catch (\Exception $e) {
+            $db->transRollback();
+            
+            // Remove uploaded file on error
+            if (!empty($fileName) && file_exists($uploadPath . $fileName)) {
+                unlink($uploadPath . $fileName);
+            }
+
+            log_message('error', 'Event registration error: ' . $e->getMessage());
+            
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Calculate event price for presenter
-     */
     public function calculatePrice()
     {
         $eventId = $this->request->getPost('event_id');
         $voucherCode = $this->request->getPost('voucher_code');
+        $userRole = session('role');
 
-        if (!$eventId) {
+        // Get base price for presenter (always offline)
+        $event = $this->eventModel->find($eventId);
+        if (!$event) {
             return $this->response->setJSON([
                 'success' => false,
-                'message' => 'Event ID is required'
+                'message' => 'Event tidak ditemukan'
             ]);
         }
 
-        try {
-            $event = $this->eventModel->find($eventId);
+        $basePrice = $event['presenter_fee_offline'] ?? 0;
+        $finalPrice = $basePrice;
+        $discount = 0;
+        $voucherValid = false;
+        $voucherMessage = '';
+
+        // Apply voucher if provided
+        if ($voucherCode) {
+            $voucher = $this->voucherModel->where('kode_voucher', strtoupper(trim($voucherCode)))->first();
             
-            if (!$event) {
-                return $this->response->setJSON([
-                    'success' => false,
-                    'message' => 'Event not found'
-                ]);
-            }
-
-            // Presenter always uses offline price
-            $originalPrice = $event['presenter_fee_offline'] ?? 0;
-            $finalPrice = $originalPrice;
-            $discount = 0;
-            $voucherInfo = null;
-
-            // Apply voucher if provided
-            if ($voucherCode) {
-                $voucher = $this->voucherModel->where('kode_voucher', strtoupper($voucherCode))->first();
+            if (!$voucher) {
+                $voucherMessage = 'Kode voucher tidak ditemukan.';
+            } elseif ($voucher['status'] !== 'aktif') {
+                $voucherMessage = 'Voucher tidak aktif.';
+            } elseif (strtotime($voucher['masa_berlaku']) <= time()) {
+                $voucherMessage = 'Voucher sudah expired.';
+            } else {
+                // Check quota
+                $usedCount = $this->pembayaranModel->where('id_voucher', $voucher['id_voucher'])->countAllResults();
                 
-                if ($voucher && $voucher['status'] === 'aktif' && strtotime($voucher['masa_berlaku']) > time()) {
-                    // Check voucher quota
-                    $usedCount = $this->pembayaranModel
-                        ->where('id_voucher', $voucher['id_voucher'])
-                        ->where('status', 'verified')
-                        ->countAllResults();
-
-                    if ($usedCount < $voucher['kuota']) {
-                        if ($voucher['tipe'] === 'percentage') {
-                            $discount = ($originalPrice * $voucher['nilai']) / 100;
-                        } else {
-                            $discount = $voucher['nilai'];
-                        }
-                        
-                        $finalPrice = max(0, $originalPrice - $discount);
-                        $voucherInfo = $voucher;
+                if ($usedCount >= $voucher['kuota']) {
+                    $voucherMessage = 'Kuota voucher sudah habis.';
+                } else {
+                    $voucherValid = true;
+                    $voucherMessage = 'Voucher berhasil diterapkan!';
+                    
+                    if ($voucher['tipe'] === 'percentage') {
+                        $discount = ($basePrice * $voucher['nilai'] / 100);
+                    } else {
+                        $discount = min($voucher['nilai'], $basePrice);
                     }
+                    
+                    $finalPrice = max(0, $basePrice - $discount);
                 }
             }
-
-            return $this->response->setJSON([
-                'success' => true,
-                'pricing' => [
-                    'original_price' => $originalPrice,
-                    'discount' => $discount,
-                    'final_price' => $finalPrice,
-                    'voucher' => $voucherInfo
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            log_message('error', 'Calculate price error: ' . $e->getMessage());
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Error calculating price'
-            ]);
         }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'base_price' => $basePrice,
+            'discount' => $discount,
+            'final_price' => $finalPrice,
+            'voucher_valid' => $voucherValid,
+            'voucher_message' => $voucherMessage,
+            'formatted_base_price' => 'Rp ' . number_format($basePrice, 0, ',', '.'),
+            'formatted_discount' => 'Rp ' . number_format($discount, 0, ',', '.'),
+            'formatted_final_price' => 'Rp ' . number_format($finalPrice, 0, ',', '.')
+        ]);
     }
 
     /**
-     * Show registration form for event
+     * Check if registration is open for an event
      */
-    public function showRegistrationForm($eventId)
+    private function isRegistrationOpen($event)
     {
-        $userId = session('id_user');
+        // If event is not active, registration is closed
+        if (!($event['is_active'] ?? true)) {
+            return false;
+        }
+        
+        // Check registration deadline
+        if (!empty($event['registration_deadline'])) {
+            return (strtotime($event['registration_deadline']) > time());
+        }
+        
+        // If no deadline is set, check against event date
+        if (!empty($event['event_date'])) {
+            $eventDate = strtotime($event['event_date']);
+            $currentTime = time();
+            
+            // Allow registration until 1 day before event
+            return ($eventDate > ($currentTime + 86400));
+        }
+        
+        // Default: registration is open
+        return true;
+    }
+
+    /**
+     * Check if abstract submission is open for an event
+     */
+    private function isAbstractSubmissionOpen($event)
+    {
+        // Check abstract submission deadline
+        if (!empty($event['abstract_deadline'])) {
+            return (strtotime($event['abstract_deadline']) > time());
+        }
+        
+        // If no abstract deadline, use registration deadline
+        if (!empty($event['registration_deadline'])) {
+            return (strtotime($event['registration_deadline']) > time());
+        }
+        
+        // Default: submission is open if registration is open
+        return $this->isRegistrationOpen($event);
+    }
+
+    /**
+     * Get event statistics
+     */
+    private function getEventStats($eventId)
+    {
+        $db = \Config\Database::connect();
         
         try {
-            $event = $this->eventModel->find($eventId);
+            // Get total registrations
+            $totalRegistrations = $this->pembayaranModel
+                ->where('event_id', $eventId)
+                ->countAllResults();
             
-            if (!$event || !$event['is_active']) {
-                return redirect()->to('presenter/events')->with('error', 'Event tidak ditemukan atau tidak aktif.');
-            }
-
-            // Check if presenter can register
-            $events = $this->getEventsWithPresenterStatus($userId);
-            $eventData = array_filter($events, fn($e) => $e['id'] == $eventId);
-            $eventData = reset($eventData);
-
-            if (!$this->canRegisterForEvent($eventData)) {
-                return redirect()->to('presenter/events/detail/' . $eventId)
-                               ->with('error', 'Anda tidak dapat mendaftar untuk event ini saat ini.');
-            }
-
-            $data = [
-                'event' => $eventData,
-                'next_action' => $this->getNextAction($eventData)
+            // Get total verified registrations
+            $verifiedRegistrations = $this->pembayaranModel
+                ->where('event_id', $eventId)
+                ->where('status', 'verified')
+                ->countAllResults();
+            
+            // Get total abstracts
+            $totalAbstracts = $this->abstrakModel
+                ->where('event_id', $eventId)
+                ->countAllResults();
+            
+            // Get total revenue
+            $revenueResult = $this->pembayaranModel
+                ->select('SUM(jumlah) as total_revenue')
+                ->where('event_id', $eventId)
+                ->where('status', 'verified')
+                ->first();
+            
+            $totalRevenue = $revenueResult['total_revenue'] ?? 0;
+            
+            return [
+                'total_registrations' => $totalRegistrations,
+                'verified_registrations' => $verifiedRegistrations,
+                'total_abstracts' => $totalAbstracts,
+                'total_revenue' => $totalRevenue
             ];
-
-            return view('role/presenter/event/register', $data);
-
-        } catch (\Exception $e) {
-            log_message('error', 'Show registration form error: ' . $e->getMessage());
-            return redirect()->to('presenter/events')->with('error', 'Terjadi kesalahan saat memuat form registrasi.');
-        }
-    }
-
-    /**
-     * Process event registration
-     */
-    public function register($eventId)
-    {
-        $userId = session('id_user');
-        
-        try {
-            $event = $this->eventModel->find($eventId);
             
-            if (!$event || !$event['is_active']) {
-                return redirect()->to('presenter/events')->with('error', 'Event tidak ditemukan atau tidak aktif.');
-            }
-
-            // Check registration eligibility
-            $events = $this->getEventsWithPresenterStatus($userId);
-            $eventData = array_filter($events, fn($e) => $e['id'] == $eventId);
-            $eventData = reset($eventData);
-
-            if (!$this->canRegisterForEvent($eventData)) {
-                return redirect()->to('presenter/events/detail/' . $eventId)
-                               ->with('error', 'Anda tidak dapat mendaftar untuk event ini saat ini.');
-            }
-
-            // Create or update event registration (presenter always offline)
-            $registrationId = $this->eventRegistrationModel->createRegistration($eventId, $userId, 'offline');
-
-            // Log activity
-            $this->logActivity($userId, "Registered for event: {$event['title']} (ID: {$eventId})");
-
-            // Redirect based on next required action
-            $nextAction = $this->getNextAction($eventData);
-            return redirect()->to($nextAction['url'])->with('success', 'Registrasi berhasil! Silakan lanjutkan langkah berikutnya.');
-
         } catch (\Exception $e) {
-            log_message('error', 'Event registration error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat registrasi: ' . $e->getMessage());
+            log_message('error', 'Error getting event stats: ' . $e->getMessage());
+            
+            return [
+                'total_registrations' => 0,
+                'verified_registrations' => 0,
+                'total_abstracts' => 0,
+                'total_revenue' => 0
+            ];
         }
     }
 
     /**
-     * Log activity helper
+     * Get pricing matrix for an event
+     */
+    private function getPricingMatrix($eventId)
+    {
+        $event = $this->eventModel->find($eventId);
+        
+        if (!$event) {
+            return [];
+        }
+        
+        // For presenter, only offline pricing is relevant
+        return [
+            'presenter' => [
+                'offline' => $event['presenter_fee_offline'] ?? 0
+            ]
+        ];
+    }
+
+    /**
+     * Log user activity
      */
     private function logActivity($userId, $activity)
     {
+        $db = \Config\Database::connect();
         try {
-            $this->db->table('log_aktivitas')->insert([
+            $db->table('log_aktivitas')->insert([
                 'id_user' => $userId,
                 'aktivitas' => $activity,
                 'waktu' => date('Y-m-d H:i:s')
             ]);
         } catch (\Exception $e) {
+            // Silent fail for logging
             log_message('error', 'Failed to log activity: ' . $e->getMessage());
         }
     }
