@@ -11,7 +11,6 @@
     <style>
         :root {
             --primary-color: #2563eb;
-            --secondary-color: #64748b;
             --success-color: #10b981;
             --warning-color: #f59e0b;
             --danger-color: #ef4444;
@@ -21,7 +20,6 @@
         body {
             background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
         }
 
         .sidebar {
@@ -41,7 +39,6 @@
         .sidebar .nav-link:hover {
             background: rgba(255,255,255,0.1);
             color: white;
-            transform: translateX(5px);
         }
 
         .sidebar .nav-link.active {
@@ -58,64 +55,36 @@
 
         .stat-card {
             background: white;
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-            border: 1px solid rgba(255,255,255,0.2);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary-color), var(--info-color));
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border-left: 4px solid var(--primary-color);
+            transition: transform 0.2s ease;
         }
 
         .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
         }
 
         .stat-number {
-            font-size: 2.5rem;
+            font-size: 2rem;
             font-weight: 700;
             color: #1e293b;
-            margin: 16px 0 8px 0;
         }
 
         .header-section {
             background: white;
             padding: 24px;
-            border-radius: 16px;
+            border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-            margin-bottom: 30px;
+            margin-bottom: 24px;
         }
 
         .welcome-text {
             color: var(--primary-color);
-            font-size: 2rem;
+            font-size: 1.8rem;
             font-weight: 700;
             margin-bottom: 8px;
-        }
-
-        .table-container {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-            overflow: hidden;
-        }
-
-        .table-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--info-color) 100%);
-            color: white;
-            padding: 20px;
-            font-weight: 600;
         }
 
         .event-card {
@@ -123,8 +92,8 @@
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             border: 1px solid #e2e8f0;
-            transition: all 0.3s ease;
-            overflow: hidden;
+            transition: all 0.2s ease;
+            margin-bottom: 20px;
         }
 
         .event-card:hover {
@@ -143,61 +112,27 @@
 
         .format-badge {
             padding: 4px 12px;
-            border-radius: 12px;
+            border-radius: 8px;
             font-size: 0.75rem;
             font-weight: 600;
         }
 
-        .pricing-section {
-            background: #f8fafc;
-            border-radius: 12px;
-            padding: 16px;
-            margin: 16px 0;
-            border: 1px solid #e2e8f0;
-        }
-
-        .pricing-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 12px;
-            font-weight: 600;
-            color: #374151;
-        }
-
-        .pricing-header i {
-            margin-right: 8px;
-            width: 20px;
-            text-align: center;
-        }
-
-        .price-display {
-            font-size: 0.85rem;
-            margin-top: 8px;
-        }
-
-        .price-display .price {
-            font-weight: 600;
-            color: var(--primary-color);
-        }
-
         .modal-content {
-            border-radius: 16px;
+            border-radius: 12px;
             border: none;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
 
         .modal-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
+            background: var(--primary-color);
             color: white;
-            border-radius: 16px 16px 0 0;
-            border-bottom: none;
+            border-radius: 12px 12px 0 0;
         }
 
         .form-control, .form-select {
-            border-radius: 8px;
-            border: 2px solid #e2e8f0;
-            padding: 12px 16px;
-            transition: all 0.3s ease;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            padding: 10px 12px;
         }
 
         .form-control:focus, .form-select:focus {
@@ -206,52 +141,41 @@
         }
 
         .btn-custom {
-            border-radius: 8px;
-            padding: 8px 16px;
+            border-radius: 6px;
             font-weight: 600;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
         }
 
         .btn-custom:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
-        .participant-breakdown {
+        .price-display {
             background: #f8fafc;
             border-radius: 8px;
             padding: 12px;
-            margin: 8px 0;
-        }
-
-        .participant-type {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 4px 0;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .participant-type:last-child {
-            border-bottom: none;
-        }
-
-        .participant-label {
-            font-size: 0.9rem;
-            color: #6b7280;
-        }
-
-        .participant-count {
-            font-weight: 600;
-            color: #374151;
-        }
-
-        .revenue-section {
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-            border-radius: 8px;
-            padding: 12px;
             margin: 12px 0;
+        }
+
+        .revenue-display {
+            background: var(--success-color);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .conditional-field {
+            display: none;
+        }
+
+        .conditional-field.show {
+            display: block;
+        }
+
+        .disabled-field {
+            opacity: 0.5;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -313,480 +237,303 @@
                 <div class="main-content p-4">
                     <!-- Header -->
                     <div class="header-section">
-                        <div class="row align-items-center">
-                            <div class="col">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
                                 <h1 class="welcome-text">
-                                    <i class="fas fa-calendar me-3"></i>Kelola Event
+                                    <i class="fas fa-calendar-alt me-3"></i>
+                                    Kelola Event
                                 </h1>
-                                <p class="text-muted mb-0">
-                                    Kelola semua event konferensi dan workshop SNIA<br>
-                                    <small><strong>Presenter:</strong> Hanya offline | <strong>Audience:</strong> Online & Offline terpisah</small>
-                                </p>
+                                <p class="text-muted mb-0">Manajemen event dan aktivitas SNIA Conference</p>
                             </div>
-                            <div class="col-auto">
-                                <div class="text-end">
-                                    <small class="text-muted d-block">Terakhir update</small>
-                                    <strong><?= date('d F Y, H:i') ?></strong>
+                            <button class="btn btn-primary btn-custom" data-bs-toggle="modal" data-bs-target="#addEventModal">
+                                <i class="fas fa-plus me-2"></i>
+                                Tambah Event
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Statistics -->
+                    <div class="row mb-4">
+                        <div class="col-md-3 mb-3">
+                            <div class="stat-card">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <h6 class="text-muted mb-1">Total Event</h6>
+                                        <div class="stat-number"><?= $stats['total_events'] ?? 0 ?></div>
+                                    </div>
+                                    <i class="fas fa-calendar-alt fa-2x text-primary"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="stat-card">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <h6 class="text-muted mb-1">Event Aktif</h6>
+                                        <div class="stat-number text-success"><?= $stats['active_events'] ?? 0 ?></div>
+                                    </div>
+                                    <i class="fas fa-check-circle fa-2x text-success"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="stat-card">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <h6 class="text-muted mb-1">Total Pendaftar</h6>
+                                        <div class="stat-number text-info"><?= $stats['verified_registrations'] ?? 0 ?></div>
+                                    </div>
+                                    <i class="fas fa-users fa-2x text-info"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="stat-card">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-grow-1">
+                                        <h6 class="text-muted mb-1">Revenue</h6>
+                                        <div class="stat-number text-warning" style="font-size: 1.5rem;">
+                                            Rp <?= number_format($stats['total_revenue'] ?? 0, 0, ',', '.') ?>
+                                        </div>
+                                    </div>
+                                    <i class="fas fa-chart-line fa-2x text-warning"></i>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Statistics Cards -->
-                    <div class="row g-4 mb-4">
-                        <div class="col-md-6 col-xl-3">
-                            <div class="stat-card">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-calendar-alt fa-2x text-primary"></i>
-                                    </div>
-                                    <div class="ms-3">
-                                        <div class="stat-number"><?= $total_events ?? 0 ?></div>
-                                        <div class="text-muted">Total Event</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6 col-xl-3">
-                            <div class="stat-card">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-play-circle fa-2x text-success"></i>
-                                    </div>
-                                    <div class="ms-3">
-                                        <div class="stat-number"><?= $active_events ?? 0 ?></div>
-                                        <div class="text-muted">Event Aktif</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6 col-xl-3">
-                            <div class="stat-card">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-clock fa-2x text-warning"></i>
-                                    </div>
-                                    <div class="ms-3">
-                                        <div class="stat-number"><?= $upcoming_events ?? 0 ?></div>
-                                        <div class="text-muted">Event Mendatang</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6 col-xl-3">
-                            <div class="stat-card">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-users fa-2x text-info"></i>
-                                    </div>
-                                    <div class="ms-3">
-                                        <div class="stat-number"><?= array_sum(array_column($events ?? [], 'total_registrations')) ?></div>
-                                        <div class="text-muted">Total Registrasi</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Main Content -->
-                    <div class="table-container">
-                        <div class="table-header">
-                            <div class="row align-items-center">
-                                <div class="col">
-                                    <h5 class="mb-0">
-                                        <i class="fas fa-list me-2"></i>Daftar Event
-                                    </h5>
-                                </div>
-                                <div class="col-auto">
-                                    <button class="btn btn-light btn-custom" data-bs-toggle="modal" data-bs-target="#createModal">
-                                        <i class="fas fa-plus me-1"></i>Tambah Event
-                                    </button>
-                                    <button class="btn btn-light btn-custom" onclick="exportData()">
-                                        <i class="fas fa-download me-1"></i>Export
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="p-4">
-                            <!-- Event Cards -->
-                            <div class="row g-4">
-                                <?php if (!empty($events)): ?>
-                                    <?php foreach ($events as $event): ?>
-                                        <div class="col-lg-6 col-xl-4">
-                                            <div class="event-card">
-                                                <div class="event-header">
-                                                    <div class="d-flex justify-content-between align-items-start">
-                                                        <div class="flex-grow-1">
-                                                            <h6 class="mb-1 fw-bold"><?= esc($event['title']) ?></h6>
-                                                            <small class="text-muted">
-                                                                <i class="fas fa-calendar me-1"></i>
-                                                                <?= date('d M Y', strtotime($event['event_date'])) ?> • 
-                                                                <?= date('H:i', strtotime($event['event_time'])) ?>
-                                                            </small>
-                                                        </div>
-                                                        <span class="format-badge <?php
-                                                            if ($event['format'] == 'online') echo 'bg-info text-white';
-                                                            elseif ($event['format'] == 'offline') echo 'bg-success text-white';
-                                                            else echo 'bg-primary text-white';
-                                                        ?>">
-                                                            <i class="fas fa-<?= $event['format'] == 'online' ? 'video' : ($event['format'] == 'offline' ? 'map-marker-alt' : 'globe') ?> me-1"></i>
-                                                            <?= ucfirst($event['format']) ?>
-                                                        </span>
-                                                    </div>
-                                                    <div class="mt-2">
-                                                        <span class="badge <?= $event['is_active'] ? 'bg-success' : 'bg-secondary' ?>">
-                                                            <?= $event['is_active'] ? 'Aktif' : 'Nonaktif' ?>
-                                                        </span>
-                                                        <?php if ($event['registration_active']): ?>
-                                                            <span class="badge bg-primary">Pendaftaran Buka</span>
-                                                        <?php endif; ?>
-                                                        <?php if ($event['abstract_submission_active']): ?>
-                                                            <span class="badge bg-warning">Abstrak Buka</span>
-                                                        <?php endif; ?>
-                                                    </div>
+                    <!-- Events List -->
+                    <div class="row">
+                        <?php if (!empty($events)): ?>
+                            <?php foreach ($events as $event): ?>
+                                <div class="col-lg-6 mb-4">
+                                    <div class="event-card">
+                                        <div class="event-header">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <h5 class="mb-0 text-primary"><?= esc($event['title']) ?></h5>
+                                                <div class="dropdown">
+                                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                                                        <i class="fas fa-ellipsis-v"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu">
+                                                        <li><a class="dropdown-item" href="#" onclick="editEvent(<?= $event['id'] ?>)">
+                                                            <i class="fas fa-edit me-2"></i>Edit
+                                                        </a></li>
+                                                        <li><a class="dropdown-item" href="#" onclick="toggleStatus(<?= $event['id'] ?>)">
+                                                            <i class="fas fa-power-off me-2"></i>
+                                                            <?= $event['is_active'] ? 'Nonaktifkan' : 'Aktifkan' ?>
+                                                        </a></li>
+                                                        <li><a class="dropdown-item" href="#" onclick="toggleRegistration(<?= $event['id'] ?>)">
+                                                            <i class="fas fa-user-plus me-2"></i>
+                                                            Reg: <?= $event['registration_active'] ? 'Tutup' : 'Buka' ?>
+                                                        </a></li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li><a class="dropdown-item text-danger" href="#" onclick="deleteEvent(<?= $event['id'] ?>)">
+                                                            <i class="fas fa-trash me-2"></i>Hapus
+                                                        </a></li>
+                                                    </ul>
                                                 </div>
-                                                
-                                                <div class="event-body">
-                                                    <p class="small text-muted mb-3"><?= esc(substr($event['description'] ?? '', 0, 100)) ?>...</p>
-                                                    
-                                                    <!-- Enhanced Pricing Display -->
-                                                    <div class="pricing-section">
-                                                        <div class="pricing-header">
-                                                            <i class="fas fa-money-bill-wave text-success"></i>
-                                                            Harga Registrasi
-                                                        </div>
-                                                        <div class="row">
-                                                            <div class="col-6">
-                                                                <div class="text-center">
-                                                                    <div class="fw-bold text-primary">
-                                                                        <i class="fas fa-microphone me-1"></i>Presenter
-                                                                    </div>
-                                                                    <div class="price-display">
-                                                                        <div class="badge bg-primary mb-1">Offline Only</div>
-                                                                        <div><span class="price">Rp <?= number_format($event['presenter_fee_offline'] ?? 0, 0, ',', '.') ?></span></div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div class="col-6">
-                                                                <div class="text-center">
-                                                                    <div class="fw-bold text-info">
-                                                                        <i class="fas fa-users me-1"></i>Audience
-                                                                    </div>
-                                                                    <div class="price-display">
-                                                                        <?php if ($event['format'] != 'offline'): ?>
-                                                                            <div class="badge bg-info text-white mb-1">Online</div>
-                                                                            <div><span class="price">Rp <?= number_format($event['audience_fee_online'] ?? 0, 0, ',', '.') ?></span></div>
-                                                                        <?php endif; ?>
-                                                                        <?php if ($event['format'] != 'online'): ?>
-                                                                            <div class="badge bg-success text-white mb-1">Offline</div>
-                                                                            <div><span class="price">Rp <?= number_format($event['audience_fee_offline'] ?? 0, 0, ',', '.') ?></span></div>
-                                                                        <?php endif; ?>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                                            </div>
+
+                                            <div class="d-flex gap-2 mb-2">
+                                                <span class="format-badge <?= $event['format'] == 'online' ? 'bg-info text-white' : ($event['format'] == 'offline' ? 'bg-primary text-white' : 'bg-success text-white') ?>">
+                                                    <?= ucfirst($event['format']) ?>
+                                                </span>
+                                                <span class="badge <?= $event['is_active'] ? 'bg-success' : 'bg-secondary' ?>">
+                                                    <?= $event['is_active'] ? 'Aktif' : 'Nonaktif' ?>
+                                                </span>
+                                            </div>
+
+                                            <div class="text-muted small">
+                                                <i class="fas fa-calendar me-1"></i>
+                                                <?= date('d M Y', strtotime($event['event_date'])) ?> - 
+                                                <i class="fas fa-clock ms-2 me-1"></i>
+                                                <?= date('H:i', strtotime($event['event_time'])) ?>
+                                            </div>
+                                        </div>
+
+                                        <div class="event-body">
+                                            <!-- Pricing -->
+                                            <div class="price-display">
+                                                <h6 class="mb-2"><i class="fas fa-tag me-2"></i>Harga</h6>
+                                                <div class="row g-2 small">
+                                                    <div class="col-6">
+                                                        <strong>Presenter:</strong><br>
+                                                        Rp <?= number_format($event['presenter_fee_offline'], 0, ',', '.') ?>
                                                     </div>
-                                                    
-                                                    <!-- Enhanced Participant Breakdown -->
-                                                    <div class="participant-breakdown">
-                                                        <div class="fw-bold text-secondary mb-2">
-                                                            <i class="fas fa-chart-pie me-1"></i>Breakdown Peserta
-                                                        </div>
-                                                        
-                                                        <div class="participant-type">
-                                                            <span class="participant-label">
-                                                                <i class="fas fa-microphone text-primary me-1"></i>Presenter
-                                                            </span>
-                                                            <span class="participant-count text-primary">
-                                                                <?= $event['presenter_registrations'] ?? 0 ?>
-                                                            </span>
-                                                        </div>
-                                                        
+                                                    <div class="col-6">
+                                                        <strong>Audience:</strong><br>
                                                         <?php if ($event['format'] != 'offline'): ?>
-                                                        <div class="participant-type">
-                                                            <span class="participant-label">
-                                                                <i class="fas fa-video text-info me-1"></i>Audience Online
-                                                            </span>
-                                                            <span class="participant-count text-info">
-                                                                <?= $event['audience_online_registrations'] ?? 0 ?>
-                                                            </span>
-                                                        </div>
+                                                            Online: Rp <?= number_format($event['audience_fee_online'], 0, ',', '.') ?><br>
                                                         <?php endif; ?>
-                                                        
                                                         <?php if ($event['format'] != 'online'): ?>
-                                                        <div class="participant-type">
-                                                            <span class="participant-label">
-                                                                <i class="fas fa-map-marker-alt text-success me-1"></i>Audience Offline
-                                                            </span>
-                                                            <span class="participant-count text-success">
-                                                                <?= $event['audience_offline_registrations'] ?? 0 ?>
-                                                            </span>
-                                                        </div>
+                                                            Offline: Rp <?= number_format($event['audience_fee_offline'], 0, ',', '.') ?>
                                                         <?php endif; ?>
-                                                        
-                                                        <div class="participant-type border-top pt-2 mt-2">
-                                                            <span class="participant-label fw-bold">
-                                                                <i class="fas fa-users me-1"></i>Total Verified
-                                                            </span>
-                                                            <span class="participant-count fw-bold">
-                                                                <?= $event['verified_registrations'] ?? 0 ?>
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <!-- Revenue Section -->
-                                                    <div class="revenue-section">
-                                                        <div class="d-flex justify-content-between align-items-center">
-                                                            <div>
-                                                                <i class="fas fa-chart-line me-2"></i>
-                                                                <strong>Total Revenue</strong>
-                                                            </div>
-                                                            <div class="text-end">
-                                                                <div class="fw-bold">Rp <?= number_format($event['total_revenue'] ?? 0, 0, ',', '.') ?></div>
-                                                                <small><?= $event['total_abstracts'] ?? 0 ?> Abstrak</small>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <?php if (($event['online_revenue'] ?? 0) > 0 || ($event['offline_revenue'] ?? 0) > 0): ?>
-                                                        <div class="row mt-2 pt-2 border-top border-light">
-                                                            <?php if (($event['online_revenue'] ?? 0) > 0): ?>
-                                                            <div class="col-6 text-center">
-                                                                <small>Online</small><br>
-                                                                <strong>Rp <?= number_format($event['online_revenue'], 0, ',', '.') ?></strong>
-                                                            </div>
-                                                            <?php endif; ?>
-                                                            <?php if (($event['offline_revenue'] ?? 0) > 0): ?>
-                                                            <div class="col-6 text-center">
-                                                                <small>Offline</small><br>
-                                                                <strong>Rp <?= number_format($event['offline_revenue'], 0, ',', '.') ?></strong>
-                                                            </div>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                    
-                                                    <div class="d-flex gap-1">
-                                                        <button class="btn btn-outline-info btn-sm btn-custom flex-fill" 
-                                                                onclick="viewDetail(<?= $event['id'] ?>)">
-                                                            <i class="fas fa-eye"></i>
-                                                        </button>
-                                                        <button class="btn btn-outline-warning btn-sm btn-custom flex-fill" 
-                                                                onclick="editEvent(<?= $event['id'] ?>)">
-                                                            <i class="fas fa-edit"></i>
-                                                        </button>
-                                                        <button class="btn btn-outline-<?= $event['is_active'] ? 'secondary' : 'success' ?> btn-sm btn-custom flex-fill" 
-                                                                onclick="toggleStatus(<?= $event['id'] ?>, <?= $event['is_active'] ? 'false' : 'true' ?>)">
-                                                            <i class="fas fa-<?= $event['is_active'] ? 'pause' : 'play' ?>"></i>
-                                                        </button>
-                                                        <button class="btn btn-outline-danger btn-sm btn-custom flex-fill" 
-                                                                onclick="deleteEvent(<?= $event['id'] ?>)">
-                                                            <i class="fas fa-trash"></i>
-                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <div class="col-12">
-                                        <div class="text-center py-5">
-                                            <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
-                                            <h5 class="text-muted">Belum Ada Event</h5>
-                                            <p class="text-muted">Mulai dengan membuat event pertama untuk konferensi SNIA.</p>
-                                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
-                                                <i class="fas fa-plus me-2"></i>Tambah Event
-                                            </button>
+
+                                            <!-- Statistics -->
+                                            <div class="row g-2 mb-3">
+                                                <div class="col-3 text-center">
+                                                    <div class="fw-bold text-primary"><?= $event['total_registrations'] ?? 0 ?></div>
+                                                    <small class="text-muted">Total</small>
+                                                </div>
+                                                <div class="col-3 text-center">
+                                                    <div class="fw-bold text-success"><?= $event['verified_registrations'] ?? 0 ?></div>
+                                                    <small class="text-muted">Verified</small>
+                                                </div>
+                                                <div class="col-3 text-center">
+                                                    <div class="fw-bold text-info"><?= $event['total_abstracts'] ?? 0 ?></div>
+                                                    <small class="text-muted">Abstrak</small>
+                                                </div>
+                                                <div class="col-3 text-center">
+                                                    <div class="fw-bold text-warning"><?= $event['present_count'] ?? 0 ?></div>
+                                                    <small class="text-muted">Hadir</small>
+                                                </div>
+                                            </div>
+
+                                            <!-- Revenue -->
+                                            <div class="revenue-display">
+                                                <i class="fas fa-money-bill-wave me-2"></i>
+                                                <strong>Revenue: Rp <?= number_format($event['total_revenue'] ?? 0, 0, ',', '.') ?></strong>
+                                            </div>
                                         </div>
                                     </div>
-                                <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <div class="col-12">
+                                <div class="text-center py-5">
+                                    <i class="fas fa-calendar-times fa-4x text-muted mb-3"></i>
+                                    <h5 class="text-muted">Belum ada event</h5>
+                                    <p class="text-muted">Klik "Tambah Event" untuk membuat event baru</p>
+                                </div>
                             </div>
-                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Create Event Modal -->
-    <div class="modal fade" id="createModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
+    <!-- Add Event Modal -->
+    <div class="modal fade" id="addEventModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="fas fa-plus me-2"></i>Tambah Event Baru
+                        <i class="fas fa-plus me-2"></i>
+                        Tambah Event Baru
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form action="<?= base_url('admin/event/store') ?>" method="POST">
-                    <?= csrf_field() ?>
+                <form id="addEventForm">
                     <div class="modal-body">
                         <div class="row">
-                            <div class="col-md-8">
-                                <div class="mb-3">
-                                    <label class="form-label">Judul Event *</label>
-                                    <input type="text" class="form-control" name="title" required maxlength="255">
-                                </div>
+                            <div class="col-md-8 mb-3">
+                                <label class="form-label">Judul Event *</label>
+                                <input type="text" class="form-control" name="title" required>
                             </div>
-                            <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label class="form-label">Format Event *</label>
-                                    <select class="form-select" name="format" id="eventFormat" required>
-                                        <option value="">-- Pilih Format --</option>
-                                        <option value="online">Online Only</option>
-                                        <option value="offline">Offline Only</option>
-                                        <option value="both">Online & Offline (Terpisah)</option>
-                                    </select>
-                                    <div class="form-text">Presenter selalu offline. Audience bisa pilih sesuai format.</div>
-                                </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Format *</label>
+                                <select class="form-select" name="format" id="eventFormat" required>
+                                    <option value="both">Hybrid</option>
+                                    <option value="online">Online</option>
+                                    <option value="offline">Offline</option>
+                                </select>
                             </div>
                         </div>
-                        
+
                         <div class="mb-3">
-                            <label class="form-label">Deskripsi Event</label>
+                            <label class="form-label">Deskripsi</label>
                             <textarea class="form-control" name="description" rows="3"></textarea>
                         </div>
-                        
+
                         <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Tanggal Event *</label>
-                                    <input type="date" class="form-control" name="event_date" required min="<?= date('Y-m-d', strtotime('+1 day')) ?>">
-                                </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Tanggal Event *</label>
+                                <input type="date" class="form-control" name="event_date" required>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Waktu Event *</label>
-                                    <input type="time" class="form-control" name="event_time" required>
-                                </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Waktu Event *</label>
+                                <input type="time" class="form-control" name="event_time" required>
                             </div>
                         </div>
-                        
+
+                        <!-- Location/Zoom fields -->
+                        <div class="conditional-field" id="locationRow">
+                            <div class="mb-3">
+                                <label class="form-label">Lokasi <span class="text-danger" id="locationRequired">*</span></label>
+                                <input type="text" class="form-control" name="location" id="locationInput">
+                            </div>
+                        </div>
+
+                        <div class="conditional-field" id="zoomRow">
+                            <div class="mb-3">
+                                <label class="form-label">Link Zoom <span class="text-danger" id="zoomRequired">*</span></label>
+                                <input type="url" class="form-control" name="zoom_link" id="zoomInput">
+                            </div>
+                        </div>
+
+                        <!-- Pricing -->
+                        <h6 class="border-bottom pb-2 mb-3">Struktur Harga</h6>
                         <div class="row">
-                            <div class="col-md-6" id="locationField" style="display: none;">
-                                <div class="mb-3">
-                                    <label class="form-label">Lokasi Event</label>
-                                    <input type="text" class="form-control" name="location" maxlength="255">
-                                    <div class="form-text">Untuk peserta offline (presenter + audience offline)</div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Presenter (Offline) *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">Rp</span>
+                                    <input type="number" class="form-control" name="presenter_fee_offline" value="0" required>
+                                </div>
+                                <small class="text-muted">Presenter hanya bisa offline</small>
+                            </div>
+                            <div class="col-md-4 mb-3" id="audienceOnlinePrice">
+                                <label class="form-label">Audience (Online) *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">Rp</span>
+                                    <input type="number" class="form-control" name="audience_fee_online" value="0" required>
                                 </div>
                             </div>
-                            <div class="col-md-6" id="zoomField" style="display: none;">
-                                <div class="mb-3">
-                                    <label class="form-label">Link Zoom/Meeting</label>
-                                    <input type="url" class="form-control" name="zoom_link" maxlength="500">
-                                    <div class="form-text">Untuk audience online</div>
+                            <div class="col-md-4 mb-3" id="audienceOfflinePrice">
+                                <label class="form-label">Audience (Offline) *</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">Rp</span>
+                                    <input type="number" class="form-control" name="audience_fee_offline" value="0" required>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Enhanced Pricing Section -->
-                        <div class="pricing-section">
-                            <div class="pricing-header">
-                                <i class="fas fa-money-bill-wave text-success"></i>
-                                Pengaturan Harga Registrasi
+                        <!-- Additional Settings -->
+                        <h6 class="border-bottom pb-2 mb-3">Pengaturan Tambahan</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Maksimal Peserta</label>
+                                <input type="number" class="form-control" name="max_participants">
                             </div>
-                            
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>
-                                <strong>Penting:</strong> Presenter hanya bisa offline. Audience bisa memilih online/offline secara terpisah.
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="card border-primary">
-                                        <div class="card-header bg-primary text-white">
-                                            <h6 class="mb-0">
-                                                <i class="fas fa-microphone me-2"></i>
-                                                Presenter (Offline Only)
-                                            </h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="mb-3">
-                                                <label class="form-label">Harga Offline *</label>
-                                                <div class="input-group">
-                                                    <span class="input-group-text">Rp</span>
-                                                    <input type="number" class="form-control" name="presenter_fee_offline" required min="0" value="0">
-                                                </div>
-                                                <div class="form-text">Presenter wajib hadir secara fisik untuk presentasi</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="col-md-6">
-                                    <div class="card border-info">
-                                        <div class="card-header bg-info text-white">
-                                            <h6 class="mb-0">
-                                                <i class="fas fa-users me-2"></i>
-                                                Audience (Pilihan Terpisah)
-                                            </h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="mb-3">
-                                                <label class="form-label">Harga Online *</label>
-                                                <div class="input-group">
-                                                    <span class="input-group-text">Rp</span>
-                                                    <input type="number" class="form-control" name="audience_fee_online" required min="0" value="0">
-                                                </div>
-                                                <div class="form-text">Untuk audience yang ikut via online</div>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label class="form-label">Harga Offline *</label>
-                                                <div class="input-group">
-                                                    <span class="input-group-text">Rp</span>
-                                                    <input type="number" class="form-control" name="audience_fee_offline" required min="0" value="0">
-                                                </div>
-                                                <div class="form-text">Untuk audience yang hadir secara fisik</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Batas Pendaftaran</label>
+                                <input type="datetime-local" class="form-control" name="registration_deadline">
                             </div>
                         </div>
-                        
+
+                        <!-- Status toggles -->
                         <div class="row">
                             <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label class="form-label">Maksimal Peserta</label>
-                                    <input type="number" class="form-control" name="max_participants" min="1">
-                                    <div class="form-text">Total gabungan semua tipe. Kosongkan untuk unlimited</div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="is_active" checked>
+                                    <label class="form-check-label">Event Aktif</label>
                                 </div>
                             </div>
                             <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label class="form-label">Batas Pendaftaran</label>
-                                    <input type="datetime-local" class="form-control" name="registration_deadline">
-                                    <div class="form-text">Berlaku untuk semua tipe peserta</div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="registration_active" checked>
+                                    <label class="form-check-label">Pendaftaran Aktif</label>
                                 </div>
                             </div>
                             <div class="col-md-4">
-                                <div class="mb-3">
-                                    <label class="form-label">Batas Submit Abstrak</label>
-                                    <input type="datetime-local" class="form-control" name="abstract_deadline">
-                                    <div class="form-text">Hanya untuk presenter</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="registration_active" value="1" checked>
-                                    <label class="form-check-label">
-                                        Aktifkan Pendaftaran
-                                    </label>
-                                    <div class="form-text">Berlaku untuk semua tipe peserta</div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="abstract_submission_active" value="1" checked>
-                                    <label class="form-check-label">
-                                        Aktifkan Submit Abstrak
-                                    </label>
-                                    <div class="form-text">Hanya untuk presenter</div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="abstract_submission_active" checked>
+                                    <label class="form-check-label">Submit Abstrak Aktif</label>
                                 </div>
                             </div>
                         </div>
@@ -802,162 +549,353 @@
         </div>
     </div>
 
+    <!-- Edit Event Modal -->
+    <div class="modal fade" id="editEventModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-edit me-2"></i>
+                        Edit Event
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="editEventForm">
+                    <div class="modal-body" id="editFormContent">
+                        <!-- Content loaded dynamically -->
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Update Event
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.12/sweetalert2.min.js"></script>
-
     <script>
-        // Get CSRF token from meta tag
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        
-        $(document).ready(function() {
-            // Handle format change
-            $('#eventFormat').on('change', function() {
-                const format = $(this).val();
-                
-                // Reset visibility
-                $('#locationField, #zoomField').hide();
-                
-                if (format === 'online') {
-                    $('#zoomField').show();
-                } else if (format === 'offline') {
-                    $('#locationField').show();
-                } else if (format === 'both') {
-                    $('#locationField, #zoomField').show();
-                }
-                
-                // Update field requirements
-                updateFieldRequirements(format);
-            });
 
-            function updateFieldRequirements(format) {
-                // Remove all required attributes first
-                $('input[name="location"], input[name="zoom_link"]').removeAttr('required');
-                
-                if (format === 'offline') {
-                    $('input[name="location"]').attr('required', true);
-                } else if (format === 'both') {
-                    $('input[name="location"]').attr('required', true);
-                }
-            }
-
-            // Animate numbers on page load
-            const numbers = document.querySelectorAll('.stat-number');
-            numbers.forEach(number => {
-                const finalNumber = parseInt(number.textContent);
-                let currentNumber = 0;
-                const increment = finalNumber / 50;
-                
-                const timer = setInterval(() => {
-                    currentNumber += increment;
-                    if (currentNumber >= finalNumber) {
-                        number.textContent = finalNumber;
-                        clearInterval(timer);
-                    } else {
-                        number.textContent = Math.floor(currentNumber);
-                    }
-                }, 20);
-            });
+        document.addEventListener('DOMContentLoaded', function() {
+            setupFormHandlers();
+            handleFormatChange(); // Initial call
         });
 
-        function viewDetail(eventId) {
-            window.open('<?= base_url("admin/event/detail/") ?>' + eventId, '_blank');
+        function setupFormHandlers() {
+            // Add event form
+            document.getElementById('addEventForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                submitForm(this, '<?= base_url("admin/event/store") ?>');
+            });
+
+            // Edit event form
+            document.getElementById('editEventForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const eventId = this.dataset.eventId;
+                submitForm(this, `<?= base_url("admin/event/update") ?>/${eventId}`);
+            });
+
+            // Format change handler
+            document.getElementById('eventFormat').addEventListener('change', handleFormatChange);
+        }
+
+        function handleFormatChange() {
+            const format = document.getElementById('eventFormat').value;
+            const locationRow = document.getElementById('locationRow');
+            const zoomRow = document.getElementById('zoomRow');
+            const locationInput = document.getElementById('locationInput');
+            const zoomInput = document.getElementById('zoomInput');
+            const locationRequired = document.getElementById('locationRequired');
+            const zoomRequired = document.getElementById('zoomRequired');
+            const audienceOnlinePrice = document.getElementById('audienceOnlinePrice');
+            const audienceOfflinePrice = document.getElementById('audienceOfflinePrice');
+
+            // Reset all fields
+            locationRow.classList.remove('show');
+            zoomRow.classList.remove('show');
+            audienceOnlinePrice.classList.remove('disabled-field');
+            audienceOfflinePrice.classList.remove('disabled-field');
+            
+            locationInput.removeAttribute('required');
+            zoomInput.removeAttribute('required');
+            locationRequired.style.display = 'none';
+            zoomRequired.style.display = 'none';
+
+            // Show/hide fields based on format
+            switch(format) {
+                case 'offline':
+                    locationRow.classList.add('show');
+                    locationInput.setAttribute('required', 'required');
+                    locationRequired.style.display = 'inline';
+                    
+                    // Hide online price for audience
+                    audienceOnlinePrice.classList.add('disabled-field');
+                    audienceOnlinePrice.querySelector('input').value = 0;
+                    break;
+                    
+                case 'online':
+                    zoomRow.classList.add('show');
+                    zoomInput.setAttribute('required', 'required');
+                    zoomRequired.style.display = 'inline';
+                    
+                    // Hide offline price for audience
+                    audienceOfflinePrice.classList.add('disabled-field');
+                    audienceOfflinePrice.querySelector('input').value = 0;
+                    break;
+                    
+                case 'both':
+                    locationRow.classList.add('show');
+                    zoomRow.classList.add('show');
+                    locationInput.setAttribute('required', 'required');
+                    zoomInput.setAttribute('required', 'required');
+                    locationRequired.style.display = 'inline';
+                    zoomRequired.style.display = 'inline';
+                    break;
+            }
+        }
+
+        function submitForm(form, url) {
+            const formData = new FormData(form);
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            
+            // Set disabled price fields to 0
+            const format = formData.get('format');
+            if (format === 'online') {
+                formData.set('audience_fee_offline', '0');
+            } else if (format === 'offline') {
+                formData.set('audience_fee_online', '0');
+            }
+            
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Menyimpan...';
+            submitBtn.disabled = true;
+
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Berhasil!',
+                        text: data.message,
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    throw new Error(data.message || 'Terjadi kesalahan');
+                }
+            })
+            .catch(error => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error!',
+                    text: error.message
+                });
+            })
+            .finally(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
         }
 
         function editEvent(eventId) {
-            Swal.fire('Info', 'Fitur edit event akan segera tersedia', 'info');
+            fetch(`<?= base_url("admin/event/edit") ?>/${eventId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        populateEditForm(data.event);
+                        document.getElementById('editEventForm').dataset.eventId = eventId;
+                        new bootstrap.Modal(document.getElementById('editEventModal')).show();
+                    }
+                })
+                .catch(error => {
+                    Swal.fire('Error!', 'Gagal memuat data event', 'error');
+                });
         }
 
-        function toggleStatus(eventId, newStatus) {
-            const action = newStatus === 'true' ? 'aktifkan' : 'nonaktifkan';
+        function populateEditForm(event) {
+            const audienceOnlineDiv = event.format !== 'offline' ? `
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Audience (Online) *</label>
+                    <div class="input-group">
+                        <span class="input-group-text">Rp</span>
+                        <input type="number" class="form-control" name="audience_fee_online" value="${event.audience_fee_online}" required>
+                    </div>
+                </div>
+            ` : '';
+
+            const audienceOfflineDiv = event.format !== 'online' ? `
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Audience (Offline) *</label>
+                    <div class="input-group">
+                        <span class="input-group-text">Rp</span>
+                        <input type="number" class="form-control" name="audience_fee_offline" value="${event.audience_fee_offline}" required>
+                    </div>
+                </div>
+            ` : '';
+
+            const locationDiv = (event.format === 'offline' || event.format === 'both') ? `
+                <div class="mb-3">
+                    <label class="form-label">Lokasi ${event.format === 'offline' ? '<span class="text-danger">*</span>' : ''}</label>
+                    <input type="text" class="form-control" name="location" value="${event.location || ''}" ${event.format === 'offline' ? 'required' : ''}>
+                </div>
+            ` : '';
+
+            const zoomDiv = (event.format === 'online' || event.format === 'both') ? `
+                <div class="mb-3">
+                    <label class="form-label">Link Zoom ${event.format === 'online' ? '<span class="text-danger">*</span>' : ''}</label>
+                    <input type="url" class="form-control" name="zoom_link" value="${event.zoom_link || ''}" ${event.format === 'online' ? 'required' : ''}>
+                </div>
+            ` : '';
+
+            const formContent = `
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label">Judul Event *</label>
+                        <input type="text" class="form-control" name="title" value="${event.title}" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Format *</label>
+                        <select class="form-select" name="format" required>
+                            <option value="both" ${event.format === 'both' ? 'selected' : ''}>Hybrid</option>
+                            <option value="online" ${event.format === 'online' ? 'selected' : ''}>Online</option>
+                            <option value="offline" ${event.format === 'offline' ? 'selected' : ''}>Offline</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Deskripsi</label>
+                    <textarea class="form-control" name="description" rows="3">${event.description || ''}</textarea>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Tanggal Event *</label>
+                        <input type="date" class="form-control" name="event_date" value="${event.event_date}" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Waktu Event *</label>
+                        <input type="time" class="form-control" name="event_time" value="${event.event_time}" required>
+                    </div>
+                </div>
+                ${locationDiv}
+                ${zoomDiv}
+                <h6 class="border-bottom pb-2 mb-3">Struktur Harga</h6>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Presenter (Offline) *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">Rp</span>
+                            <input type="number" class="form-control" name="presenter_fee_offline" value="${event.presenter_fee_offline}" required>
+                        </div>
+                        <small class="text-muted">Presenter hanya bisa offline</small>
+                    </div>
+                    ${audienceOnlineDiv}
+                    ${audienceOfflineDiv}
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Maksimal Peserta</label>
+                        <input type="number" class="form-control" name="max_participants" value="${event.max_participants || ''}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Batas Pendaftaran</label>
+                        <input type="datetime-local" class="form-control" name="registration_deadline" value="${event.registration_deadline ? event.registration_deadline.slice(0, 16) : ''}">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="is_active" ${event.is_active ? 'checked' : ''}>
+                            <label class="form-check-label">Event Aktif</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="registration_active" ${event.registration_active ? 'checked' : ''}>
+                            <label class="form-check-label">Pendaftaran Aktif</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="abstract_submission_active" ${event.abstract_submission_active ? 'checked' : ''}>
+                            <label class="form-check-label">Submit Abstrak Aktif</label>
+                        </div>
+                    </div>
+                </div>
+                <!-- Hidden inputs for disabled price fields -->
+                ${event.format === 'online' ? '<input type="hidden" name="audience_fee_offline" value="0">' : ''}
+                ${event.format === 'offline' ? '<input type="hidden" name="audience_fee_online" value="0">' : ''}
+            `;
             
-            Swal.fire({
-                title: `${action.charAt(0).toUpperCase() + action.slice(1)} Event?`,
-                text: `Apakah Anda yakin ingin ${action} event ini?`,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: newStatus === 'true' ? '#10b981' : '#f59e0b',
-                cancelButtonColor: '#6b7280',
-                confirmButtonText: `Ya, ${action.charAt(0).toUpperCase() + action.slice(1)}!`,
-                cancelButtonText: 'Batal'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Use POST method with form submission
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '<?= base_url("admin/event/toggle-status/") ?>' + eventId;
-                    
-                    // Add CSRF token
-                    const csrfInput = document.createElement('input');
-                    csrfInput.type = 'hidden';
-                    csrfInput.name = '<?= csrf_token() ?>';
-                    csrfInput.value = csrfToken;
-                    form.appendChild(csrfInput);
-                    
-                    document.body.appendChild(form);
-                    form.submit();
-                }
-            });
+            document.getElementById('editFormContent').innerHTML = formContent;
+        }
+
+        function toggleStatus(eventId) {
+            makeRequest(`<?= base_url("admin/event/toggle-status") ?>/${eventId}`, 'toggle status event');
+        }
+
+        function toggleRegistration(eventId) {
+            makeRequest(`<?= base_url("admin/event/toggle-registration") ?>/${eventId}`, 'toggle pendaftaran');
         }
 
         function deleteEvent(eventId) {
             Swal.fire({
                 title: 'Hapus Event?',
-                text: 'Apakah Anda yakin ingin menghapus event ini? Event yang memiliki data registrasi atau abstrak tidak dapat dihapus.',
+                text: 'Event yang dihapus tidak dapat dikembalikan!',
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#6b7280',
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
                 confirmButtonText: 'Ya, Hapus!',
-                cancelButtonText: 'Batal',
-                input: 'checkbox',
-                inputPlaceholder: 'Saya yakin ingin menghapus event ini',
-                inputValidator: (result) => {
-                    return !result && 'Anda harus mencentang checkbox untuk konfirmasi'
-                }
+                cancelButtonText: 'Batal'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    // Use POST method with form submission
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '<?= base_url("admin/event/delete/") ?>' + eventId;
-                    
-                    // Add CSRF token
-                    const csrfInput = document.createElement('input');
-                    csrfInput.type = 'hidden';
-                    csrfInput.name = '<?= csrf_token() ?>';
-                    csrfInput.value = csrfToken;
-                    form.appendChild(csrfInput);
-                    
-                    document.body.appendChild(form);
-                    form.submit();
+                    makeRequest(`<?= base_url("admin/event/delete") ?>/${eventId}`, 'hapus event');
                 }
             });
         }
 
-        function exportData() {
-            window.open('<?= base_url("admin/event/export") ?>', '_blank');
+        function makeRequest(url, action) {
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Berhasil!',
+                        text: data.message,
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    throw new Error(data.message);
+                }
+            })
+            .catch(error => {
+                Swal.fire('Error!', error.message, 'error');
+            });
         }
-
-        // Show alerts for flash messages
-        <?php if (session('success')): ?>
-            Swal.fire({
-                icon: 'success',
-                title: 'Berhasil!',
-                text: '<?= addslashes(session('success')) ?>',
-                timer: 3000,
-                showConfirmButton: false
-            });
-        <?php endif; ?>
-
-        <?php if (session('error')): ?>
-            Swal.fire({
-                icon: 'error',
-                title: 'Error!',
-                text: '<?= addslashes(session('error')) ?>',
-            });
-        <?php endif; ?>
     </script>
 </body>
 </html>

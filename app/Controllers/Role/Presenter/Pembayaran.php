@@ -268,7 +268,7 @@ class Pembayaran extends BaseController
 
         if ($file->isValid() && !$file->hasMoved()) {
             // Create upload directory if not exists
-            $uploadPath = WRITEPATH . 'uploads/pembayaran/';
+            $uploadPath = FCPATH . 'uploads/pembayaran/';
             if (!is_dir($uploadPath)) {
                 mkdir($uploadPath, 0755, true);
             }
@@ -404,7 +404,7 @@ class Pembayaran extends BaseController
             throw new \CodeIgniter\Exceptions\PageNotFoundException('Payment not found.');
         }
 
-        $filePath = WRITEPATH . 'uploads/pembayaran/' . $payment['bukti_bayar'];
+        $filePath = FCPATH . 'uploads/pembayaran/' . $payment['bukti_bayar'];
 
         if (!file_exists($filePath)) {
             throw new \CodeIgniter\Exceptions\PageNotFoundException('Payment proof file not found.');
@@ -495,7 +495,7 @@ class Pembayaran extends BaseController
 
         try {
             // Delete payment file
-            $filePath = WRITEPATH . 'uploads/pembayaran/' . $payment['bukti_bayar'];
+            $filePath = FCPATH . 'uploads/pembayaran/' . $payment['bukti_bayar'];
             if (file_exists($filePath)) {
                 unlink($filePath);
             }

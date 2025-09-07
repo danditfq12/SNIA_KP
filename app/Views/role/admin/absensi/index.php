@@ -263,26 +263,38 @@
                     </div>
                     
                     <nav class="nav flex-column px-3">
-                        <a class="nav-link" href="<?= base_url('admin/dashboard') ?>">
+                        <a class="nav-link" href="<?= site_url('admin/dashboard') ?>">
                             <i class="fas fa-tachometer-alt me-2"></i> Dashboard
                         </a>
-                        <a class="nav-link" href="<?= base_url('admin/users') ?>">
+                        <a class="nav-link" href="<?= site_url('admin/users') ?>">
                             <i class="fas fa-users me-2"></i> Manajemen User
                         </a>
-                        <a class="nav-link" href="<?= base_url('admin/event') ?>">
+                        <a class="nav-link" href="<?= site_url('admin/abstrak') ?>">
+                            <i class="fas fa-file-alt me-2"></i> Manajemen Abstrak
+                        </a>
+                        <a class="nav-link" href="<?= site_url('admin/reviewer') ?>">
+                            <i class="fas fa-user-check me-2"></i> Kelola Reviewer
+                        </a>
+                        <a class="nav-link" href="<?= site_url('admin/event') ?>">
                             <i class="fas fa-calendar-alt me-2"></i> Kelola Event
                         </a>
-                        <a class="nav-link active" href="<?= base_url('admin/absensi') ?>">
-                            <i class="fas fa-qrcode me-2"></i> QR Attendance
-                        </a>
-                        <a class="nav-link" href="<?= base_url('admin/pembayaran') ?>">
+                        <a class="nav-link" href="<?= site_url('admin/pembayaran') ?>">
                             <i class="fas fa-credit-card me-2"></i> Verifikasi Pembayaran
                         </a>
-                        <a class="nav-link" href="<?= base_url('admin/laporan') ?>">
+                        <a class="nav-link active" href="<?= site_url('admin/absensi') ?>">
+                            <i class="fas fa-qrcode me-2"></i> Kelola Absensi
+                        </a>
+                        <a class="nav-link" href="<?= site_url('admin/voucher') ?>">
+                            <i class="fas fa-ticket-alt me-2"></i> Kelola Voucher
+                        </a>
+                        <a class="nav-link" href="<?= site_url('admin/dokumen') ?>">
+                            <i class="fas fa-folder-open me-2"></i> Dokumen
+                        </a>
+                        <a class="nav-link" href="<?= site_url('admin/laporan') ?>">
                             <i class="fas fa-chart-line me-2"></i> Laporan
                         </a>
                         <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
-                        <a class="nav-link text-warning" href="<?= base_url('auth/logout') ?>">
+                        <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
                             <i class="fas fa-sign-out-alt me-2"></i> Logout
                         </a>
                     </nav>

@@ -1,12 +1,9 @@
-<?php
-// app/Views/role/presenter/event/index.php
-?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Available Events - SNIA Presenter</title>
+    <title>Event - SNIA Presenter</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -17,25 +14,19 @@
             --warning-color: #f59e0b;
             --danger-color: #ef4444;
             --info-color: #06b6d4;
-            --dark-color: #1e293b;
-            --light-color: #f8fafc;
+            --purple-color: #8b5cf6;
         }
 
         body {
-            background: linear-gradient(135deg, var(--light-color) 0%, #e2e8f0 100%);
-            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
         }
 
         .sidebar {
-            background: linear-gradient(180deg, var(--primary-color) 0%, #1e40af 100%);
+            background: linear-gradient(180deg, var(--purple-color) 0%, #7c3aed 100%);
             min-height: 100vh;
             box-shadow: 4px 0 20px rgba(0,0,0,0.1);
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 250px;
-            z-index: 1000;
         }
 
         .sidebar .nav-link {
@@ -58,175 +49,177 @@
         }
 
         .main-content {
-            margin-left: 250px;
-            padding: 20px;
-            min-height: 100vh;
-        }
-
-        .content-card {
             background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-            border: 1px solid rgba(255,255,255,0.2);
-            overflow: hidden;
-            margin-bottom: 30px;
-        }
-
-        .content-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--info-color) 100%);
-            color: white;
-            padding: 24px;
+            border-radius: 20px 0 0 0;
+            min-height: 100vh;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.05);
         }
 
         .event-card {
             background: white;
             border-radius: 16px;
+            padding: 24px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            border: 1px solid rgba(255,255,255,0.2);
+            margin-bottom: 24px;
             transition: all 0.3s ease;
-            border: 1px solid #e2e8f0;
+            position: relative;
             overflow: hidden;
-            margin-bottom: 20px;
         }
+
+        .event-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+
+        .event-card.available::before { background: var(--success-color); }
+        .event-card.participating::before { background: var(--primary-color); }
+        .event-card.completed::before { background: var(--info-color); }
+        .event-card.blocked::before { background: var(--secondary-color); }
 
         .event-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.12);
-        }
-
-        .event-header {
-            position: relative;
-            padding: 25px;
-            background: linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%);
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .event-body {
-            padding: 25px;
-        }
-
-        .event-footer {
-            padding: 20px 25px;
-            background: #f8fafc;
-            border-top: 1px solid #e2e8f0;
-        }
-
-        .event-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--dark-color);
-            margin-bottom: 12px;
-        }
-
-        .event-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 16px;
-            margin-bottom: 16px;
-            color: var(--secondary-color);
-            font-size: 0.9rem;
-        }
-
-        .event-meta-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .price-display {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--success-color);
-            background: rgba(16, 185, 129, 0.1);
-            padding: 12px 20px;
-            border-radius: 12px;
-            text-align: center;
-            margin-bottom: 16px;
-        }
-
-        .offline-badge {
-            background: rgba(245, 158, 11, 0.1);
-            color: #d97706;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            display: inline-block;
-            margin-top: 8px;
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
         }
 
         .status-badge {
+            position: absolute;
+            top: 16px;
+            right: 16px;
             padding: 8px 16px;
             border-radius: 20px;
-            font-size: 0.8rem;
+            font-size: 12px;
             font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
+            color: white;
         }
 
-        .status-not-registered {
-            background: rgba(107, 114, 128, 0.1);
-            color: #6b7280;
+        .status-badge.need_abstract { background: var(--warning-color); }
+        .status-badge.abstract_pending { background: var(--info-color); }
+        .status-badge.abstract_revision { background: var(--warning-color); }
+        .status-badge.abstract_rejected { background: var(--danger-color); }
+        .status-badge.need_payment { background: var(--success-color); }
+        .status-badge.payment_pending { background: var(--info-color); }
+        .status-badge.payment_rejected { background: var(--danger-color); }
+        .status-badge.completed { background: var(--success-color); }
+
+        .header-section {
+            background: linear-gradient(135deg, var(--purple-color) 0%, #7c3aed 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 30px;
         }
 
-        .status-pending {
-            background: rgba(251, 191, 36, 0.1);
-            color: #d97706;
+        .filter-tabs {
+            background: white;
+            border-radius: 12px;
+            padding: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
         }
 
-        .status-verified {
-            background: rgba(16, 185, 129, 0.1);
-            color: #059669;
-        }
-
-        .status-rejected {
-            background: rgba(239, 68, 68, 0.1);
-            color: #dc2626;
-        }
-
-        .btn-custom {
-            border-radius: 8px;
-            padding: 12px 20px;
-            font-weight: 600;
-            transition: all 0.3s ease;
+        .filter-tab {
+            background: transparent;
             border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            color: var(--secondary-color);
+            transition: all 0.3s ease;
+        }
+
+        .filter-tab.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .filter-tab:hover:not(.active) {
+            background: #f1f5f9;
+        }
+
+        .workflow-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .workflow-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #e2e8f0;
+        }
+
+        .workflow-dot.completed { background: var(--success-color); }
+        .workflow-dot.current { background: var(--primary-color); }
+        .workflow-dot.blocked { background: var(--danger-color); }
+
+        .workflow-line {
+            flex: 1;
+            height: 2px;
+            background: #e2e8f0;
+        }
+
+        .workflow-line.completed { background: var(--success-color); }
+
+        .event-meta {
+            display: flex;
+            gap: 20px;
+            margin: 16px 0;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--secondary-color);
+            font-size: 14px;
+        }
+
+        .action-button {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--info-color) 100%);
+            border: none;
+            border-radius: 12px;
+            padding: 12px 24px;
+            color: white;
+            font-weight: 600;
             text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
         }
 
-        .btn-custom:hover {
+        .action-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        .btn-primary-custom {
-            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.3);
             color: white;
         }
 
-        .btn-success-custom {
-            background: linear-gradient(135deg, var(--success-color), #059669);
-            color: white;
+        .action-button.warning {
+            background: linear-gradient(135deg, var(--warning-color) 0%, #d97706 100%);
         }
 
-        .btn-warning-custom {
-            background: linear-gradient(135deg, var(--warning-color), #d97706);
-            color: white;
+        .action-button.danger {
+            background: linear-gradient(135deg, var(--danger-color) 0%, #dc2626 100%);
         }
 
-        .deadline-warning {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-top: 12px;
+        .action-button.success {
+            background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
         }
 
-        .deadline-info {
-            background: rgba(6, 182, 212, 0.1);
-            border: 1px solid rgba(6, 182, 212, 0.3);
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-top: 12px;
+        .action-button.secondary {
+            background: linear-gradient(135deg, var(--secondary-color) 0%, #475569 100%);
+        }
+
+        .action-button:disabled {
+            background: #e2e8f0;
+            color: #94a3b8;
+            cursor: not-allowed;
         }
 
         .empty-state {
@@ -235,421 +228,319 @@
             color: var(--secondary-color);
         }
 
-        .empty-state i {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            opacity: 0.5;
+        .deadline-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        .filter-card {
+        .deadline-critical {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .stats-bar {
             background: white;
             border-radius: 12px;
             padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            margin-bottom: 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
         }
 
-        .stats-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
+        .stat-item {
+            text-align: center;
         }
 
-        .stats-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary-color), var(--info-color));
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 4px;
         }
 
-        .stats-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        .stat-label {
+            color: var(--secondary-color);
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="p-4 text-center">
-            <h4 class="text-white mb-0">
-                <i class="fas fa-microphone-alt me-2"></i>
-                SNIA Presenter
-            </h4>
-            <small class="text-white-50">Event Management</small>
-        </div>
-        
-        <nav class="nav flex-column px-3">
-            <a class="nav-link" href="<?= site_url('presenter/dashboard') ?>">
-                <i class="fas fa-tachometer-alt me-2"></i> Dashboard
-            </a>
-            <a class="nav-link active" href="<?= site_url('presenter/events') ?>">
-                <i class="fas fa-calendar me-2"></i> Events
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/abstrak') ?>">
-                <i class="fas fa-file-alt me-2"></i> My Abstracts
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/pembayaran') ?>">
-                <i class="fas fa-credit-card me-2"></i> Payments
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/absensi') ?>">
-                <i class="fas fa-qrcode me-2"></i> Attendance
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/dokumen/loa') ?>">
-                <i class="fas fa-file-contract me-2"></i> LOA
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/dokumen/sertifikat') ?>">
-                <i class="fas fa-certificate me-2"></i> Certificate
-            </a>
-            <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
-            <a class="nav-link" href="<?= site_url('profile') ?>">
-                <i class="fas fa-user me-2"></i> Profile
-            </a>
-            <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
-                <i class="fas fa-sign-out-alt me-2"></i> Logout
-            </a>
-        </nav>
-    </div>
-
-    <!-- Main Content -->
-    <div class="main-content">
-        <!-- Header -->
-        <div class="content-card">
-            <div class="content-header">
-                <div class="row align-items-center">
-                    <div class="col">
-                        <h2 class="mb-2">
-                            <i class="fas fa-calendar-plus me-3"></i>Available Events
-                        </h2>
-                        <p class="mb-0 opacity-75">Register for events and manage your presentations</p>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 px-0">
+                <div class="sidebar">
+                    <div class="p-4 text-center">
+                        <h4 class="text-white mb-0">
+                            <i class="fas fa-chalkboard-teacher me-2"></i>
+                            SNIA Presenter
+                        </h4>
+                        <small class="text-white-50">Dashboard</small>
                     </div>
-                    <div class="col-auto">
-                        <button class="btn btn-outline-light btn-custom" onclick="location.reload()">
-                            <i class="fas fa-sync-alt me-2"></i>Refresh
+                    
+                    <nav class="nav flex-column px-3">
+                        <a class="nav-link" href="<?= site_url('presenter/dashboard') ?>">
+                            <i class="fas fa-tachometer-alt me-2"></i> Dashboard
+                        </a>
+                        <a class="nav-link active" href="<?= site_url('presenter/events') ?>">
+                            <i class="fas fa-calendar-alt me-2"></i> Event
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/abstrak') ?>">
+                            <i class="fas fa-file-alt me-2"></i> Abstrak
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/pembayaran') ?>">
+                            <i class="fas fa-credit-card me-2"></i> Pembayaran
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/absensi') ?>">
+                            <i class="fas fa-qrcode me-2"></i> Absensi
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/dokumen/loa') ?>">
+                            <i class="fas fa-certificate me-2"></i> Dokumen
+                        </a>
+                        <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
+                        <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
+                            <i class="fas fa-sign-out-alt me-2"></i> Logout
+                        </a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10">
+                <div class="main-content p-4">
+                    <!-- Header -->
+                    <div class="header-section">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h1 class="mb-2">
+                                    <i class="fas fa-calendar-alt me-3"></i>Event Tersedia
+                                </h1>
+                                <p class="mb-0 opacity-75">
+                                    Kelola partisipasi Anda dalam berbagai event SNIA.
+                                </p>
+                            </div>
+                            <div class="col-auto">
+                                <div class="text-end">
+                                    <small class="opacity-75 d-block">Total Event</small>
+                                    <strong class="h4"><?= $total_events ?></strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Statistics Bar -->
+                    <div class="stats-bar">
+                        <div class="row">
+                            <div class="col-3">
+                                <div class="stat-item">
+                                    <div class="stat-number text-success"><?= $available_count ?></div>
+                                    <div class="stat-label">Tersedia</div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="stat-item">
+                                    <div class="stat-number text-primary"><?= $participating_count ?></div>
+                                    <div class="stat-label">Sedang Proses</div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="stat-item">
+                                    <div class="stat-number text-info"><?= $completed_count ?></div>
+                                    <div class="stat-label">Selesai</div>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="stat-item">
+                                    <div class="stat-number text-secondary"><?= $total_events - $available_count - $participating_count - $completed_count ?></div>
+                                    <div class="stat-label">Tidak Dapat</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filter Tabs -->
+                    <div class="filter-tabs">
+                        <button class="filter-tab active" data-filter="all">
+                            Semua Event (<?= $total_events ?>)
+                        </button>
+                        <button class="filter-tab" data-filter="available">
+                            Tersedia (<?= $available_count ?>)
+                        </button>
+                        <button class="filter-tab" data-filter="participating">
+                            Sedang Proses (<?= $participating_count ?>)
+                        </button>
+                        <button class="filter-tab" data-filter="completed">
+                            Selesai (<?= $completed_count ?>)
                         </button>
                     </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Quick Stats -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-3">
-                <div class="stats-card">
-                    <div class="d-flex align-items-center">
-                        <div class="me-3">
-                            <i class="fas fa-calendar-alt fa-2x text-primary"></i>
-                        </div>
-                        <div>
-                            <h4 class="mb-0"><?= count($events) ?></h4>
-                            <small class="text-muted">Available Events</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-3">
-                <div class="stats-card">
-                    <div class="d-flex align-items-center">
-                        <div class="me-3">
-                            <i class="fas fa-check-circle fa-2x text-success"></i>
-                        </div>
-                        <div>
-                            <h4 class="mb-0">
-                                <?= count(array_filter($events, fn($e) => isset($e['user_registration']) && $e['user_registration']['status'] === 'verified')) ?>
-                            </h4>
-                            <small class="text-muted">Registered</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-3">
-                <div class="stats-card">
-                    <div class="d-flex align-items-center">
-                        <div class="me-3">
-                            <i class="fas fa-clock fa-2x text-warning"></i>
-                        </div>
-                        <div>
-                            <h4 class="mb-0">
-                                <?= count(array_filter($events, fn($e) => isset($e['user_registration']) && $e['user_registration']['status'] === 'pending')) ?>
-                            </h4>
-                            <small class="text-muted">Pending</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-3">
-                <div class="stats-card">
-                    <div class="d-flex align-items-center">
-                        <div class="me-3">
-                            <i class="fas fa-map-marker-alt fa-2x text-info"></i>
-                        </div>
-                        <div>
-                            <h4 class="mb-0"><?= count($events) ?></h4>
-                            <small class="text-muted">Offline Only</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Events List -->
-        <?php if (!empty($events)): ?>
-            <div class="row">
-                <?php foreach ($events as $event): ?>
-                    <div class="col-lg-6 mb-4">
-                        <div class="event-card">
-                            <!-- Event Header -->
-                            <div class="event-header">
-                                <h3 class="event-title"><?= esc($event['title']) ?></h3>
-                                
-                                <div class="event-meta">
-                                    <div class="event-meta-item">
-                                        <i class="fas fa-calendar text-primary"></i>
-                                        <span><?= date('d F Y', strtotime($event['event_date'])) ?></span>
-                                    </div>
-                                    <div class="event-meta-item">
-                                        <i class="fas fa-clock text-info"></i>
-                                        <span><?= date('H:i', strtotime($event['event_time'])) ?></span>
-                                    </div>
-                                    <?php if ($event['location']): ?>
-                                        <div class="event-meta-item">
-                                            <i class="fas fa-map-marker-alt text-warning"></i>
-                                            <span><?= esc($event['location']) ?></span>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-
-                                <!-- Registration Status -->
-                                <?php
-                                $registrationStatus = 'not_registered';
-                                $userRegistration = null;
-                                
-                                if (!empty($event['user_registration'])) {
-                                    $userRegistration = $event['user_registration'];
-                                    $registrationStatus = $userRegistration['status'];
-                                }
-                                ?>
-                                
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <?php if ($registrationStatus === 'not_registered'): ?>
-                                        <span class="status-badge status-not-registered">
-                                            <i class="fas fa-user-plus"></i>Not Registered
-                                        </span>
-                                    <?php elseif ($registrationStatus === 'pending'): ?>
-                                        <span class="status-badge status-pending">
-                                            <i class="fas fa-clock"></i>Pending Verification
-                                        </span>
-                                    <?php elseif ($registrationStatus === 'verified'): ?>
-                                        <span class="status-badge status-verified">
-                                            <i class="fas fa-check-circle"></i>Registered
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="status-badge status-rejected">
-                                            <i class="fas fa-times-circle"></i>Rejected
-                                        </span>
-                                    <?php endif; ?>
+                    <!-- Events List -->
+                    <div class="events-container">
+                        <?php if (!empty($events)): ?>
+                            <?php foreach ($events as $event): ?>
+                                <div class="event-card <?= $event['is_completed'] ? 'completed' : ($event['can_participate'] ? 'available' : ($event['has_abstract'] || $event['has_payment'] ? 'participating' : 'blocked')) ?>" 
+                                     data-filter-type="<?= $event['is_completed'] ? 'completed' : ($event['can_participate'] ? 'available' : ($event['has_abstract'] || $event['has_payment'] ? 'participating' : 'blocked')) ?>">
                                     
-                                    <span class="offline-badge">
-                                        <i class="fas fa-map-marker-alt me-1"></i>Offline Only
-                                    </span>
-                                </div>
-                            </div>
+                                    <!-- Status Badge -->
+                                    <div class="status-badge <?= $event['workflow_status'] ?>">
+                                        <?php
+                                        $statusText = [
+                                            'need_abstract' => 'Perlu Abstrak',
+                                            'abstract_pending' => 'Review Abstrak',
+                                            'abstract_revision' => 'Perlu Revisi',
+                                            'abstract_rejected' => 'Abstrak Ditolak',
+                                            'need_payment' => 'Perlu Bayar',
+                                            'payment_pending' => 'Tunggu Verifikasi',
+                                            'payment_rejected' => 'Bayar Ditolak',
+                                            'completed' => 'Selesai'
+                                        ];
+                                        echo $statusText[$event['workflow_status']] ?? 'Unknown';
+                                        ?>
+                                    </div>
 
-                            <!-- Event Body -->
-                            <div class="event-body">
-                                <?php if ($event['description']): ?>
-                                    <p class="text-muted mb-3"><?= esc(substr($event['description'], 0, 150)) ?>...</p>
-                                <?php endif; ?>
-
-                                <!-- Pricing -->
-                                <div class="price-display">
-                                    Rp <?= number_format($event['presenter_fee_offline'] ?? 0, 0, ',', '.') ?>
-                                    <div class="small text-muted mt-1">Presenter Fee (Offline)</div>
-                                </div>
-
-                                <!-- Event Stats -->
-                                <?php if (isset($event['stats'])): ?>
-                                    <div class="row text-center">
-                                        <div class="col-4">
-                                            <div class="small text-muted">Registrations</div>
-                                            <div class="fw-bold text-primary"><?= $event['stats']['total_registrations'] ?? 0 ?></div>
-                                        </div>
-                                        <div class="col-4">
-                                            <div class="small text-muted">Abstracts</div>
-                                            <div class="fw-bold text-success"><?= $event['stats']['total_abstracts'] ?? 0 ?></div>
-                                        </div>
-                                        <div class="col-4">
-                                            <div class="small text-muted">Revenue</div>
-                                            <div class="fw-bold text-info">
-                                                <?= 'Rp ' . number_format($event['stats']['total_revenue'] ?? 0, 0, ',', '.') ?>
+                                    <!-- Event Header -->
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <div>
+                                            <h5 class="mb-2">
+                                                <a href="<?= site_url('presenter/events/detail/' . $event['id']) ?>" 
+                                                   class="text-decoration-none text-dark">
+                                                    <?= esc($event['title']) ?>
+                                                </a>
+                                            </h5>
+                                            <div class="event-meta">
+                                                <div class="meta-item">
+                                                    <i class="fas fa-calendar"></i>
+                                                    <span><?= $event['formatted_date'] ?></span>
+                                                </div>
+                                                <div class="meta-item">
+                                                    <i class="fas fa-clock"></i>
+                                                    <span><?= $event['formatted_time'] ?></span>
+                                                </div>
+                                                <div class="meta-item">
+                                                    <i class="fas fa-map-marker-alt"></i>
+                                                    <span><?= $event['format'] === 'offline' ? esc($event['location']) : ucfirst($event['format']) ?></span>
+                                                </div>
+                                                <div class="meta-item">
+                                                    <i class="fas fa-money-bill-wave"></i>
+                                                    <span>Rp <?= number_format($event['presenter_price'], 0, ',', '.') ?></span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                <?php endif; ?>
 
-                                <!-- Deadline Information -->
-                                <?php if ($event['registration_deadline']): ?>
-                                    <?php
-                                    $deadlineTime = strtotime($event['registration_deadline']);
-                                    $daysLeft = ceil(($deadlineTime - time()) / (60 * 60 * 24));
-                                    ?>
-                                    
-                                    <?php if ($daysLeft <= 3 && $daysLeft > 0): ?>
-                                        <div class="deadline-warning">
-                                            <small class="text-danger">
-                                                <i class="fas fa-exclamation-triangle me-1"></i>
-                                                <strong>Registration closes in <?= $daysLeft ?> day(s)!</strong><br>
-                                                Deadline: <?= date('d M Y, H:i', strtotime($event['registration_deadline'])) ?>
-                                            </small>
-                                        </div>
-                                    <?php elseif ($daysLeft > 0): ?>
-                                        <div class="deadline-info">
-                                            <small class="text-info">
-                                                <i class="fas fa-info-circle me-1"></i>
-                                                Registration deadline: <?= date('d M Y, H:i', strtotime($event['registration_deadline'])) ?>
-                                            </small>
+                                    <!-- Event Description -->
+                                    <?php if (!empty($event['description'])): ?>
+                                        <p class="text-muted mb-3">
+                                            <?= esc(substr($event['description'], 0, 150)) ?><?= strlen($event['description']) > 150 ? '...' : '' ?>
+                                        </p>
+                                    <?php endif; ?>
+
+                                    <!-- Workflow Progress -->
+                                    <div class="workflow-status">
+                                        <?php
+                                        $steps = ['need_abstract', 'abstract_pending', 'need_payment', 'payment_pending', 'completed'];
+                                        $currentStepIndex = array_search($event['workflow_status'], $steps);
+                                        if ($currentStepIndex === false) $currentStepIndex = 0;
+                                        
+                                        foreach ($steps as $index => $step):
+                                            $isCompleted = $index < $currentStepIndex || $event['workflow_status'] === 'completed';
+                                            $isCurrent = $index === $currentStepIndex && $event['workflow_status'] !== 'completed';
+                                            $isBlocked = in_array($event['workflow_status'], ['abstract_rejected', 'payment_rejected']) && $index === $currentStepIndex;
+                                        ?>
+                                            <div class="workflow-dot <?= $isCompleted ? 'completed' : ($isCurrent ? 'current' : ($isBlocked ? 'blocked' : '')) ?>"></div>
+                                            <?php if ($index < count($steps) - 1): ?>
+                                                <div class="workflow-line <?= $isCompleted ? 'completed' : '' ?>"></div>
+                                            <?php endif; ?>
+                                        <?php endforeach; ?>
+                                    </div>
+
+                                    <!-- Deadline Warnings -->
+                                    <?php if ($event['days_until'] <= 7 && $event['days_until'] > 0): ?>
+                                        <div class="deadline-warning <?= $event['days_until'] <= 3 ? 'deadline-critical' : '' ?>">
+                                            <i class="fas fa-exclamation-triangle text-warning"></i>
+                                            <span>
+                                                <strong>Event dimulai dalam <?= $event['days_until'] ?> hari!</strong>
+                                                <?php if (!$event['abstract_submission_open']): ?>
+                                                    - Submission abstrak sudah ditutup.
+                                                <?php elseif (!$event['registration_open']): ?>
+                                                    - Registrasi sudah ditutup.
+                                                <?php endif; ?>
+                                            </span>
                                         </div>
                                     <?php endif; ?>
-                                <?php endif; ?>
-                            </div>
 
-                            <!-- Event Footer -->
-                            <div class="event-footer">
-                                <div class="row align-items-center">
-                                    <div class="col">
-                                        <!-- Payment Information -->
-                                        <?php if ($userRegistration): ?>
-                                            <div class="small text-muted">
-                                                Payment: Rp <?= number_format($userRegistration['jumlah'], 0, ',', '.') ?>
-                                                <br>
-                                                Submitted: <?= date('d M Y', strtotime($userRegistration['tanggal_bayar'])) ?>
-                                            </div>
+                                    <!-- Actions -->
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <a href="<?= site_url('presenter/events/detail/' . $event['id']) ?>" 
+                                           class="btn btn-outline-primary">
+                                            <i class="fas fa-eye me-2"></i>Detail
+                                        </a>
+
+                                        <?php if ($event['can_participate']): ?>
+                                            <?php
+                                            $actionClass = 'primary';
+                                            $actionText = 'Lanjutkan';
+                                            $actionIcon = 'fas fa-arrow-right';
+                                            $actionUrl = site_url('presenter/events/detail/' . $event['id']);
+
+                                            switch ($event['workflow_status']) {
+                                                case 'need_abstract':
+                                                    $actionText = 'Upload Abstrak';
+                                                    $actionIcon = 'fas fa-upload';
+                                                    $actionUrl = site_url('presenter/abstrak?event_id=' . $event['id']);
+                                                    break;
+                                                case 'abstract_revision':
+                                                    $actionText = 'Revisi Abstrak';
+                                                    $actionIcon = 'fas fa-edit';
+                                                    $actionClass = 'warning';
+                                                    $actionUrl = site_url('presenter/abstrak/detail/' . $event['abstract']['id_abstrak']);
+                                                    break;
+                                                case 'abstract_rejected':
+                                                    $actionText = 'Submit Ulang';
+                                                    $actionIcon = 'fas fa-redo';
+                                                    $actionClass = 'danger';
+                                                    $actionUrl = site_url('presenter/abstrak?event_id=' . $event['id']);
+                                                    break;
+                                                case 'need_payment':
+                                                    $actionText = 'Bayar Sekarang';
+                                                    $actionIcon = 'fas fa-credit-card';
+                                                    $actionClass = 'success';
+                                                    $actionUrl = site_url('presenter/pembayaran/create/' . $event['id']);
+                                                    break;
+                                                case 'payment_rejected':
+                                                    $actionText = 'Bayar Ulang';
+                                                    $actionIcon = 'fas fa-redo';
+                                                    $actionClass = 'danger';
+                                                    $actionUrl = site_url('presenter/pembayaran/create/' . $event['id']);
+                                                    break;
+                                            }
+                                            ?>
+                                            <a href="<?= $actionUrl ?>" class="action-button <?= $actionClass ?>">
+                                                <i class="<?= $actionIcon ?> me-2"></i><?= $actionText ?>
+                                            </a>
+                                        <?php elseif ($event['is_completed']): ?>
+                                            <a href="<?= site_url('presenter/absensi') ?>" class="action-button success">
+                                                <i class="fas fa-star me-2"></i>Akses Fitur
+                                            </a>
+                                        <?php else: ?>
+                                            <button class="action-button secondary" disabled>
+                                                <i class="fas fa-lock me-2"></i>Tidak Tersedia
+                                            </button>
                                         <?php endif; ?>
                                     </div>
-                                    <div class="col-auto">
-                                        <div class="btn-group" role="group">
-                                            <!-- Main Action Button -->
-                                            <?php if ($registrationStatus === 'not_registered'): ?>
-                                                <?php if ($this->eventModel->isRegistrationOpen($event['id'])): ?>
-                                                    <a href="<?= site_url('presenter/events/register/' . $event['id']) ?>" 
-                                                       class="btn btn-primary-custom btn-custom">
-                                                        <i class="fas fa-user-plus me-1"></i>Register Now
-                                                    </a>
-                                                <?php else: ?>
-                                                    <button class="btn btn-secondary btn-custom" disabled>
-                                                        <i class="fas fa-lock me-1"></i>Registration Closed
-                                                    </button>
-                                                <?php endif; ?>
-                                            <?php elseif ($registrationStatus === 'verified'): ?>
-                                                <a href="<?= site_url('presenter/abstrak') ?>?event=<?= $event['id'] ?>" 
-                                                   class="btn btn-success-custom btn-custom">
-                                                    <i class="fas fa-file-upload me-1"></i>Submit Abstract
-                                                </a>
-                                            <?php elseif ($registrationStatus === 'pending'): ?>
-                                                <a href="<?= site_url('presenter/pembayaran') ?>" 
-                                                   class="btn btn-warning-custom btn-custom">
-                                                    <i class="fas fa-clock me-1"></i>View Payment
-                                                </a>
-                                            <?php else: ?>
-                                                <a href="<?= site_url('presenter/events/register/' . $event['id']) ?>" 
-                                                   class="btn btn-primary-custom btn-custom">
-                                                    <i class="fas fa-redo me-1"></i>Register Again
-                                                </a>
-                                            <?php endif; ?>
-                                            
-                                            <!-- View Details Button -->
-                                            <a href="<?= site_url('presenter/events/detail/' . $event['id']) ?>" 
-                                               class="btn btn-outline-info btn-custom">
-                                                <i class="fas fa-info-circle"></i>
-                                            </a>
-                                        </div>
-                                    </div>
                                 </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <div class="empty-state">
+                                <i class="fas fa-calendar-times fa-4x mb-3"></i>
+                                <h5>Belum Ada Event Tersedia</h5>
+                                <p>Saat ini belum ada event yang dapat Anda ikuti sebagai presenter.</p>
                             </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php else: ?>
-            <div class="content-card">
-                <div class="p-5">
-                    <div class="empty-state">
-                        <i class="fas fa-calendar-times"></i>
-                        <h4>No Events Available</h4>
-                        <p>There are currently no events available for registration.</p>
-                        <p class="text-muted small">
-                            Events will appear here when registration is opened by the admin.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        <?php endif; ?>
-
-        <!-- Information Card -->
-        <div class="content-card mt-4">
-            <div class="content-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Presenter Guidelines
-                </h5>
-            </div>
-            <div class="p-4">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="text-primary mb-3">
-                            <i class="fas fa-clipboard-list me-2"></i>Registration Process
-                        </h6>
-                        <ol class="list-group list-group-flush">
-                            <li class="list-group-item border-0 px-0">
-                                <strong>1. Register for Event</strong><br>
-                                <small class="text-muted">Choose an event and complete registration form</small>
-                            </li>
-                            <li class="list-group-item border-0 px-0">
-                                <strong>2. Make Payment</strong><br>
-                                <small class="text-muted">Upload payment proof and wait for verification</small>
-                            </li>
-                            <li class="list-group-item border-0 px-0">
-                                <strong>3. Submit Abstract</strong><br>
-                                <small class="text-muted">Submit your presentation abstract for review</small>
-                            </li>
-                            <li class="list-group-item border-0 px-0">
-                                <strong>4. Present at Event</strong><br>
-                                <small class="text-muted">Deliver your presentation on the event day</small>
-                            </li>
-                        </ol>
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="text-success mb-3">
-                            <i class="fas fa-map-marker-alt me-2"></i>Important Notes
-                        </h6>
-                        <div class="alert alert-warning">
-                            <h6 class="alert-heading">
-                                <i class="fas fa-exclamation-triangle me-2"></i>Offline Participation Only
-                            </h6>
-                            <p class="mb-0 small">
-                                As a presenter, you must participate <strong>offline</strong> (in-person). 
-                                All presentations must be delivered at the event venue.
-                            </p>
-                        </div>
-                        <div class="alert alert-info">
-                            <h6 class="alert-heading">
-                                <i class="fas fa-credit-card me-2"></i>Payment Verification
-                            </h6>
-                            <p class="mb-0 small">
-                                Payment verification by admin may take 1-2 business days. 
-                                You'll be notified once verified.
-                            </p>
-                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -657,51 +548,101 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        // Show success/error messages
         document.addEventListener('DOMContentLoaded', function() {
-            <?php if (session('success')): ?>
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Success!',
-                    text: '<?= addslashes(session('success')) ?>',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
-            <?php endif; ?>
+            // Filter functionality
+            const filterTabs = document.querySelectorAll('.filter-tab');
+            const eventCards = document.querySelectorAll('.event-card');
 
-            <?php if (session('error')): ?>
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error!',
-                    text: '<?= addslashes(session('error')) ?>',
+            filterTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const filter = this.dataset.filter;
+                    
+                    // Update active tab
+                    filterTabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Filter events
+                    eventCards.forEach(card => {
+                        if (filter === 'all') {
+                            card.style.display = 'block';
+                        } else {
+                            const cardType = card.dataset.filterType;
+                            card.style.display = cardType === filter ? 'block' : 'none';
+                        }
+                    });
                 });
-            <?php endif; ?>
-
-            <?php if (session('info')): ?>
-                Swal.fire({
-                    icon: 'info',
-                    title: 'Information',
-                    text: '<?= addslashes(session('info')) ?>',
-                });
-            <?php endif; ?>
+            });
 
             // Animate cards on load
-            const cards = document.querySelectorAll('.event-card');
-            cards.forEach((card, index) => {
+            eventCards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
                 setTimeout(() => {
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateY(20px)';
-                    card.style.transition = 'all 0.5s ease';
-                    
-                    setTimeout(() => {
-                        card.style.opacity = '1';
-                        card.style.transform = 'translateY(0)';
-                    }, 100);
+                    card.style.transition = 'all 0.3s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
                 }, index * 100);
             });
+
+            // Update countdown timers every minute
+            setInterval(updateCountdowns, 60000);
+
+            function updateCountdowns() {
+                // Update any countdown elements if needed
+                console.log('Updating countdowns...');
+            }
+
+            // Add hover effects
+            eventCards.forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-3px)';
+                });
+                
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0)';
+                });
+            });
         });
+
+        // Utility function to show toast notifications
+        function showToast(message, type = 'info') {
+            // Create toast element
+            const toast = document.createElement('div');
+            toast.className = `toast align-items-center text-white bg-${type} border-0`;
+            toast.setAttribute('role', 'alert');
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">${message}</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            `;
+            
+            // Add to page
+            document.body.appendChild(toast);
+            
+            // Show toast
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+            
+            // Remove from DOM after hide
+            toast.addEventListener('hidden.bs.toast', () => {
+                document.body.removeChild(toast);
+            });
+        }
+
+        // Check for flash messages
+        const urlParams = new URLSearchParams(window.location.search);
+        const success = urlParams.get('success');
+        const error = urlParams.get('error');
+
+        if (success) {
+            showToast(success, 'success');
+        }
+        if (error) {
+            showToast(error, 'danger');
+        }
     </script>
 </body>
 </html>

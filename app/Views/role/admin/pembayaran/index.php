@@ -115,7 +115,7 @@
             padding: 16px 20px;
             border-bottom: 1px solid #e2e8f0;
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
         }
 
@@ -211,6 +211,31 @@
             margin-bottom: 20px;
             opacity: 0.5;
         }
+
+        .event-tag {
+            background: linear-gradient(135deg, #e0f2fe, #b3e5fc);
+            color: #01579b;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .participation-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .participation-online {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .participation-offline {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
     </style>
 </head>
 <body>
@@ -283,6 +308,9 @@
                                     <button class="btn btn-light btn-custom me-2" onclick="exportData()">
                                         <i class="fas fa-download me-2"></i>Export Data
                                     </button>
+                                    <button class="btn btn-outline-light btn-custom me-2" onclick="viewStatistics()">
+                                        <i class="fas fa-chart-bar me-2"></i>Statistik
+                                    </button>
                                     <button class="btn btn-outline-light btn-custom" onclick="refreshData()">
                                         <i class="fas fa-sync-alt me-2"></i>Refresh
                                     </button>
@@ -350,13 +378,13 @@
                     <!-- Filter -->
                     <div class="filter-card">
                         <div class="row align-items-center">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="fas fa-search"></i></span>
                                     <input type="text" class="form-control" id="searchInput" placeholder="Cari pembayaran...">
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <select class="form-select" id="statusFilter">
                                     <option value="">Semua Status</option>
                                     <option value="pending">Pending</option>
@@ -364,11 +392,18 @@
                                     <option value="rejected">Ditolak</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <select class="form-select" id="roleFilter">
                                     <option value="">Semua Role</option>
                                     <option value="presenter">Presenter</option>
                                     <option value="audience">Audience</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select class="form-select" id="participationFilter">
+                                    <option value="">Semua Partisipasi</option>
+                                    <option value="online">Online</option>
+                                    <option value="offline">Offline</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -383,7 +418,11 @@
                     <div class="row g-4" id="paymentContainer">
                         <?php if (!empty($pembayarans)): ?>
                             <?php foreach ($pembayarans as $pembayaran): ?>
-                                <div class="col-lg-6" data-status="<?= $pembayaran['status'] ?>" data-role="<?= $pembayaran['role'] ?>">
+                                <div class="col-lg-6 col-xl-4" 
+                                     data-status="<?= $pembayaran['status'] ?>" 
+                                     data-role="<?= $pembayaran['role'] ?>"
+                                     data-participation="<?= $pembayaran['participation_type'] ?? '' ?>"
+                                     data-search="<?= strtolower($pembayaran['nama_lengkap'] . ' ' . $pembayaran['email'] . ' ' . $pembayaran['metode']) ?>">
                                     <div class="payment-card">
                                         <div class="payment-header">
                                             <div class="user-info">
@@ -393,6 +432,11 @@
                                                 <div>
                                                     <h6 class="mb-0"><?= esc($pembayaran['nama_lengkap']) ?></h6>
                                                     <small class="text-muted"><?= esc($pembayaran['email']) ?></small>
+                                                    <?php if (!empty($pembayaran['event_title'])): ?>
+                                                        <div class="mt-1">
+                                                            <span class="event-tag"><?= esc($pembayaran['event_title']) ?></span>
+                                                        </div>
+                                                    <?php endif; ?>
                                                 </div>
                                             </div>
                                             <div>
@@ -432,11 +476,16 @@
                                             
                                             <div class="row mt-3">
                                                 <div class="col-6">
-                                                    <label class="text-muted small">Role</label>
+                                                    <label class="text-muted small">Role & Partisipasi</label>
                                                     <div>
                                                         <span class="badge <?= $pembayaran['role'] == 'presenter' ? 'bg-primary' : 'bg-secondary' ?>">
                                                             <?= ucfirst($pembayaran['role']) ?>
                                                         </span>
+                                                        <?php if (!empty($pembayaran['participation_type'])): ?>
+                                                            <span class="participation-badge participation-<?= $pembayaran['participation_type'] ?>">
+                                                                <?= ucfirst($pembayaran['participation_type']) ?>
+                                                            </span>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </div>
                                                 <div class="col-6">
@@ -454,31 +503,41 @@
                                                     </div>
                                                 </div>
                                             <?php endif; ?>
+
+                                            <?php if (!empty($pembayaran['verified_at'])): ?>
+                                                <div class="mt-2">
+                                                    <small class="text-muted">Diverifikasi: <?= date('d/m/Y H:i', strtotime($pembayaran['verified_at'])) ?></small>
+                                                </div>
+                                            <?php endif; ?>
                                         </div>
 
                                         <div class="payment-footer">
-                                            <div class="d-flex justify-content-between">
-                                                <button class="btn btn-outline-info btn-custom btn-sm" 
-                                                        onclick="viewDetail(<?= $pembayaran['id_pembayaran'] ?>)">
-                                                    <i class="fas fa-eye me-1"></i>Detail
-                                                </button>
-                                                
-                                                <?php if ($pembayaran['bukti_bayar']): ?>
-                                                    <button class="btn btn-outline-secondary btn-custom btn-sm" 
-                                                            onclick="viewBukti('<?= base_url('uploads/pembayaran/' . $pembayaran['bukti_bayar']) ?>')">
-                                                        <i class="fas fa-image me-1"></i>Bukti
+                                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <button class="btn btn-outline-info btn-custom" 
+                                                            onclick="viewDetail(<?= $pembayaran['id_pembayaran'] ?>)">
+                                                        <i class="fas fa-eye me-1"></i>Detail
                                                     </button>
-                                                <?php endif; ?>
+                                                    
+                                                    <?php if (!empty($pembayaran['bukti_bayar'])): ?>
+                                                        <button class="btn btn-outline-secondary btn-custom" 
+                                                                onclick="viewBukti('<?= site_url('admin/pembayaran/view-bukti/' . $pembayaran['id_pembayaran']) ?>')">
+                                                            <i class="fas fa-image me-1"></i>Bukti
+                                                        </button>
+                                                    <?php endif; ?>
+                                                </div>
                                                 
                                                 <?php if ($pembayaran['status'] == 'pending'): ?>
-                                                    <button class="btn btn-success btn-custom btn-sm" 
-                                                            onclick="verifikasiPembayaran(<?= $pembayaran['id_pembayaran'] ?>, 'verified')">
-                                                        <i class="fas fa-check me-1"></i>Verifikasi
-                                                    </button>
-                                                    <button class="btn btn-danger btn-custom btn-sm" 
-                                                            onclick="verifikasiPembayaran(<?= $pembayaran['id_pembayaran'] ?>, 'rejected')">
-                                                        <i class="fas fa-times me-1"></i>Tolak
-                                                    </button>
+                                                    <div class="btn-group btn-group-sm" role="group">
+                                                        <button class="btn btn-success btn-custom" 
+                                                                onclick="verifikasiPembayaran(<?= $pembayaran['id_pembayaran'] ?>, 'verified')">
+                                                            <i class="fas fa-check me-1"></i>Verifikasi
+                                                        </button>
+                                                        <button class="btn btn-danger btn-custom" 
+                                                                onclick="verifikasiPembayaran(<?= $pembayaran['id_pembayaran'] ?>, 'rejected')">
+                                                            <i class="fas fa-times me-1"></i>Tolak
+                                                        </button>
+                                                    </div>
                                                 <?php endif; ?>
                                             </div>
                                         </div>
@@ -495,6 +554,15 @@
                             </div>
                         <?php endif; ?>
                     </div>
+
+                    <!-- Load More Button (if needed) -->
+                    <?php if (count($pembayarans) >= 50): ?>
+                        <div class="text-center mt-4">
+                            <button class="btn btn-outline-primary btn-custom" onclick="loadMore()">
+                                <i class="fas fa-plus me-2"></i>Tampilkan Lebih Banyak
+                            </button>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -513,6 +581,9 @@
                 <div class="modal-body text-center">
                     <img id="buktiImage" src="" class="bukti-preview" alt="Bukti Pembayaran">
                 </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                </div>
             </div>
         </div>
     </div>
@@ -529,10 +600,14 @@
                 </div>
                 <form id="verifikasiForm" method="POST">
                     <div class="modal-body">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Pastikan bukti pembayaran sudah sesuai sebelum melakukan verifikasi.
+                        </div>
                         <div class="mb-3">
-                            <label class="form-label">Keterangan</label>
+                            <label class="form-label">Keterangan Verifikasi</label>
                             <textarea class="form-control" name="keterangan" rows="3" 
-                                    placeholder="Tambahkan keterangan verifikasi..."></textarea>
+                                    placeholder="Tambahkan keterangan verifikasi (opsional)..."></textarea>
                         </div>
                         <input type="hidden" name="status" id="verifikasiStatus">
                     </div>
@@ -547,43 +622,88 @@
         </div>
     </div>
 
+    <!-- Statistics Modal -->
+    <div class="modal fade" id="statistikModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-chart-bar me-2"></i>Statistik Pembayaran
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <canvas id="revenueChart"></canvas>
+                        </div>
+                        <div class="col-md-6">
+                            <canvas id="statusChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Search and filter functionality
         document.getElementById('searchInput').addEventListener('keyup', filterPayments);
         document.getElementById('statusFilter').addEventListener('change', filterPayments);
         document.getElementById('roleFilter').addEventListener('change', filterPayments);
+        document.getElementById('participationFilter').addEventListener('change', filterPayments);
 
         function filterPayments() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             const statusFilter = document.getElementById('statusFilter').value;
             const roleFilter = document.getElementById('roleFilter').value;
+            const participationFilter = document.getElementById('participationFilter').value;
             const cards = document.querySelectorAll('#paymentContainer > div');
 
+            let visibleCount = 0;
+
             cards.forEach(card => {
-                const text = card.textContent.toLowerCase();
+                const searchData = card.getAttribute('data-search') || '';
                 const status = card.getAttribute('data-status');
                 const role = card.getAttribute('data-role');
+                const participation = card.getAttribute('data-participation');
 
-                const matchesSearch = text.includes(searchTerm);
+                const matchesSearch = !searchTerm || searchData.includes(searchTerm);
                 const matchesStatus = !statusFilter || status === statusFilter;
                 const matchesRole = !roleFilter || role === roleFilter;
+                const matchesParticipation = !participationFilter || participation === participationFilter;
 
-                card.style.display = matchesSearch && matchesStatus && matchesRole ? '' : 'none';
+                const shouldShow = matchesSearch && matchesStatus && matchesRole && matchesParticipation;
+                card.style.display = shouldShow ? '' : 'none';
+                
+                if (shouldShow) visibleCount++;
             });
+
+            // Update counter
+            const counterElement = document.getElementById('resultCounter');
+            if (counterElement) {
+                counterElement.textContent = `Menampilkan ${visibleCount} dari ${cards.length} pembayaran`;
+            }
         }
 
         function resetFilter() {
             document.getElementById('searchInput').value = '';
             document.getElementById('statusFilter').value = '';
             document.getElementById('roleFilter').value = '';
+            document.getElementById('participationFilter').value = '';
             filterPayments();
         }
 
         function viewBukti(imageUrl) {
             document.getElementById('buktiImage').src = imageUrl;
             new bootstrap.Modal(document.getElementById('buktiModal')).show();
+        }
+
+        function viewDetail(id) {
+            window.location.href = `<?= site_url('admin/pembayaran/detail') ?>/${id}`;
         }
 
         function verifikasiPembayaran(id, status) {
@@ -608,6 +728,78 @@
 
         function exportData() {
             window.location.href = '<?= site_url('admin/pembayaran/export') ?>';
+        }
+
+        function viewStatistics() {
+            // Load statistics data
+            fetch('<?= site_url('admin/pembayaran/statistik') ?>')
+                .then(response => response.json())
+                .then(data => {
+                    showStatistics(data);
+                })
+                .catch(error => {
+                    console.error('Error loading statistics:', error);
+                    Swal.fire('Error', 'Gagal memuat data statistik', 'error');
+                });
+        }
+
+        function showStatistics(data) {
+            new bootstrap.Modal(document.getElementById('statistikModal')).show();
+            
+            // Revenue Chart
+            const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+            new Chart(revenueCtx, {
+                type: 'line',
+                data: {
+                    labels: data.revenue_chart.map(item => item.label),
+                    datasets: [{
+                        label: 'Revenue',
+                        data: data.revenue_chart.map(item => item.revenue),
+                        borderColor: 'rgb(37, 99, 235)',
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Revenue 12 Bulan Terakhir'
+                        }
+                    }
+                }
+            });
+
+            // Status Chart
+            const statusCtx = document.getElementById('statusChart').getContext('2d');
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Pending', 'Verified', 'Rejected'],
+                    datasets: [{
+                        data: [
+                            data.status_distribution.pending,
+                            data.status_distribution.verified,
+                            data.status_distribution.rejected
+                        ],
+                        backgroundColor: [
+                            'rgb(245, 158, 11)',
+                            'rgb(16, 185, 129)',
+                            'rgb(239, 68, 68)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Distribusi Status Pembayaran'
+                        }
+                    }
+                }
+            });
         }
 
         // Show success/error messages
@@ -644,7 +836,38 @@
                     }, 100);
                 }, index * 50);
             });
+
+            // Add result counter
+            const filterCard = document.querySelector('.filter-card .row');
+            if (filterCard) {
+                const counterDiv = document.createElement('div');
+                counterDiv.className = 'col-md-12 mt-2';
+                counterDiv.innerHTML = '<small id="resultCounter" class="text-muted"></small>';
+                filterCard.appendChild(counterDiv);
+                filterPayments(); // Initial count
+            }
         });
+
+        // Auto-refresh every 30 seconds for pending payments
+        setInterval(() => {
+            const pendingCards = document.querySelectorAll('[data-status="pending"]');
+            if (pendingCards.length > 0) {
+                // Only refresh if there are pending payments
+                fetch(window.location.href)
+                    .then(response => response.text())
+                    .then(html => {
+                        // Update only the payment container
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const newContainer = doc.getElementById('paymentContainer');
+                        if (newContainer) {
+                            document.getElementById('paymentContainer').innerHTML = newContainer.innerHTML;
+                            filterPayments(); // Reapply filters
+                        }
+                    })
+                    .catch(error => console.log('Auto-refresh failed:', error));
+            }
+        }, 30000);
     </script>
 </body>
 </html>

@@ -184,6 +184,34 @@
             transition: width 0.3s ease;
             border-radius: 4px;
         }
+
+        .search-filter-section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: -100%;
+                width: 250px;
+                transition: left 0.3s ease;
+                z-index: 1000;
+            }
+
+            .sidebar.show {
+                left: 0;
+            }
+
+            .main-content {
+                border-radius: 0;
+                margin-left: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -261,6 +289,42 @@
                         </div>
                     </div>
 
+                    <!-- Search and Filter Section -->
+                    <div class="search-filter-section">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                    <input type="text" class="form-control" id="searchReviewer" placeholder="Cari reviewer...">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="filterStatus">
+                                    <option value="">Semua Status</option>
+                                    <option value="aktif">Aktif</option>
+                                    <option value="nonaktif">Nonaktif</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="filterCategory">
+                                    <option value="">Semua Kategori</option>
+                                    <?php if (!empty($categories)): ?>
+                                        <?php foreach ($categories as $category): ?>
+                                            <option value="<?= esc($category['nama_kategori']) ?>">
+                                                <?= esc($category['nama_kategori']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button class="btn btn-outline-secondary w-100" onclick="resetFilters()">
+                                    <i class="fas fa-redo me-2"></i>Reset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Statistics Cards -->
                     <div class="row g-4 mb-4">
                         <div class="col-md-3">
@@ -320,10 +384,14 @@
                     </div>
 
                     <!-- Reviewers Grid -->
-                    <div class="row g-4">
+                    <div class="row g-4" id="reviewersGrid">
                         <?php if (!empty($reviewers)): ?>
                             <?php foreach ($reviewers as $reviewer): ?>
-                                <div class="col-lg-6 col-xl-4">
+                                <div class="col-lg-6 col-xl-4 reviewer-item" 
+                                     data-name="<?= strtolower(esc($reviewer['nama_lengkap'])) ?>"
+                                     data-email="<?= strtolower(esc($reviewer['email'])) ?>"
+                                     data-status="<?= esc($reviewer['status']) ?>"
+                                     data-categories="<?= strtolower(implode(',', array_column($reviewer['categories'], 'nama_kategori'))) ?>">
                                     <div class="reviewer-card">
                                         <div class="reviewer-header">
                                             <div class="d-flex align-items-center">
@@ -427,6 +495,18 @@
                             </div>
                         <?php endif; ?>
                     </div>
+
+                    <!-- No Results Message -->
+                    <div class="col-12 d-none" id="noResults">
+                        <div class="empty-state">
+                            <i class="fas fa-search"></i>
+                            <h4>Tidak Ada Hasil</h4>
+                            <p>Tidak ditemukan reviewer yang sesuai dengan filter pencarian.</p>
+                            <button class="btn btn-outline-primary" onclick="resetFilters()">
+                                <i class="fas fa-redo me-2"></i>Reset Filter
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -442,28 +522,37 @@
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form action="<?= site_url('admin/reviewer/store') ?>" method="POST">
+                <form action="<?= site_url('admin/reviewer/store') ?>" method="POST" id="addReviewerForm">
                     <div class="modal-body">
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label class="form-label">Nama Lengkap</label>
+                                    <label class="form-label">Nama Lengkap <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" name="nama_lengkap" required>
+                                    <div class="invalid-feedback"></div>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label class="form-label">Email</label>
+                                    <label class="form-label">Email <span class="text-danger">*</span></label>
                                     <input type="email" class="form-control" name="email" required>
+                                    <div class="invalid-feedback"></div>
                                 </div>
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Password</label>
-                            <input type="password" class="form-control" name="password" required minlength="6">
+                            <label class="form-label">Password <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" name="password" required minlength="6" id="password">
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePassword()">
+                                    <i class="fas fa-eye" id="passwordToggle"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted">Minimal 6 karakter</small>
+                            <div class="invalid-feedback"></div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Kategori Review</label>
+                            <label class="form-label">Kategori Review <span class="text-danger">*</span></label>
                             <div class="row">
                                 <?php if (!empty($categories)): ?>
                                     <?php foreach ($categories as $category): ?>
@@ -486,6 +575,7 @@
                                     </div>
                                 <?php endif; ?>
                             </div>
+                            <div class="invalid-feedback d-block" id="categoriesError" style="display: none !important;"></div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -544,6 +634,63 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        // Search and Filter Functions
+        function filterReviewers() {
+            const searchTerm = document.getElementById('searchReviewer').value.toLowerCase();
+            const statusFilter = document.getElementById('filterStatus').value;
+            const categoryFilter = document.getElementById('filterCategory').value.toLowerCase();
+            const reviewerItems = document.querySelectorAll('.reviewer-item');
+            let visibleCount = 0;
+
+            reviewerItems.forEach(item => {
+                const name = item.dataset.name;
+                const email = item.dataset.email;
+                const status = item.dataset.status;
+                const categories = item.dataset.categories;
+
+                const matchesSearch = name.includes(searchTerm) || email.includes(searchTerm);
+                const matchesStatus = !statusFilter || status === statusFilter;
+                const matchesCategory = !categoryFilter || categories.includes(categoryFilter);
+
+                if (matchesSearch && matchesStatus && matchesCategory) {
+                    item.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+
+            // Show/hide no results message
+            const noResults = document.getElementById('noResults');
+            if (visibleCount === 0 && reviewerItems.length > 0) {
+                noResults.classList.remove('d-none');
+            } else {
+                noResults.classList.add('d-none');
+            }
+        }
+
+        function resetFilters() {
+            document.getElementById('searchReviewer').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterCategory').value = '';
+            filterReviewers();
+        }
+
+        function togglePassword() {
+            const passwordField = document.getElementById('password');
+            const passwordToggle = document.getElementById('passwordToggle');
+            
+            if (passwordField.type === 'password') {
+                passwordField.type = 'text';
+                passwordToggle.classList.remove('fa-eye');
+                passwordToggle.classList.add('fa-eye-slash');
+            } else {
+                passwordField.type = 'password';
+                passwordToggle.classList.remove('fa-eye-slash');
+                passwordToggle.classList.add('fa-eye');
+            }
+        }
+
         function assignCategory(reviewerId, reviewerName) {
             document.getElementById('assignReviewerId').value = reviewerId;
             document.getElementById('assignReviewerName').value = reviewerName;
@@ -586,13 +733,58 @@
             });
         }
 
-        // Show alerts
+        // Event Listeners
         document.addEventListener('DOMContentLoaded', function() {
+            // Add event listeners for search and filter
+            document.getElementById('searchReviewer').addEventListener('input', filterReviewers);
+            document.getElementById('filterStatus').addEventListener('change', filterReviewers);
+            document.getElementById('filterCategory').addEventListener('change', filterReviewers);
+
+            // Form validation
+            const addReviewerForm = document.getElementById('addReviewerForm');
+            addReviewerForm.addEventListener('submit', function(e) {
+                const requiredFields = addReviewerForm.querySelectorAll('[required]');
+                let isValid = true;
+                
+                // Clear previous validation
+                requiredFields.forEach(field => {
+                    field.classList.remove('is-invalid');
+                    const feedback = field.parentNode.querySelector('.invalid-feedback');
+                    if (feedback) feedback.textContent = '';
+                });
+
+                // Validate required fields
+                requiredFields.forEach(field => {
+                    if (!field.value.trim()) {
+                        field.classList.add('is-invalid');
+                        const feedback = field.parentNode.querySelector('.invalid-feedback');
+                        if (feedback) feedback.textContent = 'Field ini wajib diisi.';
+                        isValid = false;
+                    }
+                });
+
+                // Check if at least one category is selected
+                const categories = addReviewerForm.querySelectorAll('input[name="categories[]"]:checked');
+                if (categories.length === 0) {
+                    document.getElementById('categoriesError').textContent = 'Pilih setidaknya satu kategori review.';
+                    document.getElementById('categoriesError').style.display = 'block';
+                    isValid = false;
+                } else {
+                    document.getElementById('categoriesError').style.display = 'none';
+                }
+                
+                if (!isValid) {
+                    e.preventDefault();
+                    Swal.fire('Error!', 'Mohon lengkapi semua field yang diperlukan', 'error');
+                }
+            });
+
+            // Show alerts
             <?php if (session('success')): ?>
                 Swal.fire({
                     icon: 'success',
                     title: 'Berhasil!',
-                    text: '<?= session('success') ?>',
+                    text: '<?= addslashes(session('success')) ?>',
                     timer: 3000,
                     showConfirmButton: false
                 });
@@ -602,14 +794,14 @@
                 Swal.fire({
                     icon: 'error',
                     title: 'Error!',
-                    text: '<?= session('error') ?>',
+                    text: '<?= addslashes(session('error')) ?>',
                 });
             <?php endif; ?>
 
             <?php if (session('errors')): ?>
                 let errorMessages = '';
                 <?php foreach (session('errors') as $error): ?>
-                    errorMessages += '<?= $error ?>\n';
+                    errorMessages += '<?= addslashes($error) ?>\n';
                 <?php endforeach; ?>
                 Swal.fire({
                     icon: 'error',
@@ -645,37 +837,10 @@
             }, 1000);
         });
 
-        // Form validation
-        document.querySelectorAll('form').forEach(form => {
-            form.addEventListener('submit', function(e) {
-                const requiredFields = form.querySelectorAll('[required]');
-                let isValid = true;
-                
-                requiredFields.forEach(field => {
-                    if (!field.value.trim()) {
-                        field.classList.add('is-invalid');
-                        isValid = false;
-                    } else {
-                        field.classList.remove('is-invalid');
-                    }
-                });
-
-                // Check if at least one category is selected for new reviewer
-                if (form.action.includes('/store')) {
-                    const categories = form.querySelectorAll('input[name="categories[]"]:checked');
-                    if (categories.length === 0) {
-                        Swal.fire('Error!', 'Pilih setidaknya satu kategori review', 'error');
-                        e.preventDefault();
-                        return;
-                    }
-                }
-                
-                if (!isValid) {
-                    e.preventDefault();
-                    Swal.fire('Error!', 'Mohon lengkapi semua field yang diperlukan', 'error');
-                }
-            });
-        });
+        // Mobile sidebar toggle
+        function toggleSidebar() {
+            document.querySelector('.sidebar').classList.toggle('show');
+        }
     </script>
 </body>
 </html>

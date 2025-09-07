@@ -4,306 +4,405 @@ namespace App\Controllers\Role\Admin;
 
 use App\Controllers\BaseController;
 use App\Models\DokumenModel;
-use App\Models\UserModel;
-use App\Models\AbstrakModel;
-use App\Models\PembayaranModel;
 use App\Models\EventModel;
+use App\Models\UserModel;
+use App\Models\PembayaranModel;
+use App\Models\AbsensiModel;
+use Mpdf\Mpdf;
 
 class Dokumen extends BaseController
 {
     protected $dokumenModel;
-    protected $userModel;
-    protected $abstrakModel;
-    protected $pembayaranModel;
     protected $eventModel;
+    protected $userModel;
+    protected $pembayaranModel;
+    protected $absensiModel;
+    protected $db;
 
     public function __construct()
     {
         $this->dokumenModel = new DokumenModel();
-        $this->userModel = new UserModel();
-        $this->abstrakModel = new AbstrakModel();
-        $this->pembayaranModel = new PembayaranModel();
         $this->eventModel = new EventModel();
+        $this->userModel = new UserModel();
+        $this->pembayaranModel = new PembayaranModel();
+        $this->absensiModel = new AbsensiModel();
+        $this->db = \Config\Database::connect();
     }
 
     public function index()
     {
-        // Get all documents with user info
-        $dokumens = $this->dokumenModel->getDokumenWithUser();
+        // Get filter parameters
+        $eventId = $this->request->getGet('event_id');
+        $tipe = $this->request->getGet('tipe');
 
-        // Separate by type
-        $loa_documents = array_filter($dokumens, fn($d) => $d['tipe'] === 'LOA');
-        $sertifikat_documents = array_filter($dokumens, fn($d) => $d['tipe'] === 'Sertifikat');
+        // Get all documents with filters
+        $documents = $this->dokumenModel->getDokumenWithUser($tipe, $eventId);
 
-        // Get users who need LOA (presenters with accepted abstracts)
-        $needLOA = $this->abstrakModel
-                       ->select('abstrak.id_user, users.nama_lengkap, users.email, users.institusi, COUNT(abstrak.id_abstrak) as total_accepted')
-                       ->join('users', 'users.id_user = abstrak.id_user')
-                       ->where('abstrak.status', 'diterima')
-                       ->where('users.role', 'presenter')
-                       ->groupBy('abstrak.id_user, users.nama_lengkap, users.email, users.institusi')
-                       ->findAll();
+        // Get all events for filter dropdown
+        $events = $this->eventModel->where('is_active', true)
+                                  ->orderBy('event_date', 'DESC')
+                                  ->findAll();
 
-        // Filter out users who already have LOA
-        $existingLOA = array_column($loa_documents, 'id_user');
-        $needLOA = array_filter($needLOA, fn($user) => !in_array($user['id_user'], $existingLOA));
-
-        // Get users who need certificates (verified payments)
-        $needSertifikat = $this->pembayaranModel
-                              ->select('users.*, pembayaran.status as payment_status, events.title as event_title')
-                              ->join('users', 'users.id_user = pembayaran.id_user')
-                              ->join('events', 'events.id = pembayaran.event_id', 'left')
-                              ->where('users.status', 'aktif')
-                              ->whereIn('users.role', ['presenter', 'audience'])
-                              ->where('pembayaran.status', 'verified')
-                              ->groupBy('users.id_user, users.nama_lengkap, users.email, users.role, users.institusi, pembayaran.status, events.title')
-                              ->findAll();
-
-        $existingSertifikat = array_column($sertifikat_documents, 'id_user');
-        $needSertifikat = array_filter($needSertifikat, fn($user) => !in_array($user['id_user'], $existingSertifikat));
+        // Calculate statistics
+        $stats = $this->getDocumentStatistics();
 
         $data = [
-            'loa_documents' => $loa_documents,
-            'sertifikat_documents' => $sertifikat_documents,
-            'need_loa' => $needLOA,
-            'need_sertifikat' => $needSertifikat,
-            'total_loa' => count($loa_documents),
-            'total_sertifikat' => count($sertifikat_documents),
-            'pending_loa' => count($needLOA),
-            'pending_sertifikat' => count($needSertifikat)
+            'documents' => $documents,
+            'events' => $events,
+            'current_event' => $eventId,
+            'current_tipe' => $tipe,
+            'stats' => $stats
         ];
 
         return view('role/admin/dokumen/index', $data);
     }
 
-    public function uploadLoa($userId)
+    public function uploadLoa($eventId)
     {
-        $user = $this->userModel->find($userId);
+        $validation = \Config\Services::validation();
         
+        $rules = [
+            'user_id' => 'required|integer',
+            'loa_file' => [
+                'uploaded[loa_file]',
+                'max_size[loa_file,5120]', // 5MB
+                'ext_in[loa_file,pdf,doc,docx]'
+            ]
+        ];
+
+        if (!$this->validate($rules)) {
+            return redirect()->back()->with('error', 'Validasi gagal: ' . implode(', ', $validation->getErrors()));
+        }
+
+        $userId = $this->request->getPost('user_id');
+        $file = $this->request->getFile('loa_file');
+
+        // Validate event exists
+        $event = $this->eventModel->find($eventId);
+        if (!$event) {
+            return redirect()->back()->with('error', 'Event tidak ditemukan.');
+        }
+
+        // Validate user exists and has verified payment
+        $user = $this->userModel->find($userId);
         if (!$user) {
             return redirect()->back()->with('error', 'User tidak ditemukan.');
         }
 
-        // Check if user has accepted abstracts
-        $acceptedAbstrak = $this->abstrakModel->where('id_user', $userId)
-                                             ->where('status', 'diterima')
-                                             ->countAllResults();
+        $verifiedPayment = $this->pembayaranModel
+            ->where('id_user', $userId)
+            ->where('event_id', $eventId)
+            ->where('status', 'verified')
+            ->first();
 
-        if ($acceptedAbstrak == 0) {
-            return redirect()->back()->with('error', 'User tidak memiliki abstrak yang diterima.');
+        if (!$verifiedPayment) {
+            return redirect()->back()->with('error', 'User belum memiliki pembayaran yang terverifikasi untuk event ini.');
         }
 
         // Check if LOA already exists
-        $existingLOA = $this->dokumenModel->where('id_user', $userId)
-                                         ->where('tipe', 'LOA')
-                                         ->first();
-
-        if ($existingLOA) {
+        $existingLoa = $this->dokumenModel->hasUserDocument($userId, $eventId, 'loa');
+        if ($existingLoa) {
             return redirect()->back()->with('error', 'LOA untuk user ini sudah ada.');
         }
 
-        $validation = \Config\Services::validation();
-        
-        $rules = [
-            'loa_file' => 'uploaded[loa_file]|max_size[loa_file,5120]|ext_in[loa_file,pdf]'
-        ];
+        $this->db->transStart();
 
-        if (!$this->validate($rules)) {
-            return redirect()->back()->with('errors', $validation->getErrors());
-        }
-
-        $file = $this->request->getFile('loa_file');
-        
-        if ($file->isValid() && !$file->hasMoved()) {
-            // Ensure upload directory exists
-            $uploadPath = WRITEPATH . 'uploads/dokumen/';
+        try {
+            // Create upload directory
+            $uploadPath = WRITEPATH . 'uploads/loa/';
             if (!is_dir($uploadPath)) {
                 mkdir($uploadPath, 0755, true);
             }
 
-            $fileName = 'LOA_' . $userId . '_' . time() . '.pdf';
+            // Generate unique filename
+            $fileName = 'LOA_' . $eventId . '_' . $userId . '_' . time() . '.' . $file->getExtension();
             
-            if ($file->move($uploadPath, $fileName)) {
-                // Save to database
-                $dokumenData = [
-                    'id_user' => $userId,
-                    'tipe' => 'LOA',
-                    'file_path' => $fileName,
-                    'syarat' => 'Abstrak diterima',
-                    'uploaded_at' => date('Y-m-d H:i:s')
-                ];
-
-                if ($this->dokumenModel->save($dokumenData)) {
-                    $this->logActivity(session('id_user'), "Upload LOA untuk user: {$user['nama_lengkap']} (ID: {$userId})");
-                    return redirect()->to('admin/dokumen')->with('success', 'LOA berhasil diupload!');
-                } else {
-                    // Remove uploaded file if database save fails
-                    unlink($uploadPath . $fileName);
-                    return redirect()->back()->with('error', 'Gagal menyimpan data LOA.');
-                }
+            // Move file
+            if (!$file->move($uploadPath, $fileName)) {
+                throw new \Exception('Gagal menyimpan file: ' . $file->getErrorString());
             }
-        }
 
-        return redirect()->back()->with('error', 'File tidak valid atau gagal diupload.');
+            // Save to database
+            $documentData = [
+                'id_user' => $userId,
+                'event_id' => $eventId,
+                'tipe' => 'loa',
+                'file_path' => $fileName,
+                'syarat' => 'Letter of Acceptance',
+                'uploaded_at' => date('Y-m-d H:i:s')
+            ];
+
+            if (!$this->dokumenModel->insert($documentData)) {
+                throw new \Exception('Gagal menyimpan data dokumen: ' . implode(', ', $this->dokumenModel->errors()));
+            }
+
+            // Log activity
+            $this->logActivity(session('id_user'), "Uploaded LOA for {$user['nama_lengkap']} in event: {$event['title']}");
+
+            $this->db->transComplete();
+
+            if ($this->db->transStatus() === FALSE) {
+                throw new \Exception('Transaction failed');
+            }
+
+            return redirect()->to('admin/dokumen')->with('success', 'LOA berhasil diupload!');
+
+        } catch (\Exception $e) {
+            $this->db->transRollback();
+            
+            // Clean up uploaded file if exists
+            if (isset($fileName) && file_exists($uploadPath . $fileName)) {
+                unlink($uploadPath . $fileName);
+            }
+            
+            log_message('error', 'LOA upload error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+        }
     }
 
-    public function uploadSertifikat($userId)
+    public function uploadSertifikat($eventId)
     {
-        $user = $this->userModel->find($userId);
+        $validation = \Config\Services::validation();
         
+        $rules = [
+            'user_id' => 'required|integer',
+            'sertifikat_file' => [
+                'uploaded[sertifikat_file]',
+                'max_size[sertifikat_file,5120]', // 5MB
+                'ext_in[sertifikat_file,pdf,jpg,jpeg,png]'
+            ]
+        ];
+
+        if (!$this->validate($rules)) {
+            return redirect()->back()->with('error', 'Validasi gagal: ' . implode(', ', $validation->getErrors()));
+        }
+
+        $userId = $this->request->getPost('user_id');
+        $file = $this->request->getFile('sertifikat_file');
+
+        // Validate event exists
+        $event = $this->eventModel->find($eventId);
+        if (!$event) {
+            return redirect()->back()->with('error', 'Event tidak ditemukan.');
+        }
+
+        // Validate user exists and has attended
+        $user = $this->userModel->find($userId);
         if (!$user) {
             return redirect()->back()->with('error', 'User tidak ditemukan.');
         }
 
-        // Check if user has verified payment
-        $payment = $this->pembayaranModel->where('id_user', $userId)
-                                        ->where('status', 'verified')
-                                        ->first();
+        $attendance = $this->absensiModel
+            ->where('id_user', $userId)
+            ->where('event_id', $eventId)
+            ->where('status', 'hadir')
+            ->first();
 
-        if (!$payment) {
-            return redirect()->back()->with('error', 'User belum memiliki pembayaran yang terverifikasi.');
+        if (!$attendance) {
+            return redirect()->back()->with('error', 'User belum hadir pada event ini.');
         }
 
         // Check if certificate already exists
-        $existingSertifikat = $this->dokumenModel->where('id_user', $userId)
-                                                ->where('tipe', 'Sertifikat')
-                                                ->first();
-
-        if ($existingSertifikat) {
+        $existingCert = $this->dokumenModel->hasUserDocument($userId, $eventId, 'sertifikat');
+        if ($existingCert) {
             return redirect()->back()->with('error', 'Sertifikat untuk user ini sudah ada.');
         }
 
-        $validation = \Config\Services::validation();
-        
-        $rules = [
-            'sertifikat_file' => 'uploaded[sertifikat_file]|max_size[sertifikat_file,5120]|ext_in[sertifikat_file,pdf]'
-        ];
+        $this->db->transStart();
 
-        if (!$this->validate($rules)) {
-            return redirect()->back()->with('errors', $validation->getErrors());
-        }
-
-        $file = $this->request->getFile('sertifikat_file');
-        
-        if ($file->isValid() && !$file->hasMoved()) {
-            // Ensure upload directory exists
-            $uploadPath = WRITEPATH . 'uploads/dokumen/';
+        try {
+            // Create upload directory
+            $uploadPath = WRITEPATH . 'uploads/sertifikat/';
             if (!is_dir($uploadPath)) {
                 mkdir($uploadPath, 0755, true);
             }
 
-            $fileName = 'CERT_' . $userId . '_' . time() . '.pdf';
+            // Generate unique filename
+            $fileName = 'SERTIFIKAT_' . $eventId . '_' . $userId . '_' . time() . '.' . $file->getExtension();
             
-            if ($file->move($uploadPath, $fileName)) {
-                // Save to database
-                $dokumenData = [
-                    'id_user' => $userId,
-                    'tipe' => 'Sertifikat',
-                    'file_path' => $fileName,
-                    'syarat' => 'Pembayaran terverifikasi',
-                    'uploaded_at' => date('Y-m-d H:i:s')
-                ];
-
-                if ($this->dokumenModel->save($dokumenData)) {
-                    $this->logActivity(session('id_user'), "Upload Sertifikat untuk user: {$user['nama_lengkap']} (ID: {$userId})");
-                    return redirect()->to('admin/dokumen')->with('success', 'Sertifikat berhasil diupload!');
-                } else {
-                    // Remove uploaded file if database save fails
-                    unlink($uploadPath . $fileName);
-                    return redirect()->back()->with('error', 'Gagal menyimpan data sertifikat.');
-                }
+            // Move file
+            if (!$file->move($uploadPath, $fileName)) {
+                throw new \Exception('Gagal menyimpan file: ' . $file->getErrorString());
             }
+
+            // Save to database
+            $documentData = [
+                'id_user' => $userId,
+                'event_id' => $eventId,
+                'tipe' => 'sertifikat',
+                'file_path' => $fileName,
+                'syarat' => 'Certificate of Participation',
+                'uploaded_at' => date('Y-m-d H:i:s')
+            ];
+
+            if (!$this->dokumenModel->insert($documentData)) {
+                throw new \Exception('Gagal menyimpan data dokumen: ' . implode(', ', $this->dokumenModel->errors()));
+            }
+
+            // Log activity
+            $this->logActivity(session('id_user'), "Uploaded Certificate for {$user['nama_lengkap']} in event: {$event['title']}");
+
+            $this->db->transComplete();
+
+            if ($this->db->transStatus() === FALSE) {
+                throw new \Exception('Transaction failed');
+            }
+
+            return redirect()->to('admin/dokumen')->with('success', 'Sertifikat berhasil diupload!');
+
+        } catch (\Exception $e) {
+            $this->db->transRollback();
+            
+            // Clean up uploaded file if exists
+            if (isset($fileName) && file_exists($uploadPath . $fileName)) {
+                unlink($uploadPath . $fileName);
+            }
+            
+            log_message('error', 'Certificate upload error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+        }
+    }
+
+    public function download($idDokumen)
+    {
+        $document = $this->dokumenModel->getOneWithDetails($idDokumen);
+        
+        if (!$document) {
+            throw new \CodeIgniter\Exceptions\PageNotFoundException('Dokumen tidak ditemukan.');
         }
 
-        return redirect()->back()->with('error', 'File tidak valid atau gagal diupload.');
+        // Determine file path based on document type
+        $basePath = WRITEPATH . 'uploads/' . $document['tipe'] . '/';
+        $filePath = $basePath . $document['file_path'];
+
+        if (!file_exists($filePath)) {
+            throw new \CodeIgniter\Exceptions\PageNotFoundException('File tidak ditemukan: ' . $filePath);
+        }
+
+        // Generate download filename
+        $eventTitle = $document['event_title'] ? preg_replace('/[^A-Za-z0-9_-]/', '_', $document['event_title']) : 'Event';
+        $userName = preg_replace('/[^A-Za-z0-9_-]/', '_', $document['nama_lengkap']);
+        $extension = pathinfo($document['file_path'], PATHINFO_EXTENSION);
+        
+        $downloadName = strtoupper($document['tipe']) . '_' . $eventTitle . '_' . $userName . '.' . $extension;
+        
+        // Log download activity
+        $this->logActivity(session('id_user'), "Downloaded {$document['tipe']} for {$document['nama_lengkap']} from event: {$document['event_title']}");
+
+        return $this->response->download($filePath, null)->setFileName($downloadName);
+    }
+
+    public function delete($idDokumen)
+    {
+        $document = $this->dokumenModel->find($idDokumen);
+        
+        if (!$document) {
+            return redirect()->back()->with('error', 'Dokumen tidak ditemukan.');
+        }
+
+        $this->db->transStart();
+
+        try {
+            // Get user info for logging
+            $user = $this->userModel->find($document['id_user']);
+            $event = $this->eventModel->find($document['event_id']);
+
+            // Delete file from filesystem
+            $filePath = WRITEPATH . 'uploads/' . $document['tipe'] . '/' . $document['file_path'];
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
+
+            // Delete from database
+            if (!$this->dokumenModel->delete($idDokumen)) {
+                throw new \Exception('Gagal menghapus data dokumen');
+            }
+
+            // Log activity
+            $userName = $user ? $user['nama_lengkap'] : 'Unknown User';
+            $eventTitle = $event ? $event['title'] : 'Unknown Event';
+            $this->logActivity(session('id_user'), "Deleted {$document['tipe']} for {$userName} from event: {$eventTitle}");
+
+            $this->db->transComplete();
+
+            if ($this->db->transStatus() === FALSE) {
+                throw new \Exception('Transaction failed');
+            }
+
+            return redirect()->back()->with('success', 'Dokumen berhasil dihapus!');
+
+        } catch (\Exception $e) {
+            $this->db->transRollback();
+            log_message('error', 'Document deletion error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+        }
     }
 
     public function generateBulkLOA()
     {
-        // Get all users who need LOA but don't have it yet
-        $needLOA = $this->abstrakModel
-                       ->select('abstrak.id_user, users.nama_lengkap, users.email, users.institusi, users.no_hp')
-                       ->join('users', 'users.id_user = abstrak.id_user')
-                       ->where('abstrak.status', 'diterima')
-                       ->where('users.role', 'presenter')
-                       ->groupBy('abstrak.id_user, users.nama_lengkap, users.email, users.institusi, users.no_hp')
-                       ->findAll();
-
-        $existingLOA = $this->dokumenModel->where('tipe', 'LOA')
-                                         ->select('id_user')
-                                         ->findAll();
-        $existingLOAIds = array_column($existingLOA, 'id_user');
-
-        // Filter out users who already have LOA
-        $usersNeedingLOA = array_filter($needLOA, fn($user) => !in_array($user['id_user'], $existingLOAIds));
-
-        if (empty($usersNeedingLOA)) {
-            return redirect()->back()->with('info', 'Semua LOA sudah dibuat atau tidak ada presenter dengan abstrak yang diterima.');
+        $eventId = $this->request->getPost('event_id');
+        
+        if (!$eventId) {
+            return redirect()->back()->with('error', 'Event ID diperlukan.');
         }
 
-        $generated = 0;
-        $errors = [];
-
-        // Ensure upload directory exists
-        $uploadPath = WRITEPATH . 'uploads/dokumen/';
-        if (!is_dir($uploadPath)) {
-            mkdir($uploadPath, 0755, true);
+        $event = $this->eventModel->find($eventId);
+        if (!$event) {
+            return redirect()->back()->with('error', 'Event tidak ditemukan.');
         }
 
-        // Begin transaction
-        $db = \Config\Database::connect();
-        $db->transStart();
+        // Get eligible presenters for LOA
+        $eligiblePresenters = $this->dokumenModel->getEligiblePresentersForLOA($eventId);
+        
+        if (empty($eligiblePresenters)) {
+            return redirect()->back()->with('error', 'Tidak ada presenter yang memenuhi syarat untuk LOA.');
+        }
+
+        $this->db->transStart();
 
         try {
-            foreach ($usersNeedingLOA as $user) {
-                try {
-                    $fileName = 'LOA_' . $user['id_user'] . '_' . time() . '_' . rand(1000, 9999) . '.pdf';
-                    $filePath = $uploadPath . $fileName;
-                    
-                    // Generate LOA PDF using TCPDF
-                    if ($this->generateLOAPDF($user, $filePath)) {
-                        $dokumenData = [
-                            'id_user' => $user['id_user'],
-                            'tipe' => 'LOA',
-                            'file_path' => $fileName,
-                            'syarat' => 'Auto-generated bulk LOA',
-                            'uploaded_at' => date('Y-m-d H:i:s')
-                        ];
+            $successCount = 0;
+            $uploadPath = WRITEPATH . 'uploads/loa/';
+            
+            // Ensure directory exists
+            if (!is_dir($uploadPath)) {
+                mkdir($uploadPath, 0755, true);
+            }
 
-                        if ($this->dokumenModel->save($dokumenData)) {
-                            $generated++;
-                        } else {
-                            // Remove file if database save failed
-                            if (file_exists($filePath)) {
-                                unlink($filePath);
-                            }
-                            $errors[] = "Gagal menyimpan LOA untuk {$user['nama_lengkap']}";
-                        }
-                    } else {
-                        $errors[] = "Gagal generate PDF LOA untuk {$user['nama_lengkap']}";
+            foreach ($eligiblePresenters as $presenter) {
+                // Generate PDF LOA
+                $pdfPath = $this->generateLOAPDF($presenter, $event, $uploadPath);
+                
+                if ($pdfPath) {
+                    // Save to database
+                    $documentData = [
+                        'id_user' => $presenter['id_user'],
+                        'event_id' => $eventId,
+                        'tipe' => 'loa',
+                        'file_path' => basename($pdfPath),
+                        'syarat' => 'Letter of Acceptance - Generated',
+                        'uploaded_at' => date('Y-m-d H:i:s')
+                    ];
+
+                    if ($this->dokumenModel->insert($documentData)) {
+                        $successCount++;
                     }
-                } catch (\Exception $e) {
-                    $errors[] = "Error untuk {$user['nama_lengkap']}: " . $e->getMessage();
                 }
             }
 
-            $db->transComplete();
+            // Log activity
+            $this->logActivity(session('id_user'), "Generated {$successCount} LOA documents for event: {$event['title']}");
 
-            if ($db->transStatus() === FALSE) {
+            $this->db->transComplete();
+
+            if ($this->db->transStatus() === FALSE) {
                 throw new \Exception('Transaction failed');
             }
 
-            $this->logActivity(session('id_user'), "Generate bulk LOA: {$generated} LOA dibuat");
-
-            if (!empty($errors)) {
-                $errorMessage = "Berhasil generate {$generated} LOA. Errors: " . implode(', ', array_slice($errors, 0, 3));
-                return redirect()->back()->with('warning', $errorMessage);
-            }
-
-            return redirect()->back()->with('success', "Berhasil generate {$generated} LOA!");
+            return redirect()->back()->with('success', "Berhasil generate {$successCount} LOA dari " . count($eligiblePresenters) . " presenter!");
 
         } catch (\Exception $e) {
-            $db->transRollback();
+            $this->db->transRollback();
             log_message('error', 'Bulk LOA generation error: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
         }
@@ -311,326 +410,160 @@ class Dokumen extends BaseController
 
     public function generateBulkSertifikat()
     {
-        // Get all users who need certificates
-        $needSertifikat = $this->pembayaranModel
-                              ->select('users.*, pembayaran.verified_at, events.title as event_title')
-                              ->join('users', 'users.id_user = pembayaran.id_user')
-                              ->join('events', 'events.id = pembayaran.event_id', 'left')
-                              ->where('users.status', 'aktif')
-                              ->whereIn('users.role', ['presenter', 'audience'])
-                              ->where('pembayaran.status', 'verified')
-                              ->groupBy('users.id_user, users.nama_lengkap, users.email, users.role, users.institusi, users.no_hp, pembayaran.verified_at, events.title')
-                              ->findAll();
-
-        $existingSertifikat = $this->dokumenModel->where('tipe', 'Sertifikat')
-                                                ->select('id_user')
-                                                ->findAll();
-        $existingSertifikatIds = array_column($existingSertifikat, 'id_user');
-
-        // Filter out users who already have certificates
-        $usersNeedingCertificate = array_filter($needSertifikat, fn($user) => !in_array($user['id_user'], $existingSertifikatIds));
-
-        if (empty($usersNeedingCertificate)) {
-            return redirect()->back()->with('info', 'Semua sertifikat sudah dibuat atau tidak ada peserta dengan pembayaran terverifikasi.');
+        $eventId = $this->request->getPost('event_id');
+        
+        if (!$eventId) {
+            return redirect()->back()->with('error', 'Event ID diperlukan.');
         }
 
-        $generated = 0;
-        $errors = [];
-
-        // Ensure upload directory exists
-        $uploadPath = WRITEPATH . 'uploads/dokumen/';
-        if (!is_dir($uploadPath)) {
-            mkdir($uploadPath, 0755, true);
+        $event = $this->eventModel->find($eventId);
+        if (!$event) {
+            return redirect()->back()->with('error', 'Event tidak ditemukan.');
         }
 
-        // Begin transaction
-        $db = \Config\Database::connect();
-        $db->transStart();
+        // Get eligible users for certificate
+        $eligibleUsers = $this->dokumenModel->getEligibleUsersForCertificate($eventId);
+        
+        if (empty($eligibleUsers)) {
+            return redirect()->back()->with('error', 'Tidak ada peserta yang memenuhi syarat untuk sertifikat.');
+        }
+
+        $this->db->transStart();
 
         try {
-            foreach ($usersNeedingCertificate as $user) {
-                try {
-                    $fileName = 'CERT_' . $user['id_user'] . '_' . time() . '_' . rand(1000, 9999) . '.pdf';
-                    $filePath = $uploadPath . $fileName;
-                    
-                    // Generate Certificate PDF using TCPDF
-                    if ($this->generateCertificatePDF($user, $filePath)) {
-                        $dokumenData = [
-                            'id_user' => $user['id_user'],
-                            'tipe' => 'Sertifikat',
-                            'file_path' => $fileName,
-                            'syarat' => 'Auto-generated bulk certificate',
-                            'uploaded_at' => date('Y-m-d H:i:s')
-                        ];
+            $successCount = 0;
+            $uploadPath = WRITEPATH . 'uploads/sertifikat/';
+            
+            // Ensure directory exists
+            if (!is_dir($uploadPath)) {
+                mkdir($uploadPath, 0755, true);
+            }
 
-                        if ($this->dokumenModel->save($dokumenData)) {
-                            $generated++;
-                        } else {
-                            // Remove file if database save failed
-                            if (file_exists($filePath)) {
-                                unlink($filePath);
-                            }
-                            $errors[] = "Gagal menyimpan sertifikat untuk {$user['nama_lengkap']}";
-                        }
-                    } else {
-                        $errors[] = "Gagal generate PDF sertifikat untuk {$user['nama_lengkap']}";
+            foreach ($eligibleUsers as $user) {
+                // Generate PDF Certificate
+                $pdfPath = $this->generateCertificatePDF($user, $event, $uploadPath);
+                
+                if ($pdfPath) {
+                    // Save to database
+                    $documentData = [
+                        'id_user' => $user['id_user'],
+                        'event_id' => $eventId,
+                        'tipe' => 'sertifikat',
+                        'file_path' => basename($pdfPath),
+                        'syarat' => 'Certificate of Participation - Generated',
+                        'uploaded_at' => date('Y-m-d H:i:s')
+                    ];
+
+                    if ($this->dokumenModel->insert($documentData)) {
+                        $successCount++;
                     }
-                } catch (\Exception $e) {
-                    $errors[] = "Error untuk {$user['nama_lengkap']}: " . $e->getMessage();
                 }
             }
 
-            $db->transComplete();
+            // Log activity
+            $this->logActivity(session('id_user'), "Generated {$successCount} certificates for event: {$event['title']}");
 
-            if ($db->transStatus() === FALSE) {
+            $this->db->transComplete();
+
+            if ($this->db->transStatus() === FALSE) {
                 throw new \Exception('Transaction failed');
             }
 
-            $this->logActivity(session('id_user'), "Generate bulk Sertifikat: {$generated} sertifikat dibuat");
-
-            if (!empty($errors)) {
-                $errorMessage = "Berhasil generate {$generated} sertifikat. Errors: " . implode(', ', array_slice($errors, 0, 3));
-                return redirect()->back()->with('warning', $errorMessage);
-            }
-
-            return redirect()->back()->with('success', "Berhasil generate {$generated} sertifikat!");
+            return redirect()->back()->with('success', "Berhasil generate {$successCount} sertifikat dari " . count($eligibleUsers) . " peserta!");
 
         } catch (\Exception $e) {
-            $db->transRollback();
+            $this->db->transRollback();
             log_message('error', 'Bulk certificate generation error: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
-    public function download($id)
+    // AJAX endpoints for modals
+    public function getVerifiedPresenters($eventId)
     {
-        $dokumen = $this->dokumenModel->find($id);
-        
-        if (!$dokumen) {
-            throw new \CodeIgniter\Exceptions\PageNotFoundException('Dokumen tidak ditemukan.');
-        }
-
-        $filePath = WRITEPATH . 'uploads/dokumen/' . $dokumen['file_path'];
-        
-        if (!file_exists($filePath)) {
-            throw new \CodeIgniter\Exceptions\PageNotFoundException('File tidak ditemukan.');
-        }
-
-        // Log download activity
-        $user = $this->userModel->find($dokumen['id_user']);
-        $this->logActivity(session('id_user'), "Download {$dokumen['tipe']} untuk user: {$user['nama_lengkap']}");
-
-        // Set proper filename for download
-        $downloadName = $dokumen['tipe'] . '_' . $user['nama_lengkap'] . '_' . date('Y-m-d', strtotime($dokumen['uploaded_at'])) . '.pdf';
-        $downloadName = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $downloadName);
-
-        return $this->response
-                    ->download($filePath, null)
-                    ->setFileName($downloadName)
-                    ->setContentType('application/pdf');
-    }
-
-    public function delete($id)
-    {
-        $dokumen = $this->dokumenModel->find($id);
-        
-        if (!$dokumen) {
-            return redirect()->back()->with('error', 'Dokumen tidak ditemukan.');
-        }
-
-        $filePath = WRITEPATH . 'uploads/dokumen/' . $dokumen['file_path'];
-        
-        // Get user info for logging
-        $user = $this->userModel->find($dokumen['id_user']);
-        
-        // Begin transaction
-        $db = \Config\Database::connect();
-        $db->transStart();
-
         try {
-            // Delete from database first
-            if ($this->dokumenModel->delete($id)) {
-                // Delete file after successful database deletion
-                if (file_exists($filePath)) {
-                    unlink($filePath);
-                }
-
-                $this->logActivity(session('id_user'), "Delete {$dokumen['tipe']} untuk user: {$user['nama_lengkap']}");
-                
-                $db->transComplete();
-                
-                if ($db->transStatus() === FALSE) {
-                    return redirect()->back()->with('error', 'Gagal menghapus dokumen.');
-                }
-                
-                return redirect()->back()->with('success', 'Dokumen berhasil dihapus!');
-            } else {
-                $db->transRollback();
-                return redirect()->back()->with('error', 'Gagal menghapus dokumen dari database.');
-            }
+            $presenters = $this->dokumenModel->getEligiblePresentersForLOA($eventId);
+            return $this->response->setJSON([
+                'status' => 'success',
+                'data' => $presenters
+            ]);
         } catch (\Exception $e) {
-            $db->transRollback();
-            log_message('error', 'Error deleting document: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ])->setStatusCode(500);
         }
     }
 
-    // TCPDF Implementation for LOA
-    private function generateLOAPDF($user, $filePath)
+    public function getAttendees($eventId)
     {
         try {
-            // Get user's accepted abstracts
-            $abstraks = $this->abstrakModel->select('abstrak.judul, kategori_abstrak.nama_kategori, events.title as event_title')
-                                          ->join('kategori_abstrak', 'kategori_abstrak.id_kategori = abstrak.id_kategori')
-                                          ->join('events', 'events.id = abstrak.event_id', 'left')
-                                          ->where('abstrak.id_user', $user['id_user'])
-                                          ->where('abstrak.status', 'diterima')
-                                          ->findAll();
+            $attendees = $this->dokumenModel->getEligibleUsersForCertificate($eventId);
+            return $this->response->setJSON([
+                'status' => 'success',
+                'data' => $attendees
+            ]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ])->setStatusCode(500);
+        }
+    }
 
-            // Create new PDF document
-            $pdf = new \TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
+    // Private helper methods
+    private function getDocumentStatistics()
+    {
+        $totalDocuments = $this->dokumenModel->countAll();
+        $loaCount = $this->dokumenModel->where('tipe', 'loa')->countAllResults();
+        $sertifikatCount = $this->dokumenModel->where('tipe', 'sertifikat')->countAllResults();
+        
+        // Recent uploads (this week)
+        $weekAgo = date('Y-m-d H:i:s', strtotime('-1 week'));
+        $recentUploads = $this->dokumenModel
+            ->where('uploaded_at >=', $weekAgo)
+            ->countAllResults();
 
-            // Set document information
-            $pdf->SetCreator('SNIA Conference Management System');
-            $pdf->SetAuthor('SNIA Conference');
-            $pdf->SetTitle('Letter of Acceptance');
-            $pdf->SetSubject('LOA - ' . $user['nama_lengkap']);
+        return [
+            'total_documents' => $totalDocuments,
+            'loa_count' => $loaCount,
+            'sertifikat_count' => $sertifikatCount,
+            'recent_uploads' => $recentUploads
+        ];
+    }
 
-            // Remove default header/footer
-            $pdf->setPrintHeader(false);
-            $pdf->setPrintFooter(false);
+    private function generateLOAPDF($presenter, $event, $uploadPath)
+    {
+        try {
+            // Initialize mPDF
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8',
+                'format' => 'A4',
+                'orientation' => 'P',
+                'margin_left' => 15,
+                'margin_right' => 15,
+                'margin_top' => 20,
+                'margin_bottom' => 20,
+            ]);
 
-            // Set margins
-            $pdf->SetMargins(20, 20, 20);
-            $pdf->SetAutoPageBreak(TRUE, 20);
+            // Set document properties
+            $mpdf->SetTitle('Letter of Acceptance - ' . $presenter['nama_lengkap']);
+            $mpdf->SetAuthor('SNIA Organization');
 
-            // Add a page
-            $pdf->AddPage();
-
-            // Set font
-            $pdf->SetFont('helvetica', '', 12);
-
-            // Header with logo area
-            $pdf->SetFont('helvetica', 'B', 16);
-            $pdf->SetTextColor(0, 51, 153); // Blue color
-            $pdf->Cell(0, 15, 'SNIA CONFERENCE 2024', 0, 1, 'C');
+            // Generate HTML content
+            $html = $this->getLOAHTML($presenter, $event);
             
-            $pdf->SetFont('helvetica', '', 12);
-            $pdf->SetTextColor(0, 0, 0); // Black color
-            $pdf->Cell(0, 8, 'System Network Information & Application', 0, 1, 'C');
-            $pdf->Ln(10);
+            // Write HTML to PDF
+            $mpdf->WriteHTML($html);
 
-            // LOA Title
-            $pdf->SetFont('helvetica', 'B', 18);
-            $pdf->SetTextColor(220, 53, 69); // Red color
-            $pdf->Cell(0, 15, 'LETTER OF ACCEPTANCE', 0, 1, 'C');
-            $pdf->Ln(10);
-
-            // Reference number
-            $pdf->SetFont('helvetica', '', 10);
-            $pdf->SetTextColor(0, 0, 0);
-            $refNumber = 'LOA/' . date('Y') . '/' . str_pad($user['id_user'], 4, '0', STR_PAD_LEFT);
-            $pdf->Cell(0, 6, 'Ref: ' . $refNumber, 0, 1, 'L');
-            $pdf->Cell(0, 6, 'Date: ' . date('F d, Y'), 0, 1, 'L');
-            $pdf->Ln(8);
-
-            // Greeting
-            $pdf->SetFont('helvetica', '', 12);
-            $pdf->Cell(0, 8, 'Dear ' . $user['nama_lengkap'] . ',', 0, 1, 'L');
-            $pdf->Ln(5);
-
-            // Main content
-            $content = 'We are pleased to inform you that your abstract submission(s) have been accepted for presentation at the SNIA Conference 2024. ';
-            $content .= 'The conference organizing committee has reviewed your submission and found it to be of high quality and relevant to the conference theme.';
-            
-            $pdf->MultiCell(0, 6, $content, 0, 'J');
-            $pdf->Ln(5);
-
-            // Abstract details
-            $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 8, 'Accepted Abstract(s):', 0, 1, 'L');
-            $pdf->Ln(2);
-
-            $pdf->SetFont('helvetica', '', 11);
-            foreach ($abstraks as $index => $abstrak) {
-                $pdf->SetFont('helvetica', 'B', 11);
-                $pdf->Cell(10, 6, ($index + 1) . '.', 0, 0, 'L');
-                $pdf->MultiCell(0, 6, $abstrak['judul'], 0, 'L');
-                
-                $pdf->SetFont('helvetica', '', 10);
-                $pdf->SetTextColor(100, 100, 100);
-                $pdf->Cell(10, 5, '', 0, 0, 'L');
-                $pdf->Cell(0, 5, 'Category: ' . $abstrak['nama_kategori'], 0, 1, 'L');
-                if (!empty($abstrak['event_title'])) {
-                    $pdf->Cell(10, 5, '', 0, 0, 'L');
-                    $pdf->Cell(0, 5, 'Event: ' . $abstrak['event_title'], 0, 1, 'L');
-                }
-                $pdf->SetTextColor(0, 0, 0);
-                $pdf->Ln(3);
-            }
-
-            // Presenter details
-            $pdf->Ln(5);
-            $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 8, 'Presenter Details:', 0, 1, 'L');
-            $pdf->Ln(2);
-
-            $pdf->SetFont('helvetica', '', 11);
-            $pdf->Cell(40, 6, 'Name:', 0, 0, 'L');
-            $pdf->Cell(0, 6, $user['nama_lengkap'], 0, 1, 'L');
-            
-            $pdf->Cell(40, 6, 'Email:', 0, 0, 'L');
-            $pdf->Cell(0, 6, $user['email'], 0, 1, 'L');
-            
-            if (!empty($user['institusi'])) {
-                $pdf->Cell(40, 6, 'Institution:', 0, 0, 'L');
-                $pdf->Cell(0, 6, $user['institusi'], 0, 1, 'L');
-            }
-
-            if (!empty($user['no_hp'])) {
-                $pdf->Cell(40, 6, 'Phone:', 0, 0, 'L');
-                $pdf->Cell(0, 6, $user['no_hp'], 0, 1, 'L');
-            }
-
-            // Next steps
-            $pdf->Ln(10);
-            $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 8, 'Next Steps:', 0, 1, 'L');
-            $pdf->Ln(2);
-
-            $pdf->SetFont('helvetica', '', 11);
-            $nextSteps = "1. Please confirm your attendance by completing the registration process\n";
-            $nextSteps .= "2. Prepare your presentation according to the conference guidelines\n";
-            $nextSteps .= "3. Submit your final presentation materials before the deadline\n";
-            $nextSteps .= "4. Join us at the conference venue on the scheduled date";
-
-            $pdf->MultiCell(0, 6, $nextSteps, 0, 'L');
-
-            // Closing
-            $pdf->Ln(8);
-            $pdf->SetFont('helvetica', '', 12);
-            $pdf->MultiCell(0, 6, 'We look forward to your valuable contribution to the SNIA Conference 2024.', 0, 'J');
-            $pdf->Ln(5);
-
-            $pdf->Cell(0, 6, 'Best regards,', 0, 1, 'L');
-            $pdf->Ln(15);
-
-            // Signature area
-            $pdf->SetFont('helvetica', 'B', 12);
-            $pdf->Cell(0, 6, 'SNIA Conference Organizing Committee', 0, 1, 'L');
-            $pdf->SetFont('helvetica', '', 10);
-            $pdf->Cell(0, 6, 'System Network Information & Application', 0, 1, 'L');
-
-            // Footer
-            $pdf->SetY(-30);
-            $pdf->SetFont('helvetica', '', 8);
-            $pdf->SetTextColor(100, 100, 100);
-            $pdf->Cell(0, 5, 'This is an automatically generated document. For inquiries, please contact the organizing committee.', 0, 1, 'C');
+            // Generate filename
+            $fileName = 'LOA_' . $event['id'] . '_' . $presenter['id_user'] . '_' . time() . '.pdf';
+            $filePath = $uploadPath . $fileName;
 
             // Output PDF to file
-            $pdf->Output($filePath, 'F');
-            
-            return file_exists($filePath);
+            $mpdf->Output($filePath, 'F');
+
+            return $filePath;
 
         } catch (\Exception $e) {
             log_message('error', 'LOA PDF generation error: ' . $e->getMessage());
@@ -638,109 +571,38 @@ class Dokumen extends BaseController
         }
     }
 
-    // TCPDF Implementation for Certificate
-    private function generateCertificatePDF($user, $filePath)
+    private function generateCertificatePDF($user, $event, $uploadPath)
     {
         try {
-            // Create new PDF document
-            $pdf = new \TCPDF('L', PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false); // Landscape orientation
+            // Initialize mPDF with landscape orientation for certificate
+            $mpdf = new Mpdf([
+                'mode' => 'utf-8',
+                'format' => 'A4',
+                'orientation' => 'L', // Landscape
+                'margin_left' => 10,
+                'margin_right' => 10,
+                'margin_top' => 10,
+                'margin_bottom' => 10,
+            ]);
 
-            // Set document information
-            $pdf->SetCreator('SNIA Conference Management System');
-            $pdf->SetAuthor('SNIA Conference');
-            $pdf->SetTitle('Certificate of Participation');
-            $pdf->SetSubject('Certificate - ' . $user['nama_lengkap']);
+            // Set document properties
+            $mpdf->SetTitle('Certificate of Participation - ' . $user['nama_lengkap']);
+            $mpdf->SetAuthor('SNIA Organization');
 
-            // Remove default header/footer
-            $pdf->setPrintHeader(false);
-            $pdf->setPrintFooter(false);
+            // Generate HTML content
+            $html = $this->getCertificateHTML($user, $event);
+            
+            // Write HTML to PDF
+            $mpdf->WriteHTML($html);
 
-            // Set margins
-            $pdf->SetMargins(30, 30, 30);
-            $pdf->SetAutoPageBreak(FALSE);
-
-            // Add a page
-            $pdf->AddPage();
-
-            // Background color (light blue)
-            $pdf->SetFillColor(240, 248, 255);
-            $pdf->Rect(0, 0, 297, 210, 'F'); // A4 landscape dimensions
-
-            // Border
-            $pdf->SetDrawColor(0, 51, 153);
-            $pdf->SetLineWidth(2);
-            $pdf->Rect(20, 20, 257, 170, 'D');
-
-            // Inner border
-            $pdf->SetLineWidth(0.5);
-            $pdf->Rect(25, 25, 247, 160, 'D');
-
-            // Header
-            $pdf->SetTextColor(0, 51, 153);
-            $pdf->SetFont('helvetica', 'B', 24);
-            $pdf->SetXY(30, 40);
-            $pdf->Cell(237, 15, 'SNIA CONFERENCE 2024', 0, 1, 'C');
-
-            $pdf->SetFont('helvetica', '', 14);
-            $pdf->SetXY(30, 58);
-            $pdf->Cell(237, 8, 'System Network Information & Application', 0, 1, 'C');
-
-            // Certificate title
-            $pdf->SetFont('helvetica', 'B', 28);
-            $pdf->SetTextColor(220, 53, 69);
-            $pdf->SetXY(30, 80);
-            $pdf->Cell(237, 20, 'CERTIFICATE OF PARTICIPATION', 0, 1, 'C');
-
-            // This certifies that
-            $pdf->SetFont('helvetica', '', 16);
-            $pdf->SetTextColor(0, 0, 0);
-            $pdf->SetXY(30, 110);
-            $pdf->Cell(237, 10, 'This is to certify that', 0, 1, 'C');
-
-            // Participant name
-            $pdf->SetFont('helvetica', 'B', 22);
-            $pdf->SetTextColor(0, 51, 153);
-            $pdf->SetXY(30, 125);
-            $pdf->Cell(237, 15, strtoupper($user['nama_lengkap']), 0, 1, 'C');
-
-            // Participation text
-            $pdf->SetFont('helvetica', '', 14);
-            $pdf->SetTextColor(0, 0, 0);
-            $pdf->SetXY(30, 145);
-            $participationText = 'has successfully participated in the SNIA Conference 2024 as a ' . strtoupper($user['role']);
-            $pdf->Cell(237, 8, $participationText, 0, 1, 'C');
-
-            // Institution
-            if (!empty($user['institusi'])) {
-                $pdf->SetFont('helvetica', '', 12);
-                $pdf->SetXY(30, 158);
-                $pdf->Cell(237, 6, 'Institution: ' . $user['institusi'], 0, 1, 'C');
-            }
-
-            // Award text
-            $pdf->SetFont('helvetica', '', 12);
-            $pdf->SetXY(30, 168);
-            $pdf->MultiCell(237, 5, 'This certificate is awarded in recognition of your valuable contribution to the advancement of knowledge and research in the field of information systems and technology.', 0, 'C');
-
-            // Date and signature area
-            $pdf->SetFont('helvetica', '', 10);
-            $pdf->SetXY(50, 185);
-            $pdf->Cell(80, 5, 'Date: ' . date('F d, Y'), 0, 0, 'L');
-
-            $pdf->SetXY(170, 185);
-            $pdf->Cell(80, 5, 'Conference Director', 0, 0, 'R');
-
-            // Certificate number
-            $certNumber = 'CERT/' . date('Y') . '/' . str_pad($user['id_user'], 4, '0', STR_PAD_LEFT);
-            $pdf->SetFont('helvetica', '', 8);
-            $pdf->SetTextColor(100, 100, 100);
-            $pdf->SetXY(30, 200);
-            $pdf->Cell(237, 4, 'Certificate No: ' . $certNumber, 0, 1, 'C');
+            // Generate filename
+            $fileName = 'SERTIFIKAT_' . $event['id'] . '_' . $user['id_user'] . '_' . time() . '.pdf';
+            $filePath = $uploadPath . $fileName;
 
             // Output PDF to file
-            $pdf->Output($filePath, 'F');
-            
-            return file_exists($filePath);
+            $mpdf->Output($filePath, 'F');
+
+            return $filePath;
 
         } catch (\Exception $e) {
             log_message('error', 'Certificate PDF generation error: ' . $e->getMessage());
@@ -748,17 +610,159 @@ class Dokumen extends BaseController
         }
     }
 
+    private function getLOAHTML($presenter, $event)
+    {
+        $eventDate = date('d F Y', strtotime($event['event_date']));
+        $currentDate = date('d F Y');
+        
+        return '
+        <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; }
+            .header { text-align: center; margin-bottom: 40px; }
+            .header h1 { color: #2563eb; font-size: 28px; margin-bottom: 10px; }
+            .header h2 { color: #1e40af; font-size: 20px; margin: 0; }
+            .content { margin: 20px 0; text-align: justify; }
+            .content p { margin-bottom: 15px; }
+            .details { background-color: #f8f9fa; padding: 15px; border-left: 4px solid #2563eb; margin: 20px 0; }
+            .details ul { margin: 10px 0; padding-left: 20px; }
+            .signature { margin-top: 60px; text-align: right; }
+            .signature p { margin: 5px 0; }
+            .date { text-align: left; margin-bottom: 30px; }
+        </style>
+        
+        <div class="header">
+            <h1>LETTER OF ACCEPTANCE</h1>
+            <h2>' . htmlspecialchars($event['title']) . '</h2>
+        </div>
+        
+        <div class="date">
+            <p><strong>Date:</strong> ' . $currentDate . '</p>
+        </div>
+        
+        <div class="content">
+            <p>Dear <strong>' . htmlspecialchars($presenter['nama_lengkap']) . '</strong>,</p>
+            
+            <p>We are pleased to inform you that your participation as a presenter in <strong>' . htmlspecialchars($event['title']) . '</strong> has been accepted.</p>
+            
+            <div class="details">
+                <p><strong>Event Details:</strong></p>
+                <ul>
+                    <li><strong>Event:</strong> ' . htmlspecialchars($event['title']) . '</li>
+                    <li><strong>Date:</strong> ' . $eventDate . '</li>
+                    <li><strong>Time:</strong> ' . htmlspecialchars($event['event_time']) . '</li>
+                    <li><strong>Format:</strong> ' . ucfirst(htmlspecialchars($event['format'])) . '</li>
+                </ul>
+            </div>
+            
+            <p>We look forward to your valuable contribution to this event and appreciate your participation in making this event successful.</p>
+            
+            <p>Should you have any questions or require further information, please do not hesitate to contact us.</p>
+            
+            <p>Best regards,</p>
+        </div>
+        
+        <div class="signature">
+            <p><strong>SNIA Organization</strong></p>
+            <p>Event Committee</p>
+        </div>';
+    }
+
+    private function getCertificateHTML($user, $event)
+    {
+        $eventDate = date('d F Y', strtotime($event['event_date']));
+        
+        return '
+        <style>
+            body { font-family: "Times New Roman", serif; margin: 0; padding: 20px; }
+            .certificate { 
+                border: 15px solid #2563eb; 
+                padding: 50px; 
+                text-align: center; 
+                background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+                min-height: 500px;
+                position: relative;
+            }
+            .title { 
+                font-size: 48px; 
+                color: #2563eb; 
+                margin-bottom: 20px; 
+                font-weight: bold; 
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            }
+            .subtitle { 
+                font-size: 24px; 
+                margin-bottom: 40px; 
+                color: #1e40af;
+                letter-spacing: 2px;
+            }
+            .recipient { 
+                font-size: 36px; 
+                color: #1e40af; 
+                margin: 40px 0; 
+                font-weight: bold;
+                text-decoration: underline;
+                text-decoration-color: #2563eb;
+            }
+            .event-title { 
+                font-size: 28px; 
+                margin: 30px 0; 
+                font-style: italic;
+                color: #374151;
+                line-height: 1.4;
+            }
+            .date { 
+                font-size: 20px; 
+                margin-top: 40px;
+                color: #6b7280;
+            }
+            .signature { 
+                margin-top: 60px; 
+                font-size: 18px;
+                color: #374151;
+            }
+            .signature p { margin: 5px 0; }
+            .decorative-line {
+                width: 200px;
+                height: 3px;
+                background: linear-gradient(to right, #2563eb, #1e40af);
+                margin: 20px auto;
+            }
+        </style>
+        
+        <div class="certificate">
+            <div class="title">CERTIFICATE</div>
+            <div class="subtitle">OF PARTICIPATION</div>
+            
+            <div class="decorative-line"></div>
+            
+            <p style="font-size: 20px; margin: 30px 0;">This is to certify that</p>
+            
+            <div class="recipient">' . htmlspecialchars($user['nama_lengkap']) . '</div>
+            
+            <p style="font-size: 20px; margin: 30px 0;">has successfully participated in</p>
+            
+            <div class="event-title">' . htmlspecialchars($event['title']) . '</div>
+            
+            <div class="decorative-line"></div>
+            
+            <div class="date">Held on ' . $eventDate . '</div>
+            
+            <div class="signature">
+                <p><strong>SNIA Organization</strong></p>
+                <p>Event Committee</p>
+            </div>
+        </div>';
+    }
+
     private function logActivity($userId, $activity)
     {
-        $db = \Config\Database::connect();
         try {
-            $db->table('log_aktivitas')->insert([
+            $this->db->table('log_aktivitas')->insert([
                 'id_user' => $userId,
                 'aktivitas' => $activity,
                 'waktu' => date('Y-m-d H:i:s')
             ]);
         } catch (\Exception $e) {
-            // Silent fail for logging
             log_message('error', 'Failed to log activity: ' . $e->getMessage());
         }
     }

@@ -16,6 +16,7 @@ class Event extends BaseController
     protected $abstrakModel;
     protected $pembayaranModel;
     protected $absensiModel;
+    protected $db;
 
     public function __construct()
     {
@@ -24,101 +25,164 @@ class Event extends BaseController
         $this->abstrakModel = new AbstrakModel();
         $this->pembayaranModel = new PembayaranModel();
         $this->absensiModel = new AbsensiModel();
+        $this->db = \Config\Database::connect();
     }
 
+    /**
+     * Main index page with real-time statistics
+     */
     public function index()
     {
-        // Get all events with statistics
-        $events = $this->eventModel->getEventsWithStats();
-        
-        // Add additional event details
-        foreach ($events as &$event) {
-            // Get detailed registration breakdown
-            $event['registration_breakdown'] = $this->getRegistrationBreakdown($event['id']);
+        try {
+            // Get events with comprehensive statistics
+            $events = $this->getEventsWithStats();
             
-            // Check registration and abstract submission status
-            $event['registration_open'] = $this->eventModel->isRegistrationOpen($event['id']);
-            $event['abstract_open'] = $this->eventModel->isAbstractSubmissionOpen($event['id']);
+            // Get dashboard statistics
+            $stats = $this->getDashboardStats();
             
-            // Get recent registrations for this event
-            $event['recent_registrations'] = $this->pembayaranModel
-                ->select('pembayaran.*, users.nama_lengkap, users.role')
-                ->join('users', 'users.id_user = pembayaran.id_user')
-                ->where('pembayaran.event_id', $event['id'])
-                ->orderBy('pembayaran.tanggal_bayar', 'DESC')
-                ->limit(3)
-                ->findAll();
-
-            // Get role-based registration counts
-            $db = \Config\Database::connect();
-            $roleStats = $db->query("
-                SELECT 
-                    u.role,
-                    p.participation_type,
-                    COUNT(*) as count
-                FROM pembayaran p
-                JOIN users u ON u.id_user = p.id_user
-                WHERE p.event_id = ? AND p.status = 'verified'
-                GROUP BY u.role, p.participation_type
-            ", [$event['id']])->getResultArray();
-
-            $event['presenter_registrations'] = 0;
-            $event['audience_online_registrations'] = 0;
-            $event['audience_offline_registrations'] = 0;
-
-            foreach ($roleStats as $stat) {
-                if ($stat['role'] === 'presenter') {
-                    $event['presenter_registrations'] += $stat['count'];
-                } elseif ($stat['role'] === 'audience') {
-                    if ($stat['participation_type'] === 'online') {
-                        $event['audience_online_registrations'] += $stat['count'];
-                    } else {
-                        $event['audience_offline_registrations'] += $stat['count'];
-                    }
-                }
+            // Process events for display
+            foreach ($events as &$event) {
+                $event['is_active'] = $this->parseBoolean($event['is_active']);
+                $event['registration_active'] = $this->parseBoolean($event['registration_active']);
+                $event['abstract_submission_active'] = $this->parseBoolean($event['abstract_submission_active']);
+                
+                // Calculate additional metrics
+                $event['attendance_rate'] = $event['verified_registrations'] > 0 
+                    ? round(($event['present_count'] / $event['verified_registrations']) * 100, 2) 
+                    : 0;
+                    
+                $event['capacity_filled'] = $event['max_participants'] 
+                    ? round(($event['verified_registrations'] / $event['max_participants']) * 100, 2)
+                    : 0;
+                
+                // Event status
+                $event['event_status'] = $this->calculateEventStatus($event);
+                $event['registration_status'] = $this->calculateRegistrationStatus($event);
             }
 
-            // Get revenue breakdown
-            $revenueStats = $db->query("
-                SELECT 
-                    p.participation_type,
-                    SUM(p.jumlah) as revenue
-                FROM pembayaran p
-                WHERE p.event_id = ? AND p.status = 'verified'
-                GROUP BY p.participation_type
-            ", [$event['id']])->getResultArray();
+            $data = [
+                'events' => $events,
+                'stats' => $stats
+            ];
 
-            $event['online_revenue'] = 0;
-            $event['offline_revenue'] = 0;
-
-            foreach ($revenueStats as $revenue) {
-                if ($revenue['participation_type'] === 'online') {
-                    $event['online_revenue'] = $revenue['revenue'];
-                } else {
-                    $event['offline_revenue'] = $revenue['revenue'];
-                }
+            // Return JSON for AJAX requests
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'data' => $data,
+                    'timestamp' => time()
+                ]);
             }
+
+            return view('role/admin/event/index', $data);
+
+        } catch (\Exception $e) {
+            log_message('error', 'Event index error: ' . $e->getMessage());
+            
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Terjadi kesalahan saat memuat data event'
+                ]);
+            }
+            
+            return redirect()->back()->with('error', 'Terjadi kesalahan saat memuat data event');
         }
-        
-        $data = [
-            'events' => $events,
-            'total_events' => $this->eventModel->countAll(),
-            'active_events' => $this->eventModel->where('is_active', true)->countAllResults(),
-            'upcoming_events' => $this->eventModel->where('event_date >=', date('Y-m-d'))
-                                                 ->where('is_active', true)
-                                                 ->countAllResults(),
-        ];
-
-        return view('role/admin/event/index', $data);
     }
 
+    /**
+     * Get events with comprehensive statistics
+     */
+    private function getEventsWithStats()
+    {
+        $sql = "
+            SELECT 
+                e.*,
+                COALESCE(reg_stats.total_registrations, 0) as total_registrations,
+                COALESCE(reg_stats.verified_registrations, 0) as verified_registrations,
+                COALESCE(reg_stats.online_registrations, 0) as online_registrations,
+                COALESCE(reg_stats.offline_registrations, 0) as offline_registrations,
+                COALESCE(rev_stats.total_revenue, 0) as total_revenue,
+                COALESCE(abs_stats.total_abstracts, 0) as total_abstracts,
+                COALESCE(att_stats.present_count, 0) as present_count
+            FROM events e
+            LEFT JOIN (
+                SELECT 
+                    event_id,
+                    COUNT(*) as total_registrations,
+                    COUNT(CASE WHEN status = 'verified' THEN 1 END) as verified_registrations,
+                    COUNT(CASE WHEN participation_type = 'online' THEN 1 END) as online_registrations,
+                    COUNT(CASE WHEN participation_type = 'offline' THEN 1 END) as offline_registrations
+                FROM pembayaran 
+                GROUP BY event_id
+            ) reg_stats ON e.id = reg_stats.event_id
+            LEFT JOIN (
+                SELECT 
+                    event_id,
+                    SUM(CASE WHEN status = 'verified' THEN jumlah ELSE 0 END) as total_revenue
+                FROM pembayaran 
+                GROUP BY event_id
+            ) rev_stats ON e.id = rev_stats.event_id
+            LEFT JOIN (
+                SELECT 
+                    event_id,
+                    COUNT(*) as total_abstracts
+                FROM abstrak 
+                GROUP BY event_id
+            ) abs_stats ON e.id = abs_stats.event_id
+            LEFT JOIN (
+                SELECT 
+                    event_id,
+                    COUNT(CASE WHEN status = 'hadir' THEN 1 END) as present_count
+                FROM absensi 
+                GROUP BY event_id
+            ) att_stats ON e.id = att_stats.event_id
+            ORDER BY e.event_date DESC, e.created_at DESC
+        ";
+        
+        return $this->db->query($sql)->getResultArray();
+    }
+
+    /**
+     * Get dashboard statistics
+     */
+    private function getDashboardStats()
+    {
+        $totalEvents = $this->eventModel->countAll();
+        $activeEvents = $this->eventModel->where('is_active', true)->countAllResults();
+        $upcomingEvents = $this->eventModel
+            ->where('event_date >=', date('Y-m-d'))
+            ->where('is_active', true)
+            ->countAllResults();
+        
+        $totalRevenue = $this->pembayaranModel
+            ->selectSum('jumlah')
+            ->where('status', 'verified')
+            ->first()['jumlah'] ?? 0;
+            
+        $verifiedRegistrations = $this->pembayaranModel
+            ->where('status', 'verified')
+            ->countAllResults();
+
+        return [
+            'total_events' => $totalEvents,
+            'active_events' => $activeEvents,
+            'upcoming_events' => $upcomingEvents,
+            'total_revenue' => $totalRevenue,
+            'verified_registrations' => $verifiedRegistrations
+        ];
+    }
+
+    /**
+     * Store new event
+     */
     public function store()
     {
         $validation = \Config\Services::validation();
         
         $rules = [
             'title' => 'required|min_length[3]|max_length[255]',
-            'description' => 'max_length[1000]',
+            'description' => 'max_length[2000]',
             'event_date' => 'required|valid_date',
             'event_time' => 'required',
             'format' => 'required|in_list[both,online,offline]',
@@ -130,107 +194,95 @@ class Event extends BaseController
             'abstract_deadline' => 'permit_empty|valid_date'
         ];
 
-        // Additional validation based on format
-        if ($this->request->getPost('format') === 'offline') {
+        // Format-specific validation
+        $format = $this->request->getPost('format');
+        if (in_array($format, ['offline', 'both'])) {
             $rules['location'] = 'required|min_length[5]|max_length[255]';
-        } else if ($this->request->getPost('format') === 'online') {
-            $rules['zoom_link'] = 'permit_empty|valid_url|max_length[500]';
-        } else if ($this->request->getPost('format') === 'both') {
-            $rules['location'] = 'required|min_length[5]|max_length[255]';
+        }
+        if (in_array($format, ['online', 'both'])) {
             $rules['zoom_link'] = 'permit_empty|valid_url|max_length[500]';
         }
 
         if (!$this->validate($rules)) {
-            return redirect()->back()->withInput()->with('errors', $validation->getErrors());
+            return $this->handleValidationError($validation->getErrors());
         }
 
-        // Validate dates
-        $eventDate = $this->request->getPost('event_date');
-        $registrationDeadline = $this->request->getPost('registration_deadline');
-        $abstractDeadline = $this->request->getPost('abstract_deadline');
-
-        if (strtotime($eventDate) <= time()) {
-            return redirect()->back()->withInput()->with('error', 'Tanggal event harus di masa depan.');
+        // Date validation
+        $dateValidation = $this->validateEventDates();
+        if (!$dateValidation['valid']) {
+            return $this->handleError($dateValidation['message']);
         }
 
-        if ($registrationDeadline && strtotime($registrationDeadline) >= strtotime($eventDate)) {
-            return redirect()->back()->withInput()->with('error', 'Batas pendaftaran harus sebelum tanggal event.');
-        }
-
-        if ($abstractDeadline && strtotime($abstractDeadline) >= strtotime($eventDate)) {
-            return redirect()->back()->withInput()->with('error', 'Batas submit abstrak harus sebelum tanggal event.');
-        }
-
-        // Begin transaction
-        $db = \Config\Database::connect();
-        $db->transStart();
+        $this->db->transStart();
 
         try {
-            $data = [
-                'title' => $this->request->getPost('title'),
-                'description' => $this->request->getPost('description'),
-                'event_date' => $eventDate,
-                'event_time' => $this->request->getPost('event_time'),
-                'format' => $this->request->getPost('format'),
-                'location' => $this->request->getPost('location'),
-                'zoom_link' => $this->request->getPost('zoom_link'),
-                'presenter_fee_offline' => $this->request->getPost('presenter_fee_offline'),
-                'audience_fee_online' => $this->request->getPost('audience_fee_online'),
-                'audience_fee_offline' => $this->request->getPost('audience_fee_offline'),
-                'max_participants' => $this->request->getPost('max_participants') ?: null,
-                'registration_deadline' => $registrationDeadline ?: null,
-                'abstract_deadline' => $abstractDeadline ?: null,
-                'registration_active' => $this->request->getPost('registration_active') ? true : false,
-                'abstract_submission_active' => $this->request->getPost('abstract_submission_active') ? true : false,
-                'is_active' => true
-            ];
-
-            if (!$this->eventModel->save($data)) {
+            $eventData = $this->prepareEventData();
+            
+            if (!$this->eventModel->save($eventData)) {
                 throw new \Exception('Failed to create event: ' . implode(', ', $this->eventModel->errors()));
             }
 
+            $newEventId = $this->eventModel->getInsertID();
+            
             // Log activity
-            $this->logActivity(session('id_user'), "Created new event: {$data['title']}");
+            $this->logActivity(session('id_user'), "Created new event: {$eventData['title']} (ID: {$newEventId})");
 
-            $db->transComplete();
+            $this->db->transComplete();
 
-            if ($db->transStatus() === FALSE) {
+            if ($this->db->transStatus() === FALSE) {
                 throw new \Exception('Transaction failed');
             }
 
-            return redirect()->to('admin/event')->with('success', 'Event berhasil dibuat!');
+            $response = [
+                'success' => true,
+                'message' => 'Event berhasil dibuat!',
+                'event_id' => $newEventId
+            ];
+
+            return $this->response->setJSON($response);
 
         } catch (\Exception $e) {
-            $db->transRollback();
+            $this->db->transRollback();
             log_message('error', 'Event creation error: ' . $e->getMessage());
-            return redirect()->back()->withInput()->with('error', 'Error: ' . $e->getMessage());
+            return $this->handleError('Error: ' . $e->getMessage());
         }
     }
 
+    /**
+     * Edit event - get event data for editing
+     */
     public function edit($id)
     {
         $event = $this->eventModel->find($id);
         
         if (!$event) {
-            return redirect()->to('admin/event')->with('error', 'Event tidak ditemukan.');
+            return $this->response->setJSON(['success' => false, 'message' => 'Event tidak ditemukan.']);
         }
 
-        return $this->response->setJSON($event);
+        // Normalize boolean values
+        $event['is_active'] = $this->parseBoolean($event['is_active']);
+        $event['registration_active'] = $this->parseBoolean($event['registration_active']);
+        $event['abstract_submission_active'] = $this->parseBoolean($event['abstract_submission_active']);
+
+        return $this->response->setJSON(['success' => true, 'event' => $event]);
     }
 
+    /**
+     * Update existing event
+     */
     public function update($id)
     {
         $event = $this->eventModel->find($id);
         
         if (!$event) {
-            return redirect()->to('admin/event')->with('error', 'Event tidak ditemukan.');
+            return $this->handleError('Event tidak ditemukan.');
         }
 
         $validation = \Config\Services::validation();
         
         $rules = [
             'title' => 'required|min_length[3]|max_length[255]',
-            'description' => 'max_length[1000]',
+            'description' => 'max_length[2000]',
             'event_date' => 'required|valid_date',
             'event_time' => 'required',
             'format' => 'required|in_list[both,online,offline]',
@@ -242,111 +294,81 @@ class Event extends BaseController
             'abstract_deadline' => 'permit_empty|valid_date'
         ];
 
-        // Additional validation based on format
-        if ($this->request->getPost('format') === 'offline') {
-            $rules['location'] = 'required|min_length[5]|max_length[255]';
-        } else if ($this->request->getPost('format') === 'online') {
-            $rules['zoom_link'] = 'permit_empty|valid_url|max_length[500]';
-        } else if ($this->request->getPost('format') === 'both') {
-            $rules['location'] = 'required|min_length[5]|max_length[255]';
-            $rules['zoom_link'] = 'permit_empty|valid_url|max_length[500]';
-        }
-
         if (!$this->validate($rules)) {
-            return redirect()->back()->withInput()->with('errors', $validation->getErrors());
+            return $this->handleValidationError($validation->getErrors());
         }
 
-        $eventDate = $this->request->getPost('event_date');
-        $registrationDeadline = $this->request->getPost('registration_deadline');
-        $abstractDeadline = $this->request->getPost('abstract_deadline');
-
-        // Only validate future date for new events or when changing date
-        if ($event['event_date'] !== $eventDate && strtotime($eventDate) <= time()) {
-            return redirect()->back()->withInput()->with('error', 'Tanggal event harus di masa depan.');
+        // Check for dependencies before allowing major changes
+        $dependencies = $this->checkEventDependencies($id);
+        if ($dependencies['has_dependencies']) {
+            $changeValidation = $this->validateChangeWithDependencies($event, $dependencies);
+            if (!$changeValidation['allowed']) {
+                return $this->handleError($changeValidation['message']);
+            }
         }
 
-        if ($registrationDeadline && strtotime($registrationDeadline) >= strtotime($eventDate)) {
-            return redirect()->back()->withInput()->with('error', 'Batas pendaftaran harus sebelum tanggal event.');
-        }
-
-        if ($abstractDeadline && strtotime($abstractDeadline) >= strtotime($eventDate)) {
-            return redirect()->back()->withInput()->with('error', 'Batas submit abstrak harus sebelum tanggal event.');
-        }
-
-        // Begin transaction
-        $db = \Config\Database::connect();
-        $db->transStart();
+        $this->db->transStart();
 
         try {
-            $data = [
-                'title' => $this->request->getPost('title'),
-                'description' => $this->request->getPost('description'),
-                'event_date' => $eventDate,
-                'event_time' => $this->request->getPost('event_time'),
-                'format' => $this->request->getPost('format'),
-                'location' => $this->request->getPost('location'),
-                'zoom_link' => $this->request->getPost('zoom_link'),
-                'presenter_fee_offline' => $this->request->getPost('presenter_fee_offline'),
-                'audience_fee_online' => $this->request->getPost('audience_fee_online'),
-                'audience_fee_offline' => $this->request->getPost('audience_fee_offline'),
-                'max_participants' => $this->request->getPost('max_participants') ?: null,
-                'registration_deadline' => $registrationDeadline ?: null,
-                'abstract_deadline' => $abstractDeadline ?: null,
-                'registration_active' => $this->request->getPost('registration_active') ? true : false,
-                'abstract_submission_active' => $this->request->getPost('abstract_submission_active') ? true : false,
-                'is_active' => $this->request->getPost('is_active') ? true : false
-            ];
-
-            if (!$this->eventModel->update($id, $data)) {
+            $eventData = $this->prepareEventData();
+            
+            if (!$this->eventModel->update($id, $eventData)) {
                 throw new \Exception('Failed to update event: ' . implode(', ', $this->eventModel->errors()));
             }
 
             // Log activity
-            $this->logActivity(session('id_user'), "Updated event: {$data['title']} (ID: {$id})");
+            $this->logActivity(session('id_user'), "Updated event: {$eventData['title']} (ID: {$id})");
 
-            $db->transComplete();
+            $this->db->transComplete();
 
-            if ($db->transStatus() === FALSE) {
+            if ($this->db->transStatus() === FALSE) {
                 throw new \Exception('Transaction failed');
             }
 
-            return redirect()->to('admin/event')->with('success', 'Event berhasil diupdate!');
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => 'Event berhasil diupdate!',
+                'event_id' => $id
+            ]);
 
         } catch (\Exception $e) {
-            $db->transRollback();
+            $this->db->transRollback();
             log_message('error', 'Event update error: ' . $e->getMessage());
-            return redirect()->back()->withInput()->with('error', 'Error: ' . $e->getMessage());
+            return $this->handleError('Error: ' . $e->getMessage());
         }
     }
 
+    /**
+     * Delete event with safety checks
+     */
     public function delete($id)
     {
         $event = $this->eventModel->find($id);
         
         if (!$event) {
-            return redirect()->to('admin/event')->with('error', 'Event tidak ditemukan.');
+            return $this->handleError('Event tidak ditemukan.');
         }
 
-        // Check if event has registrations or abstracts or attendance
-        $hasRegistrations = $this->pembayaranModel->where('event_id', $id)->countAllResults() > 0;
-        $hasAbstracts = $this->abstrakModel->where('event_id', $id)->countAllResults() > 0;
-        $hasAttendance = $this->absensiModel->where('event_id', $id)->countAllResults() > 0;
+        // Check if event is active
+        $isActive = $this->parseBoolean($event['is_active']);
+        
+        if ($isActive) {
+            return $this->handleError('Tidak dapat menghapus event yang masih aktif. Silakan nonaktifkan event terlebih dahulu.');
+        }
 
-        if ($hasRegistrations || $hasAbstracts || $hasAttendance) {
-            $relatedData = [];
-            if ($hasRegistrations) $relatedData[] = 'pendaftaran';
-            if ($hasAbstracts) $relatedData[] = 'abstrak';
-            if ($hasAttendance) $relatedData[] = 'data absensi';
+        // Check dependencies
+        $dependencies = $this->checkEventDependencies($id);
+        
+        if ($dependencies['has_dependencies']) {
+            $dependencyList = [];
+            if ($dependencies['registrations'] > 0) $dependencyList[] = "{$dependencies['registrations']} pendaftaran";
+            if ($dependencies['abstracts'] > 0) $dependencyList[] = "{$dependencies['abstracts']} abstrak";
+            if ($dependencies['attendance'] > 0) $dependencyList[] = "{$dependencies['attendance']} data absensi";
             
-            return redirect()->back()->with('error', 
-                'Tidak dapat menghapus event yang sudah memiliki ' . implode(', ', $relatedData) . '. ' .
-                'Silakan hapus data terkait terlebih dahulu atau nonaktifkan event ini.'
-            );
+            return $this->handleError('Tidak dapat menghapus event yang memiliki ' . implode(', ', $dependencyList) . '. Silakan hapus data terkait terlebih dahulu atau biarkan event tetap nonaktif.');
         }
 
-        // Begin transaction
-        $db = \Config\Database::connect();
-        $db->transStart();
+        $this->db->transStart();
 
         try {
             if (!$this->eventModel->delete($id)) {
@@ -354,23 +376,81 @@ class Event extends BaseController
             }
 
             // Log activity
-            $this->logActivity(session('id_user'), "Deleted event: {$event['title']} (ID: {$id})");
+            $this->logActivity(session('id_user'), "Deleted inactive event: {$event['title']} (ID: {$id})");
 
-            $db->transComplete();
+            $this->db->transComplete();
 
-            if ($db->transStatus() === FALSE) {
+            if ($this->db->transStatus() === FALSE) {
                 throw new \Exception('Transaction failed');
             }
 
-            return redirect()->to('admin/event')->with('success', 'Event berhasil dihapus!');
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => 'Event berhasil dihapus!'
+            ]);
 
         } catch (\Exception $e) {
-            $db->transRollback();
+            $this->db->transRollback();
             log_message('error', 'Event deletion error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Error menghapus event: ' . $e->getMessage());
+            return $this->handleError('Error menghapus event: ' . $e->getMessage());
         }
     }
 
+    /**
+     * Toggle event status (active/inactive)
+     */
+    public function toggleStatus($id)
+    {
+        $event = $this->eventModel->find($id);
+        
+        if (!$event) {
+            return $this->handleError('Event tidak ditemukan.');
+        }
+
+        $currentStatus = $this->parseBoolean($event['is_active']);
+        $newStatus = !$currentStatus;
+
+        try {
+            if ($this->eventModel->update($id, ['is_active' => $newStatus])) {
+                // Log activity
+                $this->logActivity(session('id_user'), "Changed status for event '{$event['title']}' to " . ($newStatus ? 'active' : 'inactive'));
+                
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => $newStatus ? 'Event berhasil diaktifkan!' : 'Event berhasil dinonaktifkan!',
+                    'new_status' => $newStatus,
+                    'new_status_text' => $newStatus ? 'Aktif' : 'Nonaktif',
+                    'can_delete' => !$newStatus
+                ]);
+            }
+            
+            return $this->handleError('Gagal mengubah status event.');
+
+        } catch (\Exception $e) {
+            log_message('error', 'Toggle status error: ' . $e->getMessage());
+            return $this->handleError('Error: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Toggle registration status
+     */
+    public function toggleRegistration($id)
+    {
+        return $this->toggleEventFeature($id, 'registration_active', 'pendaftaran');
+    }
+
+    /**
+     * Toggle abstract submission status
+     */
+    public function toggleAbstractSubmission($id)
+    {
+        return $this->toggleEventFeature($id, 'abstract_submission_active', 'submit abstrak');
+    }
+
+    /**
+     * Get event detail page
+     */
     public function detail($id)
     {
         $event = $this->eventModel->find($id);
@@ -379,349 +459,250 @@ class Event extends BaseController
             return redirect()->to('admin/event')->with('error', 'Event tidak ditemukan.');
         }
 
+        // Normalize boolean values
+        $event['is_active'] = $this->parseBoolean($event['is_active']);
+        $event['registration_active'] = $this->parseBoolean($event['registration_active']);
+        $event['abstract_submission_active'] = $this->parseBoolean($event['abstract_submission_active']);
+
         // Get comprehensive event statistics
         $stats = $this->eventModel->getEventStats($id);
         
-        // Get detailed registration breakdown
-        $registrationBreakdown = $this->getRegistrationBreakdown($id);
-        
-        // Get recent registrations with user details
-        $recentRegistrations = $this->pembayaranModel
-                                   ->select('pembayaran.*, users.nama_lengkap, users.email, users.role')
-                                   ->join('users', 'users.id_user = pembayaran.id_user')
-                                   ->where('pembayaran.event_id', $id)
-                                   ->orderBy('pembayaran.tanggal_bayar', 'DESC')
-                                   ->limit(10)
-                                   ->findAll();
-
-        // Get recent abstracts for this event
-        $recentAbstracts = $this->abstrakModel
-                               ->select('abstrak.*, users.nama_lengkap')
-                               ->join('users', 'users.id_user = abstrak.id_user')
-                               ->where('abstrak.event_id', $id)
-                               ->orderBy('abstrak.tanggal_upload', 'DESC')
-                               ->limit(10)
-                               ->findAll();
-
-        // Get pricing matrix
-        $pricingMatrix = $this->eventModel->getPricingMatrix($id);
-
-        // Get revenue breakdown
-        $revenueBreakdown = $this->getRevenueBreakdown($id);
-
         $data = [
             'event' => $event,
             'stats' => $stats,
-            'registration_breakdown' => $registrationBreakdown,
-            'recent_registrations' => $recentRegistrations,
-            'recent_abstracts' => $recentAbstracts,
-            'pricing_matrix' => $pricingMatrix,
-            'revenue_breakdown' => $revenueBreakdown,
-            'registration_open' => $this->eventModel->isRegistrationOpen($id),
-            'abstract_open' => $this->eventModel->isAbstractSubmissionOpen($id)
+            'dependencies' => $this->checkEventDependencies($id)
         ];
 
         return view('role/admin/event/detail', $data);
     }
 
-    public function toggleRegistration($id)
+    // === HELPER METHODS ===
+
+    /**
+     * Generic method to toggle event features
+     */
+    private function toggleEventFeature($id, $field, $featureName)
     {
         $event = $this->eventModel->find($id);
         
         if (!$event) {
-            return redirect()->back()->with('error', 'Event tidak ditemukan.');
+            return $this->handleError('Event tidak ditemukan.');
         }
 
-        $newStatus = !$event['registration_active'];
+        $currentStatus = $this->parseBoolean($event[$field]);
+        $newStatus = !$currentStatus;
         
         try {
-            if ($this->eventModel->update($id, ['registration_active' => $newStatus])) {
-                $this->logActivity(session('id_user'), "Changed registration status for event '{$event['title']}' to " . ($newStatus ? 'active' : 'inactive'));
+            if ($this->eventModel->update($id, [$field => $newStatus])) {
+                // Log activity
+                $statusText = $newStatus ? 'dibuka' : 'ditutup';
+                $this->logActivity(session('id_user'), "Event '{$event['title']}' {$featureName} {$statusText}");
                 
-                $message = $newStatus ? 'Pendaftaran berhasil dibuka!' : 'Pendaftaran berhasil ditutup!';
-                return redirect()->back()->with('success', $message);
-            } else {
-                return redirect()->back()->with('error', 'Gagal mengubah status pendaftaran: ' . implode(', ', $this->eventModel->errors()));
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => ucfirst($featureName) . ($newStatus ? ' berhasil dibuka!' : ' berhasil ditutup!'),
+                    'new_status' => $newStatus
+                ]);
             }
+            
+            return $this->handleError("Gagal mengubah status {$featureName}.");
+
         } catch (\Exception $e) {
-            log_message('error', 'Toggle registration error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+            log_message('error', "Toggle {$field} error: " . $e->getMessage());
+            return $this->handleError('Error: ' . $e->getMessage());
         }
     }
 
-    public function toggleAbstractSubmission($id)
+    /**
+     * Parse boolean values consistently
+     */
+    private function parseBoolean($value)
     {
-        $event = $this->eventModel->find($id);
-        
-        if (!$event) {
-            return redirect()->back()->with('error', 'Event tidak ditemukan.');
+        if ($value === null || $value === '') return false;
+        if (is_bool($value)) return $value;
+        if (is_string($value)) {
+            $value = strtolower(trim($value));
+            return in_array($value, ['true', 't', '1', 'yes', 'on', 'y'], true);
         }
+        if (is_numeric($value)) return (bool) intval($value);
+        return false;
+    }
 
-        $newStatus = !$event['abstract_submission_active'];
-        
+    /**
+     * Calculate event status
+     */
+    private function calculateEventStatus($event)
+    {
         try {
-            if ($this->eventModel->update($id, ['abstract_submission_active' => $newStatus])) {
-                $this->logActivity(session('id_user'), "Changed abstract submission status for event '{$event['title']}' to " . ($newStatus ? 'active' : 'inactive'));
-                
-                $message = $newStatus ? 'Submit abstrak berhasil dibuka!' : 'Submit abstrak berhasil ditutup!';
-                return redirect()->back()->with('success', $message);
+            date_default_timezone_set('Asia/Jakarta');
+            
+            $eventDateTime = new \DateTime($event['event_date'] . ' ' . $event['event_time']);
+            $currentDateTime = new \DateTime();
+            
+            $timeDiff = $currentDateTime->getTimestamp() - $eventDateTime->getTimestamp();
+            $hoursDiff = $timeDiff / 3600;
+            
+            if ($hoursDiff < -1) {
+                return ['text' => 'Akan Datang', 'badge_class' => 'bg-info'];
+            } elseif ($hoursDiff < 0) {
+                return ['text' => 'Segera Dimulai', 'badge_class' => 'bg-warning'];
+            } elseif ($hoursDiff <= 4) {
+                return ['text' => 'Sedang Berlangsung', 'badge_class' => 'bg-success'];
             } else {
-                return redirect()->back()->with('error', 'Gagal mengubah status submit abstrak: ' . implode(', ', $this->eventModel->errors()));
+                return ['text' => 'Sudah Selesai', 'badge_class' => 'bg-danger'];
             }
         } catch (\Exception $e) {
-            log_message('error', 'Toggle abstract submission error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+            return ['text' => 'Status Tidak Diketahui', 'badge_class' => 'bg-secondary'];
         }
     }
 
-    public function toggleStatus($id)
-{
-    $event = $this->eventModel->find($id);
-    
-    if (!$event) {
-        return redirect()->back()->with('error', 'Event tidak ditemukan.');
-    }
-
-    $newStatus = !$event['is_active'];
-    
-    // Debug: Log sebelum update
-    log_message('info', "Event ID {$id}: Current status = " . ($event['is_active'] ? 'true' : 'false') . ", New status = " . ($newStatus ? 'true' : 'false'));
-    
-    try {
-        $updateResult = $this->eventModel->update($id, ['is_active' => $newStatus]);
-        
-        // Debug: Log hasil update
-        log_message('info', "Update result: " . ($updateResult ? 'success' : 'failed'));
-        
-        if ($updateResult) {
-            // Verify update berhasil
-            $updatedEvent = $this->eventModel->find($id);
-            log_message('info', "Verified status after update: " . ($updatedEvent['is_active'] ? 'true' : 'false'));
-            
-            $this->logActivity(session('id_user'), "Changed status for event '{$event['title']}' to " . ($newStatus ? 'active' : 'inactive'));
-            
-            $message = $newStatus ? 'Event berhasil diaktifkan!' : 'Event berhasil dinonaktifkan!';
-            return redirect()->back()->with('success', $message);
-        } else {
-            log_message('error', "Failed to update event status: " . implode(', ', $this->eventModel->errors()));
-            return redirect()->back()->with('error', 'Gagal mengubah status event: ' . implode(', ', $this->eventModel->errors()));
-        }
-    } catch (\Exception $e) {
-        log_message('error', 'Toggle status error: ' . $e->getMessage());
-        return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
-    }
-}
-
-    public function export()
+    /**
+     * Calculate registration status
+     */
+    private function calculateRegistrationStatus($event)
     {
-        $events = $this->eventModel->getEventsWithStats();
-        
-        $filename = 'events_' . date('Y-m-d_H-i-s') . '.csv';
-        
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        
-        $output = fopen('php://output', 'w');
-        
-        // Add BOM for UTF-8
-        fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
-        
-        // CSV Headers
-        fputcsv($output, [
-            'ID', 'Title', 'Date', 'Time', 'Format', 'Location', 'Zoom Link',
-            'Presenter Fee (Offline)', 'Audience Fee (Online)', 'Audience Fee (Offline)',
-            'Max Participants', 'Total Registrations', 'Online Registrations', 'Offline Registrations',
-            'Verified Registrations', 'Total Abstracts', 'Total Revenue', 'Status',
-            'Registration Active', 'Abstract Submission Active', 'Created At'
-        ]);
-        
-        // CSV Data
-        foreach ($events as $event) {
-            fputcsv($output, [
-                $event['id'],
-                $event['title'],
-                date('d/m/Y', strtotime($event['event_date'])),
-                $event['event_time'],
-                ucfirst($event['format']),
-                $event['location'] ?? '',
-                $event['zoom_link'] ?? '',
-                'Rp ' . number_format($event['presenter_fee_offline'], 0, ',', '.'),
-                'Rp ' . number_format($event['audience_fee_online'], 0, ',', '.'),
-                'Rp ' . number_format($event['audience_fee_offline'], 0, ',', '.'),
-                $event['max_participants'] ?: 'Unlimited',
-                $event['total_registrations'],
-                $event['online_registrations'],
-                $event['offline_registrations'],
-                $event['verified_registrations'],
-                $event['total_abstracts'],
-                'Rp ' . number_format($event['total_revenue'], 0, ',', '.'),
-                $event['is_active'] ? 'Active' : 'Inactive',
-                $event['registration_active'] ? 'Yes' : 'No',
-                $event['abstract_submission_active'] ? 'Yes' : 'No',
-                date('d/m/Y H:i', strtotime($event['created_at']))
+        if (!$this->parseBoolean($event['registration_active'])) {
+            return ['text' => 'Tutup', 'badge_class' => 'bg-danger'];
+        }
+
+        $now = time();
+        $eventDate = strtotime($event['event_date']);
+        $registrationDeadline = $event['registration_deadline'] ? strtotime($event['registration_deadline']) : null;
+
+        if ($registrationDeadline && $now > $registrationDeadline) {
+            return ['text' => 'Sudah Berakhir', 'badge_class' => 'bg-warning'];
+        }
+
+        if ($now > $eventDate) {
+            return ['text' => 'Event Sudah Lewat', 'badge_class' => 'bg-danger'];
+        }
+
+        return ['text' => 'Buka', 'badge_class' => 'bg-success'];
+    }
+
+    /**
+     * Prepare event data for insert/update
+     */
+    private function prepareEventData()
+    {
+        return [
+            'title' => $this->request->getPost('title'),
+            'description' => $this->request->getPost('description'),
+            'event_date' => $this->request->getPost('event_date'),
+            'event_time' => $this->request->getPost('event_time'),
+            'format' => $this->request->getPost('format'),
+            'location' => $this->request->getPost('location'),
+            'zoom_link' => $this->request->getPost('zoom_link'),
+            'presenter_fee_offline' => $this->request->getPost('presenter_fee_offline'),
+            'audience_fee_online' => $this->request->getPost('audience_fee_online'),
+            'audience_fee_offline' => $this->request->getPost('audience_fee_offline'),
+            'max_participants' => $this->request->getPost('max_participants') ?: null,
+            'registration_deadline' => $this->request->getPost('registration_deadline') ?: null,
+            'abstract_deadline' => $this->request->getPost('abstract_deadline') ?: null,
+            'registration_active' => $this->request->getPost('registration_active') ? true : false,
+            'abstract_submission_active' => $this->request->getPost('abstract_submission_active') ? true : false,
+            'is_active' => $this->request->getPost('is_active') ? true : false
+        ];
+    }
+
+    /**
+     * Validate event dates
+     */
+    private function validateEventDates()
+    {
+        $eventDate = $this->request->getPost('event_date');
+        $registrationDeadline = $this->request->getPost('registration_deadline');
+        $abstractDeadline = $this->request->getPost('abstract_deadline');
+
+        if (strtotime($eventDate) <= time()) {
+            return ['valid' => false, 'message' => 'Tanggal event harus di masa depan.'];
+        }
+
+        if ($registrationDeadline && strtotime($registrationDeadline) >= strtotime($eventDate)) {
+            return ['valid' => false, 'message' => 'Batas pendaftaran harus sebelum tanggal event.'];
+        }
+
+        if ($abstractDeadline && strtotime($abstractDeadline) >= strtotime($eventDate)) {
+            return ['valid' => false, 'message' => 'Batas submit abstrak harus sebelum tanggal event.'];
+        }
+
+        return ['valid' => true];
+    }
+
+    /**
+     * Check event dependencies
+     */
+    private function checkEventDependencies($eventId)
+    {
+        $registrations = $this->pembayaranModel->where('event_id', $eventId)->countAllResults();
+        $abstracts = $this->abstrakModel->where('event_id', $eventId)->countAllResults();
+        $attendance = $this->absensiModel->where('event_id', $eventId)->countAllResults();
+
+        return [
+            'has_dependencies' => ($registrations + $abstracts + $attendance) > 0,
+            'registrations' => $registrations,
+            'abstracts' => $abstracts,
+            'attendance' => $attendance
+        ];
+    }
+
+    /**
+     * Validate changes with dependencies
+     */
+    private function validateChangeWithDependencies($event, $dependencies)
+    {
+        // Allow most changes, but warn about major structural changes
+        $newFormat = $this->request->getPost('format');
+        if ($event['format'] !== $newFormat && $dependencies['registrations'] > 0) {
+            return [
+                'allowed' => false,
+                'message' => 'Tidak dapat mengubah format event yang sudah memiliki pendaftaran.'
+            ];
+        }
+
+        return ['allowed' => true];
+    }
+
+    /**
+     * Handle validation errors
+     */
+    private function handleValidationError($errors)
+    {
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'success' => false,
+                'errors' => $errors
             ]);
         }
-        
-        fclose($output);
+        return redirect()->back()->withInput()->with('errors', $errors);
     }
 
-    public function statistics()
+    /**
+     * Handle general errors
+     */
+    private function handleError($message)
     {
-        // Event statistics for charts and analytics
-        $data = [
-            'events_by_month' => $this->getEventsByMonth(),
-            'registration_stats' => $this->getRegistrationStats(),
-            'revenue_by_event' => $this->getRevenueByEvent(),
-            'abstract_submission_stats' => $this->getAbstractSubmissionStats(),
-            'participation_breakdown' => $this->getParticipationBreakdown(),
-            'monthly_revenue' => $this->getMonthlyRevenue()
-        ];
-
-        return $this->response->setJSON($data);
-    }
-
-    private function getRegistrationBreakdown($eventId)
-    {
-        $db = \Config\Database::connect();
-        
-        $result = $db->query("
-            SELECT 
-                u.role,
-                p.participation_type,
-                p.status,
-                COUNT(*) as count,
-                SUM(p.jumlah) as total_amount
-            FROM pembayaran p
-            JOIN users u ON u.id_user = p.id_user
-            WHERE p.event_id = ?
-            GROUP BY u.role, p.participation_type, p.status
-            ORDER BY u.role, p.participation_type, p.status
-        ", [$eventId])->getResultArray();
-
-        return $result;
-    }
-
-    private function getRevenueBreakdown($eventId)
-    {
-        $db = \Config\Database::connect();
-        
-        $result = $db->query("
-            SELECT 
-                u.role,
-                p.participation_type,
-                COUNT(*) as registrations,
-                SUM(p.jumlah) as revenue,
-                AVG(p.jumlah) as avg_amount
-            FROM pembayaran p
-            JOIN users u ON u.id_user = p.id_user
-            WHERE p.event_id = ? AND p.status = 'verified'
-            GROUP BY u.role, p.participation_type
-            ORDER BY revenue DESC
-        ", [$eventId])->getResultArray();
-
-        return $result;
-    }
-
-    private function getEventsByMonth()
-    {
-        $data = [];
-        for ($i = 11; $i >= 0; $i--) {
-            $month = date('Y-m', strtotime("-$i months"));
-            $monthName = date('M Y', strtotime($month . '-01'));
-            
-            // PostgreSQL compatible date filtering
-            $startDate = $month . '-01';
-            $endDate = $month . '-' . date('t', strtotime($startDate));
-            
-            $count = $this->eventModel
-                         ->where('event_date >=', $startDate)
-                         ->where('event_date <=', $endDate)
-                         ->countAllResults();
-            
-            $data[] = [
-                'month' => $monthName,
-                'count' => $count
-            ];
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => $message
+            ]);
         }
-        
-        return $data;
+        return redirect()->back()->with('error', $message);
     }
 
-    private function getRegistrationStats()
-    {
-        return $this->pembayaranModel
-                   ->select('COUNT(*) as total, status, participation_type')
-                   ->groupBy('status, participation_type')
-                   ->findAll();
-    }
-
-    private function getRevenueByEvent()
-    {
-        return $this->pembayaranModel
-                   ->select('e.title, e.id as event_id, SUM(p.jumlah) as total_revenue, COUNT(*) as registrations, p.participation_type')
-                   ->join('events e', 'e.id = p.event_id')
-                   ->where('p.status', 'verified')
-                   ->groupBy('e.id, e.title, p.participation_type')
-                   ->orderBy('total_revenue', 'DESC')
-                   ->limit(10)
-                   ->findAll();
-    }
-
-    private function getAbstractSubmissionStats()
-    {
-        return $this->abstrakModel
-                   ->select('COUNT(*) as total, status')
-                   ->groupBy('status')
-                   ->findAll();
-    }
-
-    private function getParticipationBreakdown()
-    {
-        return $this->pembayaranModel
-                   ->select('u.role, p.participation_type, COUNT(*) as count, SUM(p.jumlah) as revenue')
-                   ->join('users u', 'u.id_user = p.id_user')
-                   ->where('p.status', 'verified')
-                   ->groupBy('u.role, p.participation_type')
-                   ->findAll();
-    }
-
-    private function getMonthlyRevenue()
-    {
-        $data = [];
-        for ($i = 11; $i >= 0; $i--) {
-            $month = date('Y-m', strtotime("-$i months"));
-            $monthName = date('M Y', strtotime($month . '-01'));
-            
-            $startDate = $month . '-01';
-            $endDate = $month . '-' . date('t', strtotime($startDate));
-            
-            $revenue = $this->pembayaranModel
-                           ->selectSum('jumlah')
-                           ->where('status', 'verified')
-                           ->where('tanggal_bayar >=', $startDate)
-                           ->where('tanggal_bayar <=', $endDate . ' 23:59:59')
-                           ->first()['jumlah'] ?? 0;
-            
-            $data[] = [
-                'month' => $monthName,
-                'revenue' => $revenue
-            ];
-        }
-        
-        return $data;
-    }
-
+    /**
+     * Log activity
+     */
     private function logActivity($userId, $activity)
     {
-        $db = \Config\Database::connect();
         try {
-            $db->table('log_aktivitas')->insert([
+            $this->db->table('log_aktivitas')->insert([
                 'id_user' => $userId,
                 'aktivitas' => $activity,
                 'waktu' => date('Y-m-d H:i:s')
             ]);
         } catch (\Exception $e) {
-            // Silent fail for logging
             log_message('error', 'Failed to log activity: ' . $e->getMessage());
         }
     }
