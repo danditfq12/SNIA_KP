@@ -1,31 +1,48 @@
 <?php
-  $title  = 'Event Tersedia';
-// Controller harus mengirim $events (event open registration)
-  $events = $events ?? [];
+// =========================
+//  Event Index (Audience)
+// =========================
+$title  = 'Event Tersedia';
+$events = $events ?? [];
+$myRegs = $myRegs ?? [];
 
-// Status pencarian (apakah user mengisi kata kunci / memilih format?)
-  $qRaw = $_GET['q'] ?? '';
-  $fmt  = $_GET['format'] ?? '';
-  $q    = strtolower(trim($qRaw));
-  $isSearching = ($q !== '') || ($fmt !== '');
+$qRaw = $_GET['q'] ?? '';
+$fmt  = $_GET['format'] ?? '';
+$q    = strtolower(trim($qRaw));
+$isSearching = ($q !== '') || ($fmt !== '');
 
-// Filter di view (boleh dipindah ke controller nanti)
-  $filtered = array_values(array_filter($events, function($e) use($q,$fmt){
-    // match keyword di title atau location
-    if ($q !== '') {
-      $hay = strtolower(($e['title'] ?? '').' '.($e['location'] ?? ''));
-      if (!str_contains($hay, $q)) return false;
-    }
-    // match format (online/offline/both); jika pilih online/offline, sertakan event both (hybrid)
-    if ($fmt !== '') {
-      $evFmt = $e['format'] ?? '';
-      if ($fmt === 'online'  && !in_array($evFmt, ['online','both'], true))  return false;
-      if ($fmt === 'offline' && !in_array($evFmt, ['offline','both'], true)) return false;
-      if ($fmt === 'both'    && $evFmt !== 'both')                           return false;
-    }
-    return true;
-  }));
+$rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
+
+$isOpen = function(array $e): bool {
+  $isActive  = !empty($e['is_active']);
+  $regActive = !empty($e['registration_active']);
+  if (!$isActive || !$regActive) return false;
+  $now = time();
+  if (!empty($e['registration_deadline']) && strtotime($e['registration_deadline']) < $now) return false;
+  if (!empty($e['event_date'])) {
+    $evtTs = strtotime($e['event_date'] . ' ' . ($e['event_time'] ?? '00:00'));
+    if ($evtTs < $now) return false;
+  }
+  return true;
+};
+
+$filtered = array_values(array_filter($events, function($e) use($q,$fmt){
+  if ($q !== '') {
+    $hay = strtolower(($e['title'] ?? '') . ' ' . ($e['location'] ?? ''));
+    if (!str_contains($hay, $q)) return false;
+  }
+  if ($fmt !== '') {
+    $evFmt = $e['format'] ?? '';
+    if ($fmt === 'online'  && !in_array($evFmt, ['online','both'], true))  return false;
+    if ($fmt === 'offline' && !in_array($evFmt, ['offline','both'], true)) return false;
+    if ($fmt === 'both'    && $evFmt !== 'both')                           return false;
+  }
+  return true;
+}));
+
+$list = $isSearching ? $filtered : $events;
 ?>
+
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_audience') ?>
 
@@ -71,19 +88,34 @@
         </div>
       </form>
 
-      <?php
-        // Pilih sumber data untuk ditampilkan:
-        // - jika sedang mencari -> pakai $filtered
-        // - jika tidak mencari   -> pakai $events (asal)
-        $list = $isSearching ? $filtered : $events;
-      ?>
-
       <?php if (!empty($list)): ?>
         <div class="row g-3">
           <?php foreach ($list as $e): ?>
             <?php
-              $priceOnline  = (float)($e['audience_fee_online']  ?? 0);
-              $priceOffline = (float)($e['audience_fee_offline'] ?? 0);
+              $fmtEvent   = strtolower($e['format'] ?? '');
+              $onlineOK   = in_array($fmtEvent, ['online','both'], true);
+              $offlineOK  = in_array($fmtEvent, ['offline','both'], true);
+              $pOn        = (float)($e['audience_fee_online']  ?? 0);
+              $pOff       = (float)($e['audience_fee_offline'] ?? 0);
+              $open       = $isOpen($e);
+
+              $regRaw        = $myRegs[$e['id']] ?? null;
+              $regStatus     = is_array($regRaw) ? ($regRaw['status'] ?? null)         : $regRaw;
+              $paymentId     = is_array($regRaw) ? ($regRaw['payment_id'] ?? null)     : null;
+              $paymentStatus = is_array($regRaw) ? ($regRaw['payment_status'] ?? null) : null;
+
+              // menunggu verifikasi setelah upload
+              $isWaitingVerification = (
+                $regStatus === 'menunggu_pembayaran' &&
+                !empty($paymentId) &&
+                in_array($paymentStatus, ['pending','uploaded'], true)
+              );
+
+              $isRegistered = ($regStatus !== null && $regStatus !== 'batal');
+
+              $tgl = !empty($e['event_date']) ? date('d M Y', strtotime($e['event_date'])) : '-';
+              $jam = $e['event_time'] ?? '-';
+              $loc = $e['location'] ?? ($fmtEvent === 'online' ? '—' : '-');
             ?>
             <div class="col-12 col-md-6 col-lg-4">
               <div class="card h-100 shadow-sm border-0">
@@ -92,27 +124,87 @@
                     <h5 class="card-title mb-1"><?= esc($e['title'] ?? 'Event') ?></h5>
                     <span class="badge bg-secondary-subtle text-secondary"><?= esc(strtoupper($e['format'] ?? '-')) ?></span>
                   </div>
-                  <small class="text-muted">
-                    <?= esc(isset($e['event_date']) ? date('d M Y', strtotime($e['event_date'])) : '-') ?>
-                    · <?= esc($e['event_time'] ?? '-') ?>
-                  </small>
-                  <div class="mt-2 small text-muted">Lokasi: <?= esc($e['location'] ?? '-') ?></div>
+                  <small class="text-muted"><?= esc($tgl) ?> · <?= esc($jam) ?></small>
+                  <div class="mt-2 small text-muted">Lokasi: <?= esc($loc) ?></div>
 
                   <div class="mt-3">
-                    <div class="small text-muted">Harga Audience</div>
-                    <div class="d-flex gap-3 flex-wrap">
-                      <span class="badge bg-info-subtle text-info">
-                        Online: Rp <?= number_format($priceOnline, 0, ',', '.') ?>
-                      </span>
-                      <span class="badge bg-primary-subtle text-primary">
-                        Offline: Rp <?= number_format($priceOffline, 0, ',', '.') ?>
-                      </span>
+                    <div class="small text-muted mb-1">Harga Audience</div>
+                    <div class="d-flex flex-wrap gap-2">
+                      <?php if ($onlineOK): ?>
+                        <span class="badge bg-info-subtle text-info">Online: <?= $pOn>0 ? $rupiah($pOn) : 'Gratis' ?></span>
+                      <?php endif; ?>
+                      <?php if ($offlineOK): ?>
+                        <span class="badge bg-primary-subtle text-primary">Offline: <?= $pOff>0 ? $rupiah($pOff) : 'Gratis' ?></span>
+                      <?php endif; ?>
                     </div>
                   </div>
 
-                  <div class="mt-auto pt-3 d-flex gap-2">
-                    <a href="<?= site_url('audience/events/detail/'.($e['id'] ?? 0)) ?>" class="btn btn-sm btn-outline-secondary flex-fill">Detail</a>
-                    <a href="<?= site_url('audience/events/register/'.($e['id'] ?? 0)) ?>" class="btn btn-sm btn-primary flex-fill">Daftar</a>
+                  <div class="mt-3 d-flex flex-wrap gap-2">
+                    <?php if ($isRegistered): ?>
+                      <span class="badge bg-success-subtle text-success"><i class="bi bi-check2-circle me-1"></i> Anda sudah terdaftar</span>
+                      <?php if ($isWaitingVerification): ?>
+                        <span class="badge bg-warning-subtle text-warning">Menunggu verifikasi admin</span>
+                      <?php elseif ($regStatus === 'menunggu_pembayaran'): ?>
+                        <span class="badge bg-warning-subtle text-warning">Menunggu pembayaran</span>
+                      <?php elseif ($regStatus === 'lunas'): ?>
+                        <span class="badge bg-primary-subtle text-primary">Lunas</span>
+                      <?php endif; ?>
+                    <?php else: ?>
+                      <?php if ($open): ?>
+                        <span class="badge bg-success-subtle text-success"><i class="bi bi-unlock me-1"></i>Pendaftaran dibuka</span>
+                      <?php else: ?>
+                        <span class="badge bg-danger-subtle text-danger"><i class="bi bi-lock me-1"></i>Pendaftaran ditutup</span>
+                      <?php endif; ?>
+                    <?php endif; ?>
+                  </div>
+
+                  <!-- Aksi -->
+                  <div class="mt-auto pt-3 d-flex flex-wrap gap-2">
+                    <?php if (!$isWaitingVerification): ?>
+                      <a href="<?= site_url('audience/events/detail/'.($e['id'] ?? 0)) ?>"
+                         class="btn btn-sm btn-outline-secondary flex-fill">
+                        <?= $isRegistered ? 'Lihat Status' : 'Detail' ?>
+                      </a>
+                    <?php endif; ?>
+
+                    <?php if ($isRegistered): ?>
+                      <?php if ($isWaitingVerification): ?>
+                        <!-- Pending verifikasi: tampilkan tombol pembayaran + ubah bukti -->
+                        <a href="<?= site_url('audience/pembayaran/detail/'.(int)$paymentId) ?>"
+                           class="btn btn-sm btn-primary flex-fill">
+                          Detail Pembayaran
+                        </a>
+                        <a href="<?= site_url('audience/pembayaran/detail/'.(int)$paymentId).'#unggah-ulang' ?>"
+                           class="btn btn-sm btn-outline-primary flex-fill">
+                          Ubah Bukti
+                        </a>
+
+                      <?php elseif ($regStatus === 'menunggu_pembayaran'): ?>
+                        <a href="<?= site_url('audience/pembayaran') ?>"
+                           class="btn btn-sm btn-primary flex-fill js-go-pay"
+                           data-title="<?= esc($e['title'] ?? 'Event') ?>">
+                          Lanjutkan Pembayaran
+                        </a>
+                        <?php if (!empty($paymentId)): ?>
+                          <a href="<?= site_url('audience/pembayaran/cancel/'.$paymentId) ?>"
+                             class="btn btn-sm btn-outline-danger flex-fill js-cancel"
+                             data-title="<?= esc($e['title'] ?? 'Event') ?>">
+                            Batalkan
+                          </a>
+                        <?php endif; ?>
+                      <?php else: ?>
+                        <button class="btn btn-sm btn-primary flex-fill" disabled>Daftar</button>
+                      <?php endif; ?>
+
+                    <?php else: ?>
+                      <a href="<?= site_url('audience/events/register/'.($e['id'] ?? 0)) ?>"
+                         class="btn btn-sm btn-primary flex-fill js-register"
+                         data-title="<?= esc($e['title'] ?? 'Event') ?>"
+                         <?= $open ? '' : 'tabindex="-1" aria-disabled="true"' ?>
+                         <?= $open ? '' : 'onclick="return false;" class="disabled btn btn-sm btn-primary flex-fill"' ?>>
+                        Daftar
+                      </a>
+                    <?php endif; ?>
                   </div>
                 </div>
               </div>
@@ -140,3 +232,45 @@
 </div>
 
 <?= $this->include('partials/footer') ?>
+
+<script>
+// konfirmasi
+document.querySelectorAll('.js-register').forEach(a=>{
+  a.addEventListener('click', (e)=>{
+    const title = a.getAttribute('data-title') || 'Event';
+    if (window.Swal){
+      e.preventDefault();
+      Swal.fire({
+        title: 'Daftar ke event ini?',
+        html: '<b>'+title+'</b><br><span class="text-muted">Kamu akan memilih mode (online/offline) di langkah berikutnya.</span>',
+        icon: 'question', showCancelButton: true, confirmButtonText: 'Ya, lanjut', cancelButtonText: 'Batal'
+      }).then(r=>{ if(r.isConfirmed) location.href = a.href; });
+    } else if(!confirm('Daftar ke "'+title+'"?')) e.preventDefault();
+  });
+});
+document.querySelectorAll('.js-cancel').forEach(a=>{
+  a.addEventListener('click', (e)=>{
+    const title = a.getAttribute('data-title') || 'Event';
+    if (window.Swal){
+      e.preventDefault();
+      Swal.fire({
+        title: 'Batalkan pendaftaran?', html: '<b>'+title+'</b>',
+        icon:'warning', showCancelButton:true, confirmButtonColor:'#dc3545',
+        confirmButtonText:'Ya, batalkan', cancelButtonText:'Kembali'
+      }).then(r=>{ if(r.isConfirmed) location.href = a.href; });
+    } else if(!confirm('Batalkan pendaftaran "'+title+'"?')) e.preventDefault();
+  });
+});
+document.querySelectorAll('.js-go-pay').forEach(a=>{
+  a.addEventListener('click', (e)=>{
+    const title = a.getAttribute('data-title') || 'Event';
+    if (window.Swal){
+      e.preventDefault();
+      Swal.fire({
+        title:'Lanjutkan pembayaran?', html:'<b>'+title+'</b>',
+        icon:'question', showCancelButton:true, confirmButtonText:'Ya', cancelButtonText:'Batal'
+      }).then(r=>{ if(r.isConfirmed) location.href = a.href; });
+    }
+  });
+});
+</script>

@@ -9,10 +9,11 @@ use App\Models\AbsensiModel;
 
 class Absensi extends BaseController
 {
-    protected $eventModel;
-    protected $pembayaranModel;
-    protected $absensiModel;
-    protected $db;
+    protected EventModel $eventModel;
+    protected PembayaranModel $pembayaranModel;
+    protected AbsensiModel $absensiModel;
+    protected \CodeIgniter\Database\BaseConnection $db;
+    protected \DateTimeZone $tz;
 
     public function __construct()
     {
@@ -20,22 +21,75 @@ class Absensi extends BaseController
         $this->pembayaranModel = new PembayaranModel();
         $this->absensiModel    = new AbsensiModel();
         $this->db              = \Config\Database::connect();
+        $this->tz              = new \DateTimeZone(config('App')->appTimezone ?? 'Asia/Jakarta');
+    }
+
+    private function uid(): int
+    {
+        return (int) (session('id_user') ?? 0);
+    }
+
+    /** ===== Helpers ===== */
+    private function normalizeTime(?string $t): ?string
+    {
+        if (!$t) return null;
+        $t = trim($t);
+        if (preg_match('/^\d{2}:\d{2}$/', $t)) return $t . ':00';
+        return $t;
+    }
+
+    private function composeStart(?string $eventDate, ?string $eventTime): ?string
+    {
+        if (!$eventDate || !$eventTime) return null;
+        return $eventDate . ' ' . $this->normalizeTime($eventTime);
     }
 
     /**
-     * Halaman daftar absensi:
-     * - yourEvents      : semua event user yang verified & aktif
-     * - availableEvents : subset yang sedang bisa scan
-     * - history         : riwayat absensi user
+     * Aturan:
+     * - Bisa scan hanya SETELAH mulai (>= start) s.d. +4 jam.
+     * - Jika event dihentikan admin (attendance_status = closed/stopped) → tidak bisa scan.
+     * - Event non-aktif → tidak bisa scan.
+     * Catatan: jika kolom attendance_status tidak ada, dianggap 'open'.
      */
+    private function calculateEventStatus(array $event): array
+    {
+        if (empty($event['event_date']) || empty($event['event_time'])) {
+            return ['event_status' => 'Jadwal Tidak Lengkap', 'badge_class' => 'bg-secondary', 'can_scan' => false];
+        }
+
+        if (empty($event['is_active'])) {
+            return ['event_status' => 'Tidak Aktif', 'badge_class' => 'bg-secondary', 'can_scan' => false];
+        }
+
+        $attn = strtolower((string)($event['attendance_status'] ?? 'open'));
+        if (in_array($attn, ['closed','stopped','ended'], true)) {
+            return ['event_status' => 'Dihentikan', 'badge_class' => 'bg-danger', 'can_scan' => false];
+        }
+
+        $startStr = $this->composeStart($event['event_date'], $event['event_time']);
+        $start    = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $startStr, $this->tz)
+                  ?: new \DateTimeImmutable($startStr, $this->tz);
+
+        $now   = new \DateTimeImmutable('now', $this->tz);
+        $diffH = ($now->getTimestamp() - $start->getTimestamp()) / 3600.0;
+
+        if ($diffH < 0) {
+            return ['event_status' => 'Belum Dimulai', 'badge_class' => 'bg-secondary', 'can_scan' => false];
+        } elseif ($diffH <= 4) {
+            return ['event_status' => 'Sedang Berlangsung', 'badge_class' => 'bg-success', 'can_scan' => true];
+        }
+        return ['event_status' => 'Sudah Selesai', 'badge_class' => 'bg-secondary', 'can_scan' => false];
+    }
+
+    /** ===== Pages ===== */
     public function index()
     {
-        $userId = (int) session('id_user');
+        $userId = $this->uid();
         if (!$userId || session('role') !== 'audience') {
             return redirect()->to(site_url('auth/login'));
         }
 
-        // Semua event user yang pembayarannya verified dan event aktif
+        // HANYA verified
         $paid = $this->db->table('pembayaran p')
             ->select('
                 e.id,
@@ -44,24 +98,23 @@ class Absensi extends BaseController
                 e.event_time,
                 e.format,
                 e.location,
+                e.is_active,
                 p.participation_type
             ')
             ->join('events e', 'e.id = p.event_id')
             ->where('p.id_user', $userId)
             ->where('p.status', 'verified')
-            ->where('e.is_active', true) // boolean (PostgreSQL-friendly)
+            ->where('e.is_active', true)
             ->orderBy('e.event_date', 'ASC')
             ->orderBy('e.event_time', 'ASC')
             ->get()->getResultArray();
 
-        $yourEvents      = [];
-        $availableEvents = [];
-
+        $yourEvents = [];
         foreach ($paid as $row) {
-            $status = $this->calculateEventStatus($row['event_date'] ?? null, $row['event_time'] ?? null);
-
-            $item = [
-                'id'                 => $row['id'],
+            // Kolom attendance_status mungkin tidak ada —> calculateEventStatus aman.
+            $status = $this->calculateEventStatus($row);
+            $yourEvents[] = [
+                'id'                 => (int)$row['id'],
                 'title'              => $row['title'],
                 'event_date'         => $row['event_date'],
                 'event_time'         => $row['event_time'],
@@ -72,14 +125,8 @@ class Absensi extends BaseController
                 'badge_class'        => $status['badge_class'],
                 'can_scan'           => $status['can_scan'],
             ];
-
-            $yourEvents[] = $item;
-            if ($status['can_scan'] === true) {
-                $availableEvents[] = $item;
-            }
         }
 
-        // Riwayat absensi
         $history = $this->absensiModel->select('
                             absensi.waktu_scan,
                             absensi.status,
@@ -93,121 +140,105 @@ class Absensi extends BaseController
                         ->orderBy('absensi.waktu_scan', 'DESC')
                         ->findAll() ?: [];
 
-        $data = [
-            'title'           => 'Absensi',
-            'yourEvents'      => $yourEvents,
-            'availableEvents' => $availableEvents,
-            'history'         => $history,
-        ];
-
-        return view('role/audience/absensi/index', $data);
+        return view('role/audience/absensi/index', [
+            'title'      => 'Absensi',
+            'yourEvents' => $yourEvents,
+            'history'    => $history,
+        ]);
     }
 
-    /**
-     * Detail 1 event: cek hak akses (payment verified), tampilkan status & tombol.
-     * Route: GET audience/absensi/event/(:num)  → Absensi::show/$1
-     */
     public function show(int $eventId)
     {
-        $userId = (int) session('id_user');
+        $userId = $this->uid();
         if (!$userId || session('role') !== 'audience') {
             return redirect()->to(site_url('auth/login'));
         }
 
-        // Event exist?
         $event = $this->eventModel->find($eventId);
         if (!$event || !($event['is_active'] ?? false)) {
             return redirect()->to(site_url('audience/absensi'))
-                             ->with('error', 'Event tidak ditemukan atau tidak aktif.');
+                ->with('error', 'Event tidak ditemukan atau tidak aktif.');
         }
 
-        // Wajib punya pembayaran verified untuk event ini
-        $payment = $this->pembayaranModel
-            ->where('id_user', $userId)
-            ->where('event_id', $eventId)
-            ->where('status', 'verified')
-            ->first();
-
+        $payment = $this->pembayaranModel->where('id_user', $userId)
+                                         ->where('event_id', $eventId)
+                                         ->where('status', 'verified')
+                                         ->first();
         if (!$payment) {
             return redirect()->to(site_url('audience/absensi'))
-                             ->with('error', 'Kamu belum memiliki akses absensi untuk event tersebut.');
+                ->with('error', 'Kamu belum memiliki akses absensi untuk event tersebut.');
         }
 
-        // Hitung status event
-        $status = $this->calculateEventStatus($event['event_date'] ?? null, $event['event_time'] ?? null);
-
-        // Sudah absen?
+        $status  = $this->calculateEventStatus($event);
         $already = $this->absensiModel->hasUserAttended($userId, $eventId);
 
-        $data = [
-            'title'              => 'Detail Absensi',
-            'event'              => $event,
-            'participation_type' => $payment['participation_type'] ?? 'all',
-            'event_status'       => $status['event_status'],
-            'badge_class'        => $status['badge_class'],
-            'can_scan'           => $status['can_scan'],
-            'already_attend'     => $already,
-        ];
+        $last = $this->absensiModel->select('waktu_scan')
+                ->where('id_user', $userId)
+                ->where('event_id', $eventId)
+                ->orderBy('waktu_scan','DESC')
+                ->first();
+        $attendanceAt = $last['waktu_scan'] ?? null;
 
-        return view('role/audience/absensi/detail', $data);
+        $eventView = $event;
+        $eventView['badge_class']        = $status['badge_class'];
+        $eventView['event_status']       = $status['event_status'];
+        $eventView['can_scan']           = $status['can_scan'];
+        $eventView['participation_type'] = $payment['participation_type'] ?? 'all';
+
+        return view('role/audience/absensi/detail', [
+            'title'           => 'Detail Absensi',
+            'event'           => $eventView,
+            'already_attend'  => $already,
+            'attendance_at'   => $attendanceAt,
+        ]);
     }
 
-    /**
-     * Terima token dari form lalu redirect ke QRAttendance::scan
-     * Route: POST audience/absensi/scan
-     */
     public function scan()
     {
         if (!$this->request->is('post')) {
             return redirect()->to(site_url('audience/absensi'));
         }
 
-        $userId = (int) session('id_user');
+        $userId  = $this->uid();
         if (!$userId || session('role') !== 'audience') {
             return redirect()->to(site_url('auth/login'));
         }
 
-        $token = trim((string) $this->request->getPost('token'));
-        if ($token === '') {
-            return redirect()->back()->with('error', 'Token tidak boleh kosong.');
+        $token   = trim((string)$this->request->getPost('token'));
+        $eventId = (int)$this->request->getPost('event_id');
+
+        if ($token === '' || $eventId <= 0) {
+            return redirect()->back()->with('error', 'Token / Event tidak valid.');
         }
 
-        // lempar ke handler umum QR
+        if ($this->absensiModel->hasUserAttended($userId, $eventId)) {
+            return redirect()->back()->with('error', 'Kamu sudah absen untuk event ini.');
+        }
+
+        $event = $this->eventModel->find($eventId);
+        if (!$event) {
+            return redirect()->back()->with('error','Event tidak ditemukan.');
+        }
+
+        $payment = $this->pembayaranModel->where('id_user', $userId)
+                                         ->where('event_id', $eventId)
+                                         ->where('status', 'verified')
+                                         ->first();
+        if (!$payment) {
+            return redirect()->back()->with('error','Akses absensi tidak valid untuk event ini.');
+        }
+
+        $status = $this->calculateEventStatus($event);
+        if (!$status['can_scan']) {
+            $msg = match ($status['event_status']) {
+                'Belum Dimulai' => 'Absensi belum dibuka.',
+                'Dihentikan'    => 'Absensi telah dihentikan oleh panitia.',
+                'Sudah Selesai' => 'Event sudah selesai. Absensi ditutup.',
+                default         => 'Absensi tidak tersedia saat ini.',
+            };
+            return redirect()->back()->with('error', $msg);
+        }
+
         return redirect()->to(site_url('qr/' . urlencode($token)));
-    }
-
-    /**
-     * Window scan: -1 jam s/d +4 jam dari jam mulai.
-     */
-    private function calculateEventStatus(?string $eventDate, ?string $eventTime): array
-    {
-        try {
-            date_default_timezone_set('Asia/Jakarta');
-
-            if (!$eventDate || !$eventTime) {
-                return [
-                    'event_status' => 'Jadwal Tidak Lengkap',
-                    'badge_class'  => 'bg-secondary',
-                    'can_scan'     => false,
-                ];
-            }
-
-            $start = new \DateTime($eventDate . ' ' . $eventTime);
-            $now   = new \DateTime();
-            $diffH = ($now->getTimestamp() - $start->getTimestamp()) / 3600.0;
-
-            if ($diffH < -1) {
-                return ['event_status' => 'Belum Dimulai',      'badge_class' => 'bg-secondary', 'can_scan' => false];
-            } elseif ($diffH < 0) {
-                return ['event_status' => 'Segera Dimulai',     'badge_class' => 'bg-warning',   'can_scan' => true ];
-            } elseif ($diffH <= 4) {
-                return ['event_status' => 'Sedang Berlangsung', 'badge_class' => 'bg-success',   'can_scan' => true ];
-            }
-            return     ['event_status' => 'Sudah Selesai',      'badge_class' => 'bg-danger',    'can_scan' => false];
-
-        } catch (\Throwable $e) {
-            log_message('error', 'calculateEventStatus error: ' . $e->getMessage());
-            return ['event_status' => 'Error', 'badge_class' => 'bg-secondary', 'can_scan' => false];
-        }
     }
 }

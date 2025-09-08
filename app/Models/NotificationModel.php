@@ -1,24 +1,46 @@
 <?php
-
+// app/Models/NotificationModel.php
 namespace App\Models;
 
 use CodeIgniter\Model;
+use CodeIgniter\Database\BaseBuilder;
 
 class NotificationModel extends Model
 {
-    protected $table          = 'notifikasi';
-    protected $primaryKey     = 'id_notif';
-    protected $returnType     = 'array';
-    protected $allowedFields  = [
-        'id_user', 'role', 'title', 'message', 'link',
-        'type', 'meta', 'read', 'read_at',
-        'created_at', 'updated_at'
+    protected $table         = 'notifikasi';
+    protected $primaryKey    = 'id_notif';
+    protected $returnType    = 'array';
+    protected $allowedFields = [
+        'id_user','role','title','message','link',
+        'type','meta','read','read_at','created_at','updated_at'
     ];
-    protected $useTimestamps  = false; // kita set created_at/updated_at manual di method
+    protected $useTimestamps = false;
 
-    /**
-     * Ambil notifikasi terbaru untuk user
-     */
+    /** Deteksi driver */
+    private function isPostgres(): bool
+    {
+        return stripos($this->db->DBDriver ?? '', 'postgre') !== false;
+    }
+
+    /** Tambahkan kondisi unread ke builder (portable) */
+    private function applyUnreadWhere(BaseBuilder $b): BaseBuilder
+    {
+        if ($this->isPostgres()) {
+            // boolean kolom → gunakan FALSE
+            $b->groupStart()
+                  ->where('read =', false)
+                  ->orWhere('read IS NULL', null, false)
+              ->groupEnd();
+        } else {
+            // MySQL TINYINT(1) → gunakan 0
+            $b->groupStart()
+                  ->where('read', 0)
+                  ->orWhere('read IS NULL', null, false)
+              ->groupEnd();
+        }
+        return $b;
+    }
+
     public function forUser(int $userId, int $limit = 10): array
     {
         return $this->where('id_user', $userId)
@@ -26,66 +48,49 @@ class NotificationModel extends Model
                     ->findAll($limit);
     }
 
-    /**
-     * Hitung unread (read = false atau read IS NULL)
-     * NOTE: gunakan IS NULL, bukan "= NULL"
-     */
+    /** Hitung unread (portable) */
     public function countUnread(int $userId): int
     {
-        return $this->where('id_user', $userId)
-                    ->groupStart()
-                        ->where('read', false)
-                        ->orWhere('read IS NULL', null, false) // <<< penting untuk Postgres
-                    ->groupEnd()
-                    ->countAllResults();
+        $b = $this->builder()->where('id_user', $userId);
+        $this->applyUnreadWhere($b);
+        return (int) $b->countAllResults();
     }
 
-    /**
-     * Tandai semua notif user sebagai terbaca (hanya yang belum read)
-     */
+    /** Tandai semua unread → read (portable) */
     public function markAllRead(int $userId): bool
     {
-        // Postgres-safe WHERE untuk boolean/null
-        return (bool) $this->builder()
-            ->where('id_user', $userId)
-            ->where('(read IS NULL OR read = FALSE)', null, false)
-            ->set([
-                'read'      => true,
-                'read_at'   => date('Y-m-d H:i:s'),
-                'updated_at'=> date('Y-m-d H:i:s'),
-            ])
-            ->update();
+        $b = $this->builder()->where('id_user', $userId);
+        $this->applyUnreadWhere($b);
+
+        $b->set([
+              'read'       => 1, // aman untuk Postgres (akan dicast ke TRUE) & MySQL
+              'read_at'    => date('Y-m-d H:i:s'),
+              'updated_at' => date('Y-m-d H:i:s'),
+        ])->update();
+
+        return $this->db->affectedRows() >= 0;
     }
 
-    /**
-     * Tandai satu notif terbaca
-     */
+    /** Tandai satu notif read (portable) */
     public function markRead(int $idNotif, int $userId): bool
     {
-        return (bool) $this->builder()
+        $this->builder()
             ->where('id_notif', $idNotif)
             ->where('id_user', $userId)
             ->set([
-                'read'      => true,
-                'read_at'   => date('Y-m-d H:i:s'),
-                'updated_at'=> date('Y-m-d H:i:s'),
-            ])
-            ->update();
+                'read'       => 1, // cast OK di Postgres
+                'read_at'    => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ])->update();
+
+        return $this->db->affectedRows() >= 0;
     }
 
-    /**
-     * Helper untuk membuat notifikasi baru
-     */
     public function add(
-        int $userId,
-        string $title,
-        ?string $message = null,
-        ?string $link = null,
-        string $type = 'info',
-        ?string $role = null,
-        $meta = null
+        int $userId, string $title, ?string $message = null, ?string $link = null,
+        string $type = 'info', ?string $role = null, $meta = null
     ): int {
-        $data = [
+        $this->insert([
             'id_user'    => $userId,
             'role'       => $role,
             'title'      => $title,
@@ -93,13 +98,11 @@ class NotificationModel extends Model
             'link'       => $link,
             'type'       => $type,
             'meta'       => is_array($meta) ? json_encode($meta) : $meta,
-            'read'       => null, // belum dibaca
+            'read'       => null,
             'read_at'    => null,
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s'),
-        ];
-
-        $this->insert($data);
+        ]);
         return (int) $this->getInsertID();
     }
 }

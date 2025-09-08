@@ -6,7 +6,7 @@
   <title>Verifikasi OTP - SNIA</title>
 
   <!-- CSS aplikasi (gunakan css yang sudah ada) -->
-  <link rel="stylesheet" href="<?= base_url('css/auth.css') ?>">
+  <link rel="stylesheet" href="<?= base_url('assets/css/auth.css') ?>">
 
   <!-- Font (opsional) & Font Awesome jika mau icon -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">

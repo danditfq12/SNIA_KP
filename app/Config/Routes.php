@@ -34,16 +34,16 @@ $routes->get ('qr',          'QRAttendance::showScannerInterface'); // /qr
 $routes->get ('qr/(:any)',   'QRAttendance::scan/$1');              // /qr/{token}
 $routes->post('qr/process',  'QRAttendance::process');              // POST /qr/process
 
-// ---------------------------------------------------
 // Notifikasi (butuh login)
-// ---------------------------------------------------
 $routes->group('notif', ['filter' => 'auth'], static function($routes) {
     $routes->get('recent',      'Notif::recent');
     $routes->get('list',        'Notif::list');
     $routes->get('count',       'Notif::count');
     $routes->post('read/(:num)','Notif::markRead/$1');
-    $routes->get('read-all',    'Notif::readAll');
+    $routes->match(['get','post'],'read-all', 'Notif::readAll'); // <= ini
 });
+
+
 
 // ---------------------------------------------------
 // Default dashboard redirect (must login)
@@ -184,6 +184,7 @@ $routes->group('presenter', [
     $routes->post('pembayaran/store',                 'Pembayaran::store');
     $routes->get ('pembayaran/detail/(:num)',         'Pembayaran::detail/$1');
     $routes->get ('pembayaran/download-bukti/(:num)', 'Pembayaran::downloadBukti/$1');
+    $routes->post('pembayaran/reupload/(:num)', 'Pembayaran::reupload/$1');
     $routes->get ('pembayaran/cancel/(:num)',         'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher',      'Pembayaran::validateVoucher');
 
@@ -235,6 +236,7 @@ $routes->group('audience', [
     $routes->post('pembayaran/store',                 'Pembayaran::store');
     $routes->get ('pembayaran/detail/(:num)',         'Pembayaran::detail/$1');
     $routes->get ('pembayaran/download-bukti/(:num)', 'Pembayaran::downloadBukti/$1');
+    $routes->post('pembayaran/reupload/(:num)', 'Pembayaran::reupload/$1');
     $routes->get ('pembayaran/cancel/(:num)',         'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher',      'Pembayaran::validateVoucher');
 

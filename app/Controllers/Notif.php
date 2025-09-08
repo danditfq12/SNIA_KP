@@ -15,7 +15,6 @@ class Notif extends BaseController
         helper(['url']);
     }
 
-    /** Ambil user_id dari session dengan fallback */
     private function currentUserId(): ?int
     {
         foreach (['id_user','user_id','id'] as $k) {
@@ -25,18 +24,24 @@ class Notif extends BaseController
         return null;
     }
 
-    /** Notif terbaru untuk dropdown header */
+    private function noCache()
+    {
+        $this->response
+            ->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->setHeader('Pragma', 'no-cache');
+    }
+
     public function recent()
     {
+        $this->noCache();
         $userId = $this->currentUserId();
-        if (!$userId) {
-            return $this->response->setJSON(['ok'=>false,'msg'=>'Unauthorized'])->setStatusCode(401);
-        }
+        if (!$userId) return $this->response->setJSON(['ok'=>false])->setStatusCode(401);
 
-        $limit = (int) ($this->request->getGet('limit') ?? 10);
-        $rows  = $this->notif->forUser($userId, $limit);
+        $limit  = (int) ($this->request->getGet('limit') ?? 10);
+        $rows   = $this->notif->forUser($userId, $limit);
+        $unread = $this->notif->countUnread($userId);
 
-        $items = array_map(function ($n) {
+        $items = array_map(static function ($n) {
             return [
                 'id'      => (int)($n['id_notif'] ?? 0),
                 'title'   => $n['title'] ?? '-',
@@ -48,77 +53,44 @@ class Notif extends BaseController
             ];
         }, $rows);
 
-        return $this->response->setJSON(['ok'=>true, 'items'=>$items]);
+        return $this->response->setJSON(['ok'=>true,'unread'=>$unread,'items'=>$items]);
     }
 
-    /** List paginated (API) */
-    public function list()
-    {
-        $userId = $this->currentUserId();
-        if (!$userId) {
-            return $this->response->setJSON(['ok'=>false,'msg'=>'Unauthorized'])->setStatusCode(401);
-        }
-
-        $page = max(1, (int) ($this->request->getGet('page') ?? 1));
-        $per  = min(50, max(1, (int) ($this->request->getGet('per') ?? 10)));
-
-        $builder = $this->notif->where('id_user', $userId)->orderBy('created_at','DESC');
-
-        $total = $builder->countAllResults(false);
-        $rows  = $builder->findAll($per, ($page-1)*$per);
-
-        return $this->response->setJSON([
-            'ok'    => true,
-            'page'  => $page,
-            'per'   => $per,
-            'total' => $total,
-            'items' => $rows,
-        ]);
-    }
-
-    /** Badge unread */
     public function count()
     {
+        $this->noCache();
         $userId = $this->currentUserId();
-        if (!$userId) {
-            return $this->response->setJSON(['ok'=>false,'msg'=>'Unauthorized'])->setStatusCode(401);
-        }
-        $unread = $this->notif->countUnread($userId);
-        return $this->response->setJSON(['ok'=>true, 'unread'=>$unread]);
+        if (!$userId) return $this->response->setJSON(['ok'=>false])->setStatusCode(401);
+
+        return $this->response->setJSON(['ok'=>true,'unread'=>$this->notif->countUnread($userId)]);
     }
 
-    /** Tandai satu notif terbaca */
     public function markRead($id)
     {
+        $this->noCache();
         $userId = $this->currentUserId();
-        if (!$userId) {
-            return $this->response->setJSON(['ok'=>false,'msg'=>'Unauthorized'])->setStatusCode(401);
-        }
+        if (!$userId) return $this->response->setJSON(['ok'=>false])->setStatusCode(401);
 
         $id = (int) $id;
-        if ($id <= 0) {
-            return $this->response->setJSON(['ok'=>false,'msg'=>'Invalid ID'])->setStatusCode(400);
-        }
+        if ($id <= 0) return $this->response->setJSON(['ok'=>false])->setStatusCode(400);
 
-        $updated = $this->notif->markRead($id, $userId);
-        return $this->response->setJSON(['ok'=> (bool)$updated ]);
+        return $this->response->setJSON(['ok' => $this->notif->markRead($id, $userId)]);
     }
 
-    /** Tandai SEMUA notif user terbaca */
     public function readAll()
     {
+        $this->noCache();
         $userId = $this->currentUserId();
         if (!$userId) {
-            if ($this->request->isAJAX()) {
-                return $this->response->setJSON(['ok'=>false,'msg'=>'Unauthorized'])->setStatusCode(401);
+            if ($this->request->isAJAX() || $this->request->getMethod()==='post') {
+                return $this->response->setJSON(['ok'=>false])->setStatusCode(401);
             }
             return redirect()->back()->with('error','Unauthorized');
         }
 
         $this->notif->markAllRead($userId);
 
-        // Jika AJAX (fetch), balas JSON; jika bukan, redirect balik (tidak tampil JSON di browser)
-        if ($this->request->isAJAX()) {
+        if ($this->request->isAJAX() || $this->request->getMethod()==='post') {
             return $this->response->setJSON(['ok'=>true]);
         }
         return redirect()->back()->with('success','Semua notifikasi ditandai terbaca');

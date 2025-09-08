@@ -12,9 +12,9 @@
 ?>
 <aside id="sidebar" class="sidebar p-3 shadow-sm">
   <div class="d-flex align-items-center justify-content-between mb-4">
-    <div class="d-flex align-items-center gap-2">
-      <div class="rounded-3 p-2 bg-primary-subtle text-primary"><i class="bi bi-people"></i></div>
-      <span class="brand fw-bold">SNIA Audience</span>
+    <div class="d-flex align-items-center gap-3">
+      <div class="rounded-3 p-2 bg-primary-subtle text-primary" style="font-size:1.25rem;"><i class="bi bi-people"></i></div>
+      <span class="brand fw-bold" style="font-size:1.05rem;">SNIA Audience</span>
     </div>
     <button class="btn btn-sm d-lg-none" onclick="toggleSidebar()" aria-label="Tutup menu">
       <i class="bi bi-x-lg"></i>
@@ -22,38 +22,43 @@
   </div>
 
   <nav class="nav flex-column">
-    <a class="nav-link py-2 px-3 rounded <?= isActive('audience/dashboard', $path) ? 'active' : '' ?>"
+    <a class="nav-link py-3 px-3 rounded <?= isActive('audience/dashboard', $path) ? 'active' : '' ?>"
        href="<?= site_url('audience/dashboard') ?>"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a>
 
-    <a class="nav-link py-2 px-3 rounded <?= isActive(['audience/events','audience/events/*'], $path) ? 'active' : '' ?>"
+    <a class="nav-link py-3 px-3 rounded <?= isActive(['audience/events','audience/events/*'], $path) ? 'active' : '' ?>"
        href="<?= site_url('audience/events') ?>"><i class="bi bi-calendar2-event me-2"></i>Event</a>
 
-    <a class="nav-link py-2 px-3 rounded <?= isActive(['audience/pembayaran','audience/pembayaran/*'], $path) ? 'active' : '' ?>"
+    <a class="nav-link py-3 px-3 rounded <?= isActive(['audience/pembayaran','audience/pembayaran/*'], $path) ? 'active' : '' ?>"
        href="<?= site_url('audience/pembayaran') ?>"><i class="bi bi-wallet2 me-2"></i>Pembayaran</a>
 
-    <a class="nav-link py-2 px-3 rounded <?= isActive(['audience/absensi','audience/absensi/*'], $path) ? 'active' : '' ?>"
+    <a class="nav-link py-3 px-3 rounded <?= isActive(['audience/absensi','audience/absensi/*'], $path) ? 'active' : '' ?>"
        href="<?= site_url('audience/absensi') ?>"><i class="bi bi-qr-code me-2"></i>Absensi</a>
 
-    <a class="nav-link py-2 px-3 rounded <?= isActive(['audience/dokumen','audience/dokumen/*'], $path) ? 'active' : '' ?>"
+    <a class="nav-link py-3 px-3 rounded <?= isActive(['audience/dokumen','audience/dokumen/*'], $path) ? 'active' : '' ?>"
        href="<?= site_url('audience/dokumen/sertifikat') ?>"><i class="bi bi-award me-2"></i>Sertifikat</a>
 </aside>
 
 <style>
+  /* ==== SIZE OVERRIDES ONLY ==== */
   #sidebar{
     position:fixed;
     top:var(--topbar-h);
     left:0;
-    width:var(--sidebar-w);
+    width:var(--sidebar-w);           /* 260px dari header */
     background:#fff !important;
     border-right:1px solid var(--ring);
     height:calc(100vh - var(--topbar-h));
     overflow-y:auto;
     transition:transform .3s ease-in-out;
-    z-index:1050 !important; /* di atas overlay */
+    z-index:1050 !important;
     box-shadow:none !important;
   }
 
-  .nav-link{ color:#444; transition:all .25s ease; }
+  .nav-link{
+    color:#444; transition:all .22s ease;
+    font-size:1rem;                   /* sedikit lebih besar */
+  }
+  .nav-link i{ font-size:1.15rem; }   /* ikon lebih besar dikit */
   .nav-link:hover{ background:#f1f5f9; padding-left:1.5rem; }
   .nav-link.active{ background:#0d6efd; color:#fff !important; font-weight:600; }
 
@@ -68,7 +73,6 @@
 </style>
 
 <script>
-  // Tutup sidebar ketika klik menu (HP)
   (function(){
     const mq = window.matchMedia('(max-width: 991px)');
     document.querySelectorAll('#sidebar .nav-link').forEach(a=>{
@@ -77,7 +81,7 @@
           const sb = document.getElementById('sidebar');
           const ov = document.getElementById('overlay');
           sb.classList.remove('show');
-          ov.classList.remove('show','delayed','visible');
+          ov?.classList.remove('show','delayed','visible');
           document.body.classList.remove('sb-open');
         }
       });
