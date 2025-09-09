@@ -5,7 +5,11 @@
   $myReg   = $myReg  ?? null;
   $options = $options ?? [];
   $pricing = $pricing ?? []; // matrix: ['audience'=>['online'=>..., 'offline'=>...]]
-  $payId   = $myReg['id_pembayaran'] ?? ($myReg['id'] ?? null);
+
+  // === PATCH: pisahkan regId vs payId supaya link tidak salah ===
+  $regId   = isset($myReg['id']) ? (int)$myReg['id'] : null;
+  $payId   = isset($myReg['id_pembayaran']) ? (int)$myReg['id_pembayaran'] : null;
+  $payStat = $myReg['payment_status'] ?? null;
 
   $fmtDate = function($d){ return $d ? date('d M Y', strtotime($d)) : '-'; };
   $rupiah  = function($n){ return ($n===null||$n==='') ? '—' : 'Rp '.number_format((float)$n,0,',','.'); };
@@ -20,16 +24,8 @@
 <?= $this->include('partials/alerts') ?>
 
 <style>
-  .hero{
-    /* 💙 gradient biru */
-    background: linear-gradient(135deg,#0ea5e9,#2563eb);
-    color:#fff; border-radius:16px;
-  }
-  .hero .chip{
-    background:rgba(255,255,255,.18);
-    border:1px solid rgba(255,255,255,.25);
-    border-radius:999px; padding:.35rem .7rem; font-size:.8rem
-  }
+  .hero{ background: linear-gradient(135deg,#0ea5e9,#2563eb); color:#fff; border-radius:16px; }
+  .hero .chip{ background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.25); border-radius:999px; padding:.35rem .7rem; font-size:.8rem }
   .info-tile{background:#fff; border:1px solid #eef0f4; border-radius:12px}
   .price-badge{font-weight:600}
   .muted{color:#6b7280}
@@ -106,22 +102,25 @@
                 <b><?= esc(strtoupper($myReg['mode_kehadiran'] ?? '-')) ?></b>).
               </div>
 
-              <?php if (in_array(($myReg['status'] ?? ''), ['menunggu_pembayaran','pending'], true)): ?>
-                <a class="btn btn-primary w-100 mb-2"
-                   href="<?= site_url('audience/pembayaran/instruction/'.$payId) ?>">
-                  <i class="bi bi-cash-coin me-1"></i>Lanjutkan Pembayaran
-                </a>
-              <?php else: ?>
+              <?php if ($payId): ?>
+                <!-- Jika sudah punya pembayaran, langsung ke DETAIL pembayaran -->
                 <a class="btn btn-outline-primary w-100 mb-2"
                    href="<?= site_url('audience/pembayaran/detail/'.$payId) ?>">
                   <i class="bi bi-receipt me-1"></i>Lihat Pembayaran
                 </a>
-                <?php if ($isToday): ?>
-                  <a class="btn btn-warning w-100"
-                     href="<?= site_url('audience/absensi/event/'.($event['id'] ?? 0)) ?>">
-                    <i class="bi bi-qr-code-scan me-1"></i>Absen Hari Ini
-                  </a>
-                <?php endif; ?>
+              <?php elseif (($myReg['status'] ?? '') === 'menunggu_pembayaran' && $regId): ?>
+                <!-- Belum ada pembayaran, lanjut ke instruksi pakai REG ID -->
+                <a class="btn btn-primary w-100 mb-2"
+                   href="<?= site_url('audience/pembayaran/instruction/'.$regId) ?>">
+                  <i class="bi bi-cash-coin me-1"></i>Lanjutkan Pembayaran
+                </a>
+              <?php endif; ?>
+
+              <?php if ($isToday): ?>
+                <a class="btn btn-warning w-100"
+                   href="<?= site_url('audience/absensi/event/'.($event['id'] ?? 0)) ?>">
+                  <i class="bi bi-qr-code-scan me-1"></i>Absen Hari Ini
+                </a>
               <?php endif; ?>
 
             <?php elseif ($isOpen): ?>

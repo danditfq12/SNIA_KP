@@ -103,6 +103,7 @@ $list = $isSearching ? $filtered : $events;
               $regStatus     = is_array($regRaw) ? ($regRaw['status'] ?? null)         : $regRaw;
               $paymentId     = is_array($regRaw) ? ($regRaw['payment_id'] ?? null)     : null;
               $paymentStatus = is_array($regRaw) ? ($regRaw['payment_status'] ?? null) : null;
+              $regId         = is_array($regRaw) ? ($regRaw['reg_id'] ?? null)         : null;
 
               // menunggu verifikasi setelah upload
               $isWaitingVerification = (
@@ -169,7 +170,6 @@ $list = $isSearching ? $filtered : $events;
 
                     <?php if ($isRegistered): ?>
                       <?php if ($isWaitingVerification): ?>
-                        <!-- Pending verifikasi: tampilkan tombol pembayaran + ubah bukti -->
                         <a href="<?= site_url('audience/pembayaran/detail/'.(int)$paymentId) ?>"
                            class="btn btn-sm btn-primary flex-fill">
                           Detail Pembayaran
@@ -180,7 +180,8 @@ $list = $isSearching ? $filtered : $events;
                         </a>
 
                       <?php elseif ($regStatus === 'menunggu_pembayaran'): ?>
-                        <a href="<?= site_url('audience/pembayaran') ?>"
+                        <a href="<?= $regId ? site_url('audience/pembayaran/instruction/'.$regId)
+                                             : site_url('audience/pembayaran') ?>"
                            class="btn btn-sm btn-primary flex-fill js-go-pay"
                            data-title="<?= esc($e['title'] ?? 'Event') ?>">
                           Lanjutkan Pembayaran

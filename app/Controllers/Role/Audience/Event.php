@@ -86,6 +86,7 @@ class Event extends BaseController
                 foreach ($regs as $r) {
                     $eid = (int)$r['id_event'];
                     $myRegs[$eid] = [
+                        'reg_id'         => (int)$r['id'], // <<<<<< dipakai untuk /pembayaran/instruction/{regId}
                         'status'         => $r['status'],
                         'payment_id'     => $latestPay[$eid]['payment_id']     ?? null,
                         'payment_status' => $latestPay[$eid]['payment_status'] ?? null,
@@ -113,7 +114,7 @@ class Event extends BaseController
 
         $idUser  = (int) (session()->get('id_user') ?? 0);
         $regM    = new EventRegistrationModel();
-        $myReg   = $regM->findUserReg($id, $idUser);
+        $myReg   = $regM->findUserReg($id, $idUser); // berisi id(reg_id), status, mode_kehadiran, dst.
         $options = $eventM->getParticipationOptions($id, 'audience');
         $pricing = $eventM->getPricingMatrix($id);
         $isOpen  = $eventM->isRegistrationOpen($id);

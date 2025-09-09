@@ -115,9 +115,16 @@
         <div class="col-12 col-xl-6">
           <div class="card shadow-sm border-0 h-100">
             <div class="card-body">
-              <h5 class="card-title mb-3">Aktivitas Terbaru</h5>
-              <div id="notifList" class="vstack gap-2">
-                <div class="small text-muted">Memuat...</div>
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <h5 class="card-title mb-0">Aktivitas Terbaru</h5>
+                <span class="text-muted small d-none d-xl-inline">scroll untuk lihat lainnya</span>
+              </div>
+
+              <!-- SCROLL CONTAINER: ~4 items visible -->
+              <div class="activities-scroll">
+                <div id="notifList" class="vstack gap-2">
+                  <div class="small text-muted">Memuat...</div>
+                </div>
               </div>
             </div>
           </div>
@@ -227,9 +234,20 @@
 /* KPI */
 .kpi-card { border:0; border-left:4px solid #e9ecef; }
 .kpi-icon{ width:44px; height:44px; border-radius:10px; display:grid; place-items:center; font-size:20px; }
+
 /* Absen Hari Ini */
 .abs-today-card{ background:#fff; transition:.16s ease; }
 .abs-today-card:hover{ transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,.06); }
+
+/* Aktivitas Terbaru → tampilkan 4 item, sisanya scroll */
+.activities-scroll{
+  max-height: 320px; /* ~4 item */
+  overflow: auto;
+  padding-right: 6px;
+}
+.activities-scroll::-webkit-scrollbar{ width: 8px; }
+.activities-scroll::-webkit-scrollbar-thumb{ background: #ccd6e0; border-radius: 8px; }
+
 /* Activity item */
 .notice{ border:1px solid #eef2f6; border-radius:12px; padding:12px; background:#fff; position:relative; transition:.15s ease; }
 .notice:hover{ box-shadow:0 8px 18px rgba(0,0,0,.06); }
@@ -242,20 +260,38 @@
 (function(){
   // ==== AKTIVITAS TERBARU ====
   const LIST = document.getElementById('notifList');
-  const URL  = '<?= site_url('notif/recent') ?>?limit=8';
+  const URL  = '<?= site_url('notif/recent') ?>?limit=20'; // ambil lebih banyak; tampilan tetap 4 via scroll
 
   const esc = (s)=> (s||'').toString().replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
   const pick = (o, keys)=> keys.map(k=> o && o[k] ? o[k] : null).find(v=> v!=null) || '';
 
-  // --- NORMALISASI LINK: perbaiki "http:/" → "http://", + handle path relatif ---
+  // Normalisasi link:
+  //  - perbaiki "http:/…" -> "http://…"
+  //  - kalau absolute dan host sama → kembalikan PATH relatif, supaya CI routing aman
+  //  - dukung //, / dan relatif
   function normalizeLink(href){
     if(!href) return '#';
     href = String(href).trim();
-    href = href.replace(/^http:\//i, 'http://').replace(/^https:\//i, 'https://');
+
+    // fix salah satu slash setelah skema
+    href = href.replace(/^(https?:)\/(?!\/)/i, '$1//');
+
+    // absolute URL?
+    const m = /^(https?:)\/\/([^/]+)(\/.*)?$/i.exec(href);
+    if (m) {
+      const scheme = m[1], host = m[2], path = m[3] || '/';
+      // kalau host sama → pakai path saja
+      if (host === window.location.host) return path;
+      // host beda → biarkan absolute (external)
+      return scheme + '//' + host + path;
+    }
+
+    // protocol-relative
     if (href.startsWith('//')) return window.location.protocol + href;
-    if (/^https?:\/\//i.test(href)) return href;
-    if (href.startsWith('/')) return window.location.origin + href;
-    return window.location.origin + '/' + href.replace(/^\.?\//,'');
+    // root-relative
+    if (href.startsWith('/')) return href;
+    // lainnya → relatif dari root
+    return '/' + href.replace(/^\.?\//,'');
   }
 
   async function getJSON(url){

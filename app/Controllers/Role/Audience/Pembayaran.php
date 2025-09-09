@@ -27,7 +27,7 @@ class Pembayaran extends BaseController
     {
         $uid = $this->uid(); if(!$uid) return redirect()->to('/auth/login');
 
-        $rows = $this->payM->select('id_pembayaran,event_id,jumlah,status,tanggal_bayar,bukti_bayar')
+        $rows = $this->payM->select('id_pembayaran,event_id,jumlah,metode,status,tanggal_bayar,bukti_bayar')
                 ->where('id_user',$uid)->orderBy('tanggal_bayar','DESC')->findAll();
 
         // map event title
@@ -58,10 +58,14 @@ class Pembayaran extends BaseController
         $mode    = $reg['mode_kehadiran'] ?? 'online';
         $amount  = (float)($pricing['audience'][$mode] ?? 0);
 
+        // tambahkan info event ringkas (opsional)
+        $ev = $this->eventM->select('title,event_date,event_time')->find((int)$reg['id_event']);
+
         return view('role/audience/pembayaran/instruction', [
             'title'  => 'Instruksi Pembayaran',
             'reg'    => $reg,
             'amount' => $amount,
+            'event'  => $ev,
         ]);
     }
 
@@ -125,6 +129,9 @@ class Pembayaran extends BaseController
         $mode    = $reg['mode_kehadiran'] ?? 'online';
         $amount  = (float)($pricing['audience'][$mode] ?? 0);
 
+        // === FIX: isi kolom NOT NULL `metode` dengan default manual/transfer ===
+        $method  = (string) ($this->request->getPost('metode') ?: 'transfer');
+
         // upsert pending untuk event ini
         $existing = $this->payM->where('id_user',$uid)
                                ->where('event_id',(int)$reg['id_event'])
@@ -133,7 +140,8 @@ class Pembayaran extends BaseController
 
         if ($existing) {
             $this->payM->update((int)$existing['id_pembayaran'], [
-                'bukti_bayar'   => $dbPath,        // <-- FIX: kolom benar
+                'metode'        => $method,
+                'bukti_bayar'   => $dbPath,        // kolom benar
                 'jumlah'        => $amount,
                 'status'        => 'pending',
                 'tanggal_bayar' => date('Y-m-d H:i:s'),
@@ -144,9 +152,10 @@ class Pembayaran extends BaseController
             $payId = (int) $this->payM->insert([
                 'id_user'        => $uid,
                 'event_id'       => (int)$reg['id_event'],
+                'metode'         => $method,
                 'jumlah'         => $amount,
                 'status'         => 'pending',
-                'bukti_bayar'    => $dbPath,       // <-- FIX: kolom benar
+                'bukti_bayar'    => $dbPath,       // kolom benar
                 'tanggal_bayar'  => date('Y-m-d H:i:s'),
                 'participation_type' => $mode,
             ]);

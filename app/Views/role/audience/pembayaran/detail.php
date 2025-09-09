@@ -15,6 +15,7 @@ $tanggal  = $pay['tanggal_bayar'] ?? null;
 // kolom baru + fallback legacy
 $proof    = $pay['bukti_bayar'] ?? ($pay['bukti'] ?? null);
 $payId    = (int)($pay['id_pembayaran'] ?? 0);
+$proofExt = strtolower(pathinfo((string)$proof, PATHINFO_EXTENSION));
 
 $badge = 'secondary';
 switch ($status) {
@@ -105,14 +106,62 @@ $canReupload = in_array($status, ['pending','rejected'], true);
                 </div>
 
                 <?php if ($proof): ?>
-                  <div class="d-flex flex-wrap align-items-center gap-2">
-                    <i class="bi bi-file-earmark-check"></i>
-                    <span class="small text-muted"><?= esc(basename($proof)) ?></span>
+                  <div id="proofViewer" class="proof-viewer border rounded-3 bg-light d-flex align-items-center justify-content-center" style="min-height:220px;">
+                    <div class="text-muted small">Memuat bukti…</div>
                   </div>
-                  <a class="btn btn-sm btn-outline-secondary mt-2"
-                     href="<?= site_url('audience/pembayaran/download-bukti/'.$payId) ?>">
-                    Lihat / Unduh Bukti
-                  </a>
+                  <div class="mt-2 d-flex flex-wrap gap-2">
+                    <a class="btn btn-sm btn-outline-secondary"
+                       href="<?= site_url('audience/pembayaran/download-bukti/'.$payId) ?>">
+                      Unduh Bukti
+                    </a>
+                    <?php if ($canReupload): ?>
+                      <a class="btn btn-sm btn-outline-primary" href="#unggah-ulang" id="btnShowReuploadTop">Ubah Bukti</a>
+                    <?php endif; ?>
+                  </div>
+
+                  <script>
+                    (function(){
+                      const viewer = document.getElementById('proofViewer');
+                      const url = "<?= site_url('audience/pembayaran/download-bukti/'.$payId) ?>";
+                      const ext = "<?= $proofExt ?>";
+                      fetch(url, {credentials: 'same-origin'})
+                        .then(r => r.blob())
+                        .then(blob => {
+                          const blobUrl = URL.createObjectURL(blob);
+                          let el;
+                          if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) {
+                            el = document.createElement('img');
+                            el.src = blobUrl;
+                            el.alt = 'Bukti pembayaran';
+                            el.className = 'img-fluid rounded';
+                            el.style.maxHeight = '520px';
+                          } else if (ext === 'pdf') {
+                            el = document.createElement('iframe');
+                            el.src = blobUrl;
+                            el.className = 'w-100 rounded';
+                            el.style.height = '520px';
+                          } else {
+                            el = document.createElement('a');
+                            el.href = url;
+                            el.textContent = 'Lihat / Unduh Bukti';
+                            el.className = 'btn btn-sm btn-outline-secondary';
+                          }
+                          viewer.innerHTML = '';
+                          viewer.appendChild(el);
+                        })
+                        .catch(() => {
+                          viewer.innerHTML = '<div class="text-danger small">Gagal memuat preview. Gunakan tombol Unduh Bukti.</div>';
+                        });
+
+                      document.getElementById('btnShowReuploadTop')?.addEventListener('click', function(e){
+                        e.preventDefault();
+                        const box = document.getElementById('unggah-ulang');
+                        box?.classList.remove('d-none');
+                        box?.scrollIntoView({behavior:'smooth'});
+                        history.replaceState(null,'','#unggah-ulang');
+                      });
+                    })();
+                  </script>
                 <?php else: ?>
                   <div class="text-muted">Belum ada file bukti.</div>
                 <?php endif; ?>
