@@ -276,6 +276,8 @@
     </style>
 </head>
 <body>
+    <?php $eventM = $eventM ?? new \App\Models\EventModel(); ?>
+
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="p-4 text-center">
@@ -540,7 +542,7 @@
                                         <div class="btn-group" role="group">
                                             <!-- Main Action Button -->
                                             <?php if ($registrationStatus === 'not_registered'): ?>
-                                                <?php if ($this->eventModel->isRegistrationOpen($event['id'])): ?>
+                                                <?php if ($eventM->isRegistrationOpen($event['id'])): ?>
                                                     <a href="<?= site_url('presenter/events/register/' . $event['id']) ?>" 
                                                        class="btn btn-primary-custom btn-custom">
                                                         <i class="fas fa-user-plus me-1"></i>Register Now
@@ -656,51 +658,20 @@
         </div>
     </div>
 
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        // Show success/error messages
         document.addEventListener('DOMContentLoaded', function() {
             <?php if (session('success')): ?>
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Success!',
-                    text: '<?= addslashes(session('success')) ?>',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
+            Swal.fire({ icon: 'success', title: 'Success!', text: '<?= addslashes(session('success')) ?>', timer: 3000, showConfirmButton: false });
             <?php endif; ?>
-
             <?php if (session('error')): ?>
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error!',
-                    text: '<?= addslashes(session('error')) ?>',
-                });
+            Swal.fire({ icon: 'error', title: 'Error!', text: '<?= addslashes(session('error')) ?>' });
             <?php endif; ?>
-
             <?php if (session('info')): ?>
-                Swal.fire({
-                    icon: 'info',
-                    title: 'Information',
-                    text: '<?= addslashes(session('info')) ?>',
-                });
+            Swal.fire({ icon: 'info', title: 'Information', text: '<?= addslashes(session('info')) ?>' });
             <?php endif; ?>
-
-            // Animate cards on load
-            const cards = document.querySelectorAll('.event-card');
-            cards.forEach((card, index) => {
-                setTimeout(() => {
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateY(20px)';
-                    card.style.transition = 'all 0.5s ease';
-                    
-                    setTimeout(() => {
-                        card.style.opacity = '1';
-                        card.style.transform = 'translateY(0)';
-                    }, 100);
-                }, index * 100);
-            });
         });
     </script>
 </body>
