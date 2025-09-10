@@ -419,7 +419,7 @@
 
     <!-- Add Event Modal -->
     <div class="modal fade" id="addEventModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
@@ -506,17 +506,23 @@
                         <!-- Additional Settings -->
                         <h6 class="border-bottom pb-2 mb-3">Pengaturan Tambahan</h6>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Maksimal Peserta</label>
-                                <input type="number" class="form-control" name="max_participants">
+                                <input type="number" class="form-control" name="max_participants" value="0">
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Batas Pendaftaran</label>
                                 <input type="datetime-local" class="form-control" name="registration_deadline">
                             </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Batas Submit Abstrak</label>
+                                <input type="datetime-local" class="form-control" name="abstract_deadline">
+                            </div>
                         </div>
 
+
                         <!-- Status toggles -->
+                        <h6 class="border-bottom pb-2 mb-3">Status Event</h6>
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="form-check form-switch">
@@ -551,7 +557,7 @@
 
     <!-- Edit Event Modal -->
     <div class="modal fade" id="editEventModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
@@ -560,7 +566,7 @@
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form id="editEventForm">
+                <form id="editEventForm" enctype="multipart/form-data">
                     <div class="modal-body" id="editFormContent">
                         <!-- Content loaded dynamically -->
                     </div>
@@ -805,16 +811,22 @@
                     ${audienceOnlineDiv}
                     ${audienceOfflineDiv}
                 </div>
+                <h6 class="border-bottom pb-2 mb-3">Pengaturan Tambahan</h6>
                 <div class="row">
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-4 mb-3">
                         <label class="form-label">Maksimal Peserta</label>
                         <input type="number" class="form-control" name="max_participants" value="${event.max_participants || ''}">
                     </div>
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-4 mb-3">
                         <label class="form-label">Batas Pendaftaran</label>
                         <input type="datetime-local" class="form-control" name="registration_deadline" value="${event.registration_deadline ? event.registration_deadline.slice(0, 16) : ''}">
                     </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Batas Submit Abstrak</label>
+                        <input type="datetime-local" class="form-control" name="abstract_deadline" value="${event.abstract_deadline ? event.abstract_deadline.slice(0, 16) : ''}">
+                    </div>
                 </div>
+                <h6 class="border-bottom pb-2 mb-3">Status Event</h6>
                 <div class="row">
                     <div class="col-md-4">
                         <div class="form-check form-switch">

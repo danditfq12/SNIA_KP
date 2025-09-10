@@ -67,6 +67,11 @@
             overflow: hidden;
         }
 
+        .event-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 48px rgba(0,0,0,0.12);
+        }
+
         .event-card::before {
             content: '';
             position: absolute;
@@ -74,16 +79,7 @@
             left: 0;
             right: 0;
             height: 4px;
-        }
-
-        .event-card.available::before { background: var(--success-color); }
-        .event-card.participating::before { background: var(--primary-color); }
-        .event-card.completed::before { background: var(--info-color); }
-        .event-card.blocked::before { background: var(--secondary-color); }
-
-        .event-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+            background: linear-gradient(135deg, var(--purple-color) 0%, var(--primary-color) 100%);
         }
 
         .status-badge {
@@ -94,17 +90,123 @@
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
-            color: white;
+            text-transform: uppercase;
         }
 
-        .status-badge.need_abstract { background: var(--warning-color); }
-        .status-badge.abstract_pending { background: var(--info-color); }
-        .status-badge.abstract_revision { background: var(--warning-color); }
-        .status-badge.abstract_rejected { background: var(--danger-color); }
-        .status-badge.need_payment { background: var(--success-color); }
-        .status-badge.payment_pending { background: var(--info-color); }
-        .status-badge.payment_rejected { background: var(--danger-color); }
-        .status-badge.completed { background: var(--success-color); }
+        .status-not_registered {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        .status-registered {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .status-abstract_pending {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .status-abstract_accepted {
+            background: #d1fae5;
+            color: #059669;
+        }
+
+        .status-payment_pending {
+            background: #fde68a;
+            color: #d97706;
+        }
+
+        .status-payment_verified {
+            background: #a7f3d0;
+            color: #047857;
+        }
+
+        .event-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin: 16px 0;
+            padding: 16px;
+            background: #f8fafc;
+            border-radius: 12px;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #64748b;
+            font-size: 14px;
+        }
+
+        .meta-item i {
+            color: var(--primary-color);
+        }
+
+        .price-badge {
+            background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 18px;
+            text-align: center;
+            margin: 16px 0;
+        }
+
+        .free-badge {
+            background: linear-gradient(135deg, var(--info-color) 0%, #0891b2 100%);
+        }
+
+        .deadline-warning {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 16px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .deadline-info {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            color: #0369a1;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 16px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .btn-primary-gradient {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--info-color) 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 24px;
+            color: white;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .btn-primary-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.3);
+            color: white;
+        }
 
         .header-section {
             background: linear-gradient(135deg, var(--purple-color) 0%, #7c3aed 100%);
@@ -119,152 +221,77 @@
             border-radius: 12px;
             padding: 8px;
             margin-bottom: 24px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.05);
         }
 
-        .filter-tab {
-            background: transparent;
+        .filter-tabs .nav-link {
             border: none;
-            padding: 12px 24px;
             border-radius: 8px;
+            padding: 12px 20px;
+            color: #64748b;
             font-weight: 600;
-            color: var(--secondary-color);
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
         }
 
-        .filter-tab.active {
+        .filter-tabs .nav-link.active {
             background: var(--primary-color);
             color: white;
-        }
-
-        .filter-tab:hover:not(.active) {
-            background: #f1f5f9;
-        }
-
-        .workflow-status {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin: 16px 0;
-        }
-
-        .workflow-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #e2e8f0;
-        }
-
-        .workflow-dot.completed { background: var(--success-color); }
-        .workflow-dot.current { background: var(--primary-color); }
-        .workflow-dot.blocked { background: var(--danger-color); }
-
-        .workflow-line {
-            flex: 1;
-            height: 2px;
-            background: #e2e8f0;
-        }
-
-        .workflow-line.completed { background: var(--success-color); }
-
-        .event-meta {
-            display: flex;
-            gap: 20px;
-            margin: 16px 0;
-            flex-wrap: wrap;
-        }
-
-        .meta-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--secondary-color);
-            font-size: 14px;
-        }
-
-        .action-button {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--info-color) 100%);
-            border: none;
-            border-radius: 12px;
-            padding: 12px 24px;
-            color: white;
-            font-weight: 600;
-            text-decoration: none;
-            display: inline-block;
-            transition: all 0.3s ease;
-        }
-
-        .action-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.3);
-            color: white;
-        }
-
-        .action-button.warning {
-            background: linear-gradient(135deg, var(--warning-color) 0%, #d97706 100%);
-        }
-
-        .action-button.danger {
-            background: linear-gradient(135deg, var(--danger-color) 0%, #dc2626 100%);
-        }
-
-        .action-button.success {
-            background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
-        }
-
-        .action-button.secondary {
-            background: linear-gradient(135deg, var(--secondary-color) 0%, #475569 100%);
-        }
-
-        .action-button:disabled {
-            background: #e2e8f0;
-            color: #94a3b8;
-            cursor: not-allowed;
         }
 
         .empty-state {
             text-align: center;
             padding: 60px 20px;
-            color: var(--secondary-color);
+            color: #64748b;
         }
 
-        .deadline-warning {
-            background: rgba(245, 158, 11, 0.1);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin: 12px 0;
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .workflow-progress {
             display: flex;
             align-items: center;
-            gap: 12px;
-        }
-
-        .deadline-critical {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
-        .stats-bar {
-            background: white;
+            margin: 16px 0;
+            padding: 16px;
+            background: #f8fafc;
             border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
         }
 
-        .stat-item {
-            text-align: center;
+        .progress-step {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #e2e8f0;
+            color: #64748b;
+            font-size: 12px;
+            position: relative;
+            z-index: 2;
         }
 
-        .stat-number {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 4px;
+        .progress-step.active {
+            background: var(--primary-color);
+            color: white;
         }
 
-        .stat-label {
-            color: var(--secondary-color);
-            font-size: 14px;
+        .progress-step.completed {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .progress-line {
+            flex: 1;
+            height: 2px;
+            background: #e2e8f0;
+            margin: 0 8px;
+        }
+
+        .progress-line.completed {
+            background: var(--success-color);
         }
     </style>
 </head>
@@ -279,7 +306,7 @@
                             <i class="fas fa-chalkboard-teacher me-2"></i>
                             SNIA Presenter
                         </h4>
-                        <small class="text-white-50">Dashboard</small>
+                        <small class="text-white-50">Event Management</small>
                     </div>
                     
                     <nav class="nav flex-column px-3">
@@ -317,46 +344,18 @@
                         <div class="row align-items-center">
                             <div class="col">
                                 <h1 class="mb-2">
-                                    <i class="fas fa-calendar-alt me-3"></i>Event Tersedia
+                                    <i class="fas fa-calendar-alt me-3"></i>Event Presenter
                                 </h1>
                                 <p class="mb-0 opacity-75">
-                                    Kelola partisipasi Anda dalam berbagai event SNIA.
+                                    Temukan dan ikuti event yang sesuai dengan bidang keahlian Anda.
                                 </p>
                             </div>
                             <div class="col-auto">
                                 <div class="text-end">
-                                    <small class="opacity-75 d-block">Total Event</small>
-                                    <strong class="h4"><?= $total_events ?></strong>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Statistics Bar -->
-                    <div class="stats-bar">
-                        <div class="row">
-                            <div class="col-3">
-                                <div class="stat-item">
-                                    <div class="stat-number text-success"><?= $available_count ?></div>
-                                    <div class="stat-label">Tersedia</div>
-                                </div>
-                            </div>
-                            <div class="col-3">
-                                <div class="stat-item">
-                                    <div class="stat-number text-primary"><?= $participating_count ?></div>
-                                    <div class="stat-label">Sedang Proses</div>
-                                </div>
-                            </div>
-                            <div class="col-3">
-                                <div class="stat-item">
-                                    <div class="stat-number text-info"><?= $completed_count ?></div>
-                                    <div class="stat-label">Selesai</div>
-                                </div>
-                            </div>
-                            <div class="col-3">
-                                <div class="stat-item">
-                                    <div class="stat-number text-secondary"><?= $total_events - $available_count - $participating_count - $completed_count ?></div>
-                                    <div class="stat-label">Tidak Dapat</div>
+                                    <div class="d-flex align-items-center text-white-50">
+                                        <i class="fas fa-clock me-2"></i>
+                                        <span id="currentTime"><?= date('H:i:s') ?> WIB</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -364,285 +363,485 @@
 
                     <!-- Filter Tabs -->
                     <div class="filter-tabs">
-                        <button class="filter-tab active" data-filter="all">
-                            Semua Event (<?= $total_events ?>)
-                        </button>
-                        <button class="filter-tab" data-filter="available">
-                            Tersedia (<?= $available_count ?>)
-                        </button>
-                        <button class="filter-tab" data-filter="participating">
-                            Sedang Proses (<?= $participating_count ?>)
-                        </button>
-                        <button class="filter-tab" data-filter="completed">
-                            Selesai (<?= $completed_count ?>)
-                        </button>
+                        <ul class="nav nav-pills justify-content-center" id="eventTabs">
+                            <li class="nav-item">
+                                <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#all-events">
+                                    <i class="fas fa-list me-2"></i>Semua Event
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#open-registration">
+                                    <i class="fas fa-door-open me-2"></i>Pendaftaran Terbuka
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#my-events">
+                                    <i class="fas fa-user-check me-2"></i>Event Saya
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#upcoming">
+                                    <i class="fas fa-calendar-day me-2"></i>Mendatang
+                                </button>
+                            </li>
+                        </ul>
                     </div>
 
-                    <!-- Events List -->
-                    <div class="events-container">
-                        <?php if (!empty($events)): ?>
-                            <?php foreach ($events as $event): ?>
-                                <div class="event-card <?= $event['is_completed'] ? 'completed' : ($event['can_participate'] ? 'available' : ($event['has_abstract'] || $event['has_payment'] ? 'participating' : 'blocked')) ?>" 
-                                     data-filter-type="<?= $event['is_completed'] ? 'completed' : ($event['can_participate'] ? 'available' : ($event['has_abstract'] || $event['has_payment'] ? 'participating' : 'blocked')) ?>">
-                                    
+                    <!-- Tab Content -->
+                    <div class="tab-content" id="eventTabsContent">
+                        <!-- All Events -->
+                        <div class="tab-pane fade show active" id="all-events">
+                            <?php if (!empty($events)): ?>
+                                <?php foreach ($events as $event): ?>
+                                <div class="event-card" data-event-id="<?= $event['id'] ?>" data-status="<?= $event['user_status'] ?>">
                                     <!-- Status Badge -->
-                                    <div class="status-badge <?= $event['workflow_status'] ?>">
-                                        <?php
-                                        $statusText = [
-                                            'need_abstract' => 'Perlu Abstrak',
-                                            'abstract_pending' => 'Review Abstrak',
-                                            'abstract_revision' => 'Perlu Revisi',
-                                            'abstract_rejected' => 'Abstrak Ditolak',
-                                            'need_payment' => 'Perlu Bayar',
-                                            'payment_pending' => 'Tunggu Verifikasi',
-                                            'payment_rejected' => 'Bayar Ditolak',
-                                            'completed' => 'Selesai'
-                                        ];
-                                        echo $statusText[$event['workflow_status']] ?? 'Unknown';
-                                        ?>
+                                    <span class="status-badge status-<?= $event['user_status'] ?>">
+                                        <?= ucfirst(str_replace('_', ' ', $event['user_status'])) ?>
+                                    </span>
+
+                                    <!-- Event Title & Description -->
+                                    <div class="mb-3" style="margin-right: 120px;">
+                                        <h4 class="mb-2"><?= esc($event['title']) ?></h4>
+                                        <?php if (!empty($event['description'])): ?>
+                                        <p class="text-muted mb-0"><?= esc(substr($event['description'], 0, 150)) ?><?= strlen($event['description']) > 150 ? '...' : '' ?></p>
+                                        <?php endif; ?>
                                     </div>
 
-                                    <!-- Event Header -->
-                                    <div class="d-flex justify-content-between align-items-start mb-3">
-                                        <div>
-                                            <h5 class="mb-2">
-                                                <a href="<?= site_url('presenter/events/detail/' . $event['id']) ?>" 
-                                                   class="text-decoration-none text-dark">
-                                                    <?= esc($event['title']) ?>
-                                                </a>
-                                            </h5>
-                                            <div class="event-meta">
-                                                <div class="meta-item">
-                                                    <i class="fas fa-calendar"></i>
-                                                    <span><?= $event['formatted_date'] ?></span>
-                                                </div>
-                                                <div class="meta-item">
-                                                    <i class="fas fa-clock"></i>
-                                                    <span><?= $event['formatted_time'] ?></span>
-                                                </div>
-                                                <div class="meta-item">
-                                                    <i class="fas fa-map-marker-alt"></i>
-                                                    <span><?= $event['format'] === 'offline' ? esc($event['location']) : ucfirst($event['format']) ?></span>
-                                                </div>
-                                                <div class="meta-item">
-                                                    <i class="fas fa-money-bill-wave"></i>
-                                                    <span>Rp <?= number_format($event['presenter_price'], 0, ',', '.') ?></span>
-                                                </div>
-                                            </div>
+                                    <!-- Event Meta Information -->
+                                    <div class="event-meta">
+                                        <div class="meta-item">
+                                            <i class="fas fa-calendar"></i>
+                                            <span><?= $event['formatted_times']['event_date'] ?? date('d F Y', strtotime($event['event_date'])) ?></span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <i class="fas fa-clock"></i>
+                                            <span><?= $event['formatted_times']['event_time'] ?? date('H:i', strtotime($event['event_time'])) ?> WIB</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <i class="fas fa-map-marker-alt"></i>
+                                            <span><?= $event['format'] === 'online' ? 'Online' : ($event['format'] === 'offline' ? ($event['location'] ?: 'TBA') : 'Hybrid') ?></span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <i class="fas fa-users"></i>
+                                            <span>Presenter Only</span>
                                         </div>
                                     </div>
 
-                                    <!-- Event Description -->
-                                    <?php if (!empty($event['description'])): ?>
-                                        <p class="text-muted mb-3">
-                                            <?= esc(substr($event['description'], 0, 150)) ?><?= strlen($event['description']) > 150 ? '...' : '' ?>
-                                        </p>
-                                    <?php endif; ?>
+                                    <!-- Pricing -->
+                                    <div class="price-badge <?= $event['presenter_price'] == 0 ? 'free-badge' : '' ?>">
+                                        <?php if ($event['presenter_price'] == 0): ?>
+                                            <i class="fas fa-gift me-2"></i>GRATIS
+                                        <?php else: ?>
+                                            <i class="fas fa-tag me-2"></i>Rp <?= number_format($event['presenter_price'], 0, ',', '.') ?>
+                                        <?php endif; ?>
+                                    </div>
 
-                                    <!-- Workflow Progress -->
-                                    <div class="workflow-status">
-                                        <?php
-                                        $steps = ['need_abstract', 'abstract_pending', 'need_payment', 'payment_pending', 'completed'];
-                                        $currentStepIndex = array_search($event['workflow_status'], $steps);
-                                        if ($currentStepIndex === false) $currentStepIndex = 0;
+                                    <!-- Workflow Progress for Registered Events -->
+                                    <?php if ($event['user_registered']): ?>
+                                    <div class="workflow-progress">
+                                        <div class="progress-step <?= !empty($event['abstract_data']) ? 'completed' : 'active' ?>">
+                                            <i class="fas fa-file-alt"></i>
+                                        </div>
+                                        <div class="progress-line <?= !empty($event['abstract_data']) && $event['abstract_data']['status'] === 'diterima' ? 'completed' : '' ?>"></div>
                                         
-                                        foreach ($steps as $index => $step):
-                                            $isCompleted = $index < $currentStepIndex || $event['workflow_status'] === 'completed';
-                                            $isCurrent = $index === $currentStepIndex && $event['workflow_status'] !== 'completed';
-                                            $isBlocked = in_array($event['workflow_status'], ['abstract_rejected', 'payment_rejected']) && $index === $currentStepIndex;
-                                        ?>
-                                            <div class="workflow-dot <?= $isCompleted ? 'completed' : ($isCurrent ? 'current' : ($isBlocked ? 'blocked' : '')) ?>"></div>
-                                            <?php if ($index < count($steps) - 1): ?>
-                                                <div class="workflow-line <?= $isCompleted ? 'completed' : '' ?>"></div>
-                                            <?php endif; ?>
-                                        <?php endforeach; ?>
-                                    </div>
-
-                                    <!-- Deadline Warnings -->
-                                    <?php if ($event['days_until'] <= 7 && $event['days_until'] > 0): ?>
-                                        <div class="deadline-warning <?= $event['days_until'] <= 3 ? 'deadline-critical' : '' ?>">
-                                            <i class="fas fa-exclamation-triangle text-warning"></i>
-                                            <span>
-                                                <strong>Event dimulai dalam <?= $event['days_until'] ?> hari!</strong>
-                                                <?php if (!$event['abstract_submission_open']): ?>
-                                                    - Submission abstrak sudah ditutup.
-                                                <?php elseif (!$event['registration_open']): ?>
-                                                    - Registrasi sudah ditutup.
-                                                <?php endif; ?>
-                                            </span>
+                                        <div class="progress-step <?= !empty($event['abstract_data']) && $event['abstract_data']['status'] === 'diterima' ? 'completed' : (!empty($event['abstract_data']) ? 'active' : '') ?>">
+                                            <i class="fas fa-search"></i>
                                         </div>
+                                        <div class="progress-line <?= !empty($event['payment_data']) ? 'completed' : '' ?>"></div>
+                                        
+                                        <div class="progress-step <?= !empty($event['payment_data']) && $event['payment_data']['status'] === 'verified' ? 'completed' : (!empty($event['payment_data']) ? 'active' : '') ?>">
+                                            <i class="fas fa-credit-card"></i>
+                                        </div>
+                                        <div class="progress-line <?= !empty($event['payment_data']) && $event['payment_data']['status'] === 'verified' ? 'completed' : '' ?>"></div>
+                                        
+                                        <div class="progress-step <?= !empty($event['payment_data']) && $event['payment_data']['status'] === 'verified' ? 'completed' : '' ?>">
+                                            <i class="fas fa-check"></i>
+                                        </div>
+                                    </div>
                                     <?php endif; ?>
 
-                                    <!-- Actions -->
-                                    <div class="d-flex gap-2 align-items-center">
+                                    <!-- Deadlines & Warnings -->
+                                    <?php if (isset($event['time_info'])): ?>
+                                        <?php if ($event['time_info']['days_until_registration_deadline'] !== null && $event['time_info']['days_until_registration_deadline'] <= 3 && $event['time_info']['days_until_registration_deadline'] >= 0): ?>
+                                        <div class="deadline-warning">
+                                            <i class="fas fa-exclamation-triangle"></i>
+                                            <span>Pendaftaran berakhir dalam <?= $event['time_info']['days_until_registration_deadline'] ?> hari</span>
+                                        </div>
+                                        <?php endif; ?>
+
+                                        <?php if ($event['time_info']['days_until_abstract_deadline'] !== null && $event['time_info']['days_until_abstract_deadline'] <= 7 && $event['time_info']['days_until_abstract_deadline'] >= 0): ?>
+                                        <div class="deadline-info">
+                                            <i class="fas fa-info-circle"></i>
+                                            <span>Deadline abstrak dalam <?= $event['time_info']['days_until_abstract_deadline'] ?> hari</span>
+                                        </div>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+
+                                    <!-- Action Buttons -->
+                                    <div class="action-buttons">
                                         <a href="<?= site_url('presenter/events/detail/' . $event['id']) ?>" 
                                            class="btn btn-outline-primary">
-                                            <i class="fas fa-eye me-2"></i>Detail
+                                            <i class="fas fa-eye me-2"></i>Lihat Detail
                                         </a>
 
-                                        <?php if ($event['can_participate']): ?>
-                                            <?php
-                                            $actionClass = 'primary';
-                                            $actionText = 'Lanjutkan';
-                                            $actionIcon = 'fas fa-arrow-right';
-                                            $actionUrl = site_url('presenter/events/detail/' . $event['id']);
+                                        <?php if ($event['user_status'] === 'not_registered' && $event['registration_open']): ?>
+                                            <a href="<?= site_url('presenter/events/register/' . $event['id']) ?>" 
+                                               class="btn-primary-gradient">
+                                                <i class="fas fa-user-plus me-2"></i>Daftar Sekarang
+                                            </a>
+                                        <?php elseif ($event['user_status'] === 'registered'): ?>
+                                            <a href="<?= site_url('presenter/abstrak?event_id=' . $event['id']) ?>" 
+                                               class="btn-primary-gradient">
+                                                <i class="fas fa-file-upload me-2"></i>Upload Abstrak
+                                            </a>
+                                        <?php elseif ($event['user_status'] === 'abstract_accepted'): ?>
+                                            <a href="<?= site_url('presenter/pembayaran/create/' . $event['id']) ?>" 
+                                               class="btn-primary-gradient">
+                                                <i class="fas fa-credit-card me-2"></i>Lakukan Pembayaran
+                                            </a>
+                                        <?php elseif ($event['user_status'] === 'payment_verified'): ?>
+                                            <a href="<?= site_url('presenter/absensi') ?>" 
+                                               class="btn btn-success">
+                                                <i class="fas fa-qrcode me-2"></i>Akses QR Scanner
+                                            </a>
+                                        <?php endif; ?>
 
-                                            switch ($event['workflow_status']) {
-                                                case 'need_abstract':
-                                                    $actionText = 'Upload Abstrak';
-                                                    $actionIcon = 'fas fa-upload';
-                                                    $actionUrl = site_url('presenter/abstrak?event_id=' . $event['id']);
-                                                    break;
-                                                case 'abstract_revision':
-                                                    $actionText = 'Revisi Abstrak';
-                                                    $actionIcon = 'fas fa-edit';
-                                                    $actionClass = 'warning';
-                                                    $actionUrl = site_url('presenter/abstrak/detail/' . $event['abstract']['id_abstrak']);
-                                                    break;
-                                                case 'abstract_rejected':
-                                                    $actionText = 'Submit Ulang';
-                                                    $actionIcon = 'fas fa-redo';
-                                                    $actionClass = 'danger';
-                                                    $actionUrl = site_url('presenter/abstrak?event_id=' . $event['id']);
-                                                    break;
-                                                case 'need_payment':
-                                                    $actionText = 'Bayar Sekarang';
-                                                    $actionIcon = 'fas fa-credit-card';
-                                                    $actionClass = 'success';
-                                                    $actionUrl = site_url('presenter/pembayaran/create/' . $event['id']);
-                                                    break;
-                                                case 'payment_rejected':
-                                                    $actionText = 'Bayar Ulang';
-                                                    $actionIcon = 'fas fa-redo';
-                                                    $actionClass = 'danger';
-                                                    $actionUrl = site_url('presenter/pembayaran/create/' . $event['id']);
-                                                    break;
-                                            }
-                                            ?>
-                                            <a href="<?= $actionUrl ?>" class="action-button <?= $actionClass ?>">
-                                                <i class="<?= $actionIcon ?> me-2"></i><?= $actionText ?>
+                                        <?php if ($event['user_registered']): ?>
+                                            <a href="<?= site_url('presenter/dashboard') ?>" 
+                                               class="btn btn-outline-secondary">
+                                                <i class="fas fa-chart-line me-2"></i>Lihat Progress
                                             </a>
-                                        <?php elseif ($event['is_completed']): ?>
-                                            <a href="<?= site_url('presenter/absensi') ?>" class="action-button success">
-                                                <i class="fas fa-star me-2"></i>Akses Fitur
-                                            </a>
-                                        <?php else: ?>
-                                            <button class="action-button secondary" disabled>
-                                                <i class="fas fa-lock me-2"></i>Tidak Tersedia
-                                            </button>
                                         <?php endif; ?>
                                     </div>
                                 </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="empty-state">
-                                <i class="fas fa-calendar-times fa-4x mb-3"></i>
-                                <h5>Belum Ada Event Tersedia</h5>
-                                <p>Saat ini belum ada event yang dapat Anda ikuti sebagai presenter.</p>
-                            </div>
-                        <?php endif; ?>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="empty-state">
+                                    <i class="fas fa-calendar-times"></i>
+                                    <h4>Belum Ada Event Tersedia</h4>
+                                    <p>Saat ini belum ada event yang dapat diikuti. Silakan cek kembali nanti.</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Open Registration -->
+                        <div class="tab-pane fade" id="open-registration">
+                            <?php 
+                            $openEvents = array_filter($events ?? [], function($event) {
+                                return $event['registration_open'] && $event['user_status'] === 'not_registered';
+                            });
+                            ?>
+                            
+                            <?php if (!empty($openEvents)): ?>
+                                <?php foreach ($openEvents as $event): ?>
+                                <!-- Same event card structure as above -->
+                                <div class="event-card">
+                                    <!-- Abbreviated version for open registration -->
+                                    <h4><?= esc($event['title']) ?></h4>
+                                    <div class="event-meta">
+                                        <div class="meta-item">
+                                            <i class="fas fa-calendar"></i>
+                                            <span><?= date('d F Y', strtotime($event['event_date'])) ?></span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <i class="fas fa-tag"></i>
+                                            <span>Rp <?= number_format($event['presenter_price'], 0, ',', '.') ?></span>
+                                        </div>
+                                    </div>
+                                    <div class="action-buttons">
+                                        <a href="<?= site_url('presenter/events/detail/' . $event['id']) ?>" 
+                                           class="btn btn-outline-primary">Detail</a>
+                                        <a href="<?= site_url('presenter/events/register/' . $event['id']) ?>" 
+                                           class="btn-primary-gradient">Daftar</a>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="empty-state">
+                                    <i class="fas fa-door-closed"></i>
+                                    <h4>Tidak Ada Pendaftaran Terbuka</h4>
+                                    <p>Saat ini tidak ada event dengan pendaftaran terbuka.</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- My Events -->
+                        <div class="tab-pane fade" id="my-events">
+                            <?php 
+                            $myEvents = array_filter($events ?? [], function($event) {
+                                return $event['user_registered'];
+                            });
+                            ?>
+                            
+                            <?php if (!empty($myEvents)): ?>
+                                <?php foreach ($myEvents as $event): ?>
+                                <!-- Show registered events with progress -->
+                                <div class="event-card">
+                                    <span class="status-badge status-<?= $event['user_status'] ?>">
+                                        <?= ucfirst(str_replace('_', ' ', $event['user_status'])) ?>
+                                    </span>
+                                    
+                                    <h4 style="margin-right: 120px;"><?= esc($event['title']) ?></h4>
+                                    
+                                    <div class="workflow-progress">
+                                        <!-- Progress steps as shown above -->
+                                    </div>
+                                    
+                                    <div class="action-buttons">
+                                        <a href="<?= site_url('presenter/events/detail/' . $event['id']) ?>" 
+                                           class="btn btn-outline-primary">Detail</a>
+                                        <a href="<?= site_url('presenter/dashboard') ?>" 
+                                           class="btn-primary-gradient">Kelola</a>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="empty-state">
+                                    <i class="fas fa-user-times"></i>
+                                    <h4>Belum Ada Event Terdaftar</h4>
+                                    <p>Anda belum terdaftar di event manapun. Daftar sekarang untuk mulai berpartisipasi!</p>
+                                    <a href="#all-events" data-bs-toggle="pill" class="btn-primary-gradient">
+                                        Lihat Event Tersedia
+                                    </a>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Upcoming Events -->
+                        <div class="tab-pane fade" id="upcoming">
+                            <?php 
+                            $upcomingEvents = array_filter($events ?? [], function($event) {
+                                return strtotime($event['event_date']) > time() && 
+                                       strtotime($event['event_date']) <= strtotime('+30 days');
+                            });
+                            ?>
+                            
+                            <?php if (!empty($upcomingEvents)): ?>
+                                <?php foreach ($upcomingEvents as $event): ?>
+                                <!-- Show upcoming events -->
+                                <div class="event-card">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <h4><?= esc($event['title']) ?></h4>
+                                        <div class="text-end">
+                                            <?php 
+                                            $daysUntil = ceil((strtotime($event['event_date']) - time()) / (60 * 60 * 24));
+                                            ?>
+                                            <div class="badge bg-info text-dark">
+                                                <?= $daysUntil ?> hari lagi
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="event-meta">
+                                        <div class="meta-item">
+                                            <i class="fas fa-calendar"></i>
+                                            <span><?= date('d F Y', strtotime($event['event_date'])) ?></span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <i class="fas fa-clock"></i>
+                                            <span><?= date('H:i', strtotime($event['event_time'])) ?> WIB</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="action-buttons">
+                                        <a href="<?= site_url('presenter/events/detail/' . $event['id']) ?>" 
+                                           class="btn-primary-gradient">Lihat Detail</a>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="empty-state">
+                                    <i class="fas fa-calendar-check"></i>
+                                    <h4>Tidak Ada Event Mendatang</h4>
+                                    <p>Tidak ada event dalam 30 hari ke depan.</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Filter functionality
-            const filterTabs = document.querySelectorAll('.filter-tab');
-            const eventCards = document.querySelectorAll('.event-card');
+            // Update clock
+            updateClock();
+            setInterval(updateClock, 1000);
 
-            filterTabs.forEach(tab => {
-                tab.addEventListener('click', function() {
-                    const filter = this.dataset.filter;
-                    
-                    // Update active tab
-                    filterTabs.forEach(t => t.classList.remove('active'));
-                    this.classList.add('active');
-                    
-                    // Filter events
-                    eventCards.forEach(card => {
-                        if (filter === 'all') {
-                            card.style.display = 'block';
-                        } else {
-                            const cardType = card.dataset.filterType;
-                            card.style.display = cardType === filter ? 'block' : 'none';
-                        }
-                    });
-                });
-            });
+            // Show flash messages
+            showFlashMessages();
 
-            // Animate cards on load
-            eventCards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
-                
-                setTimeout(() => {
-                    card.style.transition = 'all 0.3s ease';
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, index * 100);
-            });
+            // Add event listeners for tab switching
+            setupTabFiltering();
 
-            // Update countdown timers every minute
-            setInterval(updateCountdowns, 60000);
+            // Setup real-time event status updates
+            setInterval(updateEventStatuses, 60000);
 
-            function updateCountdowns() {
-                // Update any countdown elements if needed
-                console.log('Updating countdowns...');
-            }
-
-            // Add hover effects
-            eventCards.forEach(card => {
-                card.addEventListener('mouseenter', function() {
-                    this.style.transform = 'translateY(-3px)';
-                });
-                
-                card.addEventListener('mouseleave', function() {
-                    this.style.transform = 'translateY(0)';
-                });
-            });
+            // Add hover effects and interactions
+            setupEventCardInteractions();
         });
 
-        // Utility function to show toast notifications
-        function showToast(message, type = 'info') {
-            // Create toast element
-            const toast = document.createElement('div');
-            toast.className = `toast align-items-center text-white bg-${type} border-0`;
-            toast.setAttribute('role', 'alert');
-            toast.innerHTML = `
-                <div class="d-flex">
-                    <div class="toast-body">${message}</div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('id-ID', {
+                timeZone: 'Asia/Jakarta',
+                hour12: false
+            });
+            document.getElementById('currentTime').textContent = timeString + ' WIB';
+        }
+
+        function showFlashMessages() {
+            <?php if (session()->getFlashdata('success')): ?>
+                showToast('Berhasil!', '<?= esc(session()->getFlashdata('success')) ?>', 'success');
+            <?php endif; ?>
+            
+            <?php if (session()->getFlashdata('error')): ?>
+                showToast('Error!', '<?= esc(session()->getFlashdata('error')) ?>', 'danger');
+            <?php endif; ?>
+            
+            <?php if (session()->getFlashdata('info')): ?>
+                showToast('Info', '<?= esc(session()->getFlashdata('info')) ?>', 'info');
+            <?php endif; ?>
+        }
+
+        function showToast(title, message, type) {
+            const toastHtml = `
+                <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <strong>${title}</strong> ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
                 </div>
             `;
             
-            // Add to page
-            document.body.appendChild(toast);
+            const toastContainer = document.getElementById('toastContainer');
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
             
-            // Show toast
-            const bsToast = new bootstrap.Toast(toast);
-            bsToast.show();
-            
-            // Remove from DOM after hide
-            toast.addEventListener('hidden.bs.toast', () => {
-                document.body.removeChild(toast);
+            const toastElement = toastContainer.querySelector('.toast:last-child');
+            const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 5000 });
+            toast.show();
+
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
             });
         }
 
-        // Check for flash messages
-        const urlParams = new URLSearchParams(window.location.search);
-        const success = urlParams.get('success');
-        const error = urlParams.get('error');
+        function setupTabFiltering() {
+            const tabs = document.querySelectorAll('#eventTabs button');
+            tabs.forEach(tab => {
+                tab.addEventListener('shown.bs.tab', function(e) {
+                    const targetTab = e.target.dataset.bsTarget;
+                    console.log('Switched to tab:', targetTab);
+                    // Additional filtering logic can be added here if needed
+                });
+            });
+        }
 
-        if (success) {
-            showToast(success, 'success');
+        function updateEventStatuses() {
+            // Refresh event statuses via AJAX
+            fetch('<?= site_url('presenter/events/refreshStatuses') ?>', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update event cards with new status information
+                    updateEventCards(data.events);
+                }
+            })
+            .catch(error => {
+                console.log('Status update error:', error);
+            });
         }
-        if (error) {
-            showToast(error, 'danger');
+
+        function updateEventCards(events) {
+            events.forEach(event => {
+                const card = document.querySelector(`[data-event-id="${event.id}"]`);
+                if (card) {
+                    // Update status badge
+                    const statusBadge = card.querySelector('.status-badge');
+                    if (statusBadge) {
+                        statusBadge.className = `status-badge status-${event.user_status}`;
+                        statusBadge.textContent = event.user_status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    }
+
+                    // Update action buttons if needed
+                    updateActionButtons(card, event);
+                }
+            });
         }
+
+        function updateActionButtons(card, event) {
+            const actionButtons = card.querySelector('.action-buttons');
+            if (!actionButtons) return;
+
+            // This would contain logic to update buttons based on event status
+            // Implementation depends on specific business rules
+        }
+
+        function setupEventCardInteractions() {
+            const eventCards = document.querySelectorAll('.event-card');
+            
+            eventCards.forEach(card => {
+                // Add click to view detail functionality
+                card.addEventListener('click', function(e) {
+                    // Only trigger if not clicking on a button or link
+                    if (!e.target.closest('a, button')) {
+                        const eventId = card.dataset.eventId;
+                        if (eventId) {
+                            window.location.href = `<?= site_url('presenter/events/detail/') ?>${eventId}`;
+                        }
+                    }
+                });
+
+                // Add hover effects
+                card.addEventListener('mouseenter', function() {
+                    card.style.cursor = 'pointer';
+                });
+            });
+        }
+
+        // Utility functions
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('id-ID', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+        }
+
+        function formatTime(timeString) {
+            const time = new Date('1970-01-01T' + timeString);
+            return time.toLocaleTimeString('id-ID', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+        }
+
+        // Add smooth scrolling for better UX
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
     </script>
 </body>
 </html>

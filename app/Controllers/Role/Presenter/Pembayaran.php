@@ -6,8 +6,8 @@ use App\Controllers\BaseController;
 use App\Models\PembayaranModel;
 use App\Models\EventModel;
 use App\Models\VoucherModel;
-use App\Models\EventRegistrationModel;
 use App\Models\AbstrakModel;
+use App\Models\EventRegistrationModel;
 use App\Models\UserModel;
 
 class Pembayaran extends BaseController
@@ -15,8 +15,8 @@ class Pembayaran extends BaseController
     protected $pembayaranModel;
     protected $eventModel;
     protected $voucherModel;
-    protected $eventRegistrationModel;
     protected $abstrakModel;
+    protected $eventRegistrationModel;
     protected $userModel;
     protected $db;
 
@@ -25,145 +25,56 @@ class Pembayaran extends BaseController
         $this->pembayaranModel = new PembayaranModel();
         $this->eventModel = new EventModel();
         $this->voucherModel = new VoucherModel();
-        $this->eventRegistrationModel = new EventRegistrationModel();
         $this->abstrakModel = new AbstrakModel();
+        $this->eventRegistrationModel = new EventRegistrationModel();
         $this->userModel = new UserModel();
         $this->db = \Config\Database::connect();
     }
 
-    /**
-     * Display payment history for presenter
-     */
     public function index()
     {
         $userId = session('id_user');
         
         try {
-            // Get presenter's payment history with event details
-            $payments = $this->getPresenterPayments($userId);
+            // Get user's payment history
+            $payments = $this->getUserPayments($userId);
             
-            // Calculate payment statistics
-            $stats = $this->calculatePaymentStats($userId);
-            
-            // Get events that need payment
-            $pendingEvents = $this->getEventsNeedingPayment($userId);
+            // Get payment statistics
+            $stats = $this->getPaymentStats($userId);
 
             $data = [
                 'payments' => $payments,
                 'stats' => $stats,
-                'pending_events' => $pendingEvents,
-                'total_payments' => count($payments),
-                'can_pay_events' => count($pendingEvents)
+                'title' => 'Riwayat Pembayaran'
             ];
 
             return view('role/presenter/pembayaran/index', $data);
 
         } catch (\Exception $e) {
-            log_message('error', 'Presenter payment index error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat memuat data pembayaran.');
+            log_message('error', 'Error in presenter pembayaran index: ' . $e->getMessage());
+            
+            // Return view with empty data and error message
+            $data = [
+                'payments' => [],
+                'stats' => [
+                    'total_payments' => 0,
+                    'verified_payments' => 0,
+                    'pending_payments' => 0,
+                    'rejected_payments' => 0,
+                    'cancelled_payments' => 0,
+                    'total_amount_paid' => 0,
+                    'total_amount' => 0, // FIXED: Added missing key
+                    'pending_amount' => 0,
+                    'verified_amount' => 0
+                ],
+                'title' => 'Riwayat Pembayaran'
+            ];
+            
+            $data['error'] = 'Terjadi kesalahan saat memuat riwayat pembayaran: ' . $e->getMessage();
+            return view('role/presenter/pembayaran/index', $data);
         }
     }
 
-    /**
-     * Get presenter's payments with event details
-     */
-    private function getPresenterPayments($userId)
-    {
-        return $this->db->table('pembayaran')
-            ->select('
-                pembayaran.*,
-                events.title as event_title,
-                events.event_date,
-                events.event_time,
-                events.location,
-                events.zoom_link,
-                events.format,
-                voucher.kode_voucher,
-                voucher.tipe as voucher_tipe,
-                voucher.nilai as voucher_nilai,
-                verifier.nama_lengkap as verified_by_name
-            ')
-            ->join('events', 'events.id = pembayaran.event_id', 'left')
-            ->join('voucher', 'voucher.id_voucher = pembayaran.id_voucher', 'left')
-            ->join('users as verifier', 'verifier.id_user = pembayaran.verified_by', 'left')
-            ->where('pembayaran.id_user', $userId)
-            ->orderBy('pembayaran.tanggal_bayar', 'DESC')
-            ->get()->getResultArray();
-    }
-
-    /**
-     * Calculate payment statistics for presenter
-     */
-    private function calculatePaymentStats($userId)
-    {
-        $allPayments = $this->pembayaranModel->where('id_user', $userId)->findAll();
-        
-        $stats = [
-            'total_payments' => count($allPayments),
-            'verified_payments' => 0,
-            'pending_payments' => 0,
-            'rejected_payments' => 0,
-            'total_amount_paid' => 0,
-            'total_savings' => 0
-        ];
-
-        foreach ($allPayments as $payment) {
-            switch ($payment['status']) {
-                case 'verified':
-                    $stats['verified_payments']++;
-                    $stats['total_amount_paid'] += $payment['jumlah'];
-                    // Calculate savings if there's original amount
-                    if (isset($payment['original_amount']) && $payment['original_amount'] > $payment['jumlah']) {
-                        $stats['total_savings'] += ($payment['original_amount'] - $payment['jumlah']);
-                    }
-                    break;
-                case 'pending':
-                    $stats['pending_payments']++;
-                    break;
-                case 'rejected':
-                    $stats['rejected_payments']++;
-                    break;
-            }
-        }
-
-        return $stats;
-    }
-
-    /**
-     * Get events that need payment (abstract accepted but not paid)
-     */
-    private function getEventsNeedingPayment($userId)
-    {
-        $acceptedAbstracts = $this->abstrakModel
-            ->select('abstrak.*, events.title as event_title, events.event_date, events.presenter_fee_offline')
-            ->join('events', 'events.id = abstrak.event_id')
-            ->where('abstrak.id_user', $userId)
-            ->where('abstrak.status', 'diterima')
-            ->where('events.is_active', true)
-            ->where('events.registration_active', true)
-            ->findAll();
-
-        $needsPayment = [];
-        
-        foreach ($acceptedAbstracts as $abstract) {
-            // Check if payment already exists
-            $existingPayment = $this->pembayaranModel
-                ->where('id_user', $userId)
-                ->where('event_id', $abstract['event_id'])
-                ->where('status !=', 'rejected')
-                ->first();
-
-            if (!$existingPayment) {
-                $needsPayment[] = $abstract;
-            }
-        }
-
-        return $needsPayment;
-    }
-
-    /**
-     * Show payment creation form for specific event
-     */
     public function create($eventId)
     {
         $userId = session('id_user');
@@ -171,237 +82,258 @@ class Pembayaran extends BaseController
         try {
             $event = $this->eventModel->find($eventId);
             
-            if (!$event || !$event['is_active']) {
-                return redirect()->to('presenter/pembayaran')
-                               ->with('error', 'Event tidak ditemukan atau tidak aktif.');
+            if (!$event) {
+                return redirect()->to('presenter/events')->with('error', 'Event tidak ditemukan.');
             }
 
-            // Check if presenter has accepted abstract for this event
-            $abstract = $this->abstrakModel
+            // Check if registration is still open
+            if (!$this->eventModel->isRegistrationOpen($eventId)) {
+                return redirect()->to('presenter/events')->with('error', 'Pendaftaran untuk event ini sudah ditutup.');
+            }
+
+            // Check if user has accepted abstract for this event
+            $acceptedAbstract = $this->abstrakModel
                 ->where('id_user', $userId)
                 ->where('event_id', $eventId)
                 ->where('status', 'diterima')
                 ->first();
 
-            if (!$abstract) {
-                return redirect()->to('presenter/pembayaran')
-                               ->with('error', 'Anda harus memiliki abstrak yang diterima untuk melakukan pembayaran.');
+            if (!$acceptedAbstract) {
+                return redirect()->to('presenter/abstrak')
+                    ->with('error', 'Anda harus memiliki abstrak yang diterima sebelum melakukan pembayaran.');
             }
 
-            // Check if payment already exists and not rejected
+            // Check if user already has pending or verified payment
             $existingPayment = $this->pembayaranModel
                 ->where('id_user', $userId)
                 ->where('event_id', $eventId)
-                ->where('status !=', 'rejected')
+                ->whereIn('status', ['pending', 'verified'])
                 ->first();
 
             if ($existingPayment) {
                 return redirect()->to('presenter/pembayaran/detail/' . $existingPayment['id_pembayaran'])
-                               ->with('info', 'Pembayaran untuk event ini sudah ada.');
+                    ->with('info', 'Anda sudah memiliki pembayaran untuk event ini.');
             }
 
-            // Check registration deadline
-            if (!$this->eventModel->isRegistrationOpen($eventId)) {
-                return redirect()->to('presenter/pembayaran')
-                               ->with('error', 'Pendaftaran untuk event ini sudah ditutup.');
-            }
-
-            // Get user profile for payment form
+            // Get user data
             $user = $this->userModel->find($userId);
-            
-            // Calculate price (presenter always offline)
-            $basePrice = $event['presenter_fee_offline'] ?? 0;
-            
+            if (!$user) {
+                return redirect()->to('presenter/events')->with('error', 'Data user tidak ditemukan.');
+            }
+
+            // For presenters, participation is always offline
+            $participationType = 'offline';
+            $price = $event['presenter_fee_offline'] ?? 0;
+
+            // Payment methods with complete details
+            $paymentMethods = [
+                'transfer_bank' => [
+                    'name' => 'Transfer Bank',
+                    'icon' => 'fas fa-university',
+                    'description' => 'Transfer melalui rekening bank',
+                    'details' => [
+                        'Bank BNI: 1234567890 a.n. SNIA Event',
+                        'Bank BCA: 0987654321 a.n. SNIA Event',
+                        'Konfirmasi melalui WhatsApp setelah transfer'
+                    ]
+                ],
+                'gopay' => [
+                    'name' => 'GoPay',
+                    'icon' => 'fas fa-mobile-alt',
+                    'description' => 'Pembayaran via GoPay',
+                    'details' => [
+                        'Scan QR Code yang akan diberikan',
+                        'Atau transfer ke 0812-3456-7890',
+                        'Screenshot bukti pembayaran'
+                    ]
+                ],
+                'ovo' => [
+                    'name' => 'OVO',
+                    'icon' => 'fas fa-wallet',
+                    'description' => 'Pembayaran via OVO',
+                    'details' => [
+                        'Transfer ke 0812-3456-7890',
+                        'Pastikan saldo mencukupi',
+                        'Screenshot bukti pembayaran'
+                    ]
+                ],
+                'dana' => [
+                    'name' => 'DANA',
+                    'icon' => 'fas fa-money-bill-wave',
+                    'description' => 'Pembayaran via DANA',
+                    'details' => [
+                        'Transfer ke 0812-3456-7890',
+                        'Gunakan fitur transfer DANA',
+                        'Screenshot bukti pembayaran'
+                    ]
+                ],
+                'shopeepay' => [
+                    'name' => 'ShopeePay',
+                    'icon' => 'fas fa-shopping-bag',
+                    'description' => 'Pembayaran via ShopeePay',
+                    'details' => [
+                        'Transfer ke 0812-3456-7890',
+                        'Melalui aplikasi Shopee',
+                        'Screenshot bukti pembayaran'
+                    ]
+                ]
+            ];
+
             $data = [
                 'event' => $event,
-                'abstract' => $abstract,
+                'abstract' => $acceptedAbstract,
                 'user' => $user,
-                'base_price' => $basePrice,
-                'participation_type' => 'offline', // Presenter always offline
-                'payment_methods' => $this->getPaymentMethods(),
-                'available_vouchers' => $this->getAvailableVouchers()
+                'participation_type' => $participationType,
+                'price' => $price,
+                'base_price' => $price,
+                'payment_methods' => $paymentMethods,
+                'title' => 'Pembayaran - ' . $event['title']
             ];
 
             return view('role/presenter/pembayaran/create', $data);
 
         } catch (\Exception $e) {
-            log_message('error', 'Presenter payment create error: ' . $e->getMessage());
-            return redirect()->to('presenter/pembayaran')
-                           ->with('error', 'Terjadi kesalahan saat memuat form pembayaran.');
+            log_message('error', 'Error in payment create: ' . $e->getMessage());
+            return redirect()->to('presenter/events')->with('error', 'Terjadi kesalahan saat memuat halaman pembayaran: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Get available payment methods
-     */
-    private function getPaymentMethods()
-    {
-        return [
-            'bank_transfer' => [
-                'name' => 'Transfer Bank',
-                'description' => 'Transfer melalui rekening bank',
-                'icon' => 'fas fa-university',
-                'details' => [
-                    'Bank BCA: 1234567890 a.n. SNIA Organization',
-                    'Bank Mandiri: 0987654321 a.n. SNIA Organization',
-                    'Bank BNI: 5678901234 a.n. SNIA Organization'
-                ]
-            ],
-            'e_wallet' => [
-                'name' => 'E-Wallet',
-                'description' => 'Pembayaran melalui dompet digital',
-                'icon' => 'fas fa-mobile-alt',
-                'details' => [
-                    'GoPay: 081234567890',
-                    'OVO: 081234567890',
-                    'DANA: 081234567890'
-                ]
-            ],
-            'qris' => [
-                'name' => 'QRIS',
-                'description' => 'Scan QR Code untuk pembayaran',
-                'icon' => 'fas fa-qrcode',
-                'details' => [
-                    'Scan QR Code yang tersedia',
-                    'Gunakan aplikasi m-banking atau e-wallet'
-                ]
-            ]
-        ];
-    }
-
-    /**
-     * Get available vouchers
-     */
-    private function getAvailableVouchers()
-    {
-        return $this->voucherModel
-            ->where('status', 'aktif')
-            ->where('masa_berlaku >=', date('Y-m-d'))
-            ->where('kuota >', 0)
-            ->orderBy('masa_berlaku', 'ASC')
-            ->findAll();
-    }
-
-    /**
-     * Store payment data
-     */
     public function store()
     {
         $userId = session('id_user');
         
-        $validation = \Config\Services::validation();
-        
-        $rules = [
-            'event_id' => 'required|integer',
-            'metode' => 'required|in_list[bank_transfer,e_wallet,qris]',
-            'bukti_bayar' => [
-                'uploaded[bukti_bayar]',
-                'max_size[bukti_bayar,5120]', // 5MB
-                'ext_in[bukti_bayar,jpg,jpeg,png,pdf]'
-            ],
-            'jumlah' => 'required|numeric|greater_than[0]'
-        ];
-
-        if (!$this->validate($rules)) {
-            return redirect()->back()->withInput()->with('errors', $validation->getErrors());
+        if (!$this->request->getMethod() === 'POST') {
+            return redirect()->to('presenter/pembayaran');
         }
 
-        $eventId = $this->request->getPost('event_id');
-        $metode = $this->request->getPost('metode');
-        $voucherCode = $this->request->getPost('voucher_code');
-        $originalAmount = $this->request->getPost('original_amount');
-        $finalAmount = $this->request->getPost('jumlah');
+        // Validation rules
+        $validationRules = [
+            'event_id' => 'required|integer',
+            'metode' => 'required|in_list[transfer_bank,gopay,ovo,dana,shopeepay]',
+            'bukti_bayar' => [
+                'rules' => 'uploaded[bukti_bayar]|max_size[bukti_bayar,5120]|ext_in[bukti_bayar,jpg,jpeg,png,pdf]',
+                'errors' => [
+                    'uploaded' => 'Bukti pembayaran harus diupload',
+                    'max_size' => 'Ukuran file maksimal 5MB',
+                    'ext_in' => 'File harus berformat JPG, PNG, atau PDF'
+                ]
+            ],
+            'voucher_code' => 'permit_empty'
+        ];
 
-        $this->db->transStart();
+        if (!$this->validate($validationRules)) {
+            return redirect()->back()
+                ->withInput()
+                ->with('errors', $this->validator->getErrors());
+        }
 
         try {
-            // Validate event and abstract
+            $eventId = $this->request->getPost('event_id');
+            $method = $this->request->getPost('metode');
+            $voucherCode = $this->request->getPost('voucher_code');
+            $file = $this->request->getFile('bukti_bayar');
+
+            // Verify event and get pricing
             $event = $this->eventModel->find($eventId);
-            if (!$event || !$event['is_active']) {
-                throw new \Exception('Event tidak valid atau tidak aktif.');
+            if (!$event) {
+                return redirect()->back()->with('error', 'Event tidak ditemukan.');
             }
 
-            $abstract = $this->abstrakModel
+            // Check abstract acceptance
+            $acceptedAbstract = $this->abstrakModel
                 ->where('id_user', $userId)
                 ->where('event_id', $eventId)
                 ->where('status', 'diterima')
                 ->first();
 
-            if (!$abstract) {
-                throw new \Exception('Anda harus memiliki abstrak yang diterima untuk event ini.');
+            if (!$acceptedAbstract) {
+                return redirect()->back()->with('error', 'Abstrak Anda belum diterima untuk event ini.');
             }
 
             // Check existing payment
             $existingPayment = $this->pembayaranModel
                 ->where('id_user', $userId)
                 ->where('event_id', $eventId)
-                ->where('status !=', 'rejected')
+                ->whereIn('status', ['pending', 'verified'])
                 ->first();
 
             if ($existingPayment) {
-                throw new \Exception('Pembayaran untuk event ini sudah ada.');
+                return redirect()->back()->with('error', 'Anda sudah memiliki pembayaran untuk event ini.');
             }
 
-            // Handle file upload
-            $file = $this->request->getFile('bukti_bayar');
-            if (!$file->isValid() || $file->hasMoved()) {
-                throw new \Exception('File bukti pembayaran tidak valid.');
-            }
-
-            // Create upload directory
-            $uploadPath = WRITEPATH . 'uploads/pembayaran/';
-            if (!is_dir($uploadPath)) {
-                mkdir($uploadPath, 0755, true);
-            }
-
-            // Generate unique filename
-            $fileName = 'BUKTI_' . $eventId . '_' . $userId . '_' . time() . '.' . $file->getExtension();
-            
-            if (!$file->move($uploadPath, $fileName)) {
-                throw new \Exception('Gagal menyimpan file bukti pembayaran.');
-            }
-
-            // Process voucher if provided
-            $voucherId = null;
+            // Calculate price (presenters always offline)
+            $participationType = 'offline';
+            $originalPrice = $event['presenter_fee_offline'] ?? 0;
+            $finalPrice = $originalPrice;
             $discountAmount = 0;
-            
-            if ($voucherCode) {
-                $voucher = $this->voucherModel->where('kode_voucher', strtoupper($voucherCode))->first();
-                
-                if ($voucher && $this->isVoucherValid($voucher, $userId, $eventId)) {
-                    $voucherId = $voucher['id_voucher'];
-                    
-                    if ($voucher['tipe'] === 'percentage') {
-                        $discountAmount = ($originalAmount * $voucher['nilai']) / 100;
+            $voucherId = null;
+
+            // Apply voucher if provided
+            if (!empty($voucherCode)) {
+                $voucher = $this->checkVoucherValidity($voucherCode);
+                if ($voucher) {
+                    if ($voucher['tipe'] === 'persentase') {
+                        $discountAmount = ($originalPrice * $voucher['nilai']) / 100;
                     } else {
                         $discountAmount = $voucher['nilai'];
                     }
+                    $finalPrice = max(0, $originalPrice - $discountAmount);
+                    $voucherId = $voucher['id_voucher'];
+                } else {
+                    return redirect()->back()
+                        ->withInput()
+                        ->with('error', 'Voucher tidak valid atau sudah tidak berlaku.');
                 }
             }
 
+            $this->db->transStart();
+
+            // Handle file upload
+            $fileName = $this->handleFileUpload($file, $userId, $eventId);
+            
+            if (!$fileName) {
+                throw new \Exception('Gagal mengupload bukti pembayaran.');
+            }
+
             // Create payment record
+            $timezone = new \DateTimeZone('Asia/Jakarta');
+            $now = new \DateTime('now', $timezone);
+
             $paymentData = [
                 'id_user' => $userId,
                 'event_id' => $eventId,
-                'metode' => $metode,
-                'jumlah' => $finalAmount,
-                'original_amount' => $originalAmount,
-                'discount_amount' => $discountAmount,
+                'metode' => $method,
+                'jumlah' => $finalPrice,
                 'bukti_bayar' => $fileName,
                 'status' => 'pending',
-                'tanggal_bayar' => date('Y-m-d H:i:s'),
-                'id_voucher' => $voucherId,
-                'participation_type' => 'offline', // Presenter always offline
-                'payment_reference' => 'PAY_' . $eventId . '_' . $userId . '_' . time()
+                'tanggal_bayar' => $now->format('Y-m-d H:i:s'),
+                'id_voucher' => $voucherId
             ];
 
-            if (!$this->pembayaranModel->save($paymentData)) {
-                throw new \Exception('Gagal menyimpan data pembayaran: ' . implode(', ', $this->pembayaranModel->errors()));
+            // Add additional fields if they exist in the database
+            if ($this->db->fieldExists('participation_type', 'pembayaran')) {
+                $paymentData['participation_type'] = $participationType;
+            }
+            if ($this->db->fieldExists('original_amount', 'pembayaran')) {
+                $paymentData['original_amount'] = $originalPrice;
+            }
+            if ($this->db->fieldExists('discount_amount', 'pembayaran')) {
+                $paymentData['discount_amount'] = $discountAmount;
             }
 
+            $result = $this->pembayaranModel->insert($paymentData);
             $paymentId = $this->pembayaranModel->getInsertID();
 
-            // Update event registration status
+            if (!$result) {
+                throw new \Exception('Gagal menyimpan data pembayaran.');
+            }
+
+            // Update voucher quota if used
+            if ($voucherId) {
+                $this->db->query("UPDATE voucher SET kuota = kuota - 1 WHERE id_voucher = ?", [$voucherId]);
+            }
+
+            // Update event registration status if exists
             $registration = $this->eventRegistrationModel->findUserReg($eventId, $userId);
             if ($registration) {
                 $this->eventRegistrationModel->update($registration['id'], [
@@ -409,214 +341,118 @@ class Pembayaran extends BaseController
                 ]);
             }
 
-            // Log activity
-            $this->logActivity($userId, "Created payment for event: {$event['title']} (Amount: Rp " . number_format($finalAmount, 0, ',', '.') . ")");
-
             $this->db->transComplete();
 
-            if ($this->db->transStatus() === FALSE) {
-                throw new \Exception('Transaction failed');
+            if ($this->db->transStatus() === false) {
+                // Delete uploaded file if transaction failed
+                $this->deleteUploadedFile($fileName);
+                throw new \Exception('Database transaction failed');
             }
 
+            // Log activity
+            $this->logActivity($userId, "Melakukan pembayaran untuk event: {$event['title']} (Rp " . number_format($finalPrice, 0, ',', '.') . ")");
+
             return redirect()->to('presenter/pembayaran/detail/' . $paymentId)
-                           ->with('success', 'Pembayaran berhasil dibuat! Silakan tunggu verifikasi dari admin.');
+                ->with('success', 'Pembayaran berhasil disubmit. Silakan tunggu verifikasi dari admin.');
 
         } catch (\Exception $e) {
             $this->db->transRollback();
             
-            // Clean up uploaded file if exists
-            if (isset($fileName) && file_exists($uploadPath . $fileName)) {
-                unlink($uploadPath . $fileName);
+            // Delete uploaded file if exists
+            if (isset($fileName)) {
+                $this->deleteUploadedFile($fileName);
             }
             
-            log_message('error', 'Presenter payment store error: ' . $e->getMessage());
-            return redirect()->back()->withInput()->with('error', 'Error: ' . $e->getMessage());
+            log_message('error', 'Error storing payment: ' . $e->getMessage());
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Terjadi kesalahan saat memproses pembayaran: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Validate voucher for use
-     */
-    private function isVoucherValid($voucher, $userId, $eventId)
-    {
-        // Check voucher status
-        if ($voucher['status'] !== 'aktif') {
-            return false;
-        }
-
-        // Check expiration
-        if (strtotime($voucher['masa_berlaku']) < time()) {
-            return false;
-        }
-
-        // Check quota
-        $usedCount = $this->pembayaranModel
-            ->where('id_voucher', $voucher['id_voucher'])
-            ->where('status', 'verified')
-            ->countAllResults();
-
-        if ($usedCount >= $voucher['kuota']) {
-            return false;
-        }
-
-        // Check if user already used this voucher for this event
-        $userUsage = $this->pembayaranModel
-            ->where('id_voucher', $voucher['id_voucher'])
-            ->where('id_user', $userId)
-            ->where('event_id', $eventId)
-            ->first();
-
-        return !$userUsage;
-    }
-
-    /**
-     * Show payment detail
-     */
     public function detail($paymentId)
     {
         $userId = session('id_user');
         
         try {
-            $payment = $this->db->table('pembayaran')
-                ->select('
-                    pembayaran.*,
-                    events.title as event_title,
-                    events.event_date,
-                    events.event_time,
-                    events.location,
-                    events.zoom_link,
-                    events.format,
-                    voucher.kode_voucher,
-                    voucher.tipe as voucher_tipe,
-                    voucher.nilai as voucher_nilai,
-                    verifier.nama_lengkap as verified_by_name
-                ')
-                ->join('events', 'events.id = pembayaran.event_id', 'left')
-                ->join('voucher', 'voucher.id_voucher = pembayaran.id_voucher', 'left')
-                ->join('users as verifier', 'verifier.id_user = pembayaran.verified_by', 'left')
-                ->where('pembayaran.id_pembayaran', $paymentId)
-                ->where('pembayaran.id_user', $userId)
-                ->get()->getRowArray();
-
+            // Get payment with details
+            $payment = $this->getPaymentWithDetails($paymentId, $userId);
+            
             if (!$payment) {
-                return redirect()->to('presenter/pembayaran')
-                               ->with('error', 'Data pembayaran tidak ditemukan.');
+                return redirect()->to('presenter/pembayaran')->with('error', 'Pembayaran tidak ditemukan.');
             }
 
-            // Get payment method details
-            $paymentMethods = $this->getPaymentMethods();
-            $methodDetails = $paymentMethods[$payment['metode']] ?? null;
-
-            // Check if payment file exists
-            $filePath = WRITEPATH . 'uploads/pembayaran/' . $payment['bukti_bayar'];
-            $fileExists = file_exists($filePath);
-
-            // Get event features status (if payment verified)
-            $eventFeatures = [];
-            if ($payment['status'] === 'verified') {
-                $eventFeatures = $this->getEventFeaturesStatus($userId, $payment['event_id']);
+            // Get event info
+            $event = $this->eventModel->find($payment['event_id']);
+            
+            // Get voucher info if used
+            $voucher = null;
+            if (!empty($payment['id_voucher'])) {
+                $voucher = $this->voucherModel->find($payment['id_voucher']);
             }
+
+            // Check if can cancel (only pending payments)
+            $canCancel = $payment['status'] === 'pending';
 
             $data = [
                 'payment' => $payment,
-                'method_details' => $methodDetails,
-                'file_exists' => $fileExists,
-                'event_features' => $eventFeatures,
-                'status_badge_class' => $this->getStatusBadgeClass($payment['status']),
-                'status_icon' => $this->getStatusIcon($payment['status'])
+                'event' => $event,
+                'voucher' => $voucher,
+                'can_cancel' => $canCancel,
+                'title' => 'Detail Pembayaran'
             ];
 
             return view('role/presenter/pembayaran/detail', $data);
 
         } catch (\Exception $e) {
-            log_message('error', 'Presenter payment detail error: ' . $e->getMessage());
-            return redirect()->to('presenter/pembayaran')
-                           ->with('error', 'Terjadi kesalahan saat memuat detail pembayaran.');
+            log_message('error', 'Error in payment detail: ' . $e->getMessage());
+            return redirect()->to('presenter/pembayaran')->with('error', 'Terjadi kesalahan saat memuat detail pembayaran: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Get event features status after payment verification
-     */
-    private function getEventFeaturesStatus($userId, $eventId)
-    {
-        $features = [
-            'attendance_scanning' => false,
-            'loa_download' => false,
-            'certificate_download' => false,
-            'presenter_dashboard' => true // Always available after payment
-        ];
-
-        // Check attendance
-        $attendance = $this->db->table('absensi')
-            ->where('id_user', $userId)
-            ->where('event_id', $eventId)
-            ->where('status', 'hadir')
-            ->get()->getRowArray();
-
-        $features['attendance_scanning'] = !empty($attendance);
-
-        // Check documents
-        $loa = $this->db->table('dokumen')
-            ->where('id_user', $userId)
-            ->where('event_id', $eventId)
-            ->where('tipe', 'loa')
-            ->get()->getRowArray();
-
-        $certificate = $this->db->table('dokumen')
-            ->where('id_user', $userId)
-            ->where('event_id', $eventId)
-            ->where('tipe', 'sertifikat')
-            ->get()->getRowArray();
-
-        $features['loa_download'] = !empty($loa);
-        $features['certificate_download'] = !empty($certificate);
-
-        return $features;
-    }
-
-    /**
-     * Download payment proof file
-     */
     public function downloadBukti($paymentId)
     {
         $userId = session('id_user');
         
         try {
+            // Verify payment belongs to user
             $payment = $this->pembayaranModel
                 ->where('id_pembayaran', $paymentId)
                 ->where('id_user', $userId)
                 ->first();
 
-            if (!$payment || empty($payment['bukti_bayar'])) {
-                return redirect()->back()->with('error', 'File bukti pembayaran tidak ditemukan.');
+            if (!$payment) {
+                return redirect()->to('presenter/pembayaran')->with('error', 'Pembayaran tidak ditemukan.');
             }
 
             $filePath = WRITEPATH . 'uploads/pembayaran/' . $payment['bukti_bayar'];
             
             if (!file_exists($filePath)) {
-                return redirect()->back()->with('error', 'File tidak ditemukan di server.');
+                return redirect()->to('presenter/pembayaran')->with('error', 'File bukti pembayaran tidak ditemukan.');
             }
 
-            // Log activity
-            $this->logActivity($userId, "Downloaded payment proof for payment ID: {$paymentId}");
+            // Log download activity
+            $this->logActivity($userId, "Mengunduh bukti pembayaran: {$payment['bukti_bayar']}");
 
-            return $this->response->download($filePath, null)->setFileName($payment['bukti_bayar']);
+            // Force download
+            return $this->response->download($filePath, null);
 
         } catch (\Exception $e) {
-            log_message('error', 'Download payment proof error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat mengunduh file.');
+            log_message('error', 'Error downloading payment proof: ' . $e->getMessage());
+            return redirect()->to('presenter/pembayaran')->with('error', 'Terjadi kesalahan saat mengunduh file.');
         }
     }
 
-    /**
-     * Cancel payment (only for pending payments)
-     */
     public function cancel($paymentId)
     {
         $userId = session('id_user');
         
+        if (!$this->request->getMethod() === 'POST') {
+            return redirect()->to('presenter/pembayaran');
+        }
+
         try {
+            // Verify payment belongs to user and is pending
             $payment = $this->pembayaranModel
                 ->where('id_pembayaran', $paymentId)
                 ->where('id_user', $userId)
@@ -624,24 +460,36 @@ class Pembayaran extends BaseController
                 ->first();
 
             if (!$payment) {
-                return redirect()->back()->with('error', 'Pembayaran tidak dapat dibatalkan.');
+                return redirect()->to('presenter/pembayaran')->with('error', 'Pembayaran tidak ditemukan atau tidak dapat dibatalkan.');
             }
 
             $this->db->transStart();
 
             // Update payment status
-            $this->pembayaranModel->update($paymentId, [
-                'status' => 'cancelled',
-                'keterangan' => 'Dibatalkan oleh presenter pada ' . date('Y-m-d H:i:s')
-            ]);
+            $timezone = new \DateTimeZone('Asia/Jakarta');
+            $now = new \DateTime('now', $timezone);
 
-            // Delete uploaded file
-            $filePath = WRITEPATH . 'uploads/pembayaran/' . $payment['bukti_bayar'];
-            if (file_exists($filePath)) {
-                unlink($filePath);
+            $updateData = [
+                'status' => 'cancelled'
+            ];
+
+            // Add keterangan field if it exists
+            if ($this->db->fieldExists('keterangan', 'pembayaran')) {
+                $updateData['keterangan'] = 'Dibatalkan oleh user pada ' . $now->format('Y-m-d H:i:s');
             }
 
-            // Update event registration status
+            $result = $this->pembayaranModel->update($paymentId, $updateData);
+
+            if (!$result) {
+                throw new \Exception('Gagal membatalkan pembayaran.');
+            }
+
+            // Restore voucher quota if used
+            if (!empty($payment['id_voucher'])) {
+                $this->db->query("UPDATE voucher SET kuota = kuota + 1 WHERE id_voucher = ?", [$payment['id_voucher']]);
+            }
+
+            // Update registration status
             $registration = $this->eventRegistrationModel->findUserReg($payment['event_id'], $userId);
             if ($registration) {
                 $this->eventRegistrationModel->update($registration['id'], [
@@ -649,132 +497,253 @@ class Pembayaran extends BaseController
                 ]);
             }
 
-            // Log activity
-            $this->logActivity($userId, "Cancelled payment ID: {$paymentId}");
-
             $this->db->transComplete();
 
-            if ($this->db->transStatus() === FALSE) {
-                throw new \Exception('Transaction failed');
+            if ($this->db->transStatus() === false) {
+                throw new \Exception('Database transaction failed');
             }
 
+            // Log activity
+            $this->logActivity($userId, "Membatalkan pembayaran: {$payment['bukti_bayar']}");
+
             return redirect()->to('presenter/pembayaran')
-                           ->with('success', 'Pembayaran berhasil dibatalkan.');
+                ->with('success', 'Pembayaran berhasil dibatalkan.');
 
         } catch (\Exception $e) {
             $this->db->transRollback();
-            log_message('error', 'Cancel payment error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat membatalkan pembayaran.');
+            log_message('error', 'Error cancelling payment: ' . $e->getMessage());
+            
+            return redirect()->back()->with('error', 'Terjadi kesalahan saat membatalkan pembayaran: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Validate voucher via AJAX
-     */
     public function validateVoucher()
     {
-        $voucherCode = $this->request->getPost('voucher_code');
-        $eventId = $this->request->getPost('event_id');
-        $userId = session('id_user');
-
-        if (!$voucherCode || !$eventId) {
-            return $this->response->setJSON([
-                'valid' => false,
-                'message' => 'Data tidak lengkap.'
-            ]);
+        if (!$this->request->isAJAX()) {
+            return $this->response->setStatusCode(400);
         }
 
         try {
-            $voucher = $this->voucherModel->where('kode_voucher', strtoupper($voucherCode))->first();
+            $voucherCode = $this->request->getPost('voucher_code');
+            $eventId = $this->request->getPost('event_id');
+
+            if (empty($voucherCode)) {
+                return $this->response->setJSON([
+                    'valid' => false,
+                    'message' => 'Kode voucher tidak boleh kosong'
+                ]);
+            }
+
+            $voucher = $this->checkVoucherValidity($voucherCode);
 
             if (!$voucher) {
                 return $this->response->setJSON([
                     'valid' => false,
-                    'message' => 'Kode voucher tidak ditemukan.'
+                    'message' => 'Voucher tidak valid atau sudah tidak berlaku'
                 ]);
             }
 
-            if (!$this->isVoucherValid($voucher, $userId, $eventId)) {
-                $message = 'Voucher tidak dapat digunakan.';
-                
-                if ($voucher['status'] !== 'aktif') {
-                    $message = 'Voucher tidak aktif.';
-                } elseif (strtotime($voucher['masa_berlaku']) < time()) {
-                    $message = 'Voucher sudah expired.';
-                } else {
-                    $usedCount = $this->pembayaranModel
-                        ->where('id_voucher', $voucher['id_voucher'])
-                        ->where('status', 'verified')
-                        ->countAllResults();
-                    
-                    if ($usedCount >= $voucher['kuota']) {
-                        $message = 'Kuota voucher sudah habis.';
-                    } else {
-                        $message = 'Anda sudah menggunakan voucher ini untuk event ini.';
-                    }
-                }
+            // Get event price for calculation
+            $event = $this->eventModel->find($eventId);
+            $originalPrice = $event['presenter_fee_offline'] ?? 0;
 
-                return $this->response->setJSON([
-                    'valid' => false,
-                    'message' => $message
-                ]);
+            // Calculate discount
+            if ($voucher['tipe'] === 'persentase') {
+                $discount = ($originalPrice * $voucher['nilai']) / 100;
+            } else {
+                $discount = $voucher['nilai'];
             }
+
+            $finalPrice = max(0, $originalPrice - $discount);
 
             return $this->response->setJSON([
                 'valid' => true,
                 'voucher' => $voucher,
-                'message' => 'Voucher valid dan dapat digunakan.'
+                'original_price' => $originalPrice,
+                'discount' => $discount,
+                'final_price' => $finalPrice
             ]);
 
         } catch (\Exception $e) {
-            log_message('error', 'Validate voucher error: ' . $e->getMessage());
+            log_message('error', 'Error validating voucher: ' . $e->getMessage());
             return $this->response->setJSON([
                 'valid' => false,
-                'message' => 'Terjadi kesalahan saat validasi voucher.'
+                'message' => 'Terjadi kesalahan saat validasi voucher'
             ]);
         }
     }
 
-    /**
-     * Get status badge CSS class
-     */
-    private function getStatusBadgeClass($status)
+    // FIXED: Enhanced getPaymentStats with all required keys
+    private function getPaymentStats($userId)
     {
-        $classes = [
-            'pending' => 'bg-warning',
-            'verified' => 'bg-success',
-            'rejected' => 'bg-danger',
-            'cancelled' => 'bg-secondary'
-        ];
+        try {
+            $result = $this->db->query("
+                SELECT 
+                    COUNT(*) as total_payments,
+                    COUNT(CASE WHEN status = 'verified' THEN 1 END) as verified_payments,
+                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_payments,
+                    COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected_payments,
+                    COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_payments,
+                    COALESCE(SUM(CASE WHEN status = 'verified' THEN jumlah ELSE 0 END), 0) as verified_amount,
+                    COALESCE(SUM(CASE WHEN status = 'pending' THEN jumlah ELSE 0 END), 0) as pending_amount,
+                    COALESCE(SUM(jumlah), 0) as total_amount,
+                    COALESCE(SUM(CASE WHEN status = 'verified' THEN jumlah ELSE 0 END), 0) as total_amount_paid
+                FROM pembayaran 
+                WHERE id_user = ?
+            ", [$userId])->getRowArray();
 
-        return $classes[$status] ?? 'bg-secondary';
+            // Ensure all required keys exist with default values
+            $defaultStats = [
+                'total_payments' => 0,
+                'verified_payments' => 0,
+                'pending_payments' => 0,
+                'rejected_payments' => 0,
+                'cancelled_payments' => 0,
+                'total_amount_paid' => 0,
+                'total_amount' => 0,
+                'pending_amount' => 0,
+                'verified_amount' => 0
+            ];
+
+            // Merge with actual results, ensuring all keys exist
+            $stats = array_merge($defaultStats, $result ?: []);
+            
+            // Convert to integers to avoid type issues
+            foreach ($stats as $key => $value) {
+                $stats[$key] = (int) $value;
+            }
+
+            return $stats;
+
+        } catch (\Exception $e) {
+            log_message('error', 'Error getting payment stats: ' . $e->getMessage());
+            
+            // Return default stats on error
+            return [
+                'total_payments' => 0,
+                'verified_payments' => 0,
+                'pending_payments' => 0,
+                'rejected_payments' => 0,
+                'cancelled_payments' => 0,
+                'total_amount_paid' => 0,
+                'total_amount' => 0,
+                'pending_amount' => 0,
+                'verified_amount' => 0
+            ];
+        }
     }
 
-    /**
-     * Get status icon
-     */
-    private function getStatusIcon($status)
+    private function getUserPayments($userId)
     {
-        $icons = [
-            'pending' => 'fas fa-clock',
-            'verified' => 'fas fa-check-circle',
-            'rejected' => 'fas fa-times-circle',
-            'cancelled' => 'fas fa-ban'
-        ];
-
-        return $icons[$status] ?? 'fas fa-question-circle';
+        try {
+            return $this->db->query("
+                SELECT 
+                    p.*,
+                    e.title as event_title,
+                    e.event_date,
+                    e.event_time,
+                    v.kode_voucher,
+                    v.tipe as voucher_type,
+                    v.nilai as voucher_value,
+                    verifier.nama_lengkap as verifier_name
+                FROM pembayaran p
+                LEFT JOIN events e ON e.id = p.event_id
+                LEFT JOIN voucher v ON v.id_voucher = p.id_voucher
+                LEFT JOIN users verifier ON verifier.id_user = p.verified_by
+                WHERE p.id_user = ?
+                ORDER BY p.tanggal_bayar DESC
+            ", [$userId])->getResultArray();
+        } catch (\Exception $e) {
+            log_message('error', 'Error getting user payments: ' . $e->getMessage());
+            return [];
+        }
     }
 
-    /**
-     * Log activity helper
-     */
+    private function getPaymentWithDetails($paymentId, $userId)
+    {
+        try {
+            return $this->db->query("
+                SELECT 
+                    p.*,
+                    e.title as event_title,
+                    e.event_date,
+                    e.event_time,
+                    e.location,
+                    verifier.nama_lengkap as verifier_name
+                FROM pembayaran p
+                LEFT JOIN events e ON e.id = p.event_id
+                LEFT JOIN users verifier ON verifier.id_user = p.verified_by
+                WHERE p.id_pembayaran = ? AND p.id_user = ?
+            ", [$paymentId, $userId])->getRowArray();
+        } catch (\Exception $e) {
+            log_message('error', 'Error getting payment details: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    private function checkVoucherValidity($voucherCode)
+    {
+        try {
+            $timezone = new \DateTimeZone('Asia/Jakarta');
+            $now = new \DateTime('now', $timezone);
+            
+            return $this->voucherModel
+                ->where('kode_voucher', $voucherCode)
+                ->where('status', 'aktif')
+                ->where('masa_berlaku >=', $now->format('Y-m-d'))
+                ->where('kuota >', 0)
+                ->first();
+        } catch (\Exception $e) {
+            log_message('error', 'Error checking voucher validity: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    private function handleFileUpload($file, $userId, $eventId)
+    {
+        if (!$file->isValid()) {
+            throw new \Exception('File tidak valid: ' . $file->getErrorString());
+        }
+
+        // Create upload directory if it doesn't exist
+        $uploadPath = WRITEPATH . 'uploads/pembayaran/';
+        if (!is_dir($uploadPath)) {
+            mkdir($uploadPath, 0755, true);
+        }
+
+        // Generate unique filename
+        $timezone = new \DateTimeZone('Asia/Jakarta');
+        $now = new \DateTime('now', $timezone);
+        $timestamp = $now->format('YmdHis');
+        $extension = $file->getClientExtension();
+        $fileName = "payment_{$userId}_{$eventId}_{$timestamp}.{$extension}";
+
+        // Move file
+        if (!$file->move($uploadPath, $fileName)) {
+            throw new \Exception('Gagal memindahkan file ke direktori upload.');
+        }
+
+        return $fileName;
+    }
+
+    private function deleteUploadedFile($fileName)
+    {
+        $filePath = WRITEPATH . 'uploads/pembayaran/' . $fileName;
+        if (file_exists($filePath)) {
+            unlink($filePath);
+        }
+    }
+
     private function logActivity($userId, $activity)
     {
         try {
+            $timezone = new \DateTimeZone('Asia/Jakarta');
+            $now = new \DateTime('now', $timezone);
+            
             $this->db->table('log_aktivitas')->insert([
                 'id_user' => $userId,
                 'aktivitas' => $activity,
-                'waktu' => date('Y-m-d H:i:s')
+                'waktu' => $now->format('Y-m-d H:i:s')
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Failed to log activity: ' . $e->getMessage());

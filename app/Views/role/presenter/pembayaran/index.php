@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Management - SNIA Presenter</title>
+    <title>Pembayaran - SNIA Presenter</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -14,25 +14,19 @@
             --warning-color: #f59e0b;
             --danger-color: #ef4444;
             --info-color: #06b6d4;
-            --dark-color: #1e293b;
-            --light-color: #f8fafc;
+            --purple-color: #8b5cf6;
         }
 
         body {
-            background: linear-gradient(135deg, var(--light-color) 0%, #e2e8f0 100%);
-            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
         }
 
         .sidebar {
-            background: linear-gradient(180deg, var(--primary-color) 0%, #1e40af 100%);
+            background: linear-gradient(180deg, var(--purple-color) 0%, #7c3aed 100%);
             min-height: 100vh;
             box-shadow: 4px 0 20px rgba(0,0,0,0.1);
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 250px;
-            z-index: 1000;
         }
 
         .sidebar .nav-link {
@@ -41,7 +35,6 @@
             margin: 4px 0;
             border-radius: 8px;
             transition: all 0.3s ease;
-            text-decoration: none;
         }
 
         .sidebar .nav-link:hover {
@@ -53,42 +46,117 @@
         .sidebar .nav-link.active {
             background: rgba(255,255,255,0.2);
             color: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
 
         .main-content {
-            margin-left: 250px;
-            padding: 20px;
+            background: white;
+            border-radius: 20px 0 0 0;
             min-height: 100vh;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.05);
         }
 
-        .content-card {
-            background: white;
+        .header-section {
+            background: linear-gradient(135deg, var(--purple-color) 0%, #7c3aed 100%);
+            color: white;
+            padding: 30px;
             border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-            border: 1px solid rgba(255,255,255,0.2);
-            overflow: hidden;
             margin-bottom: 30px;
         }
 
-        .content-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--info-color) 100%);
-            color: white;
-            padding: 24px;
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
         }
 
         .stat-card {
             background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            border-left: 4px solid var(--primary-color);
             transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-            height: 100%;
         }
 
-        .stat-card::before {
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+        }
+
+        .stat-card.success { border-left-color: var(--success-color); }
+        .stat-card.warning { border-left-color: var(--warning-color); }
+        .stat-card.info { border-left-color: var(--info-color); }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #1e293b;
+        }
+
+        .stat-label {
+            color: #64748b;
+            font-size: 14px;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+
+        .stat-icon.primary { background: #dbeafe; color: var(--primary-color); }
+        .stat-icon.success { background: #dcfce7; color: var(--success-color); }
+        .stat-icon.warning { background: #fef3c7; color: var(--warning-color); }
+        .stat-icon.info { background: #e0f2fe; color: var(--info-color); }
+
+        .filter-tabs {
+            background: white;
+            border-radius: 12px;
+            padding: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+        }
+
+        .filter-tab {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: #64748b;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .filter-tab.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .filter-tab:hover:not(.active) {
+            background: #f1f5f9;
+        }
+
+        .payment-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            margin-bottom: 24px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .payment-card::before {
             content: '';
             position: absolute;
             top: 0;
@@ -97,136 +165,142 @@
             height: 4px;
         }
 
-        .stat-card.pending::before { background: var(--warning-color); }
-        .stat-card.verified::before { background: var(--success-color); }
-        .stat-card.rejected::before { background: var(--danger-color); }
-        .stat-card.total::before { background: var(--info-color); }
-
-        .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-        }
-
-        .payment-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
-            border: 1px solid #e2e8f0;
-            overflow: hidden;
-            margin-bottom: 20px;
-        }
+        .payment-card.pending::before { background: var(--warning-color); }
+        .payment-card.verified::before { background: var(--success-color); }
+        .payment-card.rejected::before { background: var(--danger-color); }
+        .payment-card.cancelled::before { background: var(--secondary-color); }
 
         .payment-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
         }
 
         .payment-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid #e2e8f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            padding: 24px 24px 0 24px;
         }
 
         .payment-body {
-            padding: 20px;
+            padding: 24px;
         }
 
-        .payment-footer {
-            padding: 16px 20px;
-            background: #f8fafc;
-            border-top: 1px solid #e2e8f0;
-        }
-
-        .status-badge {
-            padding: 6px 12px;
+        .payment-status {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            padding: 8px 16px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
             text-transform: uppercase;
         }
 
-        .status-pending {
-            background: rgba(251, 191, 36, 0.1);
-            color: #d97706;
-            border: 1px solid rgba(251, 191, 36, 0.3);
-        }
-
-        .status-verified {
-            background: rgba(16, 185, 129, 0.1);
-            color: #059669;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-
-        .status-rejected {
-            background: rgba(239, 68, 68, 0.1);
-            color: #dc2626;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
-        .btn-custom {
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            border: none;
-        }
-
-        .btn-custom:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        .btn-primary-custom {
-            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
-            color: white;
-        }
-
-        .btn-success-custom {
-            background: linear-gradient(135deg, var(--success-color), #059669);
-            color: white;
-        }
-
-        .btn-warning-custom {
-            background: linear-gradient(135deg, var(--warning-color), #d97706);
-            color: white;
-        }
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-verified { background: #d1fae5; color: #065f46; }
+        .status-rejected { background: #fee2e2; color: #991b1b; }
+        .status-cancelled { background: #f1f5f9; color: #475569; }
 
         .amount-display {
-            font-size: 1.5rem;
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 16px 0;
+        }
+
+        .amount-final {
+            font-size: 1.8rem;
             font-weight: 700;
             color: var(--success-color);
+            margin-bottom: 4px;
         }
 
-        .event-info {
+        .amount-original {
+            font-size: 1rem;
+            color: #6b7280;
+            text-decoration: line-through;
+        }
+
+        .amount-savings {
+            font-size: 0.9rem;
+            color: var(--success-color);
+            font-weight: 600;
+        }
+
+        .payment-method {
             background: #f8fafc;
-            border-radius: 8px;
+            border-radius: 12px;
             padding: 16px;
-            margin-bottom: 16px;
+            margin: 16px 0;
+            display: flex;
+            align-items: center;
         }
 
-        .abstract-info {
-            background: rgba(37, 99, 235, 0.05);
-            border-left: 4px solid var(--primary-color);
-            padding: 12px;
-            margin-top: 12px;
-            border-radius: 0 8px 8px 0;
+        .method-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-right: 16px;
+            flex-shrink: 0;
         }
 
-        .voucher-info {
-            background: rgba(16, 185, 129, 0.05);
-            border-left: 4px solid var(--success-color);
-            padding: 12px;
-            margin-top: 12px;
-            border-radius: 0 8px 8px 0;
+        .method-icon.transfer_bank { background: #dbeafe; color: var(--primary-color); }
+        .method-icon.gopay { background: #dcfce7; color: var(--success-color); }
+        .method-icon.ovo { background: #fef3c7; color: var(--warning-color); }
+        .method-icon.dana { background: #e0f2fe; color: #0ea5e9; }
+        .method-icon.shopeepay { background: #fed7e2; color: #e53e3e; }
+
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+            margin-top: 20px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e2e8f0;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-bottom: 20px;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -22px;
+            top: 4px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #e2e8f0;
+        }
+
+        .timeline-item.completed::before {
+            background: var(--success-color);
+        }
+
+        .timeline-item.active::before {
+            background: var(--warning-color);
+        }
+
+        .timeline-item.rejected::before {
+            background: var(--danger-color);
         }
 
         .empty-state {
             text-align: center;
             padding: 60px 20px;
-            color: var(--secondary-color);
+            color: #64748b;
         }
 
         .empty-state i {
@@ -237,432 +311,405 @@
 
         .alert-custom {
             border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
             border: none;
-            padding: 16px 20px;
         }
 
-        .timeline-item {
-            border-left: 3px solid var(--primary-color);
-            padding-left: 20px;
+        .alert-custom.info {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            color: #1e40af;
+        }
+
+        .alert-custom.warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            color: #92400e;
+        }
+
+        .btn-action {
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-1px);
+        }
+
+        .voucher-badge {
+            background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+            color: var(--purple-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .breadcrumb-custom {
+            background: none;
+            padding: 0;
             margin-bottom: 20px;
-            position: relative;
         }
 
-        .timeline-item::before {
-            content: '';
-            position: absolute;
-            left: -8px;
-            top: 5px;
-            width: 12px;
-            height: 12px;
-            background: var(--primary-color);
-            border-radius: 50%;
+        .breadcrumb-custom .breadcrumb-item {
+            color: #64748b;
+        }
+
+        .breadcrumb-custom .breadcrumb-item.active {
+            color: var(--primary-color);
+            font-weight: 600;
         }
     </style>
 </head>
 <body>
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="p-4 text-center">
-            <h4 class="text-white mb-0">
-                <i class="fas fa-microphone-alt me-2"></i>
-                SNIA Presenter
-            </h4>
-            <small class="text-white-50">Payment Management</small>
-        </div>
-        
-        <nav class="nav flex-column px-3">
-            <a class="nav-link" href="<?= site_url('presenter/dashboard') ?>">
-                <i class="fas fa-tachometer-alt me-2"></i> Dashboard
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/events') ?>">
-                <i class="fas fa-calendar me-2"></i> Events
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/abstrak') ?>">
-                <i class="fas fa-file-alt me-2"></i> My Abstracts
-            </a>
-            <a class="nav-link active" href="<?= site_url('presenter/pembayaran') ?>">
-                <i class="fas fa-credit-card me-2"></i> Payments
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/absensi') ?>">
-                <i class="fas fa-qrcode me-2"></i> Attendance
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/dokumen/loa') ?>">
-                <i class="fas fa-file-contract me-2"></i> LOA
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/dokumen/sertifikat') ?>">
-                <i class="fas fa-certificate me-2"></i> Certificate
-            </a>
-            <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
-            <a class="nav-link" href="<?= site_url('profile') ?>">
-                <i class="fas fa-user me-2"></i> Profile
-            </a>
-            <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
-                <i class="fas fa-sign-out-alt me-2"></i> Logout
-            </a>
-        </nav>
-    </div>
-
-    <!-- Main Content -->
-    <div class="main-content">
-        <!-- Header -->
-        <div class="content-card">
-            <div class="content-header">
-                <div class="row align-items-center">
-                    <div class="col">
-                        <h2 class="mb-2">
-                            <i class="fas fa-credit-card me-3"></i>Payment Management
-                        </h2>
-                        <p class="mb-0 opacity-75">Manage your conference payments and track verification status</p>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 px-0">
+                <div class="sidebar">
+                    <div class="p-4 text-center">
+                        <h4 class="text-white mb-0">
+                            <i class="fas fa-chalkboard-teacher me-2"></i>
+                            SNIA Presenter
+                        </h4>
+                        <small class="text-white-50">Payment Management</small>
                     </div>
-                    <div class="col-auto">
-                        <?php if (!empty($available_events)): ?>
-                            <div class="dropdown">
-                                <button class="btn btn-light btn-custom dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                    <i class="fas fa-plus me-2"></i>Make Payment
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <?php foreach ($available_events as $event): ?>
-                                        <li>
-                                            <a class="dropdown-item" href="<?= site_url('presenter/pembayaran/create/' . $event['event_id']) ?>">
-                                                <strong><?= esc($event['event_title']) ?></strong><br>
-                                                <small class="text-muted">Rp <?= number_format($event['presenter_fee_offline'] ?? 0, 0, ',', '.') ?></small>
-                                            </a>
-                                        </li>
-                                    <?php endforeach; ?>
-                                </ul>
-                            </div>
-                        <?php endif; ?>
-                        <button class="btn btn-outline-light btn-custom ms-2" onclick="location.reload()">
-                            <i class="fas fa-sync-alt me-2"></i>Refresh
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <?php if (!empty($accepted_abstracts)): ?>
-            <!-- Statistics Cards -->
-            <div class="row g-4 mb-4">
-                <div class="col-md-3">
-                    <div class="stat-card total">
-                        <div class="d-flex align-items-center">
-                            <div class="me-3">
-                                <i class="fas fa-receipt fa-2x text-info"></i>
-                            </div>
-                            <div>
-                                <h3 class="mb-0"><?= $payment_stats['total_payments'] ?></h3>
-                                <small class="text-muted">Total Payments</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-card verified">
-                        <div class="d-flex align-items-center">
-                            <div class="me-3">
-                                <i class="fas fa-check-circle fa-2x text-success"></i>
-                            </div>
-                            <div>
-                                <h3 class="mb-0"><?= $payment_stats['verified_payments'] ?></h3>
-                                <small class="text-muted">Verified</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-card pending">
-                        <div class="d-flex align-items-center">
-                            <div class="me-3">
-                                <i class="fas fa-clock fa-2x text-warning"></i>
-                            </div>
-                            <div>
-                                <h3 class="mb-0"><?= $payment_stats['pending_payments'] ?></h3>
-                                <small class="text-muted">Pending</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="stat-card rejected">
-                        <div class="d-flex align-items-center">
-                            <div class="me-3">
-                                <i class="fas fa-money-bill-wave fa-2x text-success"></i>
-                            </div>
-                            <div>
-                                <h3 class="mb-0">Rp <?= number_format($payment_stats['total_paid'], 0, ',', '.') ?></h3>
-                                <small class="text-muted">Total Paid</small>
-                            </div>
-                        </div>
-                    </div>
+                    
+                    <nav class="nav flex-column px-3">
+                        <a class="nav-link" href="<?= site_url('presenter/dashboard') ?>">
+                            <i class="fas fa-tachometer-alt me-2"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/events') ?>">
+                            <i class="fas fa-calendar-alt me-2"></i> Event
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/abstrak') ?>">
+                            <i class="fas fa-file-alt me-2"></i> Abstrak
+                        </a>
+                        <a class="nav-link active" href="<?= site_url('presenter/pembayaran') ?>">
+                            <i class="fas fa-credit-card me-2"></i> Pembayaran
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/absensi') ?>">
+                            <i class="fas fa-qrcode me-2"></i> Absensi
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/dokumen/loa') ?>">
+                            <i class="fas fa-certificate me-2"></i> Dokumen
+                        </a>
+                        <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
+                        <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
+                            <i class="fas fa-sign-out-alt me-2"></i> Logout
+                        </a>
+                    </nav>
                 </div>
             </div>
 
-            <!-- Payment History -->
-            <div class="content-card">
-                <div class="content-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-history me-2"></i>Payment History
-                    </h5>
-                </div>
-                <div class="p-4">
-                    <?php if (!empty($payments)): ?>
-                        <?php foreach ($payments as $payment): ?>
-                            <div class="payment-card">
-                                <div class="payment-header">
-                                    <div>
-                                        <h6 class="mb-1">
-                                            <i class="fas fa-calendar-alt me-2 text-primary"></i>
-                                            <?= esc($payment['event_title'] ?? 'Event Payment') ?>
-                                        </h6>
-                                        <small class="text-muted">
-                                            Payment ID: #<?= $payment['id_pembayaran'] ?>
-                                        </small>
-                                    </div>
-                                    <div>
-                                        <span class="status-badge status-<?= $payment['status'] ?>">
-                                            <i class="fas fa-<?= $payment['status'] === 'verified' ? 'check-circle' : ($payment['status'] === 'pending' ? 'clock' : 'times-circle') ?> me-1"></i>
-                                            <?= ucfirst($payment['status']) ?>
-                                        </span>
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10">
+                <div class="main-content p-4">
+                    <!-- Breadcrumb -->
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb breadcrumb-custom">
+                            <li class="breadcrumb-item">
+                                <a href="<?= site_url('presenter/dashboard') ?>">Dashboard</a>
+                            </li>
+                            <li class="breadcrumb-item active" aria-current="page">
+                                Pembayaran
+                            </li>
+                        </ol>
+                    </nav>
+
+                    <!-- Header -->
+                    <div class="header-section">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h1 class="mb-2">
+                                    <i class="fas fa-credit-card me-3"></i>
+                                    Riwayat Pembayaran
+                                </h1>
+                                <p class="mb-0 opacity-75">
+                                    Kelola pembayaran registrasi event dan pantau status verifikasi
+                                </p>
+                            </div>
+                            <div class="col-auto">
+                                <div class="text-end">
+                                    <div class="d-flex align-items-center text-white-50">
+                                        <i class="fas fa-shield-alt me-2"></i>
+                                        <span>Secure Payment</span>
                                     </div>
                                 </div>
-                                
-                                <div class="payment-body">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="event-info">
-                                                <h6 class="text-primary mb-2">
-                                                    <i class="fas fa-info-circle me-2"></i>Event Details
-                                                </h6>
-                                                <?php if ($payment['event_date']): ?>
-                                                    <div class="small mb-1">
-                                                        <i class="fas fa-calendar me-1"></i>
-                                                        <?= date('d F Y', strtotime($payment['event_date'])) ?>
-                                                        <i class="fas fa-clock ms-2 me-1"></i>
-                                                        <?= date('H:i', strtotime($payment['event_time'])) ?>
-                                                    </div>
-                                                <?php endif; ?>
-                                                <?php if ($payment['location']): ?>
-                                                    <div class="small">
-                                                        <i class="fas fa-map-marker-alt me-1"></i>
-                                                        <?= esc($payment['location']) ?>
-                                                    </div>
-                                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Flash Messages -->
+                    <?php if (session('success')): ?>
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <?= session('success') ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (session('error')): ?>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <?= session('error') ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    <?php endif; ?>
+
+                    <!-- Statistics -->
+                    <div class="stats-grid">
+                        <div class="stat-card primary">
+                            <div class="stat-icon primary">
+                                <i class="fas fa-receipt"></i>
+                            </div>
+                            <div class="stat-number"><?= $stats['total_payments'] ?? 0 ?></div>
+                            <div class="stat-label">Total Pembayaran</div>
+                        </div>
+
+                        <div class="stat-card success">
+                            <div class="stat-icon success">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="stat-number"><?= $stats['verified_payments'] ?? 0 ?></div>
+                            <div class="stat-label">Terverifikasi</div>
+                        </div>
+
+                        <div class="stat-card warning">
+                            <div class="stat-icon warning">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="stat-number"><?= $stats['pending_payments'] ?? 0 ?></div>
+                            <div class="stat-label">Menunggu Verifikasi</div>
+                        </div>
+
+                        <div class="stat-card info">
+                            <div class="stat-icon info">
+                                <i class="fas fa-money-bill-wave"></i>
+                            </div>
+                            <div class="stat-number">Rp <?= number_format($stats['total_amount_paid'] ?? 0, 0, ',', '.') ?></div>
+                            <div class="stat-label">Total Dibayar</div>
+                        </div>
+                    </div>
+
+                    <!-- Pending Actions Alert -->
+                    <?php if (!empty($stats['rejected_payments'])): ?>
+                    <div class="alert-custom warning">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-exclamation-triangle me-3 fs-4"></i>
+                            <div>
+                                <h6 class="mb-1">Perhatian! Ada Pembayaran yang Ditolak</h6>
+                                <p class="mb-0">Anda memiliki <?= $stats['rejected_payments'] ?> pembayaran yang ditolak dan perlu dilakukan ulang.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <!-- Filter Tabs -->
+                    <div class="filter-tabs">
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="filter-tab active" onclick="filterPayments('all', this)">
+                                <i class="fas fa-list me-2"></i>Semua Pembayaran
+                            </button>
+                            <button class="filter-tab" onclick="filterPayments('verified', this)">
+                                <i class="fas fa-check me-2"></i>Terverifikasi
+                            </button>
+                            <button class="filter-tab" onclick="filterPayments('pending', this)">
+                                <i class="fas fa-clock me-2"></i>Menunggu
+                            </button>
+                            <button class="filter-tab" onclick="filterPayments('rejected', this)">
+                                <i class="fas fa-times me-2"></i>Ditolak
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Payments List -->
+                    <div id="paymentsContainer">
+                        <?php if (!empty($payments)): ?>
+                            <?php foreach ($payments as $payment): ?>
+                            <div class="payment-card <?= $payment['status'] ?>" data-status="<?= $payment['status'] ?>">
+                                <!-- Status Badge -->
+                                <div class="payment-status status-<?= $payment['status'] ?>">
+                                    <?php
+                                    $statusLabels = [
+                                        'pending' => 'Menunggu',
+                                        'verified' => 'Terverifikasi',
+                                        'rejected' => 'Ditolak',
+                                        'cancelled' => 'Dibatalkan'
+                                    ];
+                                    echo $statusLabels[$payment['status']] ?? ucfirst($payment['status']);
+                                    ?>
+                                </div>
+
+                                <div class="payment-header">
+                                    <div class="row align-items-start">
+                                        <div class="col-md-8">
+                                            <h5 class="mb-2"><?= esc($payment['event_title'] ?? 'Event Title') ?></h5>
+                                            <div class="text-muted mb-2">
+                                                <i class="fas fa-calendar me-2"></i>
+                                                Event: <?= date('d F Y', strtotime($payment['event_date'] ?? $payment['tanggal_bayar'])) ?>
+                                                <span class="ms-3">
+                                                    <i class="fas fa-clock me-2"></i>
+                                                    Dibayar: <?= date('d M Y H:i', strtotime($payment['tanggal_bayar'])) ?>
+                                                </span>
                                             </div>
+                                            
+                                            <!-- Voucher Info -->
+                                            <?php if (!empty($payment['kode_voucher'])): ?>
+                                            <div class="voucher-badge">
+                                                <i class="fas fa-ticket-alt me-1"></i>
+                                                Voucher: <?= esc($payment['kode_voucher']) ?>
+                                            </div>
+                                            <?php endif; ?>
                                         </div>
                                         
-                                        <div class="col-md-6">
-                                            <div class="text-end">
-                                                <div class="amount-display">
+                                        <div class="col-md-4">
+                                            <div class="amount-display">
+                                                <?php if (!empty($payment['original_amount']) && $payment['original_amount'] > $payment['jumlah']): ?>
+                                                    <div class="amount-original">
+                                                        Rp <?= number_format($payment['original_amount'], 0, ',', '.') ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                                
+                                                <div class="amount-final">
                                                     Rp <?= number_format($payment['jumlah'], 0, ',', '.') ?>
                                                 </div>
-                                                <div class="small text-muted">
-                                                    <i class="fas fa-credit-card me-1"></i>
-                                                    <?= ucfirst(str_replace('_', ' ', $payment['metode'])) ?>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div class="row mt-3">
-                                        <div class="col-md-6">
-                                            <small class="text-muted">Payment Date</small>
-                                            <div class="fw-semibold">
-                                                <?= date('d M Y, H:i', strtotime($payment['tanggal_bayar'])) ?>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <small class="text-muted">Participation Type</small>
-                                            <div class="fw-semibold">
-                                                <span class="badge bg-info">
-                                                    <i class="fas fa-map-marker-alt me-1"></i>Offline Only
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <?php if ($payment['kode_voucher']): ?>
-                                        <div class="voucher-info">
-                                            <h6 class="text-success mb-1">
-                                                <i class="fas fa-ticket-alt me-2"></i>Voucher Applied
-                                            </h6>
-                                            <div class="small">
-                                                Code: <strong><?= esc($payment['kode_voucher']) ?></strong>
-                                                <?php if (isset($payment['voucher_type'])): ?>
-                                                    - <?= $payment['voucher_type'] === 'percentage' ? $payment['voucher_value'] . '% discount' : 'Rp ' . number_format($payment['voucher_value'], 0, ',', '.') . ' discount' ?>
+                                                
+                                                <?php if (!empty($payment['discount_amount']) && $payment['discount_amount'] > 0): ?>
+                                                    <div class="amount-savings">
+                                                        Hemat Rp <?= number_format($payment['discount_amount'], 0, ',', '.') ?>
+                                                    </div>
                                                 <?php endif; ?>
                                             </div>
                                         </div>
-                                    <?php endif; ?>
-
-                                    <?php if ($payment['verified_at']): ?>
-                                        <div class="mt-3 p-3 bg-success bg-opacity-10 rounded">
-                                            <h6 class="text-success mb-1">
-                                                <i class="fas fa-check-circle me-2"></i>Payment Verified
-                                            </h6>
-                                            <div class="small">
-                                                Verified on: <?= date('d M Y, H:i', strtotime($payment['verified_at'])) ?>
-                                                <?php if ($payment['verified_by_name']): ?>
-                                                    by <?= esc($payment['verified_by_name']) ?>
-                                                <?php endif; ?>
-                                            </div>
-                                            <?php if ($payment['keterangan']): ?>
-                                                <div class="small mt-1">
-                                                    <strong>Note:</strong> <?= esc($payment['keterangan']) ?>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php elseif ($payment['status'] === 'rejected'): ?>
-                                        <div class="mt-3 p-3 bg-danger bg-opacity-10 rounded">
-                                            <h6 class="text-danger mb-1">
-                                                <i class="fas fa-times-circle me-2"></i>Payment Rejected
-                                            </h6>
-                                            <?php if ($payment['keterangan']): ?>
-                                                <div class="small">
-                                                    <strong>Reason:</strong> <?= esc($payment['keterangan']) ?>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php else: ?>
-                                        <div class="mt-3 p-3 bg-warning bg-opacity-10 rounded">
-                                            <h6 class="text-warning mb-1">
-                                                <i class="fas fa-clock me-2"></i>Awaiting Verification
-                                            </h6>
-                                            <div class="small">
-                                                Your payment is being reviewed by our admin team. You will be notified once verified.
-                                            </div>
-                                        </div>
-                                    <?php endif; ?>
+                                    </div>
                                 </div>
 
-                                <div class="payment-footer">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <a href="<?= site_url('presenter/pembayaran/detail/' . $payment['id_pembayaran']) ?>" 
-                                               class="btn btn-outline-info btn-custom btn-sm">
-                                                <i class="fas fa-eye me-1"></i>View Details
-                                            </a>
-                                            
-                                            <?php if ($payment['bukti_bayar']): ?>
-                                                <a href="<?= site_url('presenter/pembayaran/download-bukti/' . $payment['id_pembayaran']) ?>" 
-                                                   class="btn btn-outline-secondary btn-custom btn-sm ms-2">
-                                                    <i class="fas fa-download me-1"></i>Download Proof
-                                                </a>
-                                            <?php endif; ?>
+                                <div class="payment-body">
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <!-- Payment Method -->
+                                            <div class="payment-method">
+                                                <div class="method-icon <?= $payment['metode'] ?>">
+                                                    <i class="fas fa-<?= $payment['metode'] === 'transfer_bank' ? 'university' : ($payment['metode'] === 'qris' ? 'qrcode' : 'wallet') ?>"></i>
+                                                </div>
+                                                <div>
+                                                    <strong><?= ucfirst(str_replace('_', ' ', $payment['metode'])) ?></strong>
+                                                    <br>
+                                                    <small class="text-muted">Mode Partisipasi: Offline</small>
+                                                </div>
+                                            </div>
+
+                                            <!-- Payment Timeline -->
+                                            <div class="timeline">
+                                                <div class="timeline-item completed">
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <strong>Pembayaran Dibuat</strong>
+                                                            <br>
+                                                            <small class="text-muted">Bukti pembayaran diupload</small>
+                                                        </div>
+                                                        <small class="text-muted">
+                                                            <?= date('d M Y H:i', strtotime($payment['tanggal_bayar'])) ?>
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                                
+                                                <?php if ($payment['status'] === 'verified'): ?>
+                                                <div class="timeline-item completed">
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <strong>Pembayaran Diverifikasi</strong>
+                                                            <br>
+                                                            <small class="text-muted">
+                                                                <?= !empty($payment['verifier_name']) ? 'Oleh: ' . $payment['verifier_name'] : 'Oleh Admin' ?>
+                                                            </small>
+                                                        </div>
+                                                        <small class="text-muted">
+                                                            <?= !empty($payment['verified_at']) ? date('d M Y H:i', strtotime($payment['verified_at'])) : '-' ?>
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                                <?php elseif ($payment['status'] === 'pending'): ?>
+                                                <div class="timeline-item active">
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <strong>Menunggu Verifikasi Admin</strong>
+                                                            <br>
+                                                            <small class="text-muted">Mohon tunggu proses verifikasi</small>
+                                                        </div>
+                                                        <small class="text-muted">Dalam proses</small>
+                                                    </div>
+                                                </div>
+                                                <?php elseif ($payment['status'] === 'rejected'): ?>
+                                                <div class="timeline-item rejected">
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <strong>Pembayaran Ditolak</strong>
+                                                            <br>
+                                                            <small class="text-muted">
+                                                                <?= !empty($payment['keterangan']) ? $payment['keterangan'] : 'Silakan hubungi admin untuk info lebih lanjut' ?>
+                                                            </small>
+                                                        </div>
+                                                        <small class="text-muted">
+                                                            <?= !empty($payment['verified_at']) ? date('d M Y H:i', strtotime($payment['verified_at'])) : '-' ?>
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
-                                        
-                                        <div>
-                                            <?php if ($payment['status'] === 'verified'): ?>
-                                                <span class="badge bg-success">
-                                                    <i class="fas fa-unlock me-1"></i>Features Unlocked
-                                                </span>
-                                            <?php elseif ($payment['status'] === 'pending'): ?>
-                                                <button class="btn btn-outline-danger btn-custom btn-sm" 
+
+                                        <div class="col-md-4">
+                                            <div class="d-grid gap-2">
+                                                <a href="<?= site_url('presenter/pembayaran/detail/' . $payment['id_pembayaran']) ?>" 
+                                                   class="btn btn-outline-primary btn-action">
+                                                    <i class="fas fa-eye me-2"></i>Lihat Detail
+                                                </a>
+                                                
+                                                <?php if (!empty($payment['bukti_bayar'])): ?>
+                                                <a href="<?= site_url('presenter/pembayaran/download-bukti/' . $payment['id_pembayaran']) ?>" 
+                                                   class="btn btn-outline-success btn-action">
+                                                    <i class="fas fa-download me-2"></i>Download Bukti
+                                                </a>
+                                                <?php endif; ?>
+
+                                                <?php if ($payment['status'] === 'pending'): ?>
+                                                <button type="button" class="btn btn-outline-danger btn-action" 
                                                         onclick="cancelPayment(<?= $payment['id_pembayaran'] ?>)">
-                                                    <i class="fas fa-times me-1"></i>Cancel
+                                                    <i class="fas fa-times me-2"></i>Batalkan
                                                 </button>
-                                            <?php endif; ?>
+                                                <?php elseif ($payment['status'] === 'rejected'): ?>
+                                                <a href="<?= site_url('presenter/pembayaran/create/' . $payment['event_id']) ?>" 
+                                                   class="btn btn-warning btn-action">
+                                                    <i class="fas fa-redo me-2"></i>Bayar Ulang
+                                                </a>
+                                                <?php elseif ($payment['status'] === 'verified'): ?>
+                                                <a href="<?= site_url('presenter/events/detail/' . $payment['event_id']) ?>" 
+                                                   class="btn btn-success btn-action">
+                                                    <i class="fas fa-calendar me-2"></i>Lihat Event
+                                                </a>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        <?php endforeach; ?>
-                    <?php else: ?>
+                            <?php endforeach; ?>
+                        <?php else: ?>
                         <div class="empty-state">
                             <i class="fas fa-credit-card"></i>
-                            <h5>No Payments Yet</h5>
-                            <p>You haven't made any payments yet. Once your abstract is accepted, you can make payment for the event.</p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-        <?php else: ?>
-            <!-- No Accepted Abstracts -->
-            <div class="content-card">
-                <div class="p-5">
-                    <div class="empty-state">
-                        <i class="fas fa-file-times"></i>
-                        <h4>No Accepted Abstracts</h4>
-                        <p class="mb-4">You need to have at least one accepted abstract before you can make payments.</p>
-                        
-                        <div class="alert alert-custom alert-info">
-                            <h6 class="alert-heading">
-                                <i class="fas fa-info-circle me-2"></i>Next Steps:
-                            </h6>
-                            <ol class="mb-0 ps-3">
-                                <li>Submit your abstract for review</li>
-                                <li>Wait for acceptance from reviewers</li>
-                                <li>Once accepted, payment option will become available</li>
-                                <li>Complete payment to unlock presenter features</li>
-                            </ol>
-                        </div>
-                        
-                        <div class="mt-4">
-                            <a href="<?= site_url('presenter/abstrak') ?>" class="btn btn-primary-custom btn-custom">
-                                <i class="fas fa-file-upload me-2"></i>Manage Abstracts
-                            </a>
-                            <a href="<?= site_url('presenter/events') ?>" class="btn btn-outline-primary btn-custom ms-2">
-                                <i class="fas fa-calendar me-2"></i>Browse Events
+                            <h5 class="text-muted">Belum Ada Pembayaran</h5>
+                            <p class="text-muted">
+                                Pembayaran akan muncul di sini setelah Anda mendaftar event dan melakukan pembayaran
+                            </p>
+                            <a href="<?= site_url('presenter/events') ?>" class="btn btn-primary btn-action">
+                                <i class="fas fa-calendar-alt me-2"></i>Lihat Event Tersedia
                             </a>
                         </div>
-                    </div>
-                </div>
-            </div>
-        <?php endif; ?>
-
-        <!-- Payment Process Info -->
-        <div class="content-card">
-            <div class="content-header">
-                <h5 class="mb-0">
-                    <i class="fas fa-question-circle me-2"></i>Payment Process Information
-                </h5>
-            </div>
-            <div class="p-4">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="text-primary">
-                            <i class="fas fa-map-marker-alt me-2"></i>Presenter Participation
-                        </h6>
-                        <p class="small mb-3">
-                            As a presenter, you can only participate <strong>offline</strong>. All presentations must be delivered 
-                            in-person at the venue. Payment is required after your abstract is accepted.
-                        </p>
-                        
-                        <h6 class="text-success">
-                            <i class="fas fa-unlock me-2"></i>Features Unlocked After Payment
-                        </h6>
-                        <ul class="small mb-0">
-                            <li>QR Code attendance scanning</li>
-                            <li>Letter of Acceptance (LOA) download</li>
-                            <li>Certificate download (after event completion)</li>
-                            <li>Full access to presenter dashboard</li>
-                        </ul>
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="text-warning">
-                            <i class="fas fa-clock me-2"></i>Payment Timeline
-                        </h6>
-                        <div class="timeline-item">
-                            <div class="small">
-                                <strong>Step 1:</strong> Submit and get abstract accepted
-                            </div>
-                        </div>
-                        <div class="timeline-item">
-                            <div class="small">
-                                <strong>Step 2:</strong> Complete payment with proof
-                            </div>
-                        </div>
-                        <div class="timeline-item">
-                            <div class="small">
-                                <strong>Step 3:</strong> Wait for admin verification
-                            </div>
-                        </div>
-                        <div class="timeline-item">
-                            <div class="small">
-                                <strong>Step 4:</strong> Access unlocked features
-                            </div>
-                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -670,90 +717,157 @@
     </div>
 
     <!-- Cancel Payment Modal -->
-    <div class="modal fade" id="cancelPaymentModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade" id="cancelModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
-                        <i class="fas fa-times-circle me-2"></i>Cancel Payment
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                        Konfirmasi Pembatalan
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <p class="mb-3">Apakah Anda yakin ingin membatalkan pembayaran ini?</p>
                     <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>Warning:</strong> This action cannot be undone. Your payment proof will be deleted 
-                        and you'll need to upload it again if you want to make payment later.
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Perhatian:</strong> Pembatalan tidak dapat dibatalkan. Anda harus melakukan pembayaran ulang untuk event ini.
                     </div>
-                    <p>Are you sure you want to cancel this payment?</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep Payment</button>
-                    <button type="button" class="btn btn-danger" id="confirmCancelPayment">
-                        <i class="fas fa-times me-2"></i>Yes, Cancel Payment
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-arrow-left me-2"></i>Batal
                     </button>
+                    <form id="cancelForm" method="post" style="display: inline;">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-times me-2"></i>Ya, Batalkan Pembayaran
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        let paymentToCancel = null;
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto-hide alerts after 5 seconds
+            setTimeout(function() {
+                const alerts = document.querySelectorAll('.alert-dismissible');
+                alerts.forEach(alert => {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                });
+            }, 5000);
 
-        function cancelPayment(paymentId) {
-            paymentToCancel = paymentId;
-            new bootstrap.Modal(document.getElementById('cancelPaymentModal')).show();
-        }
-
-        document.getElementById('confirmCancelPayment').addEventListener('click', function() {
-            if (paymentToCancel) {
-                window.location.href = `<?= site_url('presenter/pembayaran/cancel') ?>/${paymentToCancel}`;
-            }
+            // Auto refresh pending payments status every 60 seconds
+            setInterval(() => {
+                const pendingCards = document.querySelectorAll('.payment-card.pending');
+                if (pendingCards.length > 0) {
+                    console.log('Refreshing payment status...');
+                    // Optional: Add subtle refresh indicator
+                }
+            }, 60000);
         });
 
-        // Show success/error messages
-        document.addEventListener('DOMContentLoaded', function() {
-            <?php if (session('success')): ?>
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Success!',
-                    text: '<?= addslashes(session('success')) ?>',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
-            <?php endif; ?>
+        function filterPayments(status, button) {
+            // Update active tab
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            button.classList.add('active');
 
-            <?php if (session('error')): ?>
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error!',
-                    text: '<?= addslashes(session('error')) ?>',
-                });
-            <?php endif; ?>
+            // Filter payment cards
+            const payments = document.querySelectorAll('.payment-card');
+            let visibleCount = 0;
 
-            <?php if (session('info')): ?>
-                Swal.fire({
-                    icon: 'info',
-                    title: 'Information',
-                    text: '<?= addslashes(session('info')) ?>',
-                });
-            <?php endif; ?>
+            payments.forEach(paymentCard => {
+                const cardStatus = paymentCard.getAttribute('data-status');
+                
+                if (status === 'all' || cardStatus === status) {
+                    paymentCard.style.display = 'block';
+                    visibleCount++;
+                } else {
+                    paymentCard.style.display = 'none';
+                }
+            });
 
-            // Animate cards on load
-            const cards = document.querySelectorAll('.payment-card, .stat-card');
-            cards.forEach((card, index) => {
-                setTimeout(() => {
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateY(20px)';
-                    card.style.transition = 'all 0.5s ease';
-                    
-                    setTimeout(() => {
-                        card.style.opacity = '1';
-                        card.style.transform = 'translateY(0)';
-                    }, 100);
-                }, index * 100);
+            // Show empty state if no payments visible
+            const container = document.getElementById('paymentsContainer');
+            let emptyState = container.querySelector('.empty-state-filter');
+            
+            if (visibleCount === 0 && status !== 'all') {
+                if (!emptyState) {
+                    emptyState = document.createElement('div');
+                    emptyState.className = 'empty-state empty-state-filter';
+                    emptyState.innerHTML = `
+                        <i class="fas fa-filter"></i>
+                        <h5 class="text-muted">Tidak Ada Pembayaran</h5>
+                        <p class="text-muted">Tidak ada pembayaran dengan status "${getStatusLabel(status)}"</p>
+                    `;
+                    container.appendChild(emptyState);
+                }
+                emptyState.style.display = 'block';
+            } else if (emptyState) {
+                emptyState.style.display = 'none';
+            }
+        }
+
+        function getStatusLabel(status) {
+            const labels = {
+                'verified': 'Terverifikasi',
+                'pending': 'Menunggu',
+                'rejected': 'Ditolak',
+                'cancelled': 'Dibatalkan'
+            };
+            return labels[status] || status;
+        }
+
+        function cancelPayment(paymentId) {
+            const form = document.getElementById('cancelForm');
+            form.action = '<?= site_url('presenter/pembayaran/cancel/') ?>' + paymentId;
+            
+            const modal = new bootstrap.Modal(document.getElementById('cancelModal'));
+            modal.show();
+        }
+
+        function showToast(title, message, type) {
+            const toastHtml = `
+                <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <strong>${title}</strong> ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            `;
+            
+            const toastContainer = document.getElementById('toastContainer');
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            
+            const toastElement = toastContainer.querySelector('.toast:last-child');
+            const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 5000 });
+            toast.show();
+
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
+            });
+        }
+
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                }
             });
         });
     </script>

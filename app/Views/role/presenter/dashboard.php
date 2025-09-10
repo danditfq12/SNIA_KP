@@ -247,6 +247,31 @@
             color: var(--success-color);
             font-weight: 600;
         }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Status badge colors */
+        .bg-menunggu { background-color: var(--warning-color) !important; color: white; }
+        .bg-sedang_direview { background-color: var(--info-color) !important; color: white; }
+        .bg-diterima { background-color: var(--success-color) !important; color: white; }
+        .bg-ditolak { background-color: var(--danger-color) !important; color: white; }
+        .bg-revisi { background-color: var(--secondary-color) !important; color: white; }
+        .bg-pending { background-color: var(--warning-color) !important; color: white; }
+        .bg-verified { background-color: var(--success-color) !important; color: white; }
+        .bg-rejected { background-color: var(--danger-color) !important; color: white; }
+        .bg-hadir { background-color: var(--success-color) !important; color: white; }
+        .bg-tidak { background-color: var(--secondary-color) !important; color: white; }
     </style>
 </head>
 <body>
@@ -282,6 +307,9 @@
                         <a class="nav-link" href="<?= site_url('presenter/dokumen/loa') ?>">
                             <i class="fas fa-certificate me-2"></i> Dokumen
                         </a>
+                        <a class="nav-link" href="<?= site_url('presenter/profile') ?>">
+                            <i class="fas fa-certificate me-2"></i> Profile
+                        </a>
                         <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
                         <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
                             <i class="fas fa-sign-out-alt me-2"></i> Logout
@@ -301,7 +329,7 @@
                                     <i class="fas fa-chart-line me-3"></i>Dashboard Presenter
                                 </h1>
                                 <p class="mb-0 opacity-75">
-                                    Selamat datang, <strong><?= session('nama_lengkap') ?? 'Presenter' ?></strong>! 
+                                    Selamat datang, <strong><?= esc($user['nama_lengkap'] ?? session('nama_lengkap') ?? 'Presenter') ?></strong>! 
                                     Kelola partisipasi event Anda dengan mudah.
                                 </p>
                             </div>
@@ -313,7 +341,6 @@
                             </div>
                         </div>
                     </div>
-
                     <!-- Notifications -->
                     <?php if (!empty($notifications)): ?>
                     <div class="mb-4">
@@ -357,7 +384,7 @@
                                             <?= date('d F Y', strtotime($workflow['event_date'])) ?>
                                         </small>
                                     </div>
-                                    <span class="event-status-badge bg-<?= $workflow['status'] === 'completed' ? 'success' : ($workflow['can_proceed'] ? 'primary' : 'secondary') ?>">
+                                    <span class="event-status-badge bg-<?= in_array($workflow['status'], ['completed', 'attended']) ? 'success' : ($workflow['can_proceed'] ? 'primary' : 'secondary') ?> text-white">
                                         Step <?= $workflow['step'] ?>/5
                                     </span>
                                 </div>
@@ -365,10 +392,10 @@
                                 <!-- Progress Bar -->
                                 <div class="workflow-progress">
                                     <div class="text-center">
-                                        <div class="progress-step <?= $workflow['step'] >= 1 ? 'completed' : '' ?>">
+                                        <div class="progress-step <?= $workflow['step'] >= 1 ? ($workflow['abstract'] && $workflow['abstract']['status'] === 'diterima' ? 'completed' : 'active') : '' ?>">
                                             <i class="fas fa-file-alt"></i>
                                         </div>
-                                        <div class="step-label <?= $workflow['step'] >= 1 ? 'completed' : '' ?>">Abstrak</div>
+                                        <div class="step-label <?= $workflow['step'] >= 1 ? ($workflow['abstract'] && $workflow['abstract']['status'] === 'diterima' ? 'completed' : 'active') : '' ?>">Abstrak</div>
                                     </div>
                                     <div class="progress-line <?= $workflow['step'] >= 2 ? 'completed' : '' ?>"></div>
                                     
@@ -406,21 +433,21 @@
 
                                 <!-- Status Message -->
                                 <div class="mb-3">
-                                    <div class="alert alert-<?= $workflow['status'] === 'completed' ? 'success' : ($workflow['can_proceed'] ? 'primary' : 'warning') ?> mb-0">
+                                    <div class="alert alert-<?= in_array($workflow['status'], ['completed', 'attended']) ? 'success' : ($workflow['can_proceed'] ? 'primary' : 'warning') ?> mb-0">
                                         <i class="fas fa-info-circle me-2"></i>
                                         <?= esc($workflow['message']) ?>
                                     </div>
                                 </div>
 
                                 <!-- Action Button -->
-                                <?php if ($workflow['can_proceed'] && $workflow['status'] !== 'completed'): ?>
+                                <?php if ($workflow['can_proceed'] && !in_array($workflow['status'], ['completed', 'attended'])): ?>
                                 <div class="text-center">
                                     <a href="<?= $workflow['next_url'] ?>" class="action-button">
                                         <i class="fas fa-arrow-right me-2"></i>
                                         <?= esc($workflow['next_action']) ?>
                                     </a>
                                 </div>
-                                <?php elseif ($workflow['status'] === 'completed'): ?>
+                                <?php elseif (in_array($workflow['status'], ['completed', 'attended'])): ?>
                                 <div class="text-center">
                                     <a href="<?= $workflow['next_url'] ?>" class="btn btn-success btn-lg">
                                         <i class="fas fa-play me-2"></i>
@@ -531,6 +558,9 @@
         </div>
     </div>
 
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -543,7 +573,7 @@
             document.querySelectorAll('.workflow-card[data-event-id]').forEach(card => {
                 const eventId = card.dataset.eventId;
                 
-                // Add refresh button functionality
+                // Add refresh button functionality (double click to refresh)
                 card.addEventListener('dblclick', function() {
                     refreshSingleWorkflow(eventId);
                 });
@@ -554,6 +584,9 @@
 
             // Show success messages with auto-hide
             showFlashMessages();
+
+            // Check for real-time updates every minute
+            setInterval(refreshStats, 60000);
         });
 
         function refreshWorkflowStatus() {
@@ -586,6 +619,40 @@
             });
         }
 
+        function refreshStats() {
+            fetch('<?= site_url('presenter/dashboard/getQuickStats') ?>', {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateStatsUI(data.stats);
+                }
+            })
+            .catch(error => {
+                console.log('Stats refresh error:', error);
+            });
+        }
+
+        function updateStatsUI(stats) {
+            // Update stat numbers
+            const statElements = {
+                'registered_events': document.querySelector('.stat-card.primary .stat-number'),
+                'accepted_abstracts': document.querySelector('.stat-card.success .stat-number'),
+                'verified_payments': document.querySelector('.stat-card.warning .stat-number'),
+                'attended_events': document.querySelector('.stat-card.info .stat-number')
+            };
+
+            Object.keys(statElements).forEach(key => {
+                if (statElements[key] && stats[key] !== undefined) {
+                    statElements[key].textContent = stats[key];
+                }
+            });
+        }
+
         function updateWorkflowUI(eventId, workflow) {
             const card = document.querySelector(`[data-event-id="${eventId}"]`);
             if (!card) return;
@@ -594,7 +661,7 @@
             const stepBadge = card.querySelector('.event-status-badge');
             if (stepBadge) {
                 stepBadge.textContent = `Step ${workflow.step}/5`;
-                stepBadge.className = `event-status-badge bg-${workflow.status === 'completed' ? 'success' : (workflow.can_proceed ? 'primary' : 'secondary')}`;
+                stepBadge.className = `event-status-badge bg-${['completed', 'attended'].includes(workflow.status) ? 'success' : (workflow.can_proceed ? 'primary' : 'secondary')} text-white`;
             }
 
             // Update progress steps
@@ -603,9 +670,12 @@
             // Update alert message
             const alert = card.querySelector('.alert');
             if (alert) {
-                alert.className = `alert alert-${workflow.status === 'completed' ? 'success' : (workflow.can_proceed ? 'primary' : 'warning')} mb-0`;
+                alert.className = `alert alert-${['completed', 'attended'].includes(workflow.status) ? 'success' : (workflow.can_proceed ? 'primary' : 'warning')} mb-0`;
                 alert.innerHTML = `<i class="fas fa-info-circle me-2"></i>${workflow.message}`;
             }
+
+            // Update action button if needed
+            updateActionButton(card, workflow);
         }
 
         function updateProgressSteps(card, currentStep) {
@@ -635,8 +705,33 @@
             });
         }
 
+        function updateActionButton(card, workflow) {
+            const buttonContainer = card.querySelector('.text-center');
+            if (!buttonContainer) return;
+
+            let buttonHtml = '';
+            
+            if (workflow.can_proceed && !['completed', 'attended'].includes(workflow.status)) {
+                buttonHtml = `
+                    <a href="${workflow.next_url}" class="action-button">
+                        <i class="fas fa-arrow-right me-2"></i>
+                        ${workflow.next_action}
+                    </a>
+                `;
+            } else if (['completed', 'attended'].includes(workflow.status)) {
+                buttonHtml = `
+                    <a href="${workflow.next_url}" class="btn btn-success btn-lg">
+                        <i class="fas fa-play me-2"></i>
+                        Akses Fitur Event
+                    </a>
+                `;
+            }
+
+            buttonContainer.innerHTML = buttonHtml;
+        }
+
         function animateCounters() {
-            const counters = document.querySelectorAll('.h3');
+            const counters = document.querySelectorAll('.stat-number');
             
             counters.forEach(counter => {
                 const target = parseInt(counter.textContent);
@@ -657,38 +752,44 @@
 
         function showFlashMessages() {
             // Show success/error messages from session
-            const urlParams = new URLSearchParams(window.location.search);
-            const success = urlParams.get('success');
-            const error = urlParams.get('error');
-
-            if (success) {
-                showToast('Success!', success, 'success');
-            }
-            if (error) {
-                showToast('Error!', error, 'danger');
-            }
+            <?php if (session()->getFlashdata('success')): ?>
+                showToast('Berhasil!', '<?= esc(session()->getFlashdata('success')) ?>', 'success');
+            <?php endif; ?>
+            
+            <?php if (session()->getFlashdata('error')): ?>
+                showToast('Error!', '<?= esc(session()->getFlashdata('error')) ?>', 'danger');
+            <?php endif; ?>
         }
 
         function showToast(title, message, type) {
-            // Create and show a bootstrap toast
             const toastHtml = `
-                <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+                <div class="toast align-items-center text-white bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
                     <div class="d-flex">
                         <div class="toast-body">
                             <strong>${title}</strong> ${message}
                         </div>
-                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
                     </div>
                 </div>
             `;
             
-            // Add to page and show
-            document.body.insertAdjacentHTML('beforeend', toastHtml);
-            const toast = new bootstrap.Toast(document.querySelector('.toast:last-child'));
+            const toastContainer = document.getElementById('toastContainer');
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            
+            const toastElement = toastContainer.querySelector('.toast:last-child');
+            const toast = new bootstrap.Toast(toastElement, {
+                autohide: true,
+                delay: 5000
+            });
             toast.show();
+
+            // Remove toast element after it's hidden
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
+            });
         }
 
-        // Utility function to show loading
+        // Utility functions
         function showLoading() {
             document.getElementById('loadingOverlay').style.display = 'flex';
         }
@@ -696,6 +797,19 @@
         function hideLoading() {
             document.getElementById('loadingOverlay').style.display = 'none';
         }
+
+        // Add smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
     </script>
 </body>
 </html>

@@ -9,7 +9,8 @@ use App\Models\PembayaranModel;
 use App\Models\DokumenModel;
 use App\Models\ReviewModel;
 use App\Models\KategoriAbstrakModel;
-use App\Models\EventRegistrationModel;
+use App\Models\AbsensiModel;
+use App\Models\UserModel;
 
 class Dashboard extends BaseController
 {
@@ -19,7 +20,8 @@ class Dashboard extends BaseController
     protected $dokumenModel;
     protected $reviewModel;
     protected $kategoriModel;
-    protected $eventRegistrationModel;
+    protected $absensiModel;
+    protected $userModel;
     protected $db;
 
     public function __construct()
@@ -30,7 +32,8 @@ class Dashboard extends BaseController
         $this->dokumenModel = new DokumenModel();
         $this->reviewModel = new ReviewModel();
         $this->kategoriModel = new KategoriAbstrakModel();
-        $this->eventRegistrationModel = new EventRegistrationModel();
+        $this->absensiModel = new AbsensiModel();
+        $this->userModel = new UserModel();
         $this->db = \Config\Database::connect();
     }
 
@@ -39,7 +42,7 @@ class Dashboard extends BaseController
         $userId = session('id_user');
         
         try {
-            // Get active events with registration status
+            // Get active events with user participation status
             $events = $this->getEventsWithUserStatus($userId);
             
             // Get user's workflow progress for each event
@@ -64,7 +67,8 @@ class Dashboard extends BaseController
                 'recent_activities' => $recentActivities,
                 'notifications' => $notifications,
                 'next_actions' => $nextActions,
-                'categories' => $this->kategoriModel->findAll()
+                'categories' => $this->kategoriModel->findAll(),
+                'user' => $this->userModel->find($userId)
             ];
 
             return view('role/presenter/dashboard', $data);
@@ -76,34 +80,68 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Get events with user's participation status
+     * Get events with user's participation status based on actual database schema
      */
     private function getEventsWithUserStatus($userId)
     {
+        // Get all active events
         $events = $this->eventModel
             ->where('is_active', true)
             ->orderBy('event_date', 'DESC')
             ->findAll();
 
         foreach ($events as &$event) {
-            // Check registration status
-            $registration = $this->eventRegistrationModel->findUserReg($event['id'], $userId);
-            $event['is_registered'] = !empty($registration);
-            $event['registration_data'] = $registration;
+            // Parse boolean fields properly for PostgreSQL
+            $event['is_active'] = $this->parseBoolean($event['is_active']);
+            $event['registration_active'] = $this->parseBoolean($event['registration_active']);
+            $event['abstract_submission_active'] = $this->parseBoolean($event['abstract_submission_active']);
+
+            // Check user's abstract for this event
+            $abstract = $this->abstrakModel
+                ->where('id_user', $userId)
+                ->where('event_id', $event['id'])
+                ->orderBy('tanggal_upload', 'DESC')
+                ->first();
+            $event['abstract_data'] = $abstract;
+
+            // Check user's payment for this event
+            $payment = $this->pembayaranModel
+                ->where('id_user', $userId)
+                ->where('event_id', $event['id'])
+                ->orderBy('tanggal_bayar', 'DESC')
+                ->first();
+            $event['payment_data'] = $payment;
+
+            // Check user's attendance for this event
+            $attendance = $this->absensiModel
+                ->where('id_user', $userId)
+                ->where('event_id', $event['id'])
+                ->first();
+            $event['attendance_data'] = $attendance;
+
+            // Check user's documents for this event
+            $documents = $this->dokumenModel
+                ->where('id_user', $userId)
+                ->where('event_id', $event['id'])
+                ->findAll();
+            $event['documents_data'] = $documents;
 
             // Calculate pricing for presenter (always offline)
             $event['presenter_price'] = $event['presenter_fee_offline'] ?? 0;
             
-            // Check registration deadline
+            // Check deadlines
             $event['registration_open'] = $this->eventModel->isRegistrationOpen($event['id']);
             $event['abstract_submission_open'] = $this->eventModel->isAbstractSubmissionOpen($event['id']);
+
+            // Determine if user is registered (has abstract or payment)
+            $event['is_registered'] = !empty($abstract) || !empty($payment);
         }
 
         return $events;
     }
 
     /**
-     * Calculate workflow progress for each event
+     * Calculate workflow progress based on actual business logic
      */
     private function calculateWorkflowProgress($userId, $events)
     {
@@ -111,47 +149,44 @@ class Dashboard extends BaseController
 
         foreach ($events as $event) {
             $eventId = $event['id'];
+            $abstract = $event['abstract_data'];
+            $payment = $event['payment_data'];
+            $attendance = $event['attendance_data'];
+            $documents = $event['documents_data'];
+
             $progress = [
                 'event_id' => $eventId,
                 'event_title' => $event['title'],
                 'event_date' => $event['event_date'],
-                'step' => 0,
+                'step' => 1,
                 'can_proceed' => false,
                 'status' => 'not_started',
                 'message' => '',
                 'next_action' => '',
                 'next_url' => '',
-                'abstract' => null,
-                'payment' => null,
-                'attendance' => null,
-                'documents' => []
+                'abstract' => $abstract,
+                'payment' => $payment,
+                'attendance' => $attendance,
+                'documents' => $documents
             ];
 
-            // Step 1: Check Abstract Submission
-            $abstract = $this->abstrakModel
-                ->where('id_user', $userId)
-                ->where('event_id', $eventId)
-                ->orderBy('tanggal_upload', 'DESC')
-                ->first();
-
+            // Step 1: Abstract Submission
             if (!$abstract) {
-                // No abstract submitted
                 $progress['step'] = 1;
                 $progress['status'] = 'abstract_required';
-                $progress['message'] = 'Anda harus mengisi abstrak terlebih dahulu sebelum dapat melanjutkan.';
+                $progress['message'] = 'Upload abstrak untuk memulai partisipasi dalam event ini.';
                 $progress['next_action'] = 'Upload Abstrak';
                 $progress['next_url'] = site_url('presenter/abstrak?event_id=' . $eventId);
                 $progress['can_proceed'] = $event['abstract_submission_open'];
             } else {
-                $progress['abstract'] = $abstract;
-                
+                // Abstract exists, check status
                 switch ($abstract['status']) {
                     case 'menunggu':
                     case 'sedang_direview':
                         $progress['step'] = 2;
                         $progress['status'] = 'abstract_pending';
-                        $progress['message'] = 'Abstrak Anda sedang dalam proses review. Silakan tunggu hasil review.';
-                        $progress['next_action'] = 'Tunggu Review';
+                        $progress['message'] = 'Abstrak sedang dalam proses review. Tunggu hasil review.';
+                        $progress['next_action'] = 'Lihat Status';
                         $progress['next_url'] = site_url('presenter/abstrak/detail/' . $abstract['id_abstrak']);
                         $progress['can_proceed'] = false;
                         break;
@@ -159,7 +194,7 @@ class Dashboard extends BaseController
                     case 'revisi':
                         $progress['step'] = 1;
                         $progress['status'] = 'abstract_revision';
-                        $progress['message'] = 'Abstrak Anda memerlukan revisi. Silakan perbaiki dan upload ulang.';
+                        $progress['message'] = 'Abstrak memerlukan revisi. Perbaiki dan upload ulang.';
                         $progress['next_action'] = 'Revisi Abstrak';
                         $progress['next_url'] = site_url('presenter/abstrak/detail/' . $abstract['id_abstrak']);
                         $progress['can_proceed'] = $event['abstract_submission_open'];
@@ -168,37 +203,29 @@ class Dashboard extends BaseController
                     case 'ditolak':
                         $progress['step'] = 1;
                         $progress['status'] = 'abstract_rejected';
-                        $progress['message'] = 'Abstrak Anda ditolak. Silakan buat abstrak baru.';
+                        $progress['message'] = 'Abstrak ditolak. Buat abstrak baru jika masih memungkinkan.';
                         $progress['next_action'] = 'Buat Abstrak Baru';
                         $progress['next_url'] = site_url('presenter/abstrak?event_id=' . $eventId);
                         $progress['can_proceed'] = $event['abstract_submission_open'];
                         break;
 
                     case 'diterima':
-                        // Abstract accepted, check payment
-                        $payment = $this->pembayaranModel
-                            ->where('id_user', $userId)
-                            ->where('event_id', $eventId)
-                            ->orderBy('tanggal_bayar', 'DESC')
-                            ->first();
-
+                        // Step 3: Payment
                         if (!$payment) {
-                            // No payment made
                             $progress['step'] = 3;
                             $progress['status'] = 'payment_required';
-                            $progress['message'] = 'Abstrak diterima! Silakan lakukan pembayaran untuk melanjutkan.';
+                            $progress['message'] = 'Abstrak diterima! Lakukan pembayaran untuk konfirmasi partisipasi.';
                             $progress['next_action'] = 'Lakukan Pembayaran';
                             $progress['next_url'] = site_url('presenter/pembayaran/create/' . $eventId);
                             $progress['can_proceed'] = $event['registration_open'];
                         } else {
-                            $progress['payment'] = $payment;
-                            
+                            // Payment exists, check status
                             switch ($payment['status']) {
                                 case 'pending':
                                     $progress['step'] = 4;
                                     $progress['status'] = 'payment_pending';
-                                    $progress['message'] = 'Pembayaran sedang diverifikasi. Silakan tunggu konfirmasi admin.';
-                                    $progress['next_action'] = 'Tunggu Verifikasi';
+                                    $progress['message'] = 'Pembayaran sedang diverifikasi. Tunggu konfirmasi admin.';
+                                    $progress['next_action'] = 'Lihat Status Pembayaran';
                                     $progress['next_url'] = site_url('presenter/pembayaran/detail/' . $payment['id_pembayaran']);
                                     $progress['can_proceed'] = false;
                                     break;
@@ -206,23 +233,37 @@ class Dashboard extends BaseController
                                 case 'rejected':
                                     $progress['step'] = 3;
                                     $progress['status'] = 'payment_rejected';
-                                    $progress['message'] = 'Pembayaran ditolak. Silakan lakukan pembayaran ulang.';
+                                    $progress['message'] = 'Pembayaran ditolak. Lakukan pembayaran ulang.';
                                     $progress['next_action'] = 'Bayar Ulang';
                                     $progress['next_url'] = site_url('presenter/pembayaran/create/' . $eventId);
                                     $progress['can_proceed'] = $event['registration_open'];
                                     break;
 
                                 case 'verified':
-                                    // Payment verified - all features unlocked
+                                    // Step 5: Event Features Available
                                     $progress['step'] = 5;
                                     $progress['status'] = 'completed';
-                                    $progress['message'] = 'Selamat! Semua langkah selesai. Anda dapat mengakses semua fitur event.';
+                                    $progress['message'] = 'Pembayaran terverifikasi! Semua fitur event tersedia.';
                                     $progress['next_action'] = 'Akses Fitur Event';
                                     $progress['next_url'] = site_url('presenter/events/detail/' . $eventId);
                                     $progress['can_proceed'] = true;
 
-                                    // Check additional data
-                                    $this->checkEventFeatures($userId, $eventId, $progress);
+                                    // Additional status based on event date
+                                    $eventDate = strtotime($event['event_date']);
+                                    $now = time();
+                                    
+                                    if ($now > $eventDate) {
+                                        // Event has passed
+                                        if ($attendance) {
+                                            $progress['status'] = 'attended';
+                                            $progress['message'] = 'Event selesai. Anda telah hadir.';
+                                            $progress['next_action'] = 'Lihat Dokumen';
+                                        } else {
+                                            $progress['status'] = 'missed';
+                                            $progress['message'] = 'Event selesai. Anda tidak hadir.';
+                                            $progress['next_action'] = 'Lihat Detail';
+                                        }
+                                    }
                                     break;
                             }
                         }
@@ -237,38 +278,13 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Check available event features after payment verification
-     */
-    private function checkEventFeatures($userId, $eventId, &$progress)
-    {
-        // Check attendance
-        $attendance = $this->db->table('absensi')
-            ->where('id_user', $userId)
-            ->where('event_id', $eventId)
-            ->get()->getRowArray();
-        
-        $progress['attendance'] = $attendance;
-
-        // Check documents (LOA, Certificate)
-        $documents = $this->dokumenModel
-            ->where('id_user', $userId)
-            ->where('event_id', $eventId)
-            ->findAll();
-        
-        $progress['documents'] = $documents;
-
-        // Categorize documents
-        $progress['has_loa'] = !empty(array_filter($documents, fn($d) => $d['tipe'] === 'loa'));
-        $progress['has_certificate'] = !empty(array_filter($documents, fn($d) => $d['tipe'] === 'sertifikat'));
-    }
-
-    /**
      * Get user statistics
      */
     private function getUserStatistics($userId)
     {
         $stats = [
             'total_events' => 0,
+            'registered_events' => 0,
             'completed_workflows' => 0,
             'pending_actions' => 0,
             'total_abstracts' => 0,
@@ -277,7 +293,8 @@ class Dashboard extends BaseController
             'total_payments' => 0,
             'verified_payments' => 0,
             'pending_payments' => 0,
-            'attended_events' => 0
+            'attended_events' => 0,
+            'total_documents' => 0
         ];
 
         // Count abstracts
@@ -293,11 +310,27 @@ class Dashboard extends BaseController
         $stats['pending_payments'] = count(array_filter($payments, fn($p) => $p['status'] === 'pending'));
 
         // Count attendance
-        $attendance = $this->db->table('absensi')
+        $stats['attended_events'] = $this->absensiModel
             ->where('id_user', $userId)
             ->where('status', 'hadir')
             ->countAllResults();
-        $stats['attended_events'] = $attendance;
+
+        // Count documents
+        $stats['total_documents'] = $this->dokumenModel
+            ->where('id_user', $userId)
+            ->countAllResults();
+
+        // Count registered events (has abstract or payment)
+        $registeredEvents = $this->db->query("
+            SELECT DISTINCT event_id 
+            FROM (
+                SELECT event_id FROM abstrak WHERE id_user = ?
+                UNION
+                SELECT event_id FROM pembayaran WHERE id_user = ?
+            ) AS registered
+        ", [$userId, $userId])->getResultArray();
+        
+        $stats['registered_events'] = count($registeredEvents);
 
         return $stats;
     }
@@ -353,6 +386,28 @@ class Dashboard extends BaseController
             ];
         }
 
+        // Recent attendance
+        $recentAttendance = $this->absensiModel
+            ->select('absensi.*, events.title as event_title')
+            ->join('events', 'events.id = absensi.event_id', 'left')
+            ->where('absensi.id_user', $userId)
+            ->orderBy('absensi.waktu_scan', 'DESC')
+            ->limit(3)
+            ->findAll();
+
+        foreach ($recentAttendance as $attendance) {
+            $activities[] = [
+                'type' => 'attendance',
+                'title' => 'Kehadiran: ' . ucfirst($attendance['status']),
+                'subtitle' => 'Event: ' . ($attendance['event_title'] ?? 'Unknown'),
+                'status' => $attendance['status'],
+                'date' => $attendance['waktu_scan'],
+                'icon' => 'fas fa-qrcode',
+                'url' => site_url('presenter/absensi'),
+                'badge_class' => $this->getStatusBadgeClass($attendance['status'])
+            ];
+        }
+
         // Sort by date
         usort($activities, function($a, $b) {
             return strtotime($b['date']) - strtotime($a['date']);
@@ -389,7 +444,7 @@ class Dashboard extends BaseController
                             'type' => 'info',
                             'title' => 'Revisi Abstrak',
                             'message' => "Abstrak memerlukan revisi untuk event: {$workflow['event_title']}",
-                            'action_text' => 'Lihat Detail',
+                            'action_text' => 'Revisi Sekarang',
                             'action_url' => $workflow['next_url'],
                             'date' => $workflow['abstract']['tanggal_upload']
                         ];
@@ -467,13 +522,13 @@ class Dashboard extends BaseController
             ->findAll();
 
         foreach ($upcomingEvents as $event) {
-            // Check if user hasn't registered yet
-            $hasWorkflow = $this->abstrakModel
+            // Check if user hasn't started workflow yet
+            $hasAbstract = $this->abstrakModel
                 ->where('id_user', $userId)
                 ->where('event_id', $event['id'])
                 ->first();
 
-            if (!$hasWorkflow) {
+            if (!$hasAbstract) {
                 $daysLeft = ceil((strtotime($event['registration_deadline']) - time()) / (60 * 60 * 24));
                 $notifications[] = [
                     'type' => 'warning',
@@ -496,7 +551,7 @@ class Dashboard extends BaseController
             ->findAll();
 
         foreach ($abstractDeadlines as $event) {
-            // Check if user has pending abstract
+            // Check if user has pending abstract revisions
             $pendingAbstract = $this->abstrakModel
                 ->where('id_user', $userId)
                 ->where('event_id', $event['id'])
@@ -507,7 +562,7 @@ class Dashboard extends BaseController
                 $daysLeft = ceil((strtotime($event['abstract_deadline']) - time()) / (60 * 60 * 24));
                 $notifications[] = [
                     'type' => 'danger',
-                    'title' => 'Deadline Abstrak',
+                    'title' => 'Deadline Revisi Abstrak',
                     'message' => "Batas revisi abstrak {$event['title']} dalam {$daysLeft} hari",
                     'action_text' => 'Revisi Sekarang',
                     'action_url' => site_url('presenter/abstrak/detail/' . $pendingAbstract['id_abstrak']),
@@ -525,7 +580,7 @@ class Dashboard extends BaseController
         $actions = [];
 
         foreach ($workflowData as $workflow) {
-            if (!$workflow['can_proceed'] && $workflow['status'] !== 'completed') {
+            if (!$workflow['can_proceed'] && !in_array($workflow['status'], ['completed', 'attended'])) {
                 continue; // Skip if can't proceed
             }
 
@@ -587,10 +642,27 @@ class Dashboard extends BaseController
             'revisi' => 'bg-secondary',
             'pending' => 'bg-warning',
             'verified' => 'bg-success',
-            'rejected' => 'bg-danger'
+            'rejected' => 'bg-danger',
+            'hadir' => 'bg-success',
+            'tidak' => 'bg-secondary'
         ];
 
         return $classes[$status] ?? 'bg-secondary';
+    }
+
+    /**
+     * Parse boolean values for PostgreSQL compatibility
+     */
+    private function parseBoolean($value)
+    {
+        if ($value === null || $value === '') return false;
+        if (is_bool($value)) return $value;
+        if (is_string($value)) {
+            $value = strtolower(trim($value));
+            return in_array($value, ['true', 't', '1', 'yes', 'on', 'y'], true);
+        }
+        if (is_numeric($value)) return (bool) intval($value);
+        return false;
     }
 
     /**
@@ -609,8 +681,25 @@ class Dashboard extends BaseController
         }
 
         try {
-            $events = [$this->eventModel->find($eventId)];
-            $workflowData = $this->calculateWorkflowProgress($userId, $events);
+            $event = $this->eventModel->find($eventId);
+            if (!$event) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Event not found'
+                ]);
+            }
+
+            $events = $this->getEventsWithUserStatus($userId);
+            $filteredEvents = array_filter($events, fn($e) => $e['id'] == $eventId);
+            
+            if (empty($filteredEvents)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Event data not found'
+                ]);
+            }
+
+            $workflowData = $this->calculateWorkflowProgress($userId, $filteredEvents);
             $workflow = $workflowData[$eventId] ?? null;
 
             if (!$workflow) {
@@ -646,7 +735,8 @@ class Dashboard extends BaseController
             
             return $this->response->setJSON([
                 'success' => true,
-                'stats' => $stats
+                'stats' => $stats,
+                'timestamp' => time()
             ]);
 
         } catch (\Exception $e) {
@@ -655,6 +745,22 @@ class Dashboard extends BaseController
                 'success' => false,
                 'message' => 'Error getting statistics'
             ]);
+        }
+    }
+
+    /**
+     * Log activity helper
+     */
+    private function logActivity($userId, $activity)
+    {
+        try {
+            $this->db->table('log_aktivitas')->insert([
+                'id_user' => $userId,
+                'aktivitas' => $activity,
+                'waktu' => date('Y-m-d H:i:s')
+            ]);
+        } catch (\Exception $e) {
+            log_message('error', 'Failed to log activity: ' . $e->getMessage());
         }
     }
 }
