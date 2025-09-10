@@ -46,8 +46,14 @@
                     <?php
                       $tgl   = $fmtDate($e['event_date'] ?? null);
                       $jam   = $e['event_time'] ?? '-';
-                      $on    = (bool)($e['can_scan'] ?? false);
                       $today = $isToday($e['event_date'] ?? null);
+
+                      // === SAMA DENGAN DETAIL ===
+                      $already      = (bool)($e['already_attend'] ?? false);
+                      $attendanceAt = $e['attendance_at'] ?? ($e['waktu_scan'] ?? null);
+
+                      // buka scan hanya jika belum absen dan can_scan = true
+                      $canScan = !$already && !empty($e['can_scan']);
                     ?>
                     <div class="col-12 col-md-6 col-lg-4">
                       <div class="card h-100 abs-card">
@@ -56,9 +62,18 @@
                             <div class="fw-semibold me-2 abs-card-title text-truncate" title="<?= esc($e['title']) ?>">
                               <?= esc($e['title']) ?>
                             </div>
-                            <span class="badge <?= esc($e['badge_class'] ?? 'bg-secondary') ?>">
-                              <?= esc($e['event_status'] ?? '-') ?>
-                            </span>
+                            <div class="d-flex gap-1 flex-wrap justify-content-end">
+                              <?php if (!empty($e['event_status'])): ?>
+                                <span class="badge <?= esc($e['badge_class'] ?? 'bg-secondary') ?>">
+                                  <?= esc($e['event_status']) ?>
+                                </span>
+                              <?php endif; ?>
+                              <?php if ($already): ?>
+                                <span class="badge bg-success-subtle text-success">
+                                  <i class="bi bi-check2-circle me-1"></i>Sudah Absen
+                                </span>
+                              <?php endif; ?>
+                            </div>
                           </div>
 
                           <div class="mt-1 small text-muted">
@@ -76,18 +91,30 @@
                             <?php if (!empty($e['participation_type'])): ?>
                               · Mode: <?= esc(strtoupper($e['participation_type'])) ?>
                             <?php endif; ?>
+                            <?php if (!empty($e['participation_type']) && strtolower($e['participation_type'])==='online' && !empty($e['zoom_link'])): ?>
+                              · <a href="<?= esc($e['zoom_link']) ?>" target="_blank" rel="noopener">Link Zoom</a>
+                            <?php endif; ?>
                           </div>
 
                           <div class="mt-auto pt-3 d-grid">
-                            <a href="<?= site_url('audience/absensi/event/'.$e['id']) ?>"
-                               class="btn btn-primary">
-                              <i class="bi bi-clipboard-check me-1"></i>
-                              <?= $on ? 'Absen Sekarang' : 'Detail Event' ?>
-                            </a>
-                            <?php if (!$on): ?>
-                              <div class="form-text text-center mt-1">Absen dibuka setelah event dimulai.</div>
+                            <?php if ($already): ?>
+                              <button class="btn btn-success" type="button" disabled>
+                                <i class="bi bi-check2-circle me-1"></i> Sudah Absen
+                              </button>
+                              <div class="form-text text-center mt-1 text-success">
+                                Tercatat<?= $attendanceAt ? ' pada ' . esc($fmtDT($attendanceAt)) : '' ?>.
+                              </div>
                             <?php else: ?>
-                              <div class="form-text text-center mt-1">Siap absen.</div>
+                              <a href="<?= site_url('audience/absensi/event/'.$e['id']) ?>"
+                                 class="btn btn-primary">
+                                <i class="bi bi-clipboard-check me-1"></i>
+                                <?= $canScan ? 'Absen Sekarang' : 'Detail Event' ?>
+                              </a>
+                              <?php if ($canScan): ?>
+                                <div class="form-text text-center mt-1">Siap absen.</div>
+                              <?php else: ?>
+                                <div class="form-text text-center mt-1">Absen dibuka setelah event dimulai.</div>
+                              <?php endif; ?>
                             <?php endif; ?>
                           </div>
                         </div>

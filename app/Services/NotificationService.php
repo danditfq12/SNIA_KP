@@ -15,26 +15,10 @@ class NotificationService
     {
         $this->model = new NotificationModel();
         $this->db    = Database::connect();
-        // coba ambil nama tabel dari model, fallback 'notifications' atau 'notification'
-        $this->table = property_exists($this->model, 'table') ? $this->model->table : null;
-        if (!$this->table) {
-            // coba tebak dari model
-            $this->table = method_exists($this->model, 'getTable') ? $this->model->getTable() : 'notifications';
-        }
+        $this->table = method_exists($this->model, 'getTable') ? $this->model->getTable() : 'notifikasi';
     }
 
-    /**
-     * Alias serbaguna – kompatibel dengan pemanggilan lama.
-     * Tambahan parameter opsional $meta untuk payload kaya (akan disimpan ke meta_json kalau kolomnya ada).
-     *
-     * @param int         $userId
-     * @param string|null $category
-     * @param string      $title
-     * @param string|null $message
-     * @param string|null $link       relatif/absolut - akan dinormalisasi
-     * @param string      $type
-     * @param array|null  $meta       e.g. ['event_id'=>1,'payment_id'=>2,'amount'=>120000,'status'=>'pending','mode'=>'online','event_title'=>'...']
-     */
+    // notify($userId, $category, $title, $message=null, $link=null, $type='info', $meta=null)
     public function notify(
         int $userId,
         ?string $category,
@@ -46,27 +30,22 @@ class NotificationService
     ): int {
         $data = [
             'id_user'    => $userId,
-            'category'   => $category,
+            'role'       => null,
+            'type'       => $category ?: $type,
             'title'      => $title,
             'message'    => $message,
             'link'       => $this->normalizeLink($link),
-            'type'       => $type,
-            'is_read'    => 0,
+            'meta_json'  => $meta ? json_encode($this->normalizeMeta($meta), JSON_UNESCAPED_UNICODE) : null,
+            'read'       => null,
+            'read_at'    => null,
             'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s'),
         ];
-
-        // simpan meta_json kalau kolomnya ada
-        if ($meta && $this->hasColumn('meta_json')) {
-            // normalisasi angka
-            if (isset($meta['amount'])) $meta['amount'] = (float) $meta['amount'];
-            $data['meta_json'] = json_encode($meta, JSON_UNESCAPED_UNICODE);
-        }
 
         $this->model->insert($data, true);
         return (int) $this->model->getInsertID();
     }
 
-    /** Versi singkat tanpa category (kompatibel lama) */
     public function create(
         int $userId,
         string $title,
@@ -78,7 +57,6 @@ class NotificationService
         return $this->notify($userId, null, $title, $message, $link, $type, $meta);
     }
 
-    /** Broadcast ke semua user dengan role tertentu (tetap kompatibel) */
     public function broadcastToRole(
         string $role,
         string $title,
@@ -95,16 +73,15 @@ class NotificationService
 
         $count = 0;
         foreach ($users as $u) {
-            $this->create((int) $u['id_user'], $title, $message, $link, $type, $meta);
+            $this->create((int)$u['id_user'], $title, $message, $link, $type, $meta);
             $count++;
         }
         return $count;
     }
 
-    /** Dipakai header dropdown notif (tetap kompatibel) */
     public function getForCurrentUser(int $limit = 8): array
     {
-        $uid = (int) (session()->get('id_user') ?? 0);
+        $uid = (int) (session('id_user') ?? 0);
         if ($uid <= 0) return [];
 
         $rows = $this->model
@@ -115,13 +92,13 @@ class NotificationService
         $out = [];
         foreach ($rows as $r) {
             $out[] = [
-                'id'     => (int)($r['id'] ?? $r['id_notif'] ?? 0),
-                'title'  => (string)($r['title'] ?? ''),
-                'message'=> (string)($r['message'] ?? ''),
-                'link'   => (string)($this->normalizeLink($r['link'] ?? '')),
-                'type'   => (string)($r['type'] ?? 'info'),
-                'read'   => (bool)  ($r['is_read'] ?? $r['read'] ?? false),
-                'time'   => $this->humanize($r['created_at'] ?? null),
+                'id'      => (int)($r['id_notif'] ?? 0),
+                'title'   => (string)($r['title'] ?? ''),
+                'message' => (string)($r['message'] ?? ''),
+                'link'    => (string)$this->normalizeLink($r['link'] ?? ''),
+                'type'    => (string)($r['type'] ?? 'info'),
+                'read'    => (bool)  ($r['read'] ?? false),
+                'time'    => $this->humanize($r['created_at'] ?? null),
             ];
         }
         return $out;
@@ -130,45 +107,45 @@ class NotificationService
     public function markRead(int $id, int $userId): bool
     {
         return (bool) $this->model
-            ->where('id', $id)->orWhere('id_notif', $id)
-            ->where('id_user', $userId)
-            ->set('is_read', 1)->set('read', 1)
+            ->where('id_notif', $id)->where('id_user', $userId)
+            ->set(['read' => 1, 'read_at'=>date('Y-m-d H:i:s'), 'updated_at'=>date('Y-m-d H:i:s')])
             ->update();
     }
 
     public function markAllReadForUser(int $userId): void
     {
-        $this->model->where('id_user', $userId)->set('is_read', 1)->set('read', 1)->update();
+        $this->model->where('id_user', $userId)
+            ->set(['read'=>1, 'read_at'=>date('Y-m-d H:i:s'), 'updated_at'=>date('Y-m-d H:i:s')])
+            ->update();
     }
 
-    /** Normalisasi link agar aman untuk routing CI */
-    private function normalizeLink(?string $link): string
+    private function normalizeMeta(array $meta): array
     {
-        $href = trim((string) $link);
-        if ($href === '' || $href === '#') return '#';
+        if (isset($meta['amount'])) $meta['amount'] = (float)$meta['amount'];
+        return $meta;
+    }
 
-        // betulkan http:/ atau https:/ (kurang slash)
+    /** Link → path relatif bila host sama; perbaiki "http:/" jadi "http://" */
+    private function normalizeLink(?string $href): string
+    {
+        $href = trim((string)$href);
+        if ($href === '' || $href === '#') return '';
+
         $href = preg_replace('~^(https?:)/([^/])~i', '$1//$2', $href);
 
-        // absolute?
         if (preg_match('~^(https?):\/\/([^\/]+)(\/.*)?$~i', $href, $m)) {
             $host     = $m[2];
             $path     = $m[3] ?? '/';
             $currHost = $_SERVER['HTTP_HOST'] ?? '';
-            // kalau host sama → balikin PATH saja (relatif), cocok untuk CI
             if (strcasecmp($host, $currHost) === 0) return $path;
-            return $m[1] . '://' . $host . $path; // biarkan absolut (external)
+            return $m[1] . '://' . $host . $path;
         }
 
-        // protocol-relative
         if (strpos($href, '//') === 0) {
             $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https:' : 'http:';
-            $abs    = $scheme . $href;
-            // panggil lagi agar bisa jadi path relatif kalau host sama
-            return $this->normalizeLink($abs);
+            return $this->normalizeLink($scheme . $href);
         }
 
-        // root-relative atau relatif → pastikan leading slash
         return '/' . ltrim($href, '/');
     }
 
@@ -177,15 +154,5 @@ class NotificationService
         if (!$ts) return '';
         try { return Time::parse($ts)->humanize(); }
         catch (\Throwable $e) { return date('d M Y H:i', strtotime($ts)); }
-    }
-
-    private function hasColumn(string $col): bool
-    {
-        try {
-            $fields = $this->db->getFieldNames($this->table);
-            return in_array($col, $fields, true);
-        } catch (\Throwable $e) {
-            return false;
-        }
     }
 }

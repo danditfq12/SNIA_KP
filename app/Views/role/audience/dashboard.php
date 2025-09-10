@@ -1,10 +1,10 @@
 <?php
   $title        = $title        ?? 'Audience Dashboard';
-  $upcomingPaid = $upcomingPaid ?? [];
-  $pendingPays  = $pendingPays  ?? [];
-  $eventMap     = $eventMap     ?? [];
+  $upcomingPaid = $upcomingPaid ?? [];   // event yang sudah lunas/berjalan (array of event)
+  $pendingPays  = $pendingPays  ?? [];   // pembayaran pending (array of pembayaran)
+  $eventMap     = $eventMap     ?? [];   // peta event_id -> event detail (untuk tabel pending)
   $kpis         = $kpis         ?? ['joined'=>0,'upcoming'=>0,'today'=>0,'certs'=>0];
-  $absenToday   = $absenToday   ?? [];
+  $absenToday   = $absenToday   ?? [];   // event yang harus absen hari ini (id,title,event_date,event_time,mode_kehadiran,zoom_link/meeting_link/...)
 
   helper(['number','form']);
   $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
@@ -76,24 +76,40 @@
               <?php if (!empty($absenToday)): ?>
                 <div class="row g-2 g-md-3">
                   <?php foreach ($absenToday as $e): ?>
+                    <?php
+                      $modeLower = strtolower($e['mode_kehadiran'] ?? $e['format'] ?? '');
+                      // cari kemungkinan key untuk link meeting/zoom
+                      $zoomUrl = null;
+                      foreach (['zoom_link','zoom_url','meeting_link','meeting_url','link_zoom'] as $k) {
+                        if (!empty($e[$k])) { $zoomUrl = $e[$k]; break; }
+                      }
+                    ?>
                     <div class="col-12 col-md-6 col-lg-4">
-                      <a class="text-decoration-none" href="<?= site_url('audience/absensi/event/'.(int)($e['id'] ?? 0)) ?>">
-                        <div class="abs-today-card p-3 border rounded-3 h-100">
-                          <div class="d-flex align-items-start justify-content-between">
-                            <div class="fw-semibold me-2 text-truncate" title="<?= esc($e['title'] ?? 'Event') ?>">
-                              <i class="bi bi-qr-code-scan me-1"></i><?= esc($e['title'] ?? 'Event') ?>
-                            </div>
-                            <span class="badge bg-warning text-dark">Hari ini</span>
+                      <div class="abs-today-card p-3 border rounded-3 h-100">
+                        <div class="d-flex align-items-start justify-content-between">
+                          <div class="fw-semibold me-2 text-truncate" title="<?= esc($e['title'] ?? 'Event') ?>">
+                            <i class="bi bi-qr-code-scan me-1"></i><?= esc($e['title'] ?? 'Event') ?>
                           </div>
-                          <div class="small text-muted mt-1">
-                            <?= esc($fmtDate($e['event_date'] ?? null)) ?> · <?= esc($e['event_time'] ?? '-') ?>
-                            <?php if (!empty($e['mode_kehadiran'])): ?> · Mode: <?= esc(strtoupper($e['mode_kehadiran'])) ?><?php endif; ?>
-                          </div>
-                          <div class="mt-2 d-flex justify-content-end">
-                            <span class="btn btn-sm btn-outline-warning">Absen Sekarang</span>
-                          </div>
+                          <span class="badge bg-warning text-dark">Hari ini</span>
                         </div>
-                      </a>
+                        <div class="small text-muted mt-1">
+                          <?= esc($fmtDate($e['event_date'] ?? null)) ?> · <?= esc($e['event_time'] ?? '-') ?>
+                          <?php if (!empty($e['mode_kehadiran'])): ?> · Mode: <?= esc(strtoupper($e['mode_kehadiran'])) ?><?php endif; ?>
+                        </div>
+
+                        <div class="mt-2 d-flex flex-wrap gap-2 justify-content-end">
+                          <a class="btn btn-sm btn-outline-warning"
+                             href="<?= site_url('audience/absensi/event/'.(int)($e['id'] ?? 0)) ?>">
+                            Absen
+                          </a>
+                          <?php if ($modeLower === 'online' && !empty($zoomUrl)): ?>
+                            <a class="btn btn-sm btn-outline-primary"
+                               href="<?= esc($zoomUrl) ?>" target="_blank" rel="noopener">
+                              <i class="bi bi-camera-video me-1"></i>Join Zoom
+                            </a>
+                          <?php endif; ?>
+                        </div>
+                      </div>
                     </div>
                   <?php endforeach; ?>
                 </div>
@@ -173,7 +189,7 @@
         </div>
       </div>
 
-      <!-- ROW 2: Jadwal Event (FULL WIDTH) -->
+      <!-- ROW 2: Jadwal Event (Lunas / Berjalan) — INFO ONLY -->
       <div class="row g-3">
         <div class="col-12">
           <div class="card shadow-sm h-100">
@@ -182,7 +198,10 @@
               <?php if (!empty($upcomingPaid)): ?>
                 <div class="list-group list-group-flush">
                   <?php foreach ($upcomingPaid as $u):
-                    $isToday = ($u['event_date'] ?? '') === date('Y-m-d'); ?>
+                    $isToday = ($u['event_date'] ?? '') === date('Y-m-d');
+                    $mode    = strtoupper($u['mode_kehadiran'] ?? $u['format'] ?? '-');
+                    $loc     = $u['location'] ?? ($mode === 'ONLINE' ? '—' : '-');
+                  ?>
                     <div class="list-group-item px-0">
                       <div class="d-flex justify-content-between align-items-start">
                         <div>
@@ -197,24 +216,18 @@
                           <div class="small text-muted">
                             <?= esc($fmtDate($u['event_date'] ?? null)) ?> ·
                             <?= esc($u['event_time'] ?? '-') ?> ·
-                            Mode: <?= esc(strtoupper($u['mode_kehadiran'] ?? '-')) ?>
+                            Mode: <?= esc($mode) ?>
+                            <?php if (!empty($loc)): ?> · Lokasi: <?= esc($loc) ?><?php endif; ?>
                           </div>
                         </div>
-                        <?php if ($isToday): ?>
-                          <a class="btn btn-sm btn-warning"
-                             href="<?= site_url('audience/absensi/event/'.($u['id'] ?? 0)) ?>">
-                            Absen
-                          </a>
-                        <?php else: ?>
-                          <button class="btn btn-sm btn-outline-secondary" disabled>Belum dimulai</button>
-                        <?php endif; ?>
+                        <!-- Tidak ada tombol apapun di sini (info only) -->
                       </div>
                     </div>
                   <?php endforeach; ?>
                 </div>
               <?php else: ?>
                 <div class="p-4 text-center border rounded-3 bg-light-subtle">
-                  <div class="mb-2"><i class="bi bi-qr-code fs-3 text-secondary"></i></div>
+                  <div class="mb-2"><i class="bi bi-calendar-event fs-3 text-secondary"></i></div>
                   <div class="fw-semibold">Belum ada jadwal aktif</div>
                   <div class="text-muted small">Event akan muncul setelah pembayaran diverifikasi.</div>
                 </div>
@@ -280,22 +293,20 @@
     const m = /^(https?:)\/\/([^/]+)(\/.*)?$/i.exec(href);
     if (m) {
       const scheme = m[1], host = m[2], path = m[3] || '/';
-      // kalau host sama → pakai path saja
-      if (host === window.location.host) return path;
-      // host beda → biarkan absolute (external)
-      return scheme + '//' + host + path;
+      if (host === window.location.host) return path; // path relatif kalau host sama
+      return scheme + '//' + host + path;            // eksternal -> biarkan absolut
     }
 
-    // protocol-relative
     if (href.startsWith('//')) return window.location.protocol + href;
-    // root-relative
-    if (href.startsWith('/')) return href;
-    // lainnya → relatif dari root
+    if (href.startsWith('/'))  return href;
     return '/' + href.replace(/^\.?\//,'');
   }
 
   async function getJSON(url){
-    const res = await fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest','Cache-Control':'no-store'}});
+    const res = await fetch(url, {
+      headers:{'X-Requested-With':'XMLHttpRequest','Cache-Control':'no-store'},
+      credentials: 'same-origin'
+    });
     const txt = await res.text();
     try { return JSON.parse(txt); } catch(_){ return {items:[]}; }
   }

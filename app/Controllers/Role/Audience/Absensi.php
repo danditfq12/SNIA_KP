@@ -89,18 +89,30 @@ class Absensi extends BaseController
             return redirect()->to(site_url('auth/login'));
         }
 
+        // Deteksi kolom link online di tabel events
+        $eventFields = [];
+        try { $eventFields = $this->db->getFieldNames('events'); } catch (\Throwable $e) {}
+        $zoomCol = null;
+        foreach (['zoom_link','meeting_link','online_link'] as $cand) {
+            if (in_array($cand, $eventFields, true)) { $zoomCol = $cand; break; }
+        }
+
+        // SELECT dinamis agar aman di berbagai skema
+        $eventCols = '
+            e.id,
+            e.title,
+            e.event_date,
+            e.event_time,
+            e.format,
+            e.location,
+            e.is_active,
+            p.participation_type
+        ';
+        if ($zoomCol) $eventCols .= ', e.' . $zoomCol . ' AS zoom_link';
+
         // HANYA verified
         $paid = $this->db->table('pembayaran p')
-            ->select('
-                e.id,
-                e.title,
-                e.event_date,
-                e.event_time,
-                e.format,
-                e.location,
-                e.is_active,
-                p.participation_type
-            ')
+            ->select($eventCols, false)
             ->join('events e', 'e.id = p.event_id')
             ->where('p.id_user', $userId)
             ->where('p.status', 'verified')
@@ -109,12 +121,33 @@ class Absensi extends BaseController
             ->orderBy('e.event_time', 'ASC')
             ->get()->getResultArray();
 
+        // Kumpulkan event_id
+        $eventIds = array_map(fn($r)=> (int)$r['id'], $paid);
+
+        // Ambil last attendance per event (sekali query)
+        $attMap = [];
+        if (!empty($eventIds)) {
+            $rows = $this->db->table('absensi')
+                    ->select('event_id, MAX(waktu_scan) AS last_scan', false)
+                    ->where('id_user', $userId)
+                    ->whereIn('event_id', $eventIds)
+                    ->groupBy('event_id')
+                    ->get()->getResultArray();
+            foreach ($rows as $r) {
+                $attMap[(int)$r['event_id']] = $r['last_scan'] ?? null;
+            }
+        }
+
+        // Bentuk output untuk view
         $yourEvents = [];
         foreach ($paid as $row) {
-            // Kolom attendance_status mungkin tidak ada —> calculateEventStatus aman.
-            $status = $this->calculateEventStatus($row);
+            $status      = $this->calculateEventStatus($row);
+            $eid         = (int)$row['id'];
+            $attendanceAt= $attMap[$eid] ?? null;
+            $already     = $attendanceAt !== null;
+
             $yourEvents[] = [
-                'id'                 => (int)$row['id'],
+                'id'                 => $eid,
                 'title'              => $row['title'],
                 'event_date'         => $row['event_date'],
                 'event_time'         => $row['event_time'],
@@ -124,9 +157,17 @@ class Absensi extends BaseController
                 'event_status'       => $status['event_status'],
                 'badge_class'        => $status['badge_class'],
                 'can_scan'           => $status['can_scan'],
+
+                // tambahan utk tampilan “Sudah Absen”
+                'already_attend'     => $already,
+                'attendance_at'      => $attendanceAt,
+
+                // link meeting (jika ada kolomnya)
+                'zoom_link'          => $row['zoom_link'] ?? null,
             ];
         }
 
+        // Riwayat (tanpa perubahan)
         $history = $this->absensiModel->select('
                             absensi.waktu_scan,
                             absensi.status,

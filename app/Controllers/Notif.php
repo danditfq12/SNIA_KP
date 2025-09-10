@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Controllers;
 
 use App\Controllers\BaseController;
@@ -27,7 +26,7 @@ class Notif extends BaseController
         return null;
     }
 
-    private function noCache()
+    private function noCache(): void
     {
         $this->response
             ->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
@@ -39,10 +38,10 @@ class Notif extends BaseController
     {
         $this->noCache();
         $userId = $this->currentUserId();
-        if (!$userId) return $this->response->setJSON(['ok'=>false])->setStatusCode(401);
+        if (!$userId) return $this->response->setJSON(['ok'=>false,'items'=>[]])->setStatusCode(401);
 
-        $limit  = (int) ($this->request->getGet('limit') ?? 20);
-        if ($limit < 1) $limit = 20; if ($limit > 100) $limit = 100;
+        $limit = (int) ($this->request->getGet('limit') ?? 20);
+        $limit = max(1, min($limit, 100));
 
         $rows   = $this->notif->forUser($userId, $limit);
         $unread = $this->notif->countUnread($userId);
@@ -62,7 +61,7 @@ class Notif extends BaseController
         return $this->response->setJSON(['ok'=>true,'unread'=>$this->notif->countUnread($userId)]);
     }
 
-    /** POST /notif/markRead/{id} */
+    /** POST /notif/mark-read/{id} */
     public function markRead($id)
     {
         $this->noCache();
@@ -75,7 +74,7 @@ class Notif extends BaseController
         return $this->response->setJSON(['ok' => $this->notif->markRead($id, $userId)]);
     }
 
-    /** match GET/POST /notif/read-all (sudah ada di routes) */
+    /** match GET/POST /notif/read-all */
     public function readAll()
     {
         $this->noCache();
@@ -99,116 +98,93 @@ class Notif extends BaseController
     // Helpers
     // =========================
 
-    /** Bentuk item kaya untuk dashboard (link sudah dipastikan valid relatif/path). */
     private function shapeItem(array $n): array
     {
-        // field bawaan
-        $id       = (int)($n['id'] ?? $n['id_notif'] ?? 0);
+        $id       = (int)($n['id_notif'] ?? 0);
         $title    = (string)($n['title'] ?? '-');
         $message  = (string)($n['message'] ?? '');
-        $type     = (string)($n['type'] ?? ($n['category'] ?? 'info'));
+        $type     = (string)($n['type'] ?? 'info');
         $rawLink  = (string)($n['link'] ?? '');
         $created  = $n['created_at'] ?? null;
 
         $link     = $this->normalizeLink($rawLink);
 
-        // meta dari kolom meta_json kalau ada
         $meta = [];
-        if (array_key_exists('meta_json', $n) && !empty($n['meta_json'])) {
+        if (!empty($n['meta_json'])) {
             $m = json_decode((string)$n['meta_json'], true);
             if (is_array($m)) $meta = $m;
         }
 
-        // kalau meta kosong, coba infer dari link (tanpa ubah struktur DB)
-        if (empty($meta)) {
-            $meta = $this->inferMetaFromLink($link);
-        }
-
-        // Enrichment dari DB bila tersedia (misal payment_id -> ambil jumlah/status/event)
+        if (empty($meta)) $meta = $this->inferMetaFromLink($link);
         $meta = $this->enrichMeta($meta);
 
-        // format nominal manis
         $amountStr = null;
         if (isset($meta['amount']) && is_numeric($meta['amount'])) {
             $amountStr = 'Rp ' . number_format((float)$meta['amount'], 0, ',', '.');
         }
 
         return [
-            'id'           => $id,
-            'type'         => $type,
-            'title'        => $title,
-            'message'      => $message,
-            'time'         => $created ? date('d M Y H:i', strtotime($created)) : '',
-            'link'         => $link,
-
-            // atribut kaya untuk tampilan
-            'event_id'     => isset($meta['event_id']) ? (int)$meta['event_id'] : null,
-            'event_title'  => $meta['event_title'] ?? null,
+            'id'              => $id,
+            'type'            => $type,
+            'title'           => $title,
+            'message'         => $message,
+            'time'            => $created ? date('d M Y H:i', strtotime($created)) : '',
+            'link'            => $link,
+            'event_id'        => isset($meta['event_id']) ? (int)$meta['event_id'] : null,
+            'event_title'     => $meta['event_title'] ?? null,
             'registration_id' => isset($meta['registration_id']) ? (int)$meta['registration_id'] : null,
-            'payment_id'   => isset($meta['payment_id']) ? (int)$meta['payment_id'] : null,
-            'mode'         => isset($meta['mode']) ? strtoupper((string)$meta['mode']) : null,
-            'status'       => $meta['status'] ?? null,
-            'amount'       => $amountStr,
-            'amount_raw'   => isset($meta['amount']) ? (float)$meta['amount'] : null,
+            'payment_id'      => isset($meta['payment_id']) ? (int)$meta['payment_id'] : null,
+            'mode'            => isset($meta['mode']) ? strtoupper((string)$meta['mode']) : null,
+            'status'          => $meta['status'] ?? null,
+            'amount'          => $amountStr,
+            'amount_raw'      => isset($meta['amount']) ? (float)$meta['amount'] : null,
         ];
     }
 
-    /** Normalisasi link supaya gak lagi jadi 'http:/...' dan aman untuk router. */
     private function normalizeLink(?string $href): string
     {
         $href = trim((string)$href);
         if ($href === '' || $href === '#') return '';
 
-        // perbaiki http:/ atau https:/ (kurang slash)
         $href = preg_replace('~^(https?:)/([^/])~i', '$1//$2', $href);
 
-        // absolute?
         if (preg_match('~^(https?):\/\/([^\/]+)(\/.*)?$~i', $href, $m)) {
             $host     = $m[2];
             $path     = $m[3] ?? '/';
             $currHost = $_SERVER['HTTP_HOST'] ?? '';
-            if (strcasecmp($host, $currHost) === 0) return $path;  // jadi path relatif
-            return $m[1] . '://' . $host . $path;                  // external -> biarkan absolut
+            if (strcasecmp($host, $currHost) === 0) return $path;
+            return $m[1] . '://' . $host . $path;
         }
 
-        // protocol-relative
         if (strpos($href, '//') === 0) {
             $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https:' : 'http:';
-            $abs    = $scheme . $href;
-            return $this->normalizeLink($abs);
+            return $this->normalizeLink($scheme . $href);
         }
 
-        // root-relative / relatif
         return '/' . ltrim($href, '/');
     }
 
-    /** Coba tebak meta dari pola URL yang sering dipakai. */
     private function inferMetaFromLink(string $link): array
     {
-        // /audience/pembayaran/detail/{id}
         if (preg_match('~^/audience/pembayaran/detail/(\d+)~', $link, $m)) {
             return ['payment_id' => (int)$m[1]];
         }
-        // /audience/pembayaran/instruction/{regId}
         if (preg_match('~^/audience/pembayaran/instruction/(\d+)~', $link, $m)) {
             return ['registration_id' => (int)$m[1]];
         }
-        // /audience/events/detail/{eventId}
         if (preg_match('~^/audience/events/detail/(\d+)~', $link, $m)) {
             return ['event_id' => (int)$m[1]];
         }
         return [];
     }
 
-    /** Lengkapi meta dari DB jika punya id tertentu. */
     private function enrichMeta(array $meta): array
     {
-        // kalau ada payment_id, ambil jumlah/status/event_id/participation_type
         if (!empty($meta['payment_id'])) {
             $pid = (int)$meta['payment_id'];
             $pay = $this->db->table('pembayaran')
-                    ->select('event_id,jumlah,status,participation_type')
-                    ->where('id_pembayaran', $pid)->get()->getRowArray();
+                ->select('event_id,jumlah,status,participation_type')
+                ->where('id_pembayaran', $pid)->get()->getRowArray();
             if ($pay) {
                 $meta['event_id'] = (int)$pay['event_id'];
                 $meta['amount']   = (float)$pay['jumlah'];
@@ -217,9 +193,11 @@ class Notif extends BaseController
             }
         }
 
-        // kalau ada event_id tapi belum ada event_title, ambil
         if (!empty($meta['event_id']) && empty($meta['event_title'])) {
-            $ev = $this->db->table('event')->select('title')->where('id', (int)$meta['event_id'])->get()->getRowArray();
+            $ev = $this->db->table('events') // <<<<<< gunakan 'events'
+                ->select('title')
+                ->where('id', (int)$meta['event_id'])
+                ->get()->getRowArray();
             if ($ev) $meta['event_title'] = $ev['title'];
         }
 
