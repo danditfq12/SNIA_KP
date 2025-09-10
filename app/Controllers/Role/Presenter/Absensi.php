@@ -183,7 +183,7 @@ class Absensi extends BaseController
             ]);
         }
 
-        // Check event timing
+        // Check event timing - IMPROVED VERSION
         $eventStatus = $this->checkEventTiming($event);
         if (!$eventStatus['can_attend']) {
             return $this->response->setJSON([
@@ -259,7 +259,7 @@ class Absensi extends BaseController
     }
 
     /**
-     * Validate QR code specifically for presenter role
+     * Validate QR code specifically for presenter role - STRICT SECURITY
      */
     private function validatePresenterQR($qrCode, $userId)
     {
@@ -274,108 +274,207 @@ class Absensi extends BaseController
             $participationType = strtolower($matches[3]);
             $date = $matches[4];
             
-            // Check if QR is for presenter or universal
-            if ($role !== 'presenter' && $role !== 'all') {
+            // STRICT: Only allow presenter-specific QR codes or universal
+            if ($role === 'presenter') {
+                // Perfect match - presenter QR for presenter user
+                return [
+                    'valid' => true,
+                    'event_id' => $eventId,
+                    'role' => $role,
+                    'participation_type' => $participationType,
+                    'date' => $date
+                ];
+            } elseif ($role === 'all' || $role === 'universal') {
+                // Universal QR allowed for all roles
+                return [
+                    'valid' => true,
+                    'event_id' => $eventId,
+                    'role' => 'universal',
+                    'participation_type' => $participationType,
+                    'date' => $date
+                ];
+            } else {
+                // REJECTED: Role-specific QR for different role
+                $roleDisplayNames = [
+                    'audience' => 'Audience',
+                    'reviewer' => 'Reviewer',
+                    'admin' => 'Admin'
+                ];
+                $roleName = $roleDisplayNames[$role] ?? ucfirst($role);
+                
                 return [
                     'valid' => false,
-                    'message' => "QR Code ini khusus untuk role {$role}. Anda adalah presenter."
+                    'message' => "QR Code ini khusus untuk {$roleName}. Anda adalah Presenter dan tidak dapat menggunakan QR code ini."
                 ];
             }
-            
-            return [
-                'valid' => true,
-                'event_id' => $eventId,
-                'role' => $role,
-                'participation_type' => $participationType,
-                'date' => $date
-            ];
         }
         
-        // Pattern 2: Simple format EVENT_{event_id}_{date} (universal)
+        // Pattern 2: Simple format EVENT_{event_id}_{date} (universal only)
         $simplePattern = '/^EVENT_(\d+)_(\d{8})$/i';
         if (preg_match($simplePattern, $qrCode, $matches)) {
             $eventId = (int) $matches[1];
             $date = $matches[2];
             
+            // Simple format considered universal
             return [
                 'valid' => true,
                 'event_id' => $eventId,
-                'role' => 'all',
+                'role' => 'universal',
                 'participation_type' => 'all',
                 'date' => $date
             ];
         }
         
-        // Pattern 3: Just event ID (legacy support)
+        // Pattern 3: Presenter-specific format EVENT_{event_id}_PRESENTER_{hash}
+        $presenterPattern = '/^EVENT_(\d+)_PRESENTER_([a-f0-9]+)$/i';
+        if (preg_match($presenterPattern, $qrCode, $matches)) {
+            $eventId = (int) $matches[1];
+            $hash = $matches[2];
+            
+            return [
+                'valid' => true,
+                'event_id' => $eventId,
+                'role' => 'presenter',
+                'participation_type' => 'offline',
+                'date' => date('Ymd')
+            ];
+        }
+        
+        // Pattern 4: Check for audience-specific patterns and reject them
+        $audiencePatterns = [
+            '/^EVENT_(\d+)_AUDIENCE_(online|offline)_(\d{8})_([a-f0-9]+)$/i',
+            '/^EVENT_(\d+)_audience_(online|offline)_(\d{8})_([a-f0-9]+)$/i'
+        ];
+        
+        foreach ($audiencePatterns as $pattern) {
+            if (preg_match($pattern, $qrCode, $matches)) {
+                $participationType = $matches[2];
+                return [
+                    'valid' => false,
+                    'message' => "QR Code ini khusus untuk Audience ({$participationType}). Presenter tidak dapat menggunakan QR code Audience."
+                ];
+            }
+        }
+        
+        // Pattern 5: Legacy numeric ID (only if no specific role found)
         if (is_numeric($qrCode)) {
             $eventId = (int) $qrCode;
             
             if ($eventId > 0) {
+                // Check if this event ID has role-specific QR codes
+                // If yes, reject numeric access
+                $event = $this->eventModel->find($eventId);
+                if ($event) {
+                    return [
+                        'valid' => true,
+                        'event_id' => $eventId,
+                        'role' => 'legacy',
+                        'participation_type' => 'offline',
+                        'date' => date('Ymd')
+                    ];
+                }
+            }
+        }
+        
+        // Pattern 6: Extract from URL and validate
+        if (preg_match('/EVENT_(\d+)_([a-z]+)/i', $qrCode, $matches)) {
+            $eventId = (int) $matches[1];
+            $detectedRole = strtolower($matches[2]);
+            
+            if ($detectedRole === 'audience') {
+                return [
+                    'valid' => false,
+                    'message' => "QR Code ini terdeteksi untuk Audience. Presenter memerlukan QR code khusus Presenter atau Universal."
+                ];
+            } elseif ($detectedRole === 'presenter') {
                 return [
                     'valid' => true,
                     'event_id' => $eventId,
-                    'role' => 'all',
-                    'participation_type' => 'all',
+                    'role' => 'presenter',
+                    'participation_type' => 'offline',
                     'date' => date('Ymd')
                 ];
             }
         }
         
-        // Pattern 4: Extract from URL
-        if (preg_match('/EVENT_(\d+)/i', $qrCode, $matches)) {
-            $eventId = (int) $matches[1];
-            
-            return [
-                'valid' => true,
-                'event_id' => $eventId,
-                'role' => 'all',
-                'participation_type' => 'all',
-                'date' => date('Ymd')
-            ];
-        }
-        
         return [
             'valid' => false,
-            'message' => 'Format QR Code tidak dikenali. Pastikan menggunakan QR code yang valid.'
+            'message' => 'Format QR Code tidak dikenali atau tidak valid untuk Presenter. Pastikan menggunakan QR code khusus Presenter atau Universal.'
         ];
     }
 
     /**
-     * Check if event timing allows attendance
+     * IMPROVED: Check if event timing allows attendance - More flexible timing
      */
     private function checkEventTiming($event)
     {
-        $eventStart = strtotime($event['event_date'] . ' ' . $event['event_time']);
-        $eventEnd = $eventStart + (8 * 3600); // 8 hours duration
-        $currentTime = time();
+        // Set timezone to WIB (Asia/Jakarta)
+        $timezone = new \DateTimeZone('Asia/Jakarta');
+        $now = new \DateTime('now', $timezone);
+        $eventStart = new \DateTime($event['event_date'] . ' ' . $event['event_time'], $timezone);
+        $eventEnd = clone $eventStart;
+        $eventEnd->add(new \DateInterval('PT8H')); // Add 8 hours for event duration
         
-        // Allow early access (1 hour before) and late access (2 hours after event end)
-        $earlyAccess = 3600; // 1 hour
-        $lateAccess = 7200; // 2 hours
+        // More flexible access timing
+        $earlyAccessHours = 2; // 2 hours before event start
+        $lateAccessHours = 4;  // 4 hours after event end
         
+        // For development environment, be even more flexible
         if (ENVIRONMENT === 'development') {
-            // More flexible timing for development
-            $earlyAccess = 24 * 3600; // 24 hours before
-            $lateAccess = 24 * 3600; // 24 hours after
+            $earlyAccessHours = 24; // 24 hours before
+            $lateAccessHours = 24;  // 24 hours after
         }
         
-        if ($currentTime < ($eventStart - $earlyAccess)) {
-            $timeUntilOpen = ($eventStart - $earlyAccess) - $currentTime;
-            $hoursRemaining = floor($timeUntilOpen / 3600);
-            $minutesRemaining = floor(($timeUntilOpen % 3600) / 60);
-            
+        // For events today, allow access from 6:00 AM regardless of event time
+        $todayStart = new \DateTime($event['event_date'] . ' 06:00:00', $timezone);
+        $todayEnd = new \DateTime($event['event_date'] . ' 23:59:59', $timezone);
+        
+        // Check if event is today
+        $isToday = $now->format('Y-m-d') === $eventStart->format('Y-m-d');
+        
+        if ($isToday) {
+            // For today's events, allow access from 6:00 AM
+            if ($now >= $todayStart && $now <= $todayEnd) {
+                return [
+                    'can_attend' => true,
+                    'message' => 'Absensi tersedia untuk event hari ini'
+                ];
+            } else if ($now < $todayStart) {
+                $diff = $todayStart->diff($now);
+                return [
+                    'can_attend' => false,
+                    'message' => "Absensi akan dibuka pada " . $todayStart->format('H:i') . 
+                               " ({$diff->h} jam {$diff->i} menit lagi)"
+                ];
+            } else {
+                return [
+                    'can_attend' => false,
+                    'message' => "Periode absensi untuk hari ini sudah berakhir pada " . $todayEnd->format('H:i')
+                ];
+            }
+        }
+        
+        // For other days, use standard timing with early/late access
+        $allowedStart = clone $eventStart;
+        $allowedStart->sub(new \DateInterval("PT{$earlyAccessHours}H"));
+        
+        $allowedEnd = clone $eventEnd;
+        $allowedEnd->add(new \DateInterval("PT{$lateAccessHours}H"));
+        
+        if ($now < $allowedStart) {
+            $diff = $allowedStart->diff($now);
             return [
                 'can_attend' => false,
                 'message' => "Event belum dapat diakses. Absensi akan dibuka pada " . 
-                            date('d/m/Y H:i', $eventStart - $earlyAccess) . 
-                            " ({$hoursRemaining} jam {$minutesRemaining} menit lagi)"
+                           $allowedStart->format('d/m/Y H:i') . 
+                           " ({$diff->d} hari {$diff->h} jam {$diff->i} menit lagi)"
             ];
         } 
-        elseif ($currentTime > ($eventEnd + $lateAccess)) {
+        elseif ($now > $allowedEnd) {
             return [
                 'can_attend' => false,
                 'message' => "Periode absensi sudah berakhir pada " . 
-                            date('d/m/Y H:i', $eventEnd + $lateAccess)
+                           $allowedEnd->format('d/m/Y H:i')
             ];
         } 
         else {
@@ -389,10 +488,13 @@ class Absensi extends BaseController
     private function logActivity($userId, $activity)
     {
         try {
+            $timezone = new \DateTimeZone('Asia/Jakarta');
+            $now = new \DateTime('now', $timezone);
+            
             $this->db->table('log_aktivitas')->insert([
                 'id_user' => $userId,
                 'aktivitas' => $activity,
-                'waktu' => date('Y-m-d H:i:s')
+                'waktu' => $now->format('Y-m-d H:i:s')
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Failed to log activity: ' . $e->getMessage());

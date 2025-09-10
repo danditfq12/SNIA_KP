@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Certificate - SNIA Presenter</title>
+    <title>Sertifikat - SNIA Presenter</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
     <style>
         :root {
             --primary-color: #2563eb;
@@ -15,25 +14,19 @@
             --warning-color: #f59e0b;
             --danger-color: #ef4444;
             --info-color: #06b6d4;
-            --dark-color: #1e293b;
-            --light-color: #f8fafc;
+            --purple-color: #8b5cf6;
         }
 
         body {
-            background: linear-gradient(135deg, var(--light-color) 0%, #e2e8f0 100%);
-            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
         }
 
         .sidebar {
-            background: linear-gradient(180deg, var(--primary-color) 0%, #1e40af 100%);
+            background: linear-gradient(180deg, var(--purple-color) 0%, #7c3aed 100%);
             min-height: 100vh;
             box-shadow: 4px 0 20px rgba(0,0,0,0.1);
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 250px;
-            z-index: 1000;
         }
 
         .sidebar .nav-link {
@@ -42,7 +35,6 @@
             margin: 4px 0;
             border-radius: 8px;
             transition: all 0.3s ease;
-            text-decoration: none;
         }
 
         .sidebar .nav-link:hover {
@@ -54,414 +46,441 @@
         .sidebar .nav-link.active {
             background: rgba(255,255,255,0.2);
             color: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
 
         .main-content {
-            margin-left: 250px;
-            padding: 20px;
+            background: white;
+            border-radius: 20px 0 0 0;
             min-height: 100vh;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.05);
         }
 
-        .page-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
+        .header-section {
+            background: linear-gradient(135deg, var(--purple-color) 0%, #7c3aed 100%);
             color: white;
-            border-radius: 20px;
             padding: 30px;
+            border-radius: 16px;
             margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.3);
         }
 
-        .card {
+        .document-card {
+            background: white;
             border-radius: 16px;
+            padding: 24px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.08);
             border: 1px solid rgba(255,255,255,0.2);
-            overflow: hidden;
+            margin-bottom: 24px;
             transition: all 0.3s ease;
+            position: relative;
         }
 
-        .card:hover {
+        .document-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.12);
         }
 
-        .card-header {
-            padding: 20px;
-            font-weight: 600;
+        .document-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(135deg, var(--warning-color) 0%, #d97706 100%);
+            border-radius: 16px 16px 0 0;
         }
 
-        .btn-custom {
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            border: none;
-        }
-
-        .btn-custom:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        .btn-primary-custom {
-            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
-            color: white;
-        }
-
-        .btn-success-custom {
-            background: linear-gradient(135deg, var(--success-color), #059669);
-            color: white;
-        }
-
-        .btn-warning-custom {
-            background: linear-gradient(135deg, var(--warning-color), #d97706);
-            color: white;
-        }
-
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-                width: 250px;
-            }
-            
-            .sidebar.show {
-                transform: translateX(0);
-            }
-            
-            .main-content {
-                margin-left: 0;
-            }
-
-            .mobile-toggle {
-                display: block;
-                position: fixed;
-                top: 20px;
-                left: 20px;
-                z-index: 1001;
-            }
-        }
-
-        .mobile-toggle {
-            display: none;
-        }
-
-        .certificate-card {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            text-align: center;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-            margin-bottom: 20px;
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
-        }
-
-        .certificate-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
-            border-color: var(--warning-color);
-        }
-
-        .certificate-available {
-            border-color: var(--success-color);
-        }
-
-        .document-icon {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            opacity: 0.8;
-        }
-
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
+        .status-badge {
+            position: absolute;
+            top: 16px;
+            right: 16px;
             padding: 8px 16px;
             border-radius: 20px;
-            font-size: 0.85rem;
+            font-size: 12px;
             font-weight: 600;
-            margin-bottom: 15px;
+            text-transform: uppercase;
         }
 
-        .status-available {
-            background: rgba(16, 185, 129, 0.1);
+        .badge-available {
+            background: #d1fae5;
             color: #059669;
-            border: 1px solid rgba(16, 185, 129, 0.3);
         }
 
-        .status-processing {
-            background: rgba(59, 130, 246, 0.1);
-            color: #2563eb;
-            border: 1px solid rgba(59, 130, 246, 0.3);
-        }
-
-        .status-locked {
-            background: rgba(251, 191, 36, 0.1);
+        .badge-pending {
+            background: #fef3c7;
             color: #d97706;
-            border: 1px solid rgba(251, 191, 36, 0.3);
         }
 
-        .requirements-list {
-            background: #f8fafc;
-            border-left: 4px solid var(--primary-color);
+        .badge-not-eligible {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #64748b;
+        }
+
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .action-button {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--info-color) 100%);
+            border: none;
+            border-radius: 12px;
+            padding: 12px 24px;
+            color: white;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .action-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.3);
+            color: white;
+        }
+
+        .info-card {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 12px;
             padding: 20px;
-            border-radius: 8px;
             margin: 20px 0;
+            color: #92400e;
         }
 
-        .requirement-item {
+        .breadcrumb-custom {
+            background: none;
+            padding: 0;
+            margin-bottom: 20px;
+        }
+
+        .breadcrumb-custom .breadcrumb-item {
+            color: #64748b;
+        }
+
+        .breadcrumb-custom .breadcrumb-item.active {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .tab-navigation {
+            background: white;
+            border-radius: 12px;
+            padding: 8px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+        }
+
+        .tab-navigation .nav-link {
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            color: #64748b;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .tab-navigation .nav-link.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .document-meta {
+            display: flex;
+            gap: 20px;
+            margin: 16px 0;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
             display: flex;
             align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid #e2e8f0;
+            gap: 8px;
+            color: #64748b;
+            font-size: 14px;
         }
 
-        .requirement-item:last-child {
-            border-bottom: none;
-        }
-
-        .requirement-item i {
-            width: 20px;
-            margin-right: 10px;
-        }
-
-        .list-group-item {
-            border: none;
-            padding: 10px 0;
-            background: transparent;
+        .meta-item i {
+            color: var(--primary-color);
         }
     </style>
 </head>
 <body>
-    <!-- Mobile Toggle Button -->
-    <button class="btn btn-primary mobile-toggle" onclick="toggleSidebar()">
-        <i class="fas fa-bars"></i>
-    </button>
-
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="p-4 text-center">
-            <h4 class="text-white mb-0">
-                <i class="fas fa-microphone-alt me-2"></i>
-                SNIA Presenter
-            </h4>
-            <small class="text-white-50">Dashboard</small>
-        </div>
-        
-        <nav class="nav flex-column px-3">
-            <a class="nav-link" href="<?= site_url('presenter/dashboard') ?>">
-                <i class="fas fa-tachometer-alt me-2"></i> Dashboard
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/events') ?>">
-                <i class="fas fa-calendar me-2"></i> Events
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/abstrak') ?>">
-                <i class="fas fa-file-alt me-2"></i> My Abstracts
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/pembayaran') ?>">
-                <i class="fas fa-credit-card me-2"></i> Payments
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/absensi') ?>">
-                <i class="fas fa-qrcode me-2"></i> Attendance
-            </a>
-            <a class="nav-link" href="<?= site_url('presenter/dokumen/loa') ?>">
-                <i class="fas fa-file-contract me-2"></i> LOA
-            </a>
-            <a class="nav-link active" href="<?= site_url('presenter/dokumen/sertifikat') ?>">
-                <i class="fas fa-certificate me-2"></i> Certificate
-            </a>
-            <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
-            <a class="nav-link" href="<?= site_url('profile') ?>">
-                <i class="fas fa-user me-2"></i> Profile
-            </a>
-            <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
-                <i class="fas fa-sign-out-alt me-2"></i> Logout
-            </a>
-        </nav>
-    </div>
-
-    <!-- Main Content -->
-    <div class="main-content">
-        <!-- Page Header -->
-        <div class="page-header animate__animated animate__fadeInDown">
-            <div class="row align-items-center">
-                <div class="col-md-8">
-                    <h2 class="mb-2">
-                        <i class="fas fa-certificate me-2"></i>
-                        Certificate of Presentation
-                    </h2>
-                    <p class="mb-0 opacity-90">
-                        Download your official certificate after completing your presentation.
-                    </p>
-                </div>
-                <div class="col-md-4 text-end">
-                    <div class="text-white-50 small">Certificate Status</div>
-                    <div class="fw-bold">
-                        <?php if ($hasAttended): ?>
-                            <?php if (!empty($sertifikat)): ?>
-                                <i class="fas fa-check-circle text-success me-1"></i>Available
-                            <?php else: ?>
-                                <i class="fas fa-clock text-warning me-1"></i>Processing
-                            <?php endif; ?>
-                        <?php else: ?>
-                            <i class="fas fa-calendar-times text-warning me-1"></i>Attendance Required
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Main Content Row -->
+    <div class="container-fluid">
         <div class="row">
-            <!-- Main Certificate Content -->
-            <div class="col-lg-8">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0">
-                            <i class="fas fa-certificate me-2"></i>Sertifikat Presenter
-                        </h5>
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 px-0">
+                <div class="sidebar">
+                    <div class="p-4 text-center">
+                        <h4 class="text-white mb-0">
+                            <i class="fas fa-chalkboard-teacher me-2"></i>
+                            SNIA Presenter
+                        </h4>
+                        <small class="text-white-50">Document Center</small>
                     </div>
-                    <div class="card-body">
-                        <?php if ($hasAttended): ?>
-                            <?php if (!empty($sertifikat)): ?>
-                                <div class="status-indicator status-available">
-                                    <i class="fas fa-check-circle"></i>
-                                    Sertifikat tersedia untuk diunduh
-                                </div>
-
-                                <div class="row">
-                                    <?php foreach ($sertifikat as $cert): ?>
-                                        <div class="col-md-6 mb-4">
-                                            <div class="certificate-card certificate-available">
-                                                <div class="document-icon">
-                                                    <i class="fas fa-certificate text-warning"></i>
-                                                </div>
-                                                <h6 class="fw-bold text-dark">Sertifikat Presenter</h6>
-                                                <div class="mb-3">
-                                                    <small class="text-muted">
-                                                        <i class="fas fa-tag me-1"></i>Syarat: <?= esc($cert['syarat']) ?><br>
-                                                        <i class="fas fa-calendar me-1"></i>Diterbitkan: <?= date('d/m/Y', strtotime($cert['uploaded_at'])) ?>
-                                                    </small>
-                                                </div>
-                                                <a href="<?= site_url('presenter/dokumen/sertifikat/download/' . $cert['file_path']) ?>" 
-                                                   class="btn btn-warning-custom btn-custom">
-                                                    <i class="fas fa-download me-1"></i>Download Sertifikat
-                                                </a>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php else: ?>
-                                <div class="certificate-card">
-                                    <div class="status-indicator status-processing">
-                                        <i class="fas fa-cog fa-spin"></i>
-                                        Sertifikat sedang diproses
-                                    </div>
-                                    
-                                    <div class="document-icon">
-                                        <i class="fas fa-cog fa-spin text-primary"></i>
-                                    </div>
-                                    <h5 class="text-primary">Sertifikat Dalam Proses</h5>
-                                    <p class="text-muted mb-4">
-                                        Admin sedang memproses sertifikat Anda.<br>
-                                        Sertifikat akan muncul di sini setelah event selesai dan diproses.
-                                    </p>
-                                    <button class="btn btn-primary-custom btn-custom" onclick="location.reload()">
-                                        <i class="fas fa-refresh me-1"></i>Refresh Halaman
-                                    </button>
-                                </div>
-                            <?php endif; ?>
-                        <?php else: ?>
-                            <div class="certificate-card">
-                                <div class="status-indicator status-locked">
-                                    <i class="fas fa-calendar-times"></i>
-                                    Absensi diperlukan
-                                </div>
-                                
-                                <div class="document-icon">
-                                    <i class="fas fa-calendar-check text-warning"></i>
-                                </div>
-                                <h5 class="text-warning">Absensi Event Diperlukan</h5>
-                                <p class="text-muted mb-4">
-                                    Anda harus hadir di event dan melakukan presentasi untuk mendapatkan sertifikat presenter.
-                                </p>
-                                <div class="text-start text-muted small mb-4">
-                                    <div class="mb-2">
-                                        <i class="fas fa-check-circle me-2 text-primary"></i>1. Hadir di event
-                                    </div>
-                                    <div class="mb-2">
-                                        <i class="fas fa-qrcode me-2 text-primary"></i>2. Melakukan absensi dengan scan QR code
-                                    </div>
-                                    <div>
-                                        <i class="fas fa-microphone me-2 text-primary"></i>3. Melakukan presentasi
-                                    </div>
-                                </div>
-                                <a href="<?= site_url('presenter/absensi') ?>" class="btn btn-primary-custom btn-custom">
-                                    <i class="fas fa-qrcode me-1"></i>Ke Halaman Absensi
-                                </a>
-                            </div>
-                        <?php endif; ?>
-                    </div>
+                    
+                    <nav class="nav flex-column px-3">
+                        <a class="nav-link" href="<?= site_url('presenter/dashboard') ?>">
+                            <i class="fas fa-tachometer-alt me-2"></i> Dashboard
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/events') ?>">
+                            <i class="fas fa-calendar-alt me-2"></i> Event
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/abstrak') ?>">
+                            <i class="fas fa-file-alt me-2"></i> Abstrak
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/pembayaran') ?>">
+                            <i class="fas fa-credit-card me-2"></i> Pembayaran
+                        </a>
+                        <a class="nav-link" href="<?= site_url('presenter/absensi') ?>">
+                            <i class="fas fa-qrcode me-2"></i> Absensi
+                        </a>
+                        <a class="nav-link active" href="<?= site_url('presenter/dokumen/loa') ?>">
+                            <i class="fas fa-certificate me-2"></i> Dokumen
+                        </a>
+                        <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
+                        <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
+                            <i class="fas fa-sign-out-alt me-2"></i> Logout
+                        </a>
+                    </nav>
                 </div>
             </div>
 
-            <!-- Sidebar Information -->
-            <div class="col-lg-4">
-                <!-- Certificate Information -->
-                <div class="card shadow-sm mb-4">
-                    <div class="card-header bg-info text-white">
-                        <h6 class="mb-0">
-                            <i class="fas fa-info-circle me-2"></i>Informasi Sertifikat
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <h6 class="text-primary">Waktu Penerbitaan:</h6>
-                        <p class="text-muted small mb-3">
-                            Sertifikat akan diterbitkan maksimal 7 hari kerja setelah event selesai.
-                        </p>
-                        
-                        <h6 class="text-primary">Format Sertifikat:</h6>
-                        <p class="text-muted small">
-                            Sertifikat dalam format PDF dengan tanda tangan digital dan QR code verifikasi.
-                        </p>
-                    </div>
-                </div>
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10">
+                <div class="main-content p-4">
+                    <!-- Breadcrumb -->
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb breadcrumb-custom">
+                            <li class="breadcrumb-item">
+                                <a href="<?= site_url('presenter/dashboard') ?>">Dashboard</a>
+                            </li>
+                            <li class="breadcrumb-item">
+                                <a href="<?= site_url('presenter/dokumen/loa') ?>">Dokumen</a>
+                            </li>
+                            <li class="breadcrumb-item active" aria-current="page">
+                                Sertifikat
+                            </li>
+                        </ol>
+                    </nav>
 
-                <!-- Certificate Requirements -->
-                <div class="card shadow-sm">
-                    <div class="card-header bg-warning text-dark">
-                        <h6 class="mb-0">
-                            <i class="fas fa-list-check me-2"></i>Persyaratan Sertifikat
-                        </h6>
+                    <!-- Header -->
+                    <div class="header-section">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h1 class="mb-2">
+                                    <i class="fas fa-award me-3"></i>Sertifikat Presenter
+                                </h1>
+                                <p class="mb-0 opacity-75">
+                                    Kelola dan download sertifikat untuk event yang telah Anda ikuti sebagai presenter.
+                                </p>
+                            </div>
+                            <div class="col-auto">
+                                <div class="text-end">
+                                    <span class="badge bg-warning bg-opacity-25 text-warning fs-6 px-3 py-2">
+                                        <i class="fas fa-user-tie me-2"></i>Presenter
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="requirements-list">
-                            <div class="requirement-item">
-                                <i class="fas fa-check text-success"></i>
-                                <div>
-                                    <div class="fw-bold small">Abstrak Diterima</div>
-                                    <small class="text-muted">Harus disetujui oleh reviewer</small>
+
+                    <!-- Tab Navigation -->
+                    <div class="tab-navigation">
+                        <ul class="nav nav-pills justify-content-center">
+                            <li class="nav-item">
+                                <a class="nav-link" href="<?= site_url('presenter/dokumen/loa') ?>">
+                                    <i class="fas fa-certificate me-2"></i>Letter of Acceptance
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link active" href="<?= site_url('presenter/dokumen/sertifikat') ?>">
+                                    <i class="fas fa-award me-2"></i>Sertifikat
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Information Card -->
+                    <div class="info-card">
+                        <h6 class="mb-2">
+                            <i class="fas fa-info-circle me-2"></i>Tentang Sertifikat Presenter
+                        </h6>
+                        <p class="mb-0">
+                            Sertifikat adalah dokumen resmi yang menyatakan bahwa Anda telah berpartisipasi dan 
+                            menyelesaikan presentasi dalam event. Sertifikat tersedia setelah Anda hadir di event 
+                            dan melakukan absensi.
+                        </p>
+                    </div>
+
+                    <!-- Certificate Documents Section -->
+                    <div class="row">
+                        <div class="col-12">
+                            <h5 class="mb-3">
+                                <i class="fas fa-folder-open me-2 text-primary"></i>
+                                Sertifikat Tersedia
+                            </h5>
+
+                            <?php if (!empty($certificates)): ?>
+                                <?php foreach ($certificates as $cert): ?>
+                                <div class="document-card">
+                                    <span class="status-badge badge-available">
+                                        <i class="fas fa-check-circle me-1"></i>Tersedia
+                                    </span>
+
+                                    <div class="mb-3" style="margin-right: 120px;">
+                                        <h6 class="mb-2"><?= esc($cert['event_title'] ?? 'Event Title') ?></h6>
+                                        <p class="text-muted mb-0">Sertifikat partisipasi sebagai presenter</p>
+                                    </div>
+
+                                    <div class="document-meta">
+                                        <div class="meta-item">
+                                            <i class="fas fa-calendar"></i>
+                                            <span>Tanggal Event: <?= date('d F Y', strtotime($cert['event_date'] ?? date('Y-m-d'))) ?></span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <i class="fas fa-clock"></i>
+                                            <span>Diterbitkan: <?= date('d M Y H:i', strtotime($cert['uploaded_at'])) ?></span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <i class="fas fa-file-pdf"></i>
+                                            <span>Format: PDF</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-3">
+                                        <a href="<?= site_url('presenter/dokumen/sertifikat/download/' . basename($cert['file_path'])) ?>" 
+                                           class="action-button">
+                                            <i class="fas fa-download me-2"></i>Download Sertifikat
+                                        </a>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="requirement-item">
-                                <i class="fas fa-check text-success"></i>
-                                <div>
-                                    <div class="fw-bold small">Pembayaran Terverifikasi</div>
-                                    <small class="text-muted">Biaya registrasi selesai</small>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="empty-state">
+                                    <i class="fas fa-award"></i>
+                                    <h5>Belum Ada Sertifikat Tersedia</h5>
+                                    <p>Anda belum memiliki sertifikat. Sertifikat akan tersedia setelah Anda hadir di event dan melakukan presentasi.</p>
                                 </div>
-                            </div>
-                            <div class="requirement-item">
-                                <i class="fas fa-<?= $hasAttended ? 'check text-success' : 'times text-danger' ?>"></i>
-                                <div>
-                                    <div class="fw-bold small">Kehadiran Event</div>
-                                    <small class="text-muted">Harus check-in di event</small>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- Eligible Events Section -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5 class="mb-3">
+                                <i class="fas fa-clipboard-list me-2 text-warning"></i>
+                                Event Yang Memenuhi Syarat Sertifikat
+                            </h5>
+
+                            <?php if (!empty($eligible_events)): ?>
+                                <?php foreach ($eligible_events as $event): ?>
+                                <div class="document-card">
+                                    <?php if (empty($event['existing_certificate_id'])): ?>
+                                        <span class="status-badge badge-pending">
+                                            <i class="fas fa-clock me-1"></i>Dapat Diminta
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="status-badge badge-available">
+                                            <i class="fas fa-check-circle me-1"></i>Sertifikat Tersedia
+                                        </span>
+                                    <?php endif; ?>
+
+                                    <div class="mb-3" style="margin-right: 120px;">
+                                        <h6 class="mb-2"><?= esc($event['title']) ?></h6>
+                                        <p class="text-muted mb-1">
+                                            <strong>Role:</strong> Presenter
+                                        </p>
+                                        <p class="text-muted mb-0">
+                                            <strong>Status:</strong> 
+                                            <span class="badge bg-success">Hadir</span>
+                                            <span class="badge bg-primary">Pembayaran Verified</span>
+                                        </p>
+                                    </div>
+
+                                    <div class="document-meta">
+                                        <div class="meta-item">
+                                            <i class="fas fa-calendar"></i>
+                                            <span><?= date('d F Y', strtotime($event['event_date'])) ?></span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <i class="fas fa-check-circle"></i>
+                                            <span>Kehadiran: <?= date('d M Y H:i', strtotime($event['attendance_time'])) ?></span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <i class="fas fa-user-check"></i>
+                                            <span>Verified: <?= date('d M Y', strtotime($event['payment_verified_at'])) ?></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-3">
+                                        <?php if (empty($event['existing_certificate_id'])): ?>
+                                            <button type="button" class="action-button" onclick="requestCertificate(<?= $event['id'] ?>)">
+                                                <i class="fas fa-paper-plane me-2"></i>Minta Sertifikat
+                                            </button>
+                                        <?php else: ?>
+                                            <span class="text-success">
+                                                <i class="fas fa-check-circle me-2"></i>
+                                                Sertifikat sudah tersedia di bagian atas
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="requirement-item">
-                                <i class="fas fa-microphone text-primary"></i>
-                                <div>
-                                    <div class="fw-bold small">Selesaikan Presentasi</div>
-                                    <small class="text-muted">Lakukan presentasi Anda</small>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="empty-state">
+                                    <i class="fas fa-exclamation-circle"></i>
+                                    <h5>Tidak Ada Event Yang Memenuhi Syarat</h5>
+                                    <p>Saat ini tidak ada event yang memenuhi syarat untuk mendapatkan sertifikat. 
+                                       Pastikan Anda sudah hadir di event dan melakukan absensi untuk mendapatkan sertifikat.</p>
+                                    <a href="<?= site_url('presenter/events') ?>" class="action-button">
+                                        <i class="fas fa-calendar me-2"></i>Lihat Event
+                                    </a>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- Requirements Information -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="info-card">
+                                <h6 class="mb-3">
+                                    <i class="fas fa-list-check me-2"></i>Persyaratan Mendapatkan Sertifikat
+                                </h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <ul class="list-unstyled mb-0">
+                                            <li class="mb-2">
+                                                <i class="fas fa-check-circle text-success me-2"></i>
+                                                Abstrak sudah diterima oleh reviewer
+                                            </li>
+                                            <li class="mb-2">
+                                                <i class="fas fa-check-circle text-success me-2"></i>
+                                                Pembayaran sudah terverifikasi
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <ul class="list-unstyled mb-0">
+                                            <li class="mb-2">
+                                                <i class="fas fa-check-circle text-success me-2"></i>
+                                                Hadir di event dan melakukan absensi
+                                            </li>
+                                            <li class="mb-2">
+                                                <i class="fas fa-check-circle text-success me-2"></i>
+                                                Menyelesaikan presentasi
+                                            </li>
+                                        </ul>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -471,19 +490,96 @@
         </div>
     </div>
 
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        function toggleSidebar() {
-            document.querySelector('.sidebar').classList.toggle('show');
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show flash messages
+            showFlashMessages();
+        });
+
+        function requestCertificate(eventId) {
+            if (!confirm('Apakah Anda yakin ingin meminta sertifikat untuk event ini?')) {
+                return;
+            }
+
+            // Show loading
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Memproses...';
+            btn.disabled = true;
+
+            fetch('<?= site_url('presenter/dokumen/requestCertificate') ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: 'event_id=' + eventId
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Berhasil!', data.message, 'success');
+                    // Refresh page after delay
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    showToast('Error!', data.message, 'danger');
+                    // Reset button
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Request certificate error:', error);
+                showToast('Error!', 'Terjadi kesalahan saat meminta sertifikat', 'danger');
+                // Reset button
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
         }
 
-        // Auto-refresh every 5 minutes to check for new certificates
-        setInterval(function() {
-            <?php if (empty($sertifikat) && $hasAttended): ?>
-                console.log('Auto-refreshing for certificate updates...');
-                location.reload();
+        function showFlashMessages() {
+            <?php if (session()->getFlashdata('success')): ?>
+                showToast('Berhasil!', '<?= esc(session()->getFlashdata('success')) ?>', 'success');
             <?php endif; ?>
-        }, 300000);
+            
+            <?php if (session()->getFlashdata('error')): ?>
+                showToast('Error!', '<?= esc(session()->getFlashdata('error')) ?>', 'danger');
+            <?php endif; ?>
+            
+            <?php if (session()->getFlashdata('info')): ?>
+                showToast('Info', '<?= esc(session()->getFlashdata('info')) ?>', 'info');
+            <?php endif; ?>
+        }
+
+        function showToast(title, message, type) {
+            const toastHtml = `
+                <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <strong>${title}</strong> ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            `;
+            
+            const toastContainer = document.getElementById('toastContainer');
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            
+            const toastElement = toastContainer.querySelector('.toast:last-child');
+            const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 5000 });
+            toast.show();
+
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
+            });
+        }
     </script>
 </body>
 </html>

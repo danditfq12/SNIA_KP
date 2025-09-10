@@ -34,15 +34,11 @@ class EventModel extends Model
     protected bool $allowEmptyInserts = false;
     protected bool $updateOnlyChanged = true;
 
-    protected array $casts = [];
-    protected array $castHandlers = [];
-
     // Dates
     protected $useTimestamps = true;
     protected $dateFormat = 'datetime';
     protected $createdField = 'created_at';
     protected $updatedField = 'updated_at';
-    protected $deletedField = 'deleted_at';
 
     // Validation
     protected $validationRules = [
@@ -159,52 +155,112 @@ class EventModel extends Model
     }
 
     /**
-     * Get all events with statistics including new pricing
+     * Get all events with comprehensive statistics
      */
     public function getEventsWithStats()
     {
-        return $this->select('
-                events.*,
+        $db = \Config\Database::connect();
+        
+        // Base query to get events with payment statistics
+        $query = "
+            SELECT 
+                e.*,
                 COUNT(DISTINCT p.id_pembayaran) as total_registrations,
-                COUNT(CASE WHEN p.verified_at IS NOT NULL THEN 1 END) as verified_registrations,
-                COUNT(CASE WHEN p.participation_type = \'online\' THEN 1 END) as online_registrations,
-                COUNT(CASE WHEN p.participation_type = \'offline\' THEN 1 END) as offline_registrations,
+                COUNT(DISTINCT CASE WHEN p.status = 'verified' THEN p.id_pembayaran END) as verified_registrations,
+                COUNT(DISTINCT CASE WHEN p.participation_type = 'online' THEN p.id_pembayaran END) as online_registrations,
+                COUNT(DISTINCT CASE WHEN p.participation_type = 'offline' THEN p.id_pembayaran END) as offline_registrations,
                 COUNT(DISTINCT a.id_abstrak) as total_abstracts,
-                SUM(CASE WHEN p.verified_at IS NOT NULL THEN p.jumlah ELSE 0 END) as total_revenue
-            ')
-            ->join('pembayaran p', 'p.event_id = events.id', 'left')
-            ->join('abstrak a', 'a.event_id = events.id', 'left')
-            ->groupBy('events.id')
-            ->orderBy('events.event_date', 'DESC')
-            ->findAll();
+                COALESCE(SUM(CASE WHEN p.status = 'verified' THEN p.jumlah ELSE 0 END), 0) as total_revenue
+            FROM events e
+            LEFT JOIN pembayaran p ON p.event_id = e.id
+            LEFT JOIN abstrak a ON a.event_id = e.id
+            GROUP BY e.id
+            ORDER BY e.event_date DESC
+        ";
+        
+        $result = $db->query($query)->getResultArray();
+        
+        // Add additional statistics for each event
+        foreach ($result as &$event) {
+            // Get role-based registration counts
+            $roleStats = $db->query("
+                SELECT 
+                    u.role,
+                    p.participation_type,
+                    COUNT(*) as count
+                FROM pembayaran p
+                JOIN users u ON u.id_user = p.id_user
+                WHERE p.event_id = ? AND p.status = 'verified'
+                GROUP BY u.role, p.participation_type
+            ", [$event['id']])->getResultArray();
+
+            $event['presenter_registrations'] = 0;
+            $event['audience_online_registrations'] = 0;
+            $event['audience_offline_registrations'] = 0;
+
+            foreach ($roleStats as $stat) {
+                if ($stat['role'] === 'presenter') {
+                    $event['presenter_registrations'] += $stat['count'];
+                } elseif ($stat['role'] === 'audience') {
+                    if ($stat['participation_type'] === 'online') {
+                        $event['audience_online_registrations'] += $stat['count'];
+                    } else {
+                        $event['audience_offline_registrations'] += $stat['count'];
+                    }
+                }
+            }
+
+            // Get revenue breakdown
+            $revenueStats = $db->query("
+                SELECT 
+                    p.participation_type,
+                    SUM(p.jumlah) as revenue
+                FROM pembayaran p
+                WHERE p.event_id = ? AND p.status = 'verified'
+                GROUP BY p.participation_type
+            ", [$event['id']])->getResultArray();
+
+            $event['online_revenue'] = 0;
+            $event['offline_revenue'] = 0;
+
+            foreach ($revenueStats as $revenue) {
+                if ($revenue['participation_type'] === 'online') {
+                    $event['online_revenue'] = $revenue['revenue'];
+                } else {
+                    $event['offline_revenue'] = $revenue['revenue'];
+                }
+            }
+        }
+        
+        return $result;
     }
 
     /**
-     * Get event statistics for a specific event with participation breakdown
+     * Get comprehensive event statistics for a specific event
      */
     public function getEventStats($eventId)
     {
         $db = \Config\Database::connect();
         
-        // Get basic statistics
+        // Get detailed statistics
         $stats = $db->query("
             SELECT 
                 COUNT(DISTINCT p.id_pembayaran) as total_registrations,
-                COUNT(CASE WHEN p.verified_at IS NOT NULL THEN 1 END) as verified_registrations,
-                COUNT(CASE WHEN p.status = 'pending' THEN 1 END) as pending_registrations,
-                COUNT(CASE WHEN p.participation_type = 'online' THEN 1 END) as online_registrations,
-                COUNT(CASE WHEN p.participation_type = 'offline' THEN 1 END) as offline_registrations,
-                COUNT(CASE WHEN p.participation_type = 'online' AND p.verified_at IS NOT NULL THEN 1 END) as verified_online,
-                COUNT(CASE WHEN p.participation_type = 'offline' AND p.verified_at IS NOT NULL THEN 1 END) as verified_offline,
+                COUNT(DISTINCT CASE WHEN p.status = 'verified' THEN p.id_pembayaran END) as verified_registrations,
+                COUNT(DISTINCT CASE WHEN p.status = 'pending' THEN p.id_pembayaran END) as pending_registrations,
+                COUNT(DISTINCT CASE WHEN p.participation_type = 'online' THEN p.id_pembayaran END) as online_registrations,
+                COUNT(DISTINCT CASE WHEN p.participation_type = 'offline' THEN p.id_pembayaran END) as offline_registrations,
+                COUNT(DISTINCT CASE WHEN p.participation_type = 'online' AND p.status = 'verified' THEN p.id_pembayaran END) as verified_online,
+                COUNT(DISTINCT CASE WHEN p.participation_type = 'offline' AND p.status = 'verified' THEN p.id_pembayaran END) as verified_offline,
                 COUNT(DISTINCT CASE WHEN u.role = 'presenter' THEN p.id_pembayaran END) as presenter_registrations,
                 COUNT(DISTINCT CASE WHEN u.role = 'audience' THEN p.id_pembayaran END) as audience_registrations,
                 COUNT(DISTINCT a.id_abstrak) as total_abstracts,
-                COUNT(CASE WHEN a.status = 'menunggu' THEN 1 END) as pending_abstracts,
-                COUNT(CASE WHEN a.status = 'diterima' THEN 1 END) as accepted_abstracts,
-                COUNT(CASE WHEN a.status = 'ditolak' THEN 1 END) as rejected_abstracts,
-                SUM(CASE WHEN p.verified_at IS NOT NULL THEN p.jumlah ELSE 0 END) as total_revenue,
-                SUM(CASE WHEN p.verified_at IS NOT NULL AND p.participation_type = 'online' THEN p.jumlah ELSE 0 END) as online_revenue,
-                SUM(CASE WHEN p.verified_at IS NOT NULL AND p.participation_type = 'offline' THEN p.jumlah ELSE 0 END) as offline_revenue
+                COUNT(DISTINCT CASE WHEN a.status = 'menunggu' THEN a.id_abstrak END) as pending_abstracts,
+                COUNT(DISTINCT CASE WHEN a.status = 'diterima' THEN a.id_abstrak END) as accepted_abstracts,
+                COUNT(DISTINCT CASE WHEN a.status = 'ditolak' THEN a.id_abstrak END) as rejected_abstracts,
+                COALESCE(SUM(CASE WHEN p.status = 'verified' THEN p.jumlah ELSE 0 END), 0) as total_revenue,
+                COALESCE(SUM(CASE WHEN p.status = 'verified' AND p.participation_type = 'online' THEN p.jumlah ELSE 0 END), 0) as online_revenue,
+                COALESCE(SUM(CASE WHEN p.status = 'verified' AND p.participation_type = 'offline' THEN p.jumlah ELSE 0 END), 0) as offline_revenue
             FROM events e
             LEFT JOIN pembayaran p ON p.event_id = e.id
             LEFT JOIN users u ON u.id_user = p.id_user
@@ -212,7 +268,31 @@ class EventModel extends Model
             WHERE e.id = ?
         ", [$eventId])->getRowArray();
 
-        return $stats;
+        // Ensure all values are properly typed
+        foreach ($stats as $key => $value) {
+            if (is_numeric($value)) {
+                $stats[$key] = (int) $value;
+            }
+        }
+
+        return $stats ?: [
+            'total_registrations' => 0,
+            'verified_registrations' => 0,
+            'pending_registrations' => 0,
+            'online_registrations' => 0,
+            'offline_registrations' => 0,
+            'verified_online' => 0,
+            'verified_offline' => 0,
+            'presenter_registrations' => 0,
+            'audience_registrations' => 0,
+            'total_abstracts' => 0,
+            'pending_abstracts' => 0,
+            'accepted_abstracts' => 0,
+            'rejected_abstracts' => 0,
+            'total_revenue' => 0,
+            'online_revenue' => 0,
+            'offline_revenue' => 0
+        ];
     }
 
     /**
@@ -330,10 +410,17 @@ class EventModel extends Model
                 COUNT(CASE WHEN participation_type = 'online' THEN 1 END) as online_payments,
                 COUNT(CASE WHEN participation_type = 'offline' THEN 1 END) as offline_payments
             FROM pembayaran 
-            WHERE event_id = ? AND verified_at IS NOT NULL
+            WHERE event_id = ? AND status = 'verified'
         ", [$eventId])->getRowArray();
 
-        return $result;
+        return $result ?: [
+            'total_revenue' => 0,
+            'total_payments' => 0,
+            'online_revenue' => 0,
+            'offline_revenue' => 0,
+            'online_payments' => 0,
+            'offline_payments' => 0
+        ];
     }
 
     /**
@@ -343,7 +430,7 @@ class EventModel extends Model
     {
         $db = \Config\Database::connect();
         
-        $whereClause = "event_id = ? AND verified_at IS NOT NULL";
+        $whereClause = "event_id = ? AND status = 'verified'";
         $params = [$eventId];
         
         if ($participationType) {
@@ -351,11 +438,13 @@ class EventModel extends Model
             $params[] = $participationType;
         }
         
-        return $db->query("
+        $result = $db->query("
             SELECT COUNT(*) as count 
             FROM pembayaran 
             WHERE $whereClause
-        ", $params)->getRowArray()['count'];
+        ", $params)->getRowArray();
+        
+        return $result['count'] ?? 0;
     }
 
     /**

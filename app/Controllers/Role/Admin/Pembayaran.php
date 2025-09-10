@@ -186,6 +186,116 @@ class Pembayaran extends BaseController
         return $this->response->download($file, null)->setFileName($pembayaran['bukti_bayar']);
     }
 
+    // FIXED: Method viewBukti yang diperbaiki
+    public function viewBukti(int $id_pembayaran)
+    {
+        $pembayaran = $this->pembayaranModel->find($id_pembayaran);
+        if (!$pembayaran || empty($pembayaran['bukti_bayar'])) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Bukti pembayaran tidak tersedia']);
+        }
+
+        // Coba beberapa lokasi file yang mungkin
+        $possiblePaths = [
+            WRITEPATH . 'uploads/bukti/' . $pembayaran['bukti_bayar'],
+            WRITEPATH . 'uploads/pembayaran/' . $pembayaran['bukti_bayar'],
+            FCPATH . 'uploads/bukti/' . $pembayaran['bukti_bayar'],
+            FCPATH . 'uploads/pembayaran/' . $pembayaran['bukti_bayar'],
+        ];
+
+        $file = null;
+        foreach ($possiblePaths as $path) {
+            if (is_file($path)) {
+                $file = $path;
+                break;
+            }
+        }
+
+        if (!$file) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'File bukti pembayaran tidak ditemukan']);
+        }
+
+        // Tentukan MIME type berdasarkan ekstensi
+        $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        $mimeTypes = [
+            'png'  => 'image/png',
+            'jpg'  => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'gif'  => 'image/gif',
+            'webp' => 'image/webp',
+            'bmp'  => 'image/bmp'
+        ];
+        $mimeType = $mimeTypes[$extension] ?? 'image/png';
+        
+        // Set headers yang diperlukan
+        $this->response->setHeader('Content-Type', $mimeType);
+        $this->response->setHeader('Content-Length', (string)filesize($file));
+        $this->response->setHeader('Content-Disposition', 'inline; filename="' . basename($file) . '"');
+        $this->response->setHeader('Cache-Control', 'public, max-age=3600');
+        $this->response->setHeader('Access-Control-Allow-Origin', '*');
+        
+        // Baca dan kirim file
+        return $this->response->setBody(file_get_contents($file));
+    }
+
+    // TAMBAHAN: Method untuk debug lokasi file
+    public function debugBukti(int $id_pembayaran)
+    {
+        $pembayaran = $this->pembayaranModel->find($id_pembayaran);
+        if (!$pembayaran) {
+            return $this->response->setJSON(['error' => 'Pembayaran tidak ditemukan']);
+        }
+
+        $possiblePaths = [
+            'bukti_path_1' => WRITEPATH . 'uploads/bukti/' . ($pembayaran['bukti_bayar'] ?? 'no_file'),
+            'bukti_path_2' => WRITEPATH . 'uploads/pembayaran/' . ($pembayaran['bukti_bayar'] ?? 'no_file'),
+            'bukti_path_3' => FCPATH . 'uploads/bukti/' . ($pembayaran['bukti_bayar'] ?? 'no_file'),
+            'bukti_path_4' => FCPATH . 'uploads/pembayaran/' . ($pembayaran['bukti_bayar'] ?? 'no_file'),
+        ];
+
+        $debugInfo = [
+            'pembayaran_id' => $id_pembayaran,
+            'bukti_bayar_name' => $pembayaran['bukti_bayar'] ?? 'NULL',
+            'WRITEPATH' => WRITEPATH,
+            'FCPATH' => FCPATH,
+            'paths_check' => []
+        ];
+
+        foreach ($possiblePaths as $key => $path) {
+            $debugInfo['paths_check'][$key] = [
+                'path' => $path,
+                'exists' => is_file($path),
+                'readable' => is_file($path) ? is_readable($path) : false,
+                'size' => is_file($path) ? filesize($path) : 0
+            ];
+        }
+
+        return $this->response->setJSON($debugInfo);
+    }
+
+    // TAMBAHAN: Method untuk mengecek ketersediaan bukti
+    public function checkBukti(int $id_pembayaran)
+    {
+        $pembayaran = $this->pembayaranModel->find($id_pembayaran);
+        if (!$pembayaran || empty($pembayaran['bukti_bayar'])) {
+            return $this->response->setJSON(['exists' => false, 'message' => 'No bukti_bayar data']);
+        }
+
+        $possiblePaths = [
+            WRITEPATH . 'uploads/bukti/' . $pembayaran['bukti_bayar'],
+            WRITEPATH . 'uploads/pembayaran/' . $pembayaran['bukti_bayar'],
+            FCPATH . 'uploads/bukti/' . $pembayaran['bukti_bayar'],
+            FCPATH . 'uploads/pembayaran/' . $pembayaran['bukti_bayar'],
+        ];
+
+        foreach ($possiblePaths as $path) {
+            if (is_file($path)) {
+                return $this->response->setJSON(['exists' => true, 'path_found' => true]);
+            }
+        }
+
+        return $this->response->setJSON(['exists' => false, 'message' => 'File not found in any expected location']);
+    }
+
     public function export()
     {
         $rows = $this->pembayaranModel->getPembayaranWithUser();
