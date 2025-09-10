@@ -229,8 +229,9 @@ $routes->group('presenter', [
     $routes->post('pembayaran/validate-voucher',      'Pembayaran::validateVoucher');
 
     // Absensi (unlock setelah pembayaran terverifikasi)
-    $routes->get ('absensi',     'Absensi::index');
-    $routes->post('absensi/scan','Absensi::scan');
+    $routes->get ('absensi',                       'Absensi::index');
+    $routes->get ('absensi/detail/(:num)',         'Absensi::detail/$1'); // <-- DITAMBAHKAN (pakai "detail")
+    $routes->post('absensi/scan',                  'Absensi::scan');
 
     // Dokumen
     $routes->get ('dokumen/loa',                         'Dokumen::loa');
