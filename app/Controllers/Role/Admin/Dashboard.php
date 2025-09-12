@@ -18,41 +18,28 @@ class Dashboard extends BaseController
 
     public function __construct()
     {
-        $this->userModel = new UserModel();
-        $this->abstrakModel = new AbstrakModel();
-        $this->pembayaranModel = new PembayaranModel();
-        $this->eventModel = new EventModel();
-        $this->db = \Config\Database::connect();
+        $this->userModel      = new UserModel();
+        $this->abstrakModel   = new AbstrakModel();
+        $this->pembayaranModel= new PembayaranModel();
+        $this->eventModel     = new EventModel();
+        $this->db             = \Config\Database::connect();
     }
 
     public function index()
     {
         try {
-            // Get basic statistics
             $data = [
-                // User statistics
-                'total_users' => $this->userModel->countAll(),
-                'total_reviewer' => $this->userModel->where('role', 'reviewer')->countAllResults(),
-                
-                // Abstract statistics
-                'total_abstrak' => $this->abstrakModel->countAll(),
-                'abstrak_pending' => $this->abstrakModel->where('status', 'menunggu')->countAllResults(),
-                'abstrak_diterima' => $this->abstrakModel->where('status', 'diterima')->countAllResults(),
-                'abstrak_ditolak' => $this->abstrakModel->where('status', 'ditolak')->countAllResults(),
-                
-                // Payment statistics
+                // === KPI untuk view ===
                 'pembayaran_pending' => $this->pembayaranModel->where('status', 'pending')->countAllResults(),
-                'total_pembayaran' => $this->pembayaranModel->countAll(),
-                
-                // Event statistics
-                'total_events' => $this->eventModel->countAll(),
-                'active_events' => $this->eventModel->where('is_active', true)->countAllResults(),
-                
-                // Recent data
-                'recent_users' => $this->getRecentUsers(),
-                'recent_abstrak' => $this->getRecentAbstraks(),
-                'recent_events' => $this->getRecentEvents(), // FIX: Added this missing data
-                'recent_payments' => $this->getRecentPayments()
+                'abstrak_masuk'      => $this->abstrakModel->countAll(),
+                // anggap "belum ditugaskan" = status menunggu (tanpa info tabel assignment)
+                'abstrak_unassigned' => $this->abstrakModel->where('status', 'menunggu')->countAllResults(),
+                'total_event'        => $this->eventModel->countAll(),
+
+                // === Ringkasan / list untuk cards ===
+                'pendingPayments' => $this->getPendingPayments(), // << tampil di dashboard
+                'recent_abstrak'  => $this->getRecentAbstraks(),
+                'recent_events'   => $this->getRecentEvents(),
             ];
 
             return view('role/admin/dashboard', $data);
@@ -64,26 +51,30 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Get recent users (last 5)
+     * List pembayaran yang MASIH pending (limit 5) + info user & event
+     * field yang dipakai view: id_pembayaran, nama_lengkap, event_title, jumlah, tanggal_bayar
      */
-    private function getRecentUsers()
+    private function getPendingPayments(): array
     {
         try {
-            return $this->userModel
-                ->select('id_user, nama_lengkap, email, role, created_at')
-                ->orderBy('created_at', 'DESC')
+            return $this->db->table('pembayaran p')
+                ->select('p.id_pembayaran, p.jumlah, p.status, p.tanggal_bayar, u.nama_lengkap, u.email, e.title AS event_title')
+                ->join('users u', 'u.id_user = p.id_user', 'left')
+                ->join('events e', 'e.id = p.event_id', 'left')
+                ->where('p.status', 'pending')
+                ->orderBy('p.tanggal_bayar', 'DESC')
                 ->limit(5)
-                ->findAll();
-        } catch (\Exception $e) {
-            log_message('error', 'Error getting recent users: ' . $e->getMessage());
+                ->get()->getResultArray();
+        } catch (\Throwable $e) {
+            log_message('error', 'Error getting pending payments: ' . $e->getMessage());
             return [];
         }
     }
 
     /**
-     * Get recent abstracts with user info
+     * Abstrak terbaru + alias-kan tanggal ke created_at supaya match view
      */
-    private function getRecentAbstraks()
+    private function getRecentAbstraks(): array
     {
         try {
             return $this->db->query("
@@ -91,7 +82,7 @@ class Dashboard extends BaseController
                     a.id_abstrak,
                     a.judul,
                     a.status,
-                    a.tanggal_upload,
+                    a.tanggal_upload AS created_at, -- alias untuk view
                     u.nama_lengkap,
                     u.email
                 FROM abstrak a
@@ -106,9 +97,9 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Get recent events (FIX: Added this missing method)
+     * Event terbaru
      */
-    private function getRecentEvents()
+    private function getRecentEvents(): array
     {
         try {
             return $this->eventModel
@@ -123,57 +114,23 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Get recent payments with user info
+     * Data default bila error
      */
-    private function getRecentPayments()
-    {
-        try {
-            return $this->db->query("
-                SELECT 
-                    p.id_pembayaran,
-                    p.jumlah,
-                    p.status,
-                    p.tanggal_bayar,
-                    u.nama_lengkap,
-                    u.email,
-                    e.title as event_title
-                FROM pembayaran p
-                LEFT JOIN users u ON u.id_user = p.id_user
-                LEFT JOIN events e ON e.id = p.event_id
-                ORDER BY p.tanggal_bayar DESC
-                LIMIT 5
-            ")->getResultArray();
-        } catch (\Exception $e) {
-            log_message('error', 'Error getting recent payments: ' . $e->getMessage());
-            return [];
-        }
-    }
-
-    /**
-     * Get default data when there's an error
-     */
-    private function getDefaultData()
+    private function getDefaultData(): array
     {
         return [
-            'total_users' => 0,
-            'total_reviewer' => 0,
-            'total_abstrak' => 0,
-            'abstrak_pending' => 0,
-            'abstrak_diterima' => 0,
-            'abstrak_ditolak' => 0,
             'pembayaran_pending' => 0,
-            'total_pembayaran' => 0,
-            'total_events' => 0,
-            'active_events' => 0,
-            'recent_users' => [],
-            'recent_abstrak' => [],
-            'recent_events' => [],
-            'recent_payments' => []
+            'abstrak_masuk'      => 0,
+            'abstrak_unassigned' => 0,
+            'total_event'        => 0,
+            'pendingPayments'    => [],
+            'recent_abstrak'     => [],
+            'recent_events'      => [],
         ];
     }
 
     /**
-     * AJAX endpoint to get dashboard statistics
+     * Endpoint ringkasan statistik (opsional untuk AJAX)
      */
     public function getStats()
     {
@@ -184,35 +141,35 @@ class Dashboard extends BaseController
         try {
             $stats = [
                 'users' => [
-                    'total' => $this->userModel->countAll(),
-                    'active' => $this->userModel->where('status', 'aktif')->countAllResults(),
-                    'presenters' => $this->userModel->where('role', 'presenter')->countAllResults(),
+                    'total'     => $this->userModel->countAll(),
+                    'active'    => $this->userModel->where('status', 'aktif')->countAllResults(),
+                    'presenters'=> $this->userModel->where('role', 'presenter')->countAllResults(),
                     'reviewers' => $this->userModel->where('role', 'reviewer')->countAllResults(),
-                    'audience' => $this->userModel->where('role', 'audience')->countAllResults()
+                    'audience'  => $this->userModel->where('role', 'audience')->countAllResults()
                 ],
                 'abstracts' => [
-                    'total' => $this->abstrakModel->countAll(),
-                    'pending' => $this->abstrakModel->where('status', 'menunggu')->countAllResults(),
+                    'total'    => $this->abstrakModel->countAll(),
+                    'pending'  => $this->abstrakModel->where('status', 'menunggu')->countAllResults(),
                     'accepted' => $this->abstrakModel->where('status', 'diterima')->countAllResults(),
                     'rejected' => $this->abstrakModel->where('status', 'ditolak')->countAllResults(),
                     'revision' => $this->abstrakModel->where('status', 'revisi')->countAllResults()
                 ],
                 'payments' => [
-                    'total' => $this->pembayaranModel->countAll(),
-                    'pending' => $this->pembayaranModel->where('status', 'pending')->countAllResults(),
+                    'total'    => $this->pembayaranModel->countAll(),
+                    'pending'  => $this->pembayaranModel->where('status', 'pending')->countAllResults(),
                     'verified' => $this->pembayaranModel->where('status', 'verified')->countAllResults(),
                     'rejected' => $this->pembayaranModel->where('status', 'rejected')->countAllResults()
                 ],
                 'events' => [
-                    'total' => $this->eventModel->countAll(),
-                    'active' => $this->eventModel->where('is_active', true)->countAllResults(),
+                    'total'    => $this->eventModel->countAll(),
+                    'active'   => $this->eventModel->where('is_active', true)->countAllResults(),
                     'upcoming' => $this->eventModel->where('event_date >=', date('Y-m-d'))->countAllResults()
                 ]
             ];
 
             return $this->response->setJSON([
-                'success' => true,
-                'stats' => $stats,
+                'success'   => true,
+                'stats'     => $stats,
                 'timestamp' => time()
             ]);
 
@@ -226,7 +183,7 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Get chart data for dashboard
+     * Data chart (opsional)
      */
     public function getChartData()
     {
@@ -235,31 +192,28 @@ class Dashboard extends BaseController
         }
 
         try {
-            // Abstract status distribution
             $abstractStats = [
                 'menunggu' => $this->abstrakModel->where('status', 'menunggu')->countAllResults(),
                 'diterima' => $this->abstrakModel->where('status', 'diterima')->countAllResults(),
-                'ditolak' => $this->abstrakModel->where('status', 'ditolak')->countAllResults(),
-                'revisi' => $this->abstrakModel->where('status', 'revisi')->countAllResults()
+                'ditolak'  => $this->abstrakModel->where('status', 'ditolak')->countAllResults(),
+                'revisi'   => $this->abstrakModel->where('status', 'revisi')->countAllResults()
             ];
 
-            // Monthly registration trends (last 6 months)
             $monthlyData = [];
             for ($i = 5; $i >= 0; $i--) {
-                $month = date('Y-m', strtotime("-$i months"));
+                $month     = date('Y-m', strtotime("-$i months"));
                 $monthName = date('M Y', strtotime("-$i months"));
-                
+
                 $monthlyData[] = [
-                    'month' => $monthName,
-                    'users' => $this->userModel->like('created_at', $month)->countAllResults(),
-                    'abstracts' => $this->abstrakModel->like('tanggal_upload', $month)->countAllResults()
+                    'month'    => $monthName,
+                    'users'    => $this->userModel->like('created_at', $month)->countAllResults(),
+                    'abstracts'=> $this->abstrakModel->like('tanggal_upload', $month)->countAllResults()
                 ];
             }
 
-            // Payment methods distribution
             $paymentMethods = $this->db->query("
-                SELECT metode, COUNT(*) as count 
-                FROM pembayaran 
+                SELECT metode, COUNT(*) AS count
+                FROM pembayaran
                 WHERE status = 'verified'
                 GROUP BY metode
             ")->getResultArray();
@@ -267,8 +221,8 @@ class Dashboard extends BaseController
             return $this->response->setJSON([
                 'success' => true,
                 'data' => [
-                    'abstract_stats' => $abstractStats,
-                    'monthly_trends' => $monthlyData,
+                    'abstract_stats'  => $abstractStats,
+                    'monthly_trends'  => $monthlyData,
                     'payment_methods' => $paymentMethods
                 ]
             ]);

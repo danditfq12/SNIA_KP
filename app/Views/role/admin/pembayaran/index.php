@@ -1,873 +1,522 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verifikasi Pembayaran - SNIA Admin</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --primary-color: #2563eb;
-            --secondary-color: #64748b;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-            --info-color: #06b6d4;
-        }
+<?php
+// ===== Vars (fallback agar view aman) =====
+$title               = $title               ?? 'Verifikasi Pembayaran';
+$pembayarans         = $pembayarans         ?? []; // array assoc
+$pembayaran_pending  = (int)($pembayaran_pending  ?? 0);
+$pembayaran_verified = (int)($pembayaran_verified ?? 0);
+$pembayaran_rejected = (int)($pembayaran_rejected ?? 0);
+$total_revenue       = (int)($total_revenue ?? 0);
+?>
 
-        body {
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-        }
+<?= $this->include('partials/header') ?>
+<?= $this->include('partials/sidebar_admin') ?>
+<?= $this->include('partials/alerts') ?>
 
-        .sidebar {
-            background: linear-gradient(180deg, var(--primary-color) 0%, #1e40af 100%);
-            min-height: 100vh;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
-        }
+<div id="content">
+  <main class="flex-fill" style="padding-top:70px;">
+    <div class="container-fluid p-3 p-md-4">
 
-        .sidebar .nav-link {
-            color: rgba(255,255,255,0.8);
-            padding: 12px 20px;
-            margin: 4px 0;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
+      <!-- HEADER -->
+      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h3 class="welcome-text mb-1">
+            <i class="bi bi-credit-card me-2"></i><?= esc($title) ?>
+          </h3>
+          <div class="text-muted">Kelola dan verifikasi pembayaran dari peserta</div>
+        </div>
+        <div class="text-end d-none d-md-block">
+          <div class="btn-group">
+            <a href="<?= site_url('admin/pembayaran/export') ?>" class="btn btn-light btn-sm">
+              <i class="bi bi-download me-1"></i>Export
+            </a>
+            <button class="btn btn-outline-light btn-sm" id="btnStatistik" type="button">
+              <i class="bi bi-bar-chart-line me-1"></i>Statistik
+            </button>
+            <button class="btn btn-outline-light btn-sm" id="btnRefresh" type="button">
+              <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+          </div>
+          <div class="mt-2 small text-white-50">Terakhir update <strong><?= date('d M Y, H:i') ?></strong></div>
+        </div>
+      </div>
 
-        .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            transform: translateX(5px);
-        }
-
-        .sidebar .nav-link.active {
-            background: rgba(255,255,255,0.2);
-            color: white;
-        }
-
-        .main-content {
-            background: white;
-            border-radius: 20px 0 0 0;
-            min-height: 100vh;
-            box-shadow: -4px 0 20px rgba(0,0,0,0.05);
-        }
-
-        .content-card {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-            border: 1px solid rgba(255,255,255,0.2);
-            overflow: hidden;
-        }
-
-        .content-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--info-color) 100%);
-            color: white;
-            padding: 24px;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-        }
-
-        .stat-card.pending::before { background: var(--warning-color); }
-        .stat-card.verified::before { background: var(--success-color); }
-        .stat-card.rejected::before { background: var(--danger-color); }
-        .stat-card.revenue::before { background: var(--info-color); }
-
-        .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-        }
-
-        .payment-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
-            border: 1px solid #e2e8f0;
-            overflow: hidden;
-        }
-
-        .payment-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
-        }
-
-        .payment-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid #e2e8f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .payment-body {
-            padding: 20px;
-        }
-
-        .payment-footer {
-            padding: 16px 20px;
-            background: #f8fafc;
-            border-top: 1px solid #e2e8f0;
-        }
-
-        .status-badge {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .btn-custom {
-            border-radius: 8px;
-            padding: 8px 16px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        .btn-custom:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        .user-info {
-            display: flex;
-            align-items: center;
-        }
-
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            margin-right: 12px;
-        }
-
-        .amount-display {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--success-color);
-        }
-
-        .modal-content {
-            border-radius: 16px;
-            border: none;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-
-        .modal-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
-            color: white;
-            border-radius: 16px 16px 0 0;
-            border-bottom: none;
-        }
-
-        .bukti-preview {
-            max-width: 100%;
-            max-height: 400px;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        }
-
-        .filter-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            margin-bottom: 20px;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #6b7280;
-        }
-
-        .empty-state i {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            opacity: 0.5;
-        }
-
-        .event-tag {
-            background: linear-gradient(135deg, #e0f2fe, #b3e5fc);
-            color: #01579b;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-
-        .participation-badge {
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 4px;
-        }
-
-        .participation-online {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-
-        .participation-offline {
-            background: #f3e5f5;
-            color: #7b1fa2;
-        }
-    </style>
-</head>
-<body>
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-md-3 col-lg-2 px-0">
-                <div class="sidebar">
-                    <div class="p-4 text-center">
-                        <h4 class="text-white mb-0">
-                            <i class="fas fa-cogs me-2"></i>
-                            SNIA Admin
-                        </h4>
-                        <small class="text-white-50">Sistem Manajemen</small>
-                    </div>
-                    
-                    <nav class="nav flex-column px-3">
-                        <a class="nav-link" href="<?= site_url('admin/dashboard') ?>">
-                            <i class="fas fa-tachometer-alt me-2"></i> Dashboard
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/users') ?>">
-                            <i class="fas fa-users me-2"></i> Manajemen User
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/abstrak') ?>">
-                            <i class="fas fa-file-alt me-2"></i> Manajemen Abstrak
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/reviewer') ?>">
-                            <i class="fas fa-user-check me-2"></i> Kelola Reviewer
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/event') ?>">
-                            <i class="fas fa-calendar-alt me-2"></i> Kelola Event
-                        </a>
-                        <a class="nav-link active" href="<?= site_url('admin/pembayaran') ?>">
-                            <i class="fas fa-credit-card me-2"></i> Verifikasi Pembayaran
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/absensi') ?>">
-                            <i class="fas fa-qrcode me-2"></i> Kelola Absensi
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/voucher') ?>">
-                            <i class="fas fa-ticket-alt me-2"></i> Kelola Voucher
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/dokumen') ?>">
-                            <i class="fas fa-folder-open me-2"></i> Dokumen
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/laporan') ?>">
-                            <i class="fas fa-chart-line me-2"></i> Laporan
-                        </a>
-                        <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
-                        <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
-                            <i class="fas fa-sign-out-alt me-2"></i> Logout
-                        </a>
-                    </nav>
+      <!-- KPI -->
+      <section aria-label="Ringkasan Pembayaran" class="mb-3">
+        <div class="row g-3">
+          <div class="col-6 col-xl-3">
+            <div class="stat-card pending shadow-sm h-100">
+              <div class="d-flex align-items-center">
+                <div class="stat-icon bg-warning"><i class="bi bi-clock"></i></div>
+                <div class="ms-3">
+                  <div class="stat-number"><?= number_format($pembayaran_pending) ?></div>
+                  <div class="text-muted">Pending</div>
                 </div>
+              </div>
             </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="stat-card verified shadow-sm h-100">
+              <div class="d-flex align-items-center">
+                <div class="stat-icon bg-success"><i class="bi bi-check2-circle"></i></div>
+                <div class="ms-3">
+                  <div class="stat-number"><?= number_format($pembayaran_verified) ?></div>
+                  <div class="text-muted">Terverifikasi</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="stat-card rejected shadow-sm h-100">
+              <div class="d-flex align-items-center">
+                <div class="stat-icon bg-danger"><i class="bi bi-x-circle"></i></div>
+                <div class="ms-3">
+                  <div class="stat-number"><?= number_format($pembayaran_rejected) ?></div>
+                  <div class="text-muted">Ditolak</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="stat-card revenue shadow-sm h-100">
+              <div class="d-flex align-items-center">
+                <div class="stat-icon bg-info"><i class="bi bi-cash-coin"></i></div>
+                <div class="ms-3">
+                  <div class="stat-number">Rp <?= number_format($total_revenue, 0, ',', '.') ?></div>
+                  <div class="text-muted">Total Revenue</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-            <!-- Main Content -->
-            <div class="col-md-9 col-lg-10">
-                <div class="main-content p-4">
-                    <!-- Header -->
-                    <div class="content-card mb-4">
-                        <div class="content-header">
-                            <div class="row align-items-center">
-                                <div class="col">
-                                    <h2 class="mb-2">
-                                        <i class="fas fa-credit-card me-3"></i>Verifikasi Pembayaran
-                                    </h2>
-                                    <p class="mb-0 opacity-75">Kelola dan verifikasi pembayaran dari peserta</p>
-                                </div>
-                                <div class="col-auto">
-                                    <button class="btn btn-light btn-custom me-2" onclick="exportData()">
-                                        <i class="fas fa-download me-2"></i>Export Data
-                                    </button>
-                                    <button class="btn btn-outline-light btn-custom me-2" onclick="viewStatistics()">
-                                        <i class="fas fa-chart-bar me-2"></i>Statistik
-                                    </button>
-                                    <button class="btn btn-outline-light btn-custom" onclick="refreshData()">
-                                        <i class="fas fa-sync-alt me-2"></i>Refresh
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+      <!-- FILTERS -->
+      <section class="card shadow-sm mb-3" aria-label="Filter Pembayaran">
+        <div class="card-body">
+          <div class="row g-2 align-items-center">
+            <div class="col-md-4">
+              <div class="position-relative">
+                <input type="text" class="form-control ps-5" id="searchInput" placeholder="Cari nama, email, atau metode...">
+                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+              </div>
+            </div>
+            <div class="col-md-2">
+              <select class="form-select" id="statusFilter" aria-label="Filter status">
+                <option value="">Semua Status</option>
+                <option value="pending">Pending</option>
+                <option value="verified">Terverifikasi</option>
+                <option value="rejected">Ditolak</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <select class="form-select" id="roleFilter" aria-label="Filter role">
+                <option value="">Semua Role</option>
+                <option value="presenter">Presenter</option>
+                <option value="audience">Audience</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <select class="form-select" id="participationFilter" aria-label="Filter partisipasi">
+                <option value="">Semua Partisipasi</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+              </select>
+            </div>
+            <div class="col-md-2 text-md-end">
+              <button class="btn btn-outline-secondary w-100" id="btnResetFilter">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+              </button>
+            </div>
+            <div class="col-12">
+              <small id="resultCounter" class="text-muted"></small>
+            </div>
+          </div>
+        </div>
+      </section>
 
-                    <!-- Statistics Cards -->
-                    <div class="row g-4 mb-4">
-                        <div class="col-md-3">
-                            <div class="stat-card pending">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-clock fa-2x text-warning"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="mb-0"><?= $pembayaran_pending ?? 0 ?></h3>
-                                        <small class="text-muted">Pending</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="stat-card verified">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-check-circle fa-2x text-success"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="mb-0"><?= $pembayaran_verified ?? 0 ?></h3>
-                                        <small class="text-muted">Terverifikasi</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="stat-card rejected">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-times-circle fa-2x text-danger"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="mb-0"><?= $pembayaran_rejected ?? 0 ?></h3>
-                                        <small class="text-muted">Ditolak</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="stat-card revenue">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-money-bill-wave fa-2x text-info"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="mb-0">Rp <?= number_format($total_revenue ?? 0, 0, ',', '.') ?></h3>
-                                        <small class="text-muted">Total Revenue</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+      <!-- GRID -->
+      <section aria-label="Daftar Pembayaran">
+        <div class="row g-3" id="paymentContainer">
+          <?php if (!empty($pembayarans)): ?>
+            <?php foreach ($pembayarans as $p): 
+              $status = $p['status'] ?? 'pending';
+              $role   = $p['role'] ?? '';
+              $part   = $p['participation_type'] ?? '';
+              $name   = $p['nama_lengkap'] ?? '-';
+              $email  = $p['email'] ?? '-';
+              $metode = $p['metode'] ?? '-';
+              $amount = (int)($p['jumlah'] ?? 0);
+              $evt    = $p['event_title'] ?? null;
 
-                    <!-- Filter -->
-                    <div class="filter-card">
-                        <div class="row align-items-center">
-                            <div class="col-md-3">
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="fas fa-search"></i></span>
-                                    <input type="text" class="form-control" id="searchInput" placeholder="Cari pembayaran...">
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <select class="form-select" id="statusFilter">
-                                    <option value="">Semua Status</option>
-                                    <option value="pending">Pending</option>
-                                    <option value="verified">Terverifikasi</option>
-                                    <option value="rejected">Ditolak</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <select class="form-select" id="roleFilter">
-                                    <option value="">Semua Role</option>
-                                    <option value="presenter">Presenter</option>
-                                    <option value="audience">Audience</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <select class="form-select" id="participationFilter">
-                                    <option value="">Semua Partisipasi</option>
-                                    <option value="online">Online</option>
-                                    <option value="offline">Offline</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <button class="btn btn-outline-secondary w-100" onclick="resetFilter()">
-                                    <i class="fas fa-undo"></i> Reset
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Payment Cards -->
-                    <div class="row g-4" id="paymentContainer">
-                        <?php if (!empty($pembayarans)): ?>
-                            <?php foreach ($pembayarans as $pembayaran): ?>
-                                <div class="col-lg-6 col-xl-4" 
-                                     data-status="<?= $pembayaran['status'] ?>" 
-                                     data-role="<?= $pembayaran['role'] ?>"
-                                     data-participation="<?= $pembayaran['participation_type'] ?? '' ?>"
-                                     data-search="<?= strtolower($pembayaran['nama_lengkap'] . ' ' . $pembayaran['email'] . ' ' . $pembayaran['metode']) ?>">
-                                    <div class="payment-card">
-                                        <div class="payment-header">
-                                            <div class="user-info">
-                                                <div class="user-avatar">
-                                                    <?= strtoupper(substr($pembayaran['nama_lengkap'], 0, 1)) ?>
-                                                </div>
-                                                <div>
-                                                    <h6 class="mb-0"><?= esc($pembayaran['nama_lengkap']) ?></h6>
-                                                    <small class="text-muted"><?= esc($pembayaran['email']) ?></small>
-                                                    <?php if (!empty($pembayaran['event_title'])): ?>
-                                                        <div class="mt-1">
-                                                            <span class="event-tag"><?= esc($pembayaran['event_title']) ?></span>
-                                                        </div>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <?php
-                                                $statusClass = '';
-                                                $statusText = '';
-                                                switch($pembayaran['status']) {
-                                                    case 'pending':
-                                                        $statusClass = 'bg-warning text-dark';
-                                                        $statusText = 'Pending';
-                                                        break;
-                                                    case 'verified':
-                                                        $statusClass = 'bg-success';
-                                                        $statusText = 'Terverifikasi';
-                                                        break;
-                                                    case 'rejected':
-                                                        $statusClass = 'bg-danger';
-                                                        $statusText = 'Ditolak';
-                                                        break;
-                                                }
-                                                ?>
-                                                <span class="status-badge <?= $statusClass ?>"><?= $statusText ?></span>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="payment-body">
-                                            <div class="row">
-                                                <div class="col-6">
-                                                    <label class="text-muted small">Metode Pembayaran</label>
-                                                    <div class="fw-semibold"><?= esc($pembayaran['metode']) ?></div>
-                                                </div>
-                                                <div class="col-6">
-                                                    <label class="text-muted small">Jumlah</label>
-                                                    <div class="amount-display">Rp <?= number_format($pembayaran['jumlah'], 0, ',', '.') ?></div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="row mt-3">
-                                                <div class="col-6">
-                                                    <label class="text-muted small">Role & Partisipasi</label>
-                                                    <div>
-                                                        <span class="badge <?= $pembayaran['role'] == 'presenter' ? 'bg-primary' : 'bg-secondary' ?>">
-                                                            <?= ucfirst($pembayaran['role']) ?>
-                                                        </span>
-                                                        <?php if (!empty($pembayaran['participation_type'])): ?>
-                                                            <span class="participation-badge participation-<?= $pembayaran['participation_type'] ?>">
-                                                                <?= ucfirst($pembayaran['participation_type']) ?>
-                                                            </span>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </div>
-                                                <div class="col-6">
-                                                    <label class="text-muted small">Tanggal Bayar</label>
-                                                    <div class="fw-semibold"><?= date('d/m/Y H:i', strtotime($pembayaran['tanggal_bayar'])) ?></div>
-                                                </div>
-                                            </div>
-
-                                            <?php if ($pembayaran['voucher_info']): ?>
-                                                <div class="mt-3 p-2 bg-light rounded">
-                                                    <small class="text-muted">Voucher digunakan:</small>
-                                                    <div class="fw-semibold text-success">
-                                                        <?= esc($pembayaran['voucher_info']['kode_voucher']) ?>
-                                                        (<?= $pembayaran['voucher_info']['tipe'] == 'percentage' ? $pembayaran['voucher_info']['nilai'] . '%' : 'Rp ' . number_format($pembayaran['voucher_info']['nilai'], 0, ',', '.') ?>)
-                                                    </div>
-                                                </div>
-                                            <?php endif; ?>
-
-                                            <?php if (!empty($pembayaran['verified_at'])): ?>
-                                                <div class="mt-2">
-                                                    <small class="text-muted">Diverifikasi: <?= date('d/m/Y H:i', strtotime($pembayaran['verified_at'])) ?></small>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-
-                                        <div class="payment-footer">
-                                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                                <div class="btn-group btn-group-sm" role="group">
-                                                    <button class="btn btn-outline-info btn-custom" 
-                                                            onclick="viewDetail(<?= $pembayaran['id_pembayaran'] ?>)">
-                                                        <i class="fas fa-eye me-1"></i>Detail
-                                                    </button>
-                                                    
-                                                    <?php if (!empty($pembayaran['bukti_bayar'])): ?>
-                                                        <button class="btn btn-outline-secondary btn-custom" 
-                                                                onclick="viewBukti('<?= site_url('admin/pembayaran/view-bukti/' . $pembayaran['id_pembayaran']) ?>')">
-                                                            <i class="fas fa-image me-1"></i>Bukti
-                                                        </button>
-                                                    <?php endif; ?>
-                                                </div>
-                                                
-                                                <?php if ($pembayaran['status'] == 'pending'): ?>
-                                                    <div class="btn-group btn-group-sm" role="group">
-                                                        <button class="btn btn-success btn-custom" 
-                                                                onclick="verifikasiPembayaran(<?= $pembayaran['id_pembayaran'] ?>, 'verified')">
-                                                            <i class="fas fa-check me-1"></i>Verifikasi
-                                                        </button>
-                                                        <button class="btn btn-danger btn-custom" 
-                                                                onclick="verifikasiPembayaran(<?= $pembayaran['id_pembayaran'] ?>, 'rejected')">
-                                                            <i class="fas fa-times me-1"></i>Tolak
-                                                        </button>
-                                                    </div>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="col-12">
-                                <div class="empty-state">
-                                    <i class="fas fa-credit-card"></i>
-                                    <h4>Belum Ada Pembayaran</h4>
-                                    <p>Belum ada pembayaran yang perlu diverifikasi saat ini.</p>
-                                </div>
-                            </div>
+              $statusClass = match($status){
+                'pending'  => 'bg-warning text-dark',
+                'verified' => 'bg-success',
+                'rejected' => 'bg-danger',
+                default    => 'bg-secondary'
+              };
+              $statusText = match($status){
+                'pending'  => 'Pending',
+                'verified' => 'Terverifikasi',
+                'rejected' => 'Ditolak',
+                default    => ucfirst($status)
+              };
+              $searchStr = strtolower(($name.' '.$email.' '.$metode));
+            ?>
+              <div class="col-lg-6 col-xl-4"
+                   data-status="<?= esc($status) ?>"
+                   data-role="<?= esc($role) ?>"
+                   data-participation="<?= esc($part) ?>"
+                   data-search="<?= esc($searchStr) ?>">
+                <article class="card shadow-sm h-100 payment-card" aria-label="Kartu pembayaran">
+                  <div class="payment-header">
+                    <div class="d-flex align-items-center">
+                      <div class="user-avatar me-3"><?= strtoupper(substr($name,0,1)) ?></div>
+                      <div>
+                        <div class="fw-semibold"><?= esc($name) ?></div>
+                        <small class="text-muted"><?= esc($email) ?></small>
+                        <?php if(!empty($evt)): ?>
+                          <div class="mt-1">
+                            <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle"><?= esc($evt) ?></span>
+                          </div>
                         <?php endif; ?>
+                      </div>
                     </div>
+                    <span class="status-badge <?= $statusClass ?>"><?= $statusText ?></span>
+                  </div>
 
-                    <!-- Load More Button (if needed) -->
-                    <?php if (count($pembayarans) >= 50): ?>
-                        <div class="text-center mt-4">
-                            <button class="btn btn-outline-primary btn-custom" onclick="loadMore()">
-                                <i class="fas fa-plus me-2"></i>Tampilkan Lebih Banyak
-                            </button>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Bukti Pembayaran Modal -->
-    <div class="modal fade" id="buktiModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fas fa-image me-2"></i>Bukti Pembayaran
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <img id="buktiImage" src="" class="bukti-preview" alt="Bukti Pembayaran">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Verifikasi Modal -->
-    <div class="modal fade" id="verifikasiModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="verifikasiTitle">
-                        <i class="fas fa-check-circle me-2"></i>Verifikasi Pembayaran
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <form id="verifikasiForm" method="POST">
-                    <div class="modal-body">
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            Pastikan bukti pembayaran sudah sesuai sebelum melakukan verifikasi.
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Keterangan Verifikasi</label>
-                            <textarea class="form-control" name="keterangan" rows="3" 
-                                    placeholder="Tambahkan keterangan verifikasi (opsional)..."></textarea>
-                        </div>
-                        <input type="hidden" name="status" id="verifikasiStatus">
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary" id="verifikasiSubmit">
-                            <i class="fas fa-save me-2"></i>Proses
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Statistics Modal -->
-    <div class="modal fade" id="statistikModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fas fa-chart-bar me-2"></i>Statistik Pembayaran
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
+                  <div class="payment-body">
                     <div class="row">
-                        <div class="col-md-6">
-                            <canvas id="revenueChart"></canvas>
-                        </div>
-                        <div class="col-md-6">
-                            <canvas id="statusChart"></canvas>
-                        </div>
+                      <div class="col-6">
+                        <label class="text-muted small">Metode</label>
+                        <div class="fw-semibold"><?= esc($metode) ?></div>
+                      </div>
+                      <div class="col-6">
+                        <label class="text-muted small">Jumlah</label>
+                        <div class="fw-bold text-success">Rp <?= number_format($amount,0,',','.') ?></div>
+                      </div>
                     </div>
-                </div>
+
+                    <div class="row mt-3">
+                      <div class="col-6">
+                        <label class="text-muted small">Role & Partisipasi</label>
+                        <div class="d-flex flex-wrap gap-1">
+                          <span class="badge <?= $role==='presenter'?'bg-primary':'bg-secondary' ?>">
+                            <?= ucfirst($role ?: '-') ?>
+                          </span>
+                          <?php if(!empty($part)): ?>
+                            <span class="badge bg-light text-dark border"><?= ucfirst($part) ?></span>
+                          <?php endif; ?>
+                        </div>
+                      </div>
+                      <div class="col-6">
+                        <label class="text-muted small">Tanggal Bayar</label>
+                        <div class="fw-semibold">
+                          <?= !empty($p['tanggal_bayar']) ? date('d/m/Y H:i', strtotime($p['tanggal_bayar'])) : '-' ?>
+                        </div>
+                      </div>
+                    </div>
+
+                    <?php if(!empty($p['voucher_info'])):
+                      $v = $p['voucher_info'];
+                      $pot = ($v['tipe'] ?? '')==='percentage'
+                          ? ($v['nilai'] ?? 0).'%'
+                          : 'Rp '.number_format((int)($v['nilai'] ?? 0),0,',','.');
+                    ?>
+                      <div class="mt-3 p-2 bg-light rounded border">
+                        <small class="text-muted d-block">Voucher digunakan:</small>
+                        <div class="fw-semibold text-success"><?= esc($v['kode_voucher'] ?? '-') ?> (<?= $pot ?>)</div>
+                      </div>
+                    <?php endif; ?>
+
+                    <?php if(!empty($p['verified_at'])): ?>
+                      <div class="mt-2">
+                        <small class="text-muted">Diverifikasi: <?= date('d/m/Y H:i', strtotime($p['verified_at'])) ?></small>
+                      </div>
+                    <?php endif; ?>
+                  </div>
+
+                  <div class="payment-footer">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                      <div class="btn-group btn-group-sm" role="group" aria-label="Aksi utama">
+                        <a class="btn btn-outline-info"
+                           href="<?= site_url('admin/pembayaran/detail/'.(int)$p['id_pembayaran']) ?>">
+                          <i class="bi bi-eye me-1"></i>Detail
+                        </a>
+                        <?php if (!empty($p['bukti_bayar'])): ?>
+                          <button class="btn btn-outline-secondary btn-view-bukti"
+                                  data-bukti-url="<?= site_url('admin/pembayaran/view-bukti/'.(int)$p['id_pembayaran']) ?>">
+                            <i class="bi bi-image me-1"></i>Bukti
+                          </button>
+                        <?php endif; ?>
+                      </div>
+
+                      <?php if($status==='pending'): ?>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Verifikasi">
+                          <button class="btn btn-success btn-open-verif"
+                                  data-id="<?= (int)$p['id_pembayaran'] ?>"
+                                  data-status="verified">
+                            <i class="bi bi-check2 me-1"></i>Verifikasi
+                          </button>
+                          <button class="btn btn-danger btn-open-verif"
+                                  data-id="<?= (int)$p['id_pembayaran'] ?>"
+                                  data-status="rejected">
+                            <i class="bi bi-x me-1"></i>Tolak
+                          </button>
+                        </div>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            <?php endforeach; ?>
+          <?php else: ?>
+            <div class="col-12">
+              <div class="p-5 text-center border rounded-3 bg-light-subtle">
+                <div class="mb-2"><i class="bi bi-credit-card fs-3 text-secondary"></i></div>
+                <div class="fw-semibold">Belum Ada Pembayaran</div>
+                <div class="text-muted small">Belum ada pembayaran yang perlu diverifikasi saat ini.</div>
+              </div>
             </div>
+          <?php endif; ?>
         </div>
+
+        <!-- Load more (opsional) -->
+        <?php if (!empty($pembayarans) && count($pembayarans) >= 50): ?>
+          <div class="text-center mt-3">
+            <button class="btn btn-outline-primary" id="btnLoadMore">
+              <i class="bi bi-plus-lg me-1"></i>Tampilkan Lebih Banyak
+            </button>
+          </div>
+        <?php endif; ?>
+      </section>
+
     </div>
+  </main>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        // Search and filter functionality
-        document.getElementById('searchInput').addEventListener('keyup', filterPayments);
-        document.getElementById('statusFilter').addEventListener('change', filterPayments);
-        document.getElementById('roleFilter').addEventListener('change', filterPayments);
-        document.getElementById('participationFilter').addEventListener('change', filterPayments);
+<!-- MODALS -->
+<div class="modal fade" id="buktiModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><i class="bi bi-image me-2"></i>Bukti Pembayaran</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body text-center">
+      <img id="buktiImage" src="" class="img-fluid rounded shadow-sm" alt="Bukti Pembayaran">
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+    </div>
+  </div></div>
+</div>
 
-        function filterPayments() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const statusFilter = document.getElementById('statusFilter').value;
-            const roleFilter = document.getElementById('roleFilter').value;
-            const participationFilter = document.getElementById('participationFilter').value;
-            const cards = document.querySelectorAll('#paymentContainer > div');
+<div class="modal fade" id="verifikasiModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title" id="verifikasiTitle"><i class="bi bi-check2-circle me-2"></i>Verifikasi Pembayaran</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <form id="verifikasiForm" method="POST">
+      <?= csrf_field() ?>
+      <div class="modal-body">
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle me-2"></i>Pastikan bukti pembayaran sudah sesuai sebelum melakukan verifikasi.
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Keterangan Verifikasi</label>
+          <textarea class="form-control" name="keterangan" rows="3" placeholder="Tambahkan keterangan (opsional)..."></textarea>
+        </div>
+        <input type="hidden" name="status" id="verifikasiStatus">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+        <button type="submit" class="btn btn-primary" id="verifikasiSubmit">
+          <i class="bi bi-save me-1"></i>Proses
+        </button>
+      </div>
+    </form>
+  </div></div>
+</div>
 
-            let visibleCount = 0;
+<?= $this->include('partials/footer') ?>
+<style>
+    :root{
+  --primary-color:#2563eb;
+  --info-color:#06b6d4;
+  --success-color:#10b981;
+  --warning-color:#f59e0b;
+  --danger-color:#ef4444;
+}
 
-            cards.forEach(card => {
-                const searchData = card.getAttribute('data-search') || '';
-                const status = card.getAttribute('data-status');
-                const role = card.getAttribute('data-role');
-                const participation = card.getAttribute('data-participation');
+body{
+  background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%);
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+}
 
-                const matchesSearch = !searchTerm || searchData.includes(searchTerm);
-                const matchesStatus = !statusFilter || status === statusFilter;
-                const matchesRole = !roleFilter || role === roleFilter;
-                const matchesParticipation = !participationFilter || participation === participationFilter;
+/* Header (seragam dengan dashboard/reviewer) */
+.header-section.header-blue{
+  background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+  color:#fff; padding:28px 24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
+}
+.header-section.header-blue .welcome-text{ color:#fff; font-weight:800; font-size:2rem; }
+.header-section.header-blue .text-muted, 
+.header-section.header-blue strong{ color:rgba(255,255,255,.9)!important; }
 
-                const shouldShow = matchesSearch && matchesStatus && matchesRole && matchesParticipation;
-                card.style.display = shouldShow ? '' : 'none';
-                
-                if (shouldShow) visibleCount++;
-            });
+.welcome-text{ color:var(--primary-color); font-weight:700; }
 
-            // Update counter
-            const counterElement = document.getElementById('resultCounter');
-            if (counterElement) {
-                counterElement.textContent = `Menampilkan ${visibleCount} dari ${cards.length} pembayaran`;
-            }
+/* Stat cards (kpi) */
+.stat-card{
+  background:#fff; border-radius:14px; padding:20px; box-shadow:0 8px 28px rgba(0,0,0,.08);
+  border-left:4px solid #e9ecef; position:relative; overflow:hidden;
+}
+.stat-card:before{
+  content:''; position:absolute; left:0; top:0; height:4px; width:100%;
+  background:linear-gradient(90deg,var(--primary-color),var(--info-color));
+}
+.stat-icon{ width:56px; height:56px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:22px; }
+.stat-number{ font-size:2rem; font-weight:800; color:#1e293b; line-height:1; }
+
+/* Avatar (inisial) */
+.user-avatar{
+  width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff;
+  background:linear-gradient(135deg,var(--primary-color),var(--info-color));
+}
+
+/* Payment card */
+.payment-card{
+  background:#fff; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.08); border:1px solid #e2e8f0; overflow:hidden;
+}
+.payment-header{
+  padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;
+}
+.payment-body{ padding:20px; }
+.payment-footer{ padding:16px 20px; background:#f8fafc; border-top:1px solid #e2e8f0; }
+
+.status-badge{
+  padding:6px 12px; border-radius:20px; font-size:12px; font-weight:600;
+}
+.amount-display{ font-size:1.1rem; font-weight:700; color:var(--success-color); }
+
+/* Event tag (selaras style badge lembut) */
+.badge.bg-info-subtle{
+  background: #e0f2fe!important;
+  color:#0369a1!important;
+  border-color:#bae6fd!important;
+}
+
+/* Util */
+#content main>.container-fluid{ margin-top:.25rem; }
+</style>
+
+<!-- Hook JS modular (disarankan) -->
+<script>
+// Catatan: idealnya logic dipindah ke public/js/admin/payments.js dan di-enqueue di partial footer.
+// Di bawah ini hanya binding ringan supaya view langsung jalan.
+
+(function(){
+  const $ = (sel, ctx=document) => ctx.querySelector(sel);
+  const $$= (sel, ctx=document) => Array.from(ctx.querySelectorAll(sel));
+
+  // Filters
+  const searchInput = $('#searchInput');
+  const statusSel   = $('#statusFilter');
+  const roleSel     = $('#roleFilter');
+  const partSel     = $('#participationFilter');
+  const resetBtn    = $('#btnResetFilter');
+  const counterEl   = $('#resultCounter');
+
+  function applyFilter(){
+    const q    = (searchInput?.value || '').toLowerCase();
+    const s    = statusSel?.value || '';
+    const r    = roleSel?.value || '';
+    const p    = partSel?.value || '';
+    const cards= $$('#paymentContainer > div');
+
+    let visible = 0;
+    cards.forEach(col=>{
+      const ds  = (col.getAttribute('data-search')||'').toLowerCase();
+      const st  = col.getAttribute('data-status')||'';
+      const rl  = col.getAttribute('data-role')||'';
+      const prt = col.getAttribute('data-participation')||'';
+
+      const show = (!q || ds.includes(q))
+                && (!s || st===s)
+                && (!r || rl===r)
+                && (!p || prt===p);
+      col.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    if(counterEl){ counterEl.textContent = `Menampilkan ${visible} dari ${cards.length} pembayaran`; }
+  }
+
+  searchInput?.addEventListener('input', applyFilter);
+  statusSel?.addEventListener('change', applyFilter);
+  roleSel?.addEventListener('change', applyFilter);
+  partSel?.addEventListener('change', applyFilter);
+  resetBtn?.addEventListener('click', ()=>{
+    if(searchInput) searchInput.value='';
+    if(statusSel)   statusSel.value='';
+    if(roleSel)     roleSel.value='';
+    if(partSel)     partSel.value='';
+    applyFilter();
+  });
+
+  // Bukti modal
+  const buktiModal = new bootstrap.Modal($('#buktiModal'));
+  $$('.btn-view-bukti').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const url = btn.getAttribute('data-bukti-url');
+      $('#buktiImage').src = url;
+      buktiModal.show();
+    });
+  });
+
+  // Verifikasi modal
+  const verifModal = new bootstrap.Modal($('#verifikasiModal'));
+  $$('.btn-open-verif').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.getAttribute('data-id');
+      const st = btn.getAttribute('data-status');
+      const isVerif = st==='verified';
+      $('#verifikasiTitle').innerHTML = (isVerif
+        ? '<i class="bi bi-check2-circle me-2"></i>Verifikasi Pembayaran'
+        : '<i class="bi bi-x-circle me-2"></i>Tolak Pembayaran');
+      $('#verifikasiStatus').value = st;
+      const form = $('#verifikasiForm');
+      form.action = '<?= site_url('admin/pembayaran/verifikasi') ?>/'+id;
+      const submit = $('#verifikasiSubmit');
+      submit.className = 'btn ' + (isVerif ? 'btn-success' : 'btn-danger');
+      submit.innerHTML = '<i class="bi bi-save me-1"></i>' + (isVerif ? 'Verifikasi' : 'Tolak');
+      verifModal.show();
+    });
+  });
+
+  // Header buttons
+  $('#btnRefresh')?.addEventListener('click', ()=>location.reload());
+  $('#btnStatistik')?.addEventListener('click', ()=>{
+    // arahkan ke route statistik (bisa modal/chart di halaman lain)
+    window.location.href = '<?= site_url('admin/pembayaran/statistik') ?>';
+  });
+
+  // Auto refresh ringan jika ada pending
+  setInterval(()=>{
+    const hasPending = document.querySelector('[data-status="pending"]');
+    if(!hasPending) return;
+    fetch(window.location.href, {headers: {'X-Requested-With':'XMLHttpRequest'}})
+      .then(r=>r.text())
+      .then(html=>{
+        const doc = new DOMParser().parseFromString(html,'text/html');
+        const newList = doc.querySelector('#paymentContainer');
+        if(newList){
+          $('#paymentContainer').innerHTML = newList.innerHTML;
+          // re-bind minimal setelah refresh:
+          applyFilter();
         }
+      })
+      .catch(()=>{});
+  }, 30000);
 
-        function resetFilter() {
-            document.getElementById('searchInput').value = '';
-            document.getElementById('statusFilter').value = '';
-            document.getElementById('roleFilter').value = '';
-            document.getElementById('participationFilter').value = '';
-            filterPayments();
-        }
-
-        function viewBukti(imageUrl) {
-            document.getElementById('buktiImage').src = imageUrl;
-            new bootstrap.Modal(document.getElementById('buktiModal')).show();
-        }
-
-        function viewDetail(id) {
-            window.location.href = `<?= site_url('admin/pembayaran/detail') ?>/${id}`;
-        }
-
-        function verifikasiPembayaran(id, status) {
-            const isVerified = status === 'verified';
-            const title = isVerified ? 'Verifikasi Pembayaran' : 'Tolak Pembayaran';
-            const icon = isVerified ? 'fa-check-circle' : 'fa-times-circle';
-            const btnClass = isVerified ? 'btn-success' : 'btn-danger';
-            const btnText = isVerified ? 'Verifikasi' : 'Tolak';
-
-            document.getElementById('verifikasiTitle').innerHTML = `<i class="fas ${icon} me-2"></i>${title}`;
-            document.getElementById('verifikasiStatus').value = status;
-            document.getElementById('verifikasiForm').action = `<?= site_url('admin/pembayaran/verifikasi') ?>/${id}`;
-            document.getElementById('verifikasiSubmit').className = `btn ${btnClass}`;
-            document.getElementById('verifikasiSubmit').innerHTML = `<i class="fas fa-save me-2"></i>${btnText}`;
-
-            new bootstrap.Modal(document.getElementById('verifikasiModal')).show();
-        }
-
-        function refreshData() {
-            location.reload();
-        }
-
-        function exportData() {
-            window.location.href = '<?= site_url('admin/pembayaran/export') ?>';
-        }
-
-        function viewStatistics() {
-            // Load statistics data
-            fetch('<?= site_url('admin/pembayaran/statistik') ?>')
-                .then(response => response.json())
-                .then(data => {
-                    showStatistics(data);
-                })
-                .catch(error => {
-                    console.error('Error loading statistics:', error);
-                    Swal.fire('Error', 'Gagal memuat data statistik', 'error');
-                });
-        }
-
-        function showStatistics(data) {
-            new bootstrap.Modal(document.getElementById('statistikModal')).show();
-            
-            // Revenue Chart
-            const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-            new Chart(revenueCtx, {
-                type: 'line',
-                data: {
-                    labels: data.revenue_chart.map(item => item.label),
-                    datasets: [{
-                        label: 'Revenue',
-                        data: data.revenue_chart.map(item => item.revenue),
-                        borderColor: 'rgb(37, 99, 235)',
-                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Revenue 12 Bulan Terakhir'
-                        }
-                    }
-                }
-            });
-
-            // Status Chart
-            const statusCtx = document.getElementById('statusChart').getContext('2d');
-            new Chart(statusCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Pending', 'Verified', 'Rejected'],
-                    datasets: [{
-                        data: [
-                            data.status_distribution.pending,
-                            data.status_distribution.verified,
-                            data.status_distribution.rejected
-                        ],
-                        backgroundColor: [
-                            'rgb(245, 158, 11)',
-                            'rgb(16, 185, 129)',
-                            'rgb(239, 68, 68)'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Distribusi Status Pembayaran'
-                        }
-                    }
-                }
-            });
-        }
-
-        // Show success/error messages
-        document.addEventListener('DOMContentLoaded', function() {
-            <?php if (session('success')): ?>
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Berhasil!',
-                    text: '<?= session('success') ?>',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
-            <?php endif; ?>
-
-            <?php if (session('error')): ?>
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error!',
-                    text: '<?= session('error') ?>',
-                });
-            <?php endif; ?>
-
-            // Animate cards on load
-            const cards = document.querySelectorAll('.payment-card, .stat-card');
-            cards.forEach((card, index) => {
-                setTimeout(() => {
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateY(20px)';
-                    card.style.transition = 'all 0.5s ease';
-                    
-                    setTimeout(() => {
-                        card.style.opacity = '1';
-                        card.style.transform = 'translateY(0)';
-                    }, 100);
-                }, index * 50);
-            });
-
-            // Add result counter
-            const filterCard = document.querySelector('.filter-card .row');
-            if (filterCard) {
-                const counterDiv = document.createElement('div');
-                counterDiv.className = 'col-md-12 mt-2';
-                counterDiv.innerHTML = '<small id="resultCounter" class="text-muted"></small>';
-                filterCard.appendChild(counterDiv);
-                filterPayments(); // Initial count
-            }
-        });
-
-        // Auto-refresh every 30 seconds for pending payments
-        setInterval(() => {
-            const pendingCards = document.querySelectorAll('[data-status="pending"]');
-            if (pendingCards.length > 0) {
-                // Only refresh if there are pending payments
-                fetch(window.location.href)
-                    .then(response => response.text())
-                    .then(html => {
-                        // Update only the payment container
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(html, 'text/html');
-                        const newContainer = doc.getElementById('paymentContainer');
-                        if (newContainer) {
-                            document.getElementById('paymentContainer').innerHTML = newContainer.innerHTML;
-                            filterPayments(); // Reapply filters
-                        }
-                    })
-                    .catch(error => console.log('Auto-refresh failed:', error));
-            }
-        }, 30000);
-    </script>
-</body>
-</html>
+  // first render
+  applyFilter();
+})();
+</script>

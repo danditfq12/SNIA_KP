@@ -1,501 +1,318 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - SNIA</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --primary-color: #2563eb;
-            --secondary-color: #64748b;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-            --info-color: #06b6d4;
-        }
+<?php
+// ====== DEFAULT VARS (hindari notice) ======
+$title               = $title ?? 'Admin Dashboard';
+$pembayaran_pending  = (int)($pembayaran_pending ?? 0); // KPI
+$abstrak_masuk       = (int)($abstrak_masuk ?? 0);      // KPI
+$abstrak_unassigned  = (int)($abstrak_unassigned ?? 0); // KPI
+$total_event         = (int)($total_event ?? 0);        // KPI
 
-        body {
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-        }
+// list ringkasan/terbaru (opsional)
+$pendingPayments = $pendingPayments ?? []; // id_pembayaran,nama_lengkap,event_title,jumlah,tanggal_bayar
+$recent_abstrak  = $recent_abstrak  ?? []; // judul,nama_lengkap,status,created_at
+$unassigned_list = $unassigned_list ?? []; // judul,nama_lengkap,created_at
+$recent_events   = $recent_events   ?? []; // title,event_date,event_time,format,is_active
 
-        .sidebar {
-            background: linear-gradient(180deg, var(--primary-color) 0%, #1e40af 100%);
-            min-height: 100vh;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
-        }
+helper(['number','form']);
+$fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
+?>
 
-        .sidebar .nav-link {
-            color: rgba(255,255,255,0.8);
-            padding: 12px 20px;
-            margin: 4px 0;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
+<?= $this->include('partials/header') ?>
+<?= $this->include('partials/sidebar_admin') ?>
+<?= $this->include('partials/alerts') ?>
 
-        .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            transform: translateX(5px);
-        }
+<div id="content">
+  <main class="flex-fill" style="padding-top:70px;">
+    <div class="container-fluid p-3 p-md-4">
 
-        .sidebar .nav-link.active {
-            background: rgba(255,255,255,0.2);
-            color: white;
-        }
-
-        .main-content {
-            background: white;
-            border-radius: 20px 0 0 0;
-            min-height: 100vh;
-            box-shadow: -4px 0 20px rgba(0,0,0,0.05);
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-            border: 1px solid rgba(255,255,255,0.2);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary-color), var(--info-color));
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
-        }
-
-        .stat-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            color: white;
-        }
-
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #1e293b;
-            margin: 16px 0 8px 0;
-        }
-
-        .recent-card {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-            border: 1px solid rgba(255,255,255,0.2);
-            overflow: hidden;
-        }
-
-        .recent-card-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--info-color) 100%);
-            color: white;
-            padding: 20px;
-            font-weight: 600;
-        }
-
-        .list-item {
-            padding: 16px 20px;
-            border-bottom: 1px solid #e2e8f0;
-            transition: all 0.2s ease;
-        }
-
-        .list-item:hover {
-            background: #f8fafc;
-        }
-
-        .list-item:last-child {
-            border-bottom: none;
-        }
-
-        .badge-custom {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .header-section {
-            background: white;
-            padding: 24px;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-            margin-bottom: 30px;
-        }
-
-        .welcome-text {
-            color: var(--primary-color);
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .chart-container {
-            background: white;
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-            margin-top: 30px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-md-3 col-lg-2 px-0">
-                <div class="sidebar">
-                    <div class="p-4 text-center">
-                        <h4 class="text-white mb-0">
-                            <i class="fas fa-cogs me-2"></i>
-                            SNIA Admin
-                        </h4>
-                        <small class="text-white-50">Sistem Manajemen</small>
-                    </div>
-                    
-                    <nav class="nav flex-column px-3">
-                        <a class="nav-link active" href="<?= site_url('admin/dashboard') ?>">
-                            <i class="fas fa-tachometer-alt me-2"></i> Dashboard
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/users') ?>">
-                            <i class="fas fa-users me-2"></i> Manajemen User
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/abstrak') ?>">
-                            <i class="fas fa-file-alt me-2"></i> Manajemen Abstrak
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/reviewer') ?>">
-                            <i class="fas fa-user-check me-2"></i> Kelola Reviewer
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/event') ?>">
-                            <i class="fas fa-calendar-alt me-2"></i> Kelola Event
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/pembayaran') ?>">
-                            <i class="fas fa-credit-card me-2"></i> Verifikasi Pembayaran
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/absensi') ?>">
-                            <i class="fas fa-qrcode me-2"></i> Kelola Absensi
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/voucher') ?>">
-                            <i class="fas fa-ticket-alt me-2"></i> Kelola Voucher
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/dokumen') ?>">
-                            <i class="fas fa-folder-open me-2"></i> Dokumen
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/laporan') ?>">
-                            <i class="fas fa-chart-line me-2"></i> Laporan
-                        </a>
-                        <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
-                        <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
-                            <i class="fas fa-sign-out-alt me-2"></i> Logout
-                        </a>
-                    </nav>
-                </div>
-            </div>
-
-            <!-- Main Content -->
-            <div class="col-md-9 col-lg-10">
-                <div class="main-content p-4">
-                    <!-- Header -->
-                    <div class="header-section">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <h1 class="welcome-text">
-                                    <i class="fas fa-chart-pie me-3"></i>Dashboard Admin
-                                </h1>
-                                <p class="text-muted mb-0">
-                                    Selamat datang kembali, <strong><?= session('nama_lengkap') ?? 'Admin' ?></strong>! 
-                                    Kelola sistem SNIA dengan mudah dari sini.
-                                </p>
-                            </div>
-                            <div class="col-auto">
-                                <div class="text-end">
-                                    <small class="text-muted d-block">Terakhir login</small>
-                                    <strong><?= date('d F Y, H:i') ?></strong>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Statistics Cards (Only 4) -->
-                    <div class="row g-4 mb-4">
-                        <div class="col-md-6 col-xl-3">
-                            <div class="stat-card">
-                                <div class="d-flex align-items-center">
-                                    <div class="stat-icon" style="background: linear-gradient(135deg, var(--primary-color), var(--info-color));">
-                                        <i class="fas fa-users"></i>
-                                    </div>
-                                    <div class="ms-3">
-                                        <div class="stat-number"><?= $total_users ?? 0 ?></div>
-                                        <div class="text-muted">Total User</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6 col-xl-3">
-                            <div class="stat-card">
-                                <div class="d-flex align-items-center">
-                                    <div class="stat-icon" style="background: linear-gradient(135deg, var(--success-color), #059669);">
-                                        <i class="fas fa-file-alt"></i>
-                                    </div>
-                                    <div class="ms-3">
-                                        <div class="stat-number"><?= $total_abstrak ?? 0 ?></div>
-                                        <div class="text-muted">Total Abstrak</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6 col-xl-3">
-                            <div class="stat-card">
-                                <div class="d-flex align-items-center">
-                                    <div class="stat-icon" style="background: linear-gradient(135deg, var(--warning-color), #d97706);">
-                                        <i class="fas fa-credit-card"></i>
-                                    </div>
-                                    <div class="ms-3">
-                                        <div class="stat-number"><?= $pembayaran_pending ?? 0 ?></div>
-                                        <div class="text-muted">Pembayaran Pending</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6 col-xl-3">
-                            <div class="stat-card">
-                                <div class="d-flex align-items-center">
-                                    <div class="stat-icon" style="background: linear-gradient(135deg, var(--info-color), #0891b2);">
-                                        <i class="fas fa-user-check"></i>
-                                    </div>
-                                    <div class="ms-3">
-                                        <div class="stat-number"><?= $total_reviewer ?? 0 ?></div>
-                                        <div class="text-muted">Total Reviewer</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Recent Activities -->
-                    <div class="row g-4">
-                        <div class="col-lg-4">
-                            <div class="recent-card">
-                                <div class="recent-card-header">
-                                    <i class="fas fa-user-plus me-2"></i>
-                                    User Terbaru
-                                </div>
-                                <div class="card-body p-0">
-                                    <?php if (!empty($recent_users)): ?>
-                                        <?php foreach ($recent_users as $user): ?>
-                                            <div class="list-item">
-                                                <div class="d-flex align-items-center">
-                                                    <div class="flex-shrink-0">
-                                                        <div class="bg-primary rounded-circle p-2" style="width: 40px; height: 40px;">
-                                                            <i class="fas fa-user text-white"></i>
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex-grow-1 ms-3">
-                                                        <div class="fw-semibold"><?= esc($user['nama_lengkap']) ?></div>
-                                                        <div class="text-muted small"><?= esc($user['email']) ?></div>
-                                                    </div>
-                                                    <div class="flex-shrink-0">
-                                                        <span class="badge-custom <?= $user['role'] == 'presenter' ? 'bg-success' : ($user['role'] == 'reviewer' ? 'bg-info' : 'bg-secondary') ?>">
-                                                            <?= ucfirst($user['role']) ?>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <div class="list-item text-center text-muted">
-                                            <i class="fas fa-inbox fa-2x mb-2"></i>
-                                            <div>Belum ada user terbaru</div>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-lg-4">
-                            <div class="recent-card">
-                                <div class="recent-card-header">
-                                    <i class="fas fa-file-alt me-2"></i>
-                                    Abstrak Terbaru
-                                </div>
-                                <div class="card-body p-0">
-                                    <?php if (!empty($recent_abstrak)): ?>
-                                        <?php foreach ($recent_abstrak as $abstrak): ?>
-                                            <div class="list-item">
-                                                <div class="d-flex align-items-start">
-                                                    <div class="flex-shrink-0">
-                                                        <div class="bg-success rounded-circle p-2" style="width: 40px; height: 40px;">
-                                                            <i class="fas fa-file text-white"></i>
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex-grow-1 ms-3">
-                                                        <div class="fw-semibold"><?= esc(substr($abstrak['judul'], 0, 50)) ?>...</div>
-                                                        <div class="text-muted small">
-                                                            oleh <?= esc($abstrak['nama_lengkap']) ?>
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex-shrink-0">
-                                                        <?php
-                                                        $statusClass = '';
-                                                        switch($abstrak['status']) {
-                                                            case 'menunggu': $statusClass = 'bg-warning'; break;
-                                                            case 'diterima': $statusClass = 'bg-success'; break;
-                                                            case 'ditolak': $statusClass = 'bg-danger'; break;
-                                                            default: $statusClass = 'bg-secondary';
-                                                        }
-                                                        ?>
-                                                        <span class="badge-custom <?= $statusClass ?>">
-                                                            <?= ucfirst($abstrak['status']) ?>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <div class="list-item text-center text-muted">
-                                            <i class="fas fa-inbox fa-2x mb-2"></i>
-                                            <div>Belum ada abstrak</div>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-lg-4">
-                            <div class="recent-card">
-                                <div class="recent-card-header">
-                                    <i class="fas fa-calendar me-2"></i>
-                                    Event Terbaru
-                                </div>
-                                <div class="card-body p-0">
-                                    <?php if (!empty($recent_events)): ?>
-                                        <?php foreach ($recent_events as $event): ?>
-                                            <div class="list-item">
-                                                <div class="d-flex align-items-start">
-                                                    <div class="flex-shrink-0">
-                                                        <div class="bg-info rounded-circle p-2" style="width: 40px; height: 40px;">
-                                                            <i class="fas fa-calendar text-white"></i>
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex-grow-1 ms-3">
-                                                        <div class="fw-semibold"><?= esc(substr($event['title'], 0, 40)) ?>...</div>
-                                                        <div class="text-muted small">
-                                                            <?= date('d M Y', strtotime($event['event_date'])) ?> | <?= ucfirst($event['format']) ?>
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex-shrink-0">
-                                                        <span class="badge-custom <?= $event['is_active'] ? 'bg-success' : 'bg-secondary' ?>">
-                                                            <?= $event['is_active'] ? 'Aktif' : 'Nonaktif' ?>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <div class="list-item text-center text-muted">
-                                            <i class="fas fa-inbox fa-2x mb-2"></i>
-                                            <div>Belum ada event</div>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Status Overview Chart -->
-                    <div class="chart-container">
-                        <h5 class="mb-4">
-                            <i class="fas fa-chart-pie me-2 text-primary"></i>
-                            Status Abstrak Overview
-                        </h5>
-                        <div class="row">
-                            <div class="col-md-3 text-center">
-                                <div class="p-3">
-                                    <div class="display-6 text-warning"><?= $abstrak_pending ?? 0 ?></div>
-                                    <div class="text-muted">Menunggu Review</div>
-                                </div>
-                            </div>
-                            <div class="col-md-3 text-center">
-                                <div class="p-3">
-                                    <div class="display-6 text-success"><?= $abstrak_diterima ?? 0 ?></div>
-                                    <div class="text-muted">Diterima</div>
-                                </div>
-                            </div>
-                            <div class="col-md-3 text-center">
-                                <div class="p-3">
-                                    <div class="display-6 text-danger"><?= $abstrak_ditolak ?? 0 ?></div>
-                                    <div class="text-muted">Ditolak</div>
-                                </div>
-                            </div>
-                            <div class="col-md-3 text-center">
-                                <div class="p-3">
-                                    <div class="display-6 text-info"><?= $total_abstrak ?? 0 ?></div>
-                                    <div class="text-muted">Total</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <!-- HEADER (seragam: header-blue) -->
+      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h3 class="welcome-text mb-1">
+            <i class="bi bi-speedometer2 me-2"></i>Dashboard Admin
+          </h3>
+          <div class="text-white-50">Ringkasan status sistem SNIA</div>
         </div>
+        <div class="text-end d-none d-md-block">
+          <small class="text-white-50 d-block">Terakhir login</small>
+          <strong class="text-white"><?= date('d M Y, H:i') ?></strong>
+        </div>
+      </div>
+
+      <!-- KPI 4 KOTAK -->
+      <div class="row g-3 mb-3">
+        <div class="col-6 col-xl-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-warning"><i class="bi bi-cash-coin"></i></div>
+              <div class="ms-3">
+                <div class="stat-number" data-num="<?= $pembayaran_pending ?>"><?= number_format($pembayaran_pending) ?></div>
+                <div class="text-muted">Pembayaran perlu ACC</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-6 col-xl-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-primary"><i class="bi bi-file-earmark-text"></i></div>
+              <div class="ms-3">
+                <div class="stat-number" data-num="<?= $abstrak_masuk ?>"><?= number_format($abstrak_masuk) ?></div>
+                <div class="text-muted">Abstrak masuk</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-6 col-xl-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-danger"><i class="bi bi-person-gear"></i></div>
+              <div class="ms-3">
+                <div class="stat-number" data-num="<?= $abstrak_unassigned ?>"><?= number_format($abstrak_unassigned) ?></div>
+                <div class="text-muted">Belum ditugaskan</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-6 col-xl-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-success"><i class="bi bi-calendar2-event"></i></div>
+              <div class="ms-3">
+                <div class="stat-number" data-num="<?= $total_event ?>"><?= number_format($total_event) ?></div>
+                <div class="text-muted">Total event dibuat</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROW 1: Pembayaran pending + Abstrak masuk -->
+      <div class="row g-3 mb-3">
+        <!-- Pembayaran pending -->
+        <div class="col-12 col-xl-6">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="card-title mb-0"><i class="bi bi-cash-coin me-2 text-warning"></i>Pembayaran menunggu verifikasi</h5>
+                <a href="<?= site_url('admin/pembayaran') ?>" class="small">Kelola</a>
+              </div>
+              <?php if (!empty($pendingPayments)): ?>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Nama</th>
+                        <th>Event</th>
+                        <th class="text-end">Jumlah</th>
+                        <th class="text-nowrap">Tanggal</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <?php foreach ($pendingPayments as $p): ?>
+                        <tr>
+                          <td><?= esc($p['nama_lengkap'] ?? '-') ?></td>
+                          <td><?= esc($p['event_title'] ?? 'Event') ?></td>
+                          <td class="text-end">Rp <?= number_format((float)($p['jumlah'] ?? 0), 0, ',', '.') ?></td>
+                          <td class="text-nowrap"><?= esc($fmtDate($p['tanggal_bayar'] ?? null)) ?></td>
+                          <td class="text-end">
+                            <a href="<?= site_url('admin/pembayaran/detail/'.(int)($p['id_pembayaran'] ?? 0)) ?>" class="btn btn-sm btn-outline-primary">Detail</a>
+                          </td>
+                        </tr>
+                      <?php endforeach; ?>
+                    </tbody>
+                  </table>
+                </div>
+              <?php else: ?>
+                <div class="p-4 text-center border rounded-3 bg-light-subtle">
+                  <div class="mb-2"><i class="bi bi-wallet2 fs-3 text-secondary"></i></div>
+                  <div class="fw-semibold">Tidak ada pembayaran pending</div>
+                  <div class="text-muted small">Semua pembayaran telah diverifikasi.</div>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+        </div>
+
+        <!-- Abstrak masuk terbaru -->
+        <div class="col-12 col-xl-6">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="card-title mb-0"><i class="bi bi-file-earmark-text me-2 text-primary"></i>Abstrak masuk terbaru</h5>
+                <a href="<?= site_url('admin/abstrak') ?>" class="small">Kelola</a>
+              </div>
+
+              <div class="vstack gap-2 activities-scroll">
+                <?php if (!empty($recent_abstrak)): ?>
+                  <?php foreach ($recent_abstrak as $ab):
+                    $st  = strtolower($ab['status'] ?? 'menunggu');
+                    $cls = $st==='menunggu'?'bg-warning text-dark':($st==='diterima'?'bg-success':($st==='ditolak'?'bg-danger':'bg-secondary'));
+                  ?>
+                    <div class="notice">
+                      <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-journal-text text-primary mt-1"></i>
+                        <div class="flex-fill">
+                          <div class="title"><?= esc(mb_strimwidth($ab['judul'] ?? '-', 0, 70, '...')) ?></div>
+                          <div class="meta">oleh <?= esc($ab['nama_lengkap'] ?? '-') ?> · <?= esc($fmtDate($ab['created_at'] ?? null)) ?></div>
+                        </div>
+                        <span class="badge <?= $cls ?>"><?= ucfirst($st) ?></span>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <div class="p-4 text-center border rounded-3 bg-light-subtle">
+                    <div class="mb-2"><i class="bi bi-inbox fs-3 text-secondary"></i></div>
+                    <div class="fw-semibold">Belum ada abstrak</div>
+                    <div class="text-muted small">Abstrak terbaru akan tampil di sini.</div>
+                  </div>
+                <?php endif; ?>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROW 2: Abstrak belum ditugaskan + Event terbaru -->
+      <div class="row g-3">
+        <!-- Unassigned abstrak -->
+        <div class="col-12 col-xl-6">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="card-title mb-0"><i class="bi bi-person-gear me-2 text-danger"></i>Abstrak belum ditugaskan ke reviewer</h5>
+                <a href="<?= site_url('admin/reviewer') ?>" class="small">Tugaskan</a>
+              </div>
+
+              <div class="vstack gap-2 activities-scroll">
+                <?php if (!empty($unassigned_list)): ?>
+                  <?php foreach ($unassigned_list as $ua): ?>
+                    <div class="notice">
+                      <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-exclamation-triangle text-danger mt-1"></i>
+                        <div class="flex-fill">
+                          <div class="title"><?= esc(mb_strimwidth($ua['judul'] ?? '-', 0, 70, '...')) ?></div>
+                          <div class="meta">oleh <?= esc($ua['nama_lengkap'] ?? '-') ?> · <?= esc($fmtDate($ua['created_at'] ?? null)) ?></div>
+                        </div>
+                        <a href="<?= site_url('admin/reviewer') ?>" class="btn btn-sm btn-outline-danger">Tugaskan</a>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <div class="p-4 text-center border rounded-3 bg-light-subtle">
+                    <div class="mb-2"><i class="bi bi-check2-circle fs-3 text-success"></i></div>
+                    <div class="fw-semibold">Semua abstrak sudah ditugaskan</div>
+                    <div class="text-muted small">Tidak ada antrian penugasan reviewer.</div>
+                  </div>
+                <?php endif; ?>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Event terbaru -->
+        <div class="col-12 col-xl-6">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="card-title mb-0"><i class="bi bi-calendar-event me-2 text-success"></i>Event terbaru</h5>
+                <a href="<?= site_url('admin/event') ?>" class="small">Kelola</a>
+              </div>
+
+              <div class="vstack gap-2 activities-scroll">
+                <?php if (!empty($recent_events)): ?>
+                  <?php foreach ($recent_events as $ev): ?>
+                    <div class="notice">
+                      <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-calendar3 text-success mt-1"></i>
+                        <div class="flex-fill">
+                          <div class="title"><?= esc(mb_strimwidth($ev['title'] ?? 'Event', 0, 70, '...')) ?></div>
+                          <div class="meta">
+                            <?= esc($fmtDate($ev['event_date'] ?? null)) ?> ·
+                            <?= esc($ev['event_time'] ?? '-') ?> ·
+                            <?= esc(ucfirst($ev['format'] ?? '-')) ?>
+                          </div>
+                        </div>
+                        <span class="badge <?= !empty($ev['is_active']) ? 'bg-success':'bg-secondary' ?>">
+                          <?= !empty($ev['is_active']) ? 'Aktif' : 'Nonaktif' ?>
+                        </span>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <div class="p-4 text-center border rounded-3 bg-light-subtle">
+                    <div class="mb-2"><i class="bi bi-calendar-x fs-3 text-secondary"></i></div>
+                    <div class="fw-semibold">Belum ada event</div>
+                    <div class="text-muted small">Buat event baru di menu Kelola Event.</div>
+                  </div>
+                <?php endif; ?>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
+  </main>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Add some interactive features
-        document.addEventListener('DOMContentLoaded', function() {
-            // Animate numbers on page load
-            const numbers = document.querySelectorAll('.stat-number');
-            numbers.forEach(number => {
-                const finalNumber = parseInt(number.textContent);
-                let currentNumber = 0;
-                const increment = finalNumber / 50;
-                
-                const timer = setInterval(() => {
-                    currentNumber += increment;
-                    if (currentNumber >= finalNumber) {
-                        number.textContent = finalNumber;
-                        clearInterval(timer);
-                    } else {
-                        number.textContent = Math.floor(currentNumber);
-                    }
-                }, 20);
-            });
+<?= $this->include('partials/footer') ?>
 
-            // Add hover effects to cards
-            const cards = document.querySelectorAll('.stat-card, .recent-card');
-            cards.forEach(card => {
-                card.addEventListener('mouseenter', function() {
-                    this.style.transform = 'translateY(-5px)';
-                });
-                
-                card.addEventListener('mouseleave', function() {
-                    this.style.transform = 'translateY(0)';
-                });
-            });
-        });
-    </script>
-</body>
-</html>
+<!-- ====== STYLES (seragam dengan Voucher/Dokumen) ====== -->
+<style>
+  :root{
+    --primary-color:#2563eb; --success-color:#10b981; --warning-color:#f59e0b; --danger-color:#ef4444; --info-color:#06b6d4;
+  }
+  body{ background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%); font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
+
+  .header-section.header-blue{
+    background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+    color:#fff; padding:28px 24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
+  }
+  .header-section .welcome-text{ color:#fff; font-weight:800; font-size:2rem; }
+
+  .stat-card{
+    background:#fff; border-radius:14px; padding:20px; box-shadow:0 8px 28px rgba(0,0,0,.08);
+    border-left:4px solid #e9ecef; position:relative; overflow:hidden;
+  }
+  .stat-card:before{
+    content:''; position:absolute; left:0; top:0; height:4px; width:100%;
+    background:linear-gradient(90deg,var(--primary-color),var(--info-color));
+  }
+  .stat-icon{ width:56px; height:56px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:22px; }
+  .stat-number{ font-size:2rem; font-weight:800; color:#1e293b; line-height:1; }
+
+  .activities-scroll{ max-height: 320px; overflow:auto; padding-right: 6px; }
+  .activities-scroll::-webkit-scrollbar{ width:8px; }
+  .activities-scroll::-webkit-scrollbar-thumb{ background:#ccd6e0; border-radius:8px; }
+
+  .notice{ border:1px solid #eef2f6; border-radius:12px; padding:12px; background:#fff; transition:.15s ease; }
+  .notice:hover{ box-shadow:0 8px 18px rgba(0,0,0,.06); }
+  .notice .title{ font-weight:600; }
+  .notice .meta{ font-size:.85rem; color:#e5e7eb; color:#6c757d; }
+
+  /* jarak aman di bawah header global */
+  #content main>.container-fluid{ margin-top:.25rem; }
+</style>
+
+<!-- ====== SCRIPTS (animasi angka KPI) ====== -->
+<script>
+  (function(){
+    const els = document.querySelectorAll('.stat-number');
+    els.forEach(el=>{
+      const target = parseInt(el.getAttribute('data-num')||'0',10);
+      let cur = 0; const step = Math.max(1, Math.round(target/40));
+      const id = setInterval(()=>{
+        cur += step;
+        if(cur >= target){ cur = target; clearInterval(id); }
+        el.textContent = new Intl.NumberFormat('id-ID').format(cur);
+      }, 18);
+    });
+  })();
+</script>

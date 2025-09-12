@@ -1,846 +1,423 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detail Abstrak - <?= esc($abstrak['judul']) ?> - SNIA Admin</title>
-    
-    <!-- External CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.12/sweetalert2.min.css" rel="stylesheet">
-    
-    <!-- Custom Styles -->
-    <style>
-        /* CSS Variables */
-        :root {
-            --primary-color: #2563eb;
-            --secondary-color: #64748b;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-            --info-color: #06b6d4;
-            --border-radius: 12px;
-            --shadow-light: 0 2px 8px rgba(0,0,0,0.05);
-            --shadow-medium: 0 4px 16px rgba(0,0,0,0.1);
-            --shadow-heavy: 0 8px 32px rgba(0,0,0,0.15);
-        }
+<?php
+// ====== DEFAULT VARS ======
+$abstrak  = $abstrak ?? [];     // id_abstrak, judul, nama_lengkap, email, nama_kategori, id_kategori, event_id, event_title, tanggal_upload, revisi_ke, status, file_abstrak
+$reviews  = $reviews ?? [];     // reviewer_name, tanggal_review, keputusan, komentar
+$title    = 'Detail Abstrak';
 
-        /* Base Styles */
-        body {
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-        }
+// mapping status → badge
+$badgeMap = [
+  'menunggu'        => 'warning',
+  'sedang_direview' => 'info',
+  'diterima'        => 'success',
+  'ditolak'         => 'danger',
+  'revisi'          => 'secondary',
+];
+$stKey  = strtolower($abstrak['status'] ?? 'menunggu');
+$stCls  = $badgeMap[$stKey] ?? 'secondary';
+$stText = ucfirst(str_replace('_',' ', $stKey));
+?>
 
-        /* Sidebar Styles */
-        .sidebar {
-            background: linear-gradient(180deg, var(--primary-color) 0%, #1e40af 100%);
-            min-height: 100vh;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
-        }
+<?= $this->include('partials/header') ?>
+<?= $this->include('partials/sidebar_admin') ?>
+<?= $this->include('partials/alerts') ?>
 
-        .sidebar .nav-link {
-            color: rgba(255,255,255,0.8);
-            padding: 12px 20px;
-            margin: 4px 0;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
+<div id="content">
+  <main class="flex-fill" style="padding-top:70px;">
+    <div class="container-fluid p-3 p-md-4">
 
-        .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            transform: translateX(5px);
-        }
-
-        .sidebar .nav-link.active {
-            background: rgba(255,255,255,0.2);
-            color: white;
-        }
-
-        /* Main Content */
-        .main-content {
-            background: white;
-            border-radius: 20px 0 0 0;
-            min-height: 100vh;
-            box-shadow: -4px 0 20px rgba(0,0,0,0.05);
-        }
-
-        /* Card Styles */
-        .detail-card {
-            background: white;
-            border-radius: var(--border-radius);
-            padding: 24px;
-            box-shadow: var(--shadow-medium);
-            border: 1px solid rgba(255,255,255,0.2);
-            margin-bottom: 24px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .detail-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary-color), var(--info-color));
-        }
-
-        .header-section {
-            background: white;
-            padding: 24px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-light);
-            margin-bottom: 30px;
-        }
-
-        /* Badge Styles */
-        .status-badge {
-            font-size: 14px;
-            font-weight: 600;
-            padding: 8px 16px;
-            border-radius: 20px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        /* Info Item Styles */
-        .info-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid #f1f5f9;
-        }
-
-        .info-item:last-child {
-            border-bottom: none;
-        }
-
-        .info-label {
-            font-weight: 600;
-            color: #374151;
-            min-width: 150px;
-        }
-
-        .info-value {
-            color: #6b7280;
-            text-align: right;
-            flex: 1;
-        }
-
-        /* Button Styles */
-        .btn-custom {
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        .btn-custom:hover {
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-medium);
-        }
-
-        /* File Preview */
-        .file-preview {
-            background: #f8fafc;
-            border: 2px solid #e2e8f0;
-            border-radius: var(--border-radius);
-            padding: 20px;
-            text-align: center;
-            margin: 20px 0;
-        }
-
-        /* Review Timeline */
-        .review-timeline {
-            position: relative;
-            padding-left: 30px;
-        }
-
-        .review-timeline::before {
-            content: '';
-            position: absolute;
-            left: 15px;
-            top: 0;
-            bottom: 0;
-            width: 2px;
-            background: #e5e7eb;
-        }
-
-        .review-item {
-            position: relative;
-            margin-bottom: 24px;
-            background: white;
-            border-radius: var(--border-radius);
-            padding: 20px;
-            box-shadow: var(--shadow-light);
-        }
-
-        .review-item::before {
-            content: '';
-            position: absolute;
-            left: -23px;
-            top: 24px;
-            width: 12px;
-            height: 12px;
-            background: var(--primary-color);
-            border-radius: 50%;
-            border: 3px solid white;
-            box-shadow: 0 0 0 2px #e5e7eb;
-        }
-
-        .review-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .reviewer-name {
-            font-weight: 600;
-            color: #374151;
-        }
-
-        .review-date {
-            font-size: 12px;
-            color: #6b7280;
-        }
-
-        .review-decision {
-            font-size: 12px;
-            font-weight: 600;
-            padding: 4px 8px;
-            border-radius: 12px;
-            text-transform: uppercase;
-        }
-
-        /* Modal Styles */
-        .modal-content {
-            border-radius: 16px;
-            border: none;
-            box-shadow: var(--shadow-heavy);
-        }
-
-        .modal-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
-            color: white;
-            border-radius: 16px 16px 0 0;
-            border-bottom: none;
-        }
-
-        /* Form Styles */
-        .form-control, .form-select {
-            border-radius: 8px;
-            border: 2px solid #e2e8f0;
-            padding: 12px 16px;
-            transition: all 0.3s ease;
-        }
-
-        .form-control:focus, .form-select:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
-        }
-
-        /* Breadcrumb */
-        .breadcrumb-item a {
-            color: var(--primary-color);
-            text-decoration: none;
-        }
-
-        .breadcrumb-item a:hover {
-            text-decoration: underline;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 2rem 0; /* Equivalent to py-4 in Tailwind */
-        }
-
-        .empty-state i {
-            font-size: 3rem;
-            color: #6b7280;
-            margin-bottom: 1rem;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                position: fixed;
-                z-index: 1000;
-                transform: translateX(-100%);
-                transition: transform 0.3s ease;
-            }
-            
-            .sidebar.active {
-                transform: translateX(0);
-            }
-            
-            .main-content {
-                border-radius: 0;
-            }
-            
-            .detail-card {
-                margin-bottom: 16px;
-                padding: 16px;
-            }
-        }
-    </style>
-</head>
-
-<body>
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-md-3 col-lg-2 px-0">
-                <div class="sidebar">
-                    <!-- Logo Section -->
-                    <div class="p-4 text-center border-bottom border-white border-opacity-20">
-                        <h4 class="text-white mb-0">
-                            <i class="fas fa-cogs me-2"></i>
-                            SNIA Admin
-                        </h4>
-                        <small class="text-white-50">Sistem Manajemen</small>
-                    </div>
-                    
-                    <!-- Navigation Menu -->
-                    <nav class="nav flex-column px-3 py-3">
-                        <a class="nav-link" href="<?= site_url('admin/dashboard') ?>">
-                            <i class="fas fa-tachometer-alt me-2"></i> Dashboard
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/users') ?>">
-                            <i class="fas fa-users me-2"></i> Manajemen User
-                        </a>
-                        <a class="nav-link active" href="<?= site_url('admin/abstrak') ?>">
-                            <i class="fas fa-file-alt me-2"></i> Manajemen Abstrak
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/reviewer') ?>">
-                            <i class="fas fa-user-check me-2"></i> Kelola Reviewer
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/event') ?>">
-                            <i class="fas fa-calendar-alt me-2"></i> Kelola Event
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/pembayaran') ?>">
-                            <i class="fas fa-credit-card me-2"></i> Verifikasi Pembayaran
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/voucher') ?>">
-                            <i class="fas fa-ticket-alt me-2"></i> Kelola Voucher
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/dokumen') ?>">
-                            <i class="fas fa-folder-open me-2"></i> Dokumen
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/laporan') ?>">
-                            <i class="fas fa-chart-line me-2"></i> Laporan
-                        </a>
-                        
-                        <hr class="my-3 border-white border-opacity-20">
-                        
-                        <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
-                            <i class="fas fa-sign-out-alt me-2"></i> Logout
-                        </a>
-                    </nav>
-                </div>
-            </div>
-
-            <!-- Main Content -->
-            <div class="col-md-9 col-lg-10">
-                <div class="main-content p-4">
-                    <!-- Breadcrumb Navigation -->
-                    <nav aria-label="breadcrumb" class="mb-4">
-                        <ol class="breadcrumb">
-                            <li class="breadcrumb-item">
-                                <a href="<?= site_url('admin/dashboard') ?>">
-                                    <i class="fas fa-home me-1"></i>Dashboard
-                                </a>
-                            </li>
-                            <li class="breadcrumb-item">
-                                <a href="<?= site_url('admin/abstrak') ?>">Manajemen Abstrak</a>
-                            </li>
-                            <li class="breadcrumb-item active" aria-current="page">Detail Abstrak</li>
-                        </ol>
-                    </nav>
-
-                    <!-- Page Header -->
-                    <div class="header-section">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <h1 class="mb-2">
-                                    <i class="fas fa-file-alt me-3 text-primary"></i>
-                                    Detail Abstrak
-                                </h1>
-                                <h4 class="text-muted fw-normal mb-0">
-                                    <?= esc($abstrak['judul']) ?>
-                                </h4>
-                            </div>
-                            <div class="col-auto">
-                                <?php 
-                                $statusClasses = [
-                                    'menunggu' => 'warning',
-                                    'sedang_direview' => 'info', 
-                                    'diterima' => 'success',
-                                    'ditolak' => 'danger',
-                                    'revisi' => 'secondary'
-                                ];
-                                $statusClass = $statusClasses[$abstrak['status']] ?? 'secondary';
-                                $statusText = ucfirst(str_replace('_', ' ', $abstrak['status']));
-                                ?>
-                                <span class="status-badge bg-<?= $statusClass ?> text-white">
-                                    <?= $statusText ?>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Main Content Grid -->
-                    <div class="row">
-                        <!-- Left Column - Main Details -->
-                        <div class="col-lg-8">
-                            <!-- Abstract Information Card -->
-                            <div class="detail-card">
-                                <h5 class="mb-4">
-                                    <i class="fas fa-info-circle me-2 text-primary"></i>
-                                    Informasi Abstrak
-                                </h5>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">
-                                        <i class="fas fa-heading me-2"></i>Judul
-                                    </div>
-                                    <div class="info-value">
-                                        <strong><?= esc($abstrak['judul']) ?></strong>
-                                    </div>
-                                </div>
-
-                                <div class="info-item">
-                                    <div class="info-label">
-                                        <i class="fas fa-user me-2"></i>Penulis
-                                    </div>
-                                    <div class="info-value">
-                                        <?= esc($abstrak['nama_lengkap']) ?>
-                                        <br><small class="text-muted"><?= esc($abstrak['email']) ?></small>
-                                    </div>
-                                </div>
-
-                                <div class="info-item">
-                                    <div class="info-label">
-                                        <i class="fas fa-tags me-2"></i>Kategori
-                                    </div>
-                                    <div class="info-value">
-                                        <span class="badge bg-info"><?= esc($abstrak['nama_kategori']) ?></span>
-                                    </div>
-                                </div>
-
-                                <?php if (!empty($abstrak['event_title'])): ?>
-                                <div class="info-item">
-                                    <div class="info-label">
-                                        <i class="fas fa-calendar me-2"></i>Event
-                                    </div>
-                                    <div class="info-value">
-                                        <?= esc($abstrak['event_title']) ?>
-                                    </div>
-                                </div>
-                                <?php endif; ?>
-
-                                <div class="info-item">
-                                    <div class="info-label">
-                                        <i class="fas fa-clock me-2"></i>Tanggal Upload
-                                    </div>
-                                    <div class="info-value">
-                                        <?= date('d F Y, H:i', strtotime($abstrak['tanggal_upload'])) ?>
-                                    </div>
-                                </div>
-
-                                <div class="info-item">
-                                    <div class="info-label">
-                                        <i class="fas fa-redo me-2"></i>Revisi Ke
-                                    </div>
-                                    <div class="info-value">
-                                        <span class="badge bg-secondary"><?= $abstrak['revisi_ke'] ?></span>
-                                    </div>
-                                </div>
-
-                                <div class="info-item">
-                                    <div class="info-label">
-                                        <i class="fas fa-flag me-2"></i>Status
-                                    </div>
-                                    <div class="info-value">
-                                        <span class="badge bg-<?= $statusClass ?>"><?= $statusText ?></span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- File Preview Card -->
-                            <div class="detail-card">
-                                <h5 class="mb-4">
-                                    <i class="fas fa-file-pdf me-2 text-danger"></i>
-                                    File Abstrak
-                                </h5>
-                                
-                                <div class="file-preview">
-                                    <div class="mb-3">
-                                        <i class="fas fa-file-pdf fa-4x text-danger"></i>
-                                    </div>
-                                    <h6 class="mb-2"><?= esc($abstrak['file_abstrak']) ?></h6>
-                                    <p class="text-muted mb-3">Klik tombol di bawah untuk mengunduh atau melihat preview file</p>
-                                    
-                                    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-                                        <a href="<?= site_url('admin/abstrak/download/' . $abstrak['id_abstrak']) ?>" 
-                                           class="btn btn-primary btn-custom">
-                                            <i class="fas fa-download me-2"></i>Download File
-                                        </a>
-                                        <button class="btn btn-outline-info btn-custom" onclick="previewFile()">
-                                            <i class="fas fa-eye me-2"></i>Preview
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Review History Card -->
-                            <div class="detail-card">
-                                <h5 class="mb-4">
-                                    <i class="fas fa-history me-2 text-info"></i>
-                                    Riwayat Review
-                                </h5>
-
-                                <?php if (empty($reviews)): ?>
-                                    <div class="empty-state">
-                                        <i class="fas fa-inbox"></i>
-                                        <p class="text-muted mb-0">Belum ada review untuk abstrak ini</p>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="review-timeline">
-                                        <?php foreach ($reviews as $review): ?>
-                                        <div class="review-item">
-                                            <div class="review-header">
-                                                <div>
-                                                    <div class="reviewer-name">
-                                                        <?= esc($review['reviewer_name']) ?>
-                                                    </div>
-                                                    <div class="review-date">
-                                                        <?= date('d F Y, H:i', strtotime($review['tanggal_review'])) ?>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <?php 
-                                                    $decisionClasses = [
-                                                        'pending' => 'warning',
-                                                        'diterima' => 'success',
-                                                        'ditolak' => 'danger',
-                                                        'revisi' => 'info'
-                                                    ];
-                                                    $decisionClass = $decisionClasses[$review['keputusan']] ?? 'secondary';
-                                                    ?>
-                                                    <span class="review-decision bg-<?= $decisionClass ?> text-white">
-                                                        <?= ucfirst($review['keputusan']) ?>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div class="review-comment">
-                                                <p class="mb-0"><?= nl2br(esc($review['komentar'])) ?></p>
-                                            </div>
-                                        </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-
-                        <!-- Right Column - Actions & Info -->
-                        <div class="col-lg-4">
-                            <!-- Quick Actions Card -->
-                            <div class="detail-card">
-                                <h5 class="mb-4">
-                                    <i class="fas fa-tools me-2 text-warning"></i>
-                                    Aksi Cepat
-                                </h5>
-                                
-                                <div class="d-grid gap-2">
-                                    <button class="btn btn-primary btn-custom" onclick="updateStatus()">
-                                        <i class="fas fa-edit me-2"></i>Update Status
-                                    </button>
-                                    
-                                    <?php if ($abstrak['status'] === 'menunggu'): ?>
-                                    <button class="btn btn-success btn-custom" onclick="assignReviewer()">
-                                        <i class="fas fa-user-plus me-2"></i>Assign Reviewer
-                                    </button>
-                                    <?php endif; ?>
-                                    
-                                    <a href="<?= site_url('admin/abstrak/download/' . $abstrak['id_abstrak']) ?>" 
-                                       class="btn btn-info btn-custom">
-                                        <i class="fas fa-download me-2"></i>Download File
-                                    </a>
-                                    
-                                    <button class="btn btn-warning btn-custom" onclick="sendMessage()">
-                                        <i class="fas fa-envelope me-2"></i>Kirim Pesan
-                                    </button>
-                                    
-                                    <hr class="my-3">
-                                    
-                                    <button class="btn btn-danger btn-custom" onclick="deleteAbstrak()">
-                                        <i class="fas fa-trash me-2"></i>Hapus Abstrak
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Statistics Card -->
-                            <div class="detail-card">
-                                <h5 class="mb-4">
-                                    <i class="fas fa-chart-bar me-2 text-success"></i>
-                                    Statistik
-                                </h5>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">Total Review</div>
-                                    <div class="info-value">
-                                        <span class="badge bg-primary"><?= count($reviews) ?></span>
-                                    </div>
-                                </div>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">Review Pending</div>
-                                    <div class="info-value">
-                                        <?php 
-                                        $pendingReviews = array_filter($reviews, fn($r) => $r['keputusan'] === 'pending');
-                                        ?>
-                                        <span class="badge bg-warning"><?= count($pendingReviews) ?></span>
-                                    </div>
-                                </div>
-                                
-                                <div class="info-item">
-                                    <div class="info-label">Waktu Upload</div>
-                                    <div class="info-value">
-                                        <?php 
-                                        $uploadTime = strtotime($abstrak['tanggal_upload']);
-                                        $daysPassed = floor((time() - $uploadTime) / 86400);
-                                        ?>
-                                        <span class="badge bg-info"><?= $daysPassed ?> hari lalu</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Navigation Card -->
-                            <div class="detail-card">
-                                <h5 class="mb-4">
-                                    <i class="fas fa-compass me-2 text-info"></i>
-                                    Navigasi
-                                </h5>
-                                
-                                <div class="d-grid gap-2">
-                                    <a href="<?= site_url('admin/abstrak') ?>" 
-                                       class="btn btn-outline-secondary btn-custom">
-                                        <i class="fas fa-arrow-left me-2"></i>Kembali ke Daftar
-                                    </a>
-                                    
-                                    <a href="<?= site_url('admin/users/detail/' . $abstrak['id_user']) ?>" 
-                                       class="btn btn-outline-info btn-custom">
-                                        <i class="fas fa-user me-2"></i>Lihat Profil Penulis
-                                    </a>
-                                    
-                                    <?php if (!empty($abstrak['event_id'])): ?>
-                                    <a href="<?= site_url('admin/event/detail/' . $abstrak['event_id']) ?>" 
-                                       class="btn btn-outline-success btn-custom">
-                                        <i class="fas fa-calendar me-2"></i>Lihat Detail Event
-                                    </a>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <!-- HEADER (override: header-blue) -->
+      <div class="header-section header-blue d-flex justify-content-between align-items-start mb-3">
+        <div class="pe-3">
+          <h3 class="welcome-text mb-1">
+            <i class="bi bi-file-earmark-text me-2"></i>Detail Abstrak
+          </h3>
+          <div class="text-muted"><?= esc($abstrak['judul'] ?? '-') ?></div>
         </div>
-    </div>
-
-    <!-- Update Status Modal -->
-    <div class="modal fade" id="statusModal" tabindex="-1" aria-labelledby="statusModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="statusModalLabel">
-                        <i class="fas fa-edit me-2"></i>Update Status Abstrak
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form id="statusForm">
-                    <div class="modal-body">
-                        <input type="hidden" id="abstrakId" value="<?= $abstrak['id_abstrak'] ?>">
-                        
-                        <div class="mb-3">
-                            <label for="statusSelect" class="form-label">Status</label>
-                            <select class="form-select" id="statusSelect" required>
-                                <option value="menunggu" <?= $abstrak['status'] === 'menunggu' ? 'selected' : '' ?>>
-                                    Menunggu
-                                </option>
-                                <option value="sedang_direview" <?= $abstrak['status'] === 'sedang_direview' ? 'selected' : '' ?>>
-                                    Sedang Review
-                                </option>
-                                <option value="diterima" <?= $abstrak['status'] === 'diterima' ? 'selected' : '' ?>>
-                                    Diterima
-                                </option>
-                                <option value="ditolak" <?= $abstrak['status'] === 'ditolak' ? 'selected' : '' ?>>
-                                    Ditolak
-                                </option>
-                                <option value="revisi" <?= $abstrak['status'] === 'revisi' ? 'selected' : '' ?>>
-                                    Perlu Revisi
-                                </option>
-                            </select>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="statusKomentar" class="form-label">Komentar Admin</label>
-                            <textarea class="form-control" id="statusKomentar" rows="4" 
-                                      placeholder="Tambahkan komentar atau catatan untuk perubahan status ini..."></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-2"></i>Update Status
-                        </button>
-                    </div>
-                </form>
-            </div>
+        <div class="text-end">
+          <div class="mb-2">
+            <span class="badge bg-<?= $stCls ?>"><?= $stText ?></span>
+          </div>
+          <small class="text-muted d-block">Diunggah</small>
+          <strong><?= !empty($abstrak['tanggal_upload']) ? date('d M Y, H:i', strtotime($abstrak['tanggal_upload'])) : '-' ?></strong>
         </div>
+      </div>
+
+      <div class="row g-3">
+        <!-- LEFT -->
+        <div class="col-lg-8">
+          <!-- Info Abstrak -->
+          <div class="card shadow-sm mb-3">
+            <div class="card-body">
+              <h5 class="card-title mb-3">
+                <i class="bi bi-info-circle text-primary me-2"></i>Informasi Abstrak
+              </h5>
+
+              <div class="row mb-3">
+                <div class="col-md-4 text-muted">Judul</div>
+                <div class="col-md-8 fw-semibold"><?= esc($abstrak['judul'] ?? '-') ?></div>
+              </div>
+
+              <div class="row mb-3">
+                <div class="col-md-4 text-muted">Penulis</div>
+                <div class="col-md-8">
+                  <?= esc($abstrak['nama_lengkap'] ?? '-') ?><br>
+                  <small class="text-muted"><?= esc($abstrak['email'] ?? '-') ?></small>
+                </div>
+              </div>
+
+              <div class="row mb-3">
+                <div class="col-md-4 text-muted">Kategori</div>
+                <div class="col-md-8">
+                  <span class="badge bg-info"><?= esc($abstrak['nama_kategori'] ?? '-') ?></span>
+                </div>
+              </div>
+
+              <div class="row mb-3">
+                <div class="col-md-4 text-muted">Event</div>
+                <div class="col-md-8">
+                  <?php if (!empty($abstrak['event_title'])): ?>
+                    <span class="badge bg-secondary"><?= esc($abstrak['event_title']) ?></span>
+                  <?php else: ?>
+                    <small class="text-muted">-</small>
+                  <?php endif; ?>
+                </div>
+              </div>
+
+              <div class="row mb-3">
+                <div class="col-md-4 text-muted">Revisi</div>
+                <div class="col-md-8">
+                  <span class="badge bg-secondary">Ke-<?= (int)($abstrak['revisi_ke'] ?? 0) ?></span>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-4 text-muted">Status</div>
+                <div class="col-md-8">
+                  <span class="badge bg-<?= $stCls ?>"><?= $stText ?></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- File Abstrak -->
+          <div class="card shadow-sm mb-3">
+            <div class="card-body">
+              <h5 class="card-title mb-3">
+                <i class="bi bi-file-pdf text-danger me-2"></i>File Abstrak
+              </h5>
+
+              <div class="p-4 border rounded-3 bg-light-subtle text-center">
+                <div class="mb-2"><i class="bi bi-file-earmark-pdf fs-1 text-danger"></i></div>
+                <div class="fw-semibold mb-2"><?= esc($abstrak['file_abstrak'] ?? 'abstrak.pdf') ?></div>
+                <div class="text-muted mb-3">Klik tombol di bawah untuk mengunduh atau melihat di tab baru.</div>
+                <div class="d-flex gap-2 justify-content-center">
+                  <a class="btn btn-primary"
+                     href="<?= site_url('admin/abstrak/download/'.(int)($abstrak['id_abstrak'] ?? 0)) ?>">
+                    <i class="bi bi-download me-1"></i>Download
+                  </a>
+                  <a class="btn btn-outline-info"
+                     target="_blank"
+                     href="<?= site_url('admin/abstrak/download/'.(int)($abstrak['id_abstrak'] ?? 0)) ?>">
+                    <i class="bi bi-eye me-1"></i>Preview
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Riwayat Review -->
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title mb-3">
+                <i class="bi bi-clock-history text-info me-2"></i>Riwayat Review
+              </h5>
+
+              <?php if (empty($reviews)): ?>
+                <div class="p-4 text-center border rounded-3 bg-light-subtle">
+                  <div class="mb-2"><i class="bi bi-inbox fs-3 text-secondary"></i></div>
+                  <div class="text-muted">Belum ada review untuk abstrak ini</div>
+                </div>
+              <?php else: ?>
+                <div class="vstack gap-2">
+                  <?php foreach ($reviews as $r):
+                    $dMap = ['pending'=>'warning','diterima'=>'success','ditolak'=>'danger','revisi'=>'info'];
+                    $dCls = $dMap[strtolower($r['keputusan'] ?? 'pending')] ?? 'secondary';
+                  ?>
+                    <div class="p-3 border rounded-3 bg-white">
+                      <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                          <div class="fw-semibold"><?= esc($r['reviewer_name'] ?? '-') ?></div>
+                          <div class="small text-muted"><?= !empty($r['tanggal_review']) ? date('d M Y, H:i', strtotime($r['tanggal_review'])) : '-' ?></div>
+                        </div>
+                        <span class="badge bg-<?= $dCls ?>"><?= ucfirst($r['keputusan'] ?? 'pending') ?></span>
+                      </div>
+                      <?php if (!empty($r['komentar'])): ?>
+                        <div class="mt-2 text-secondary"><?= nl2br(esc($r['komentar'])) ?></div>
+                      <?php endif; ?>
+                    </div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT -->
+        <div class="col-lg-4">
+          <!-- Aksi Cepat -->
+          <div class="card shadow-sm mb-3">
+            <div class="card-body">
+              <h5 class="card-title mb-3">
+                <i class="bi bi-tools text-warning me-2"></i>Aksi Cepat
+              </h5>
+              <div class="d-grid gap-2">
+                <button class="btn btn-primary" onclick="openStatusModal(<?= (int)($abstrak['id_abstrak'] ?? 0) ?>)">
+                  <i class="bi bi-pencil-square me-1"></i>Update Status
+                </button>
+
+                <?php if ($stKey === 'menunggu'): ?>
+                  <button class="btn btn-success"
+                          onclick="openAssign(<?= (int)($abstrak['id_abstrak'] ?? 0) ?>,'<?= esc(addslashes($abstrak['judul'] ?? '-')) ?>',<?= (int)($abstrak['id_kategori'] ?? 0) ?>)">
+                    <i class="bi bi-person-plus me-1"></i>Assign Reviewer
+                  </button>
+                <?php endif; ?>
+
+                <a class="btn btn-outline-info"
+                   href="<?= site_url('admin/abstrak/download/'.(int)($abstrak['id_abstrak'] ?? 0)) ?>">
+                  <i class="bi bi-download me-1"></i>Download File
+                </a>
+
+                <hr class="my-2">
+                <button class="btn btn-danger" onclick="deleteAbstrak(<?= (int)($abstrak['id_abstrak'] ?? 0) ?>)">
+                  <i class="bi bi-trash me-1"></i>Hapus Abstrak
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Statistik singkat -->
+          <div class="card shadow-sm mb-3">
+            <div class="card-body">
+              <h5 class="card-title mb-3">
+                <i class="bi bi-graph-up text-success me-2"></i>Statistik
+              </h5>
+              <div class="d-flex justify-content-between py-2 border-bottom">
+                <span class="text-muted">Total Review</span>
+                <span class="badge bg-primary"><?= count($reviews) ?></span>
+              </div>
+              <div class="d-flex justify-content-between py-2 border-bottom">
+                <span class="text-muted">Review Pending</span>
+                <?php $pending = array_filter($reviews, fn($x)=>strtolower($x['keputusan'] ?? '')==='pending'); ?>
+                <span class="badge bg-warning text-dark"><?= count($pending) ?></span>
+              </div>
+              <div class="d-flex justify-content-between py-2">
+                <span class="text-muted">Waktu Upload</span>
+                <?php
+                  $days = '-';
+                  if (!empty($abstrak['tanggal_upload'])) {
+                    $days = floor((time() - strtotime($abstrak['tanggal_upload'])) / 86400) . ' hari lalu';
+                  }
+                ?>
+                <span class="badge bg-info"><?= $days ?></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Navigasi -->
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title mb-3">
+                <i class="bi bi-compass text-info me-2"></i>Navigasi
+              </h5>
+              <div class="d-grid gap-2">
+                <a class="btn btn-outline-secondary" href="<?= site_url('admin/abstrak') ?>">
+                  <i class="bi bi-arrow-left me-1"></i>Kembali ke Daftar
+                </a>
+                <a class="btn btn-outline-primary" href="<?= site_url('admin/users') ?>">
+                  <i class="bi bi-person me-1"></i>Lihat Profil Penulis
+                </a>
+                <?php if (!empty($abstrak['event_id'])): ?>
+                  <a class="btn btn-outline-success" href="<?= site_url('admin/event/detail/'.(int)$abstrak['event_id']) ?>">
+                    <i class="bi bi-calendar-event me-1"></i>Detail Event
+                  </a>
+                <?php endif; ?>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
+  </main>
+</div>
 
-    <!-- External Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.7.12/sweetalert2.min.js"></script>
+<!-- Assign Reviewer Modal -->
+<div class="modal fade" id="assignModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Assign Reviewer</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <form id="assignForm" method="POST">
+      <?= csrf_field() ?>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Judul Abstrak</label>
+          <input type="text" id="assignTitle" class="form-control" readonly>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Pilih Reviewer</label>
+          <select class="form-select" id="reviewerSelect" name="id_reviewer" required>
+            <option value="">-- Pilih Reviewer --</option>
+          </select>
+          <div class="form-text">Ditampilkan reviewer sesuai kategori.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-save me-1"></i>Assign</button>
+      </div>
+    </form>
+  </div></div>
+</div>
 
-    <!-- Custom JavaScript -->
-    <script>
-        // Main Functions
-        function updateStatus() {
-            $('#statusModal').modal('show');
-        }
+<!-- Update Status Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Update Status Abstrak</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <form id="statusForm">
+      <?= csrf_field() ?>
+      <div class="modal-body">
+        <input type="hidden" id="statusAbstrakId" name="id_abstrak" value="<?= (int)($abstrak['id_abstrak'] ?? 0) ?>">
+        <div class="mb-3">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="statusSelect" name="status" required>
+            <option value="menunggu"        <?= $stKey==='menunggu'?'selected':'' ?>>Menunggu</option>
+            <option value="sedang_direview" <?= $stKey==='sedang_direview'?'selected':'' ?>>Sedang Review</option>
+            <option value="diterima"        <?= $stKey==='diterima'?'selected':'' ?>>Diterima</option>
+            <option value="ditolak"         <?= $stKey==='ditolak'?'selected':'' ?>>Ditolak</option>
+            <option value="revisi"          <?= $stKey==='revisi'?'selected':'' ?>>Perlu Revisi</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Komentar (opsional)</label>
+          <textarea class="form-control" id="statusKomentar" name="komentar" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-save me-1"></i>Simpan</button>
+      </div>
+    </form>
+  </div></div>
+</div>
 
-        function assignReviewer() {
-            Swal.fire({
-                title: 'Assign Reviewer',
-                text: 'Fitur ini akan mengarahkan ke halaman assign reviewer',
-                icon: 'info',
-                confirmButtonText: 'OK'
-            }).then(() => {
-                window.location.href = '<?= site_url('admin/abstrak?assign=' . $abstrak['id_abstrak']) ?>';
-            });
-        }
+<?= $this->include('partials/footer') ?>
 
-        function sendMessage() {
-            Swal.fire({
-                title: 'Kirim Pesan',
-                input: 'textarea',
-                inputLabel: 'Pesan untuk penulis',
-                inputPlaceholder: 'Tulis pesan Anda di sini...',
-                inputAttributes: {
-                    'aria-label': 'Tulis pesan Anda di sini',
-                    'rows': '5'
-                },
-                showCancelButton: true,
-                confirmButtonText: 'Kirim',
-                cancelButtonText: 'Batal',
-                inputValidator: (value) => {
-                    if (!value) {
-                        return 'Pesan tidak boleh kosong!';
-                    }
-                }
-            }).then((result) => {
-                if (result.isConfirmed && result.value) {
-                    // TODO: Implementasi kirim pesan
-                    Swal.fire('Terkirim!', 'Pesan berhasil dikirim ke penulis', 'success');
-                }
-            });
-        }
+<style>
+  :root{
+    --primary-color:#2563eb; --success-color:#10b981; --warning-color:#f59e0b; --danger-color:#ef4444; --info-color:#06b6d4;
+  }
+  body{ background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%); font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
 
-        function deleteAbstrak() {
-            Swal.fire({
-                title: 'Hapus Abstrak?',
-                text: 'Data ini tidak dapat dikembalikan setelah dihapus!',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#3085d6',
-                confirmButtonText: 'Ya, Hapus!',
-                cancelButtonText: 'Batal'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = '<?= site_url('admin/abstrak/delete/' . $abstrak['id_abstrak']) ?>';
-                }
-            });
-        }
+  /* Default header style (dashboard) */
+  .header-section{ background:#fff; padding:20px; border-radius:14px; box-shadow:0 4px 20px rgba(0,0,0,.05); }
+  .welcome-text{ color:var(--primary-color); font-weight:700; }
 
-        function previewFile() {
-            const url = '<?= site_url('admin/abstrak/download/' . $abstrak['id_abstrak']) ?>';
-            window.open(url, '_blank');
-        }
+  /* Override khusus halaman: box biru teks putih */
+  .header-section.header-blue{
+    background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+    color:#fff;
+    padding:28px 24px;
+    border-radius:16px;
+    box-shadow:0 8px 28px rgba(0,0,0,.12);
+  }
+  .header-section.header-blue .welcome-text{ color:#fff; font-weight:800; font-size:2rem; }
+  .header-section.header-blue .text-muted{ color: rgba(255,255,255,.9) !important; }
+  .header-section.header-blue strong{ color:#fff; }
 
-        // Event Handlers
-        $(document).ready(function() {
-            // Handle status form submission
-            $('#statusForm').on('submit', function(e) {
-                e.preventDefault();
-                
-                const formData = {
-                    id_abstrak: $('#abstrakId').val(),
-                    status: $('#statusSelect').val(),
-                    komentar: $('#statusKomentar').val()
-                };
+  /* Cards/komponen seragam dengan dashboard */
+  .stat-card{
+    background:#fff; border-radius:14px; padding:20px; box-shadow:0 8px 28px rgba(0,0,0,.08);
+    border-left:4px solid #e9ecef; position:relative; overflow:hidden;
+  }
+  .stat-card:before{
+    content:''; position:absolute; left:0; top:0; height:4px; width:100%;
+    background:linear-gradient(90deg,var(--primary-color),var(--info-color));
+  }
 
-                $.ajax({
-                    url: '<?= site_url('admin/abstrak/update-status') ?>',
-                    method: 'POST',
-                    data: formData,
-                    beforeSend: function() {
-                        Swal.fire({
-                            title: 'Processing...',
-                            allowOutsideClick: false,
-                            didOpen: () => {
-                                Swal.showLoading();
-                            }
-                        });
-                    },
-                    success: function(response) {
-                        Swal.close();
-                        if (response.success) {
-                            Swal.fire('Berhasil!', response.message, 'success').then(() => {
-                                location.reload();
-                            });
-                        } else {
-                            Swal.fire('Gagal!', response.message, 'error');
-                        }
-                        $('#statusModal').modal('hide');
-                    },
-                    error: function(xhr) {
-                        Swal.close();
-                        console.error('Error:', xhr);
-                        Swal.fire('Error!', 'Terjadi kesalahan sistem', 'error');
-                    }
-                });
-            });
+  /* biar konten turun sedikit dari header global */
+  #content main>.container-fluid{ margin-top:.25rem; }
+</style>
 
-            // Show success/error messages from session
-            <?php if (session('success')): ?>
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Berhasil!',
-                    text: '<?= session('success') ?>',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
-            <?php endif; ?>
+<script>
+  // ====== CSRF (CI4) ======
+  const csrfName = '<?= csrf_token() ?>';
+  let   csrfHash = '<?= csrf_hash() ?>';
 
-            <?php if (session('error')): ?>
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error!',
-                    text: '<?= session('error') ?>',
-                });
-            <?php endif; ?>
+  // Update Status (open modal)
+  function openStatusModal(){
+    new bootstrap.Modal(document.getElementById('statusModal')).show();
+  }
+
+  // Submit Update Status (AJAX)
+  document.getElementById('statusForm')?.addEventListener('submit', function(e){
+    e.preventDefault();
+    const data = new URLSearchParams();
+    data.append('id_abstrak', document.getElementById('statusAbstrakId').value);
+    data.append('status',     document.getElementById('statusSelect').value);
+    data.append('komentar',   document.getElementById('statusKomentar').value || '');
+    data.append(csrfName, csrfHash);
+
+    fetch('<?= site_url('admin/abstrak/update-status') ?>', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
+      body:data.toString()
+    }).then(r=>r.json()).then(res=>{
+      if(res && res.success){
+        Swal?.fire('Berhasil!', res.message || 'Status diperbarui', 'success').then(()=>location.reload());
+      }else{
+        Swal?.fire('Gagal!', (res && res.message) || 'Terjadi kesalahan', 'error');
+      }
+      if(res && res[csrfName]) csrfHash = res[csrfName];
+    }).catch(()=> Swal?.fire('Error','Gagal menghubungi server','error'));
+  });
+
+  // Assign reviewer (open + load reviewers)
+  function openAssign(idAbstrak, judul, idKategori){
+    document.getElementById('assignTitle').value = judul;
+    document.getElementById('assignForm').action = '<?= site_url('admin/abstrak/assign') ?>/'+idAbstrak;
+
+    fetch('<?= site_url('admin/abstrak/reviewers-by-category') ?>/'+idKategori, {headers:{'X-Requested-With':'XMLHttpRequest'}})
+      .then(r=>r.json())
+      .then(list=>{
+        const sel = document.getElementById('reviewerSelect');
+        sel.innerHTML = '<option value="">-- Pilih Reviewer --</option>';
+        list.forEach(rv=>{
+          const opt = document.createElement('option');
+          opt.value = rv.id_user; opt.textContent = rv.nama_lengkap;
+          sel.appendChild(opt);
         });
-    </script>
-</body>
-</html>
+        new bootstrap.Modal(document.getElementById('assignModal')).show();
+      })
+      .catch(()=> Swal?.fire('Error','Gagal memuat reviewer','error'));
+  }
+
+  // Hapus (POST + CSRF)
+  function deleteAbstrak(id){
+    Swal?.fire({
+      title:'Hapus Abstrak?', text:'Tindakan ini tidak dapat dibatalkan.',
+      icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', cancelButtonColor:'#6b7280',
+      confirmButtonText:'Ya, hapus', cancelButtonText:'Batal'
+    }).then(r=>{
+      if(!r.isConfirmed) return;
+      const f = document.createElement('form');
+      f.method='POST'; f.action='<?= site_url('admin/abstrak/delete') ?>/'+id;
+      const i = document.createElement('input'); i.type='hidden'; i.name=csrfName; i.value=csrfHash; f.appendChild(i);
+      document.body.appendChild(f); f.submit();
+    });
+  }
+</script>

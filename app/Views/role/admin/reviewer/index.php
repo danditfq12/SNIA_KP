@@ -1,846 +1,512 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kelola Reviewer - SNIA Admin</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --primary-color: #2563eb;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-            --info-color: #06b6d4;
-        }
+<?php
+// ====== DEFAULT VARS ======
+$title             = $title ?? 'Kelola Reviewer';
+$reviewers         = $reviewers ?? [];         // setiap item: id_user,nama_lengkap,email,status,total_reviews,pending_reviews,categories:[{id_kategori,nama_kategori}]
+$categories        = $categories ?? [];        // id_kategori,nama_kategori
+$total_reviewers   = (int)($total_reviewers   ?? 0);
+$active_reviewers  = (int)($active_reviewers  ?? 0);
+$total_categories  = (int)($total_categories  ?? 0);
+$activation_rate   = $total_reviewers>0 ? round(($active_reviewers/$total_reviewers)*100) : 0;
+?>
 
-        body {
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
+<?= $this->include('partials/header') ?>
+<?= $this->include('partials/sidebar_admin') ?>
+<?= $this->include('partials/alerts') ?>
 
-        .sidebar {
-            background: linear-gradient(180deg, var(--primary-color) 0%, #1e40af 100%);
-            min-height: 100vh;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
-        }
+<div id="content">
+  <main class="flex-fill" style="padding-top:70px;">
+    <div class="container-fluid p-3 p-md-4">
 
-        .sidebar .nav-link {
-            color: rgba(255,255,255,0.8);
-            padding: 12px 20px;
-            margin: 4px 0;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
-
-        .sidebar .nav-link:hover {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            transform: translateX(5px);
-        }
-
-        .sidebar .nav-link.active {
-            background: rgba(255,255,255,0.2);
-            color: white;
-        }
-
-        .main-content {
-            background: white;
-            border-radius: 20px 0 0 0;
-            min-height: 100vh;
-            box-shadow: -4px 0 20px rgba(0,0,0,0.05);
-        }
-
-        .content-card {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-            overflow: hidden;
-        }
-
-        .content-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--info-color) 100%);
-            color: white;
-            padding: 24px;
-        }
-
-        .reviewer-card {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
-            border: 1px solid #e2e8f0;
-            overflow: hidden;
-        }
-
-        .reviewer-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-        }
-
-        .reviewer-header {
-            padding: 20px;
-            border-bottom: 1px solid #f1f5f9;
-        }
-
-        .reviewer-body {
-            padding: 20px;
-        }
-
-        .reviewer-avatar {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.5rem;
-            font-weight: bold;
-        }
-
-        .category-badge {
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin: 2px;
-        }
-
-        .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            border-left: 4px solid;
-            transition: all 0.3s ease;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-        }
-
-        .modal-content {
-            border-radius: 16px;
-            border: none;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-
-        .modal-header {
-            background: linear-gradient(135deg, var(--primary-color), var(--info-color));
-            color: white;
-            border-radius: 16px 16px 0 0;
-            border-bottom: none;
-        }
-
-        .form-control, .form-select {
-            border-radius: 8px;
-            border: 2px solid #e2e8f0;
-            padding: 12px 16px;
-            transition: all 0.3s ease;
-        }
-
-        .form-control:focus, .form-select:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
-        }
-
-        .btn-custom {
-            border-radius: 8px;
-            padding: 8px 16px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        .btn-custom:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #6b7280;
-        }
-
-        .empty-state i {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            opacity: 0.5;
-        }
-
-        .performance-bar {
-            height: 8px;
-            background: #e2e8f0;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-
-        .performance-fill {
-            height: 100%;
-            transition: width 0.3s ease;
-            border-radius: 4px;
-        }
-
-        .search-filter-section {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            margin-bottom: 24px;
-        }
-
-        @media (max-width: 768px) {
-            .sidebar {
-                position: fixed;
-                top: 0;
-                left: -100%;
-                width: 250px;
-                transition: left 0.3s ease;
-                z-index: 1000;
-            }
-
-            .sidebar.show {
-                left: 0;
-            }
-
-            .main-content {
-                border-radius: 0;
-                margin-left: 0;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-md-3 col-lg-2 px-0">
-                <div class="sidebar">
-                    <div class="p-4 text-center">
-                        <h4 class="text-white mb-0">
-                            <i class="fas fa-cogs me-2"></i>
-                            SNIA Admin
-                        </h4>
-                        <small class="text-white-50">Sistem Manajemen</small>
-                    </div>
-                    
-                    <nav class="nav flex-column px-3">
-                        <a class="nav-link" href="<?= site_url('admin/dashboard') ?>">
-                            <i class="fas fa-tachometer-alt me-2"></i> Dashboard
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/users') ?>">
-                            <i class="fas fa-users me-2"></i> Manajemen User
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/abstrak') ?>">
-                            <i class="fas fa-file-alt me-2"></i> Manajemen Abstrak
-                        </a>
-                        <a class="nav-link active" href="<?= site_url('admin/reviewer') ?>">
-                            <i class="fas fa-user-check me-2"></i> Kelola Reviewer
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/event') ?>">
-                            <i class="fas fa-calendar-alt me-2"></i> Kelola Event
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/pembayaran') ?>">
-                            <i class="fas fa-credit-card me-2"></i> Verifikasi Pembayaran
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/absensi') ?>">
-                            <i class="fas fa-qrcode me-2"></i> Kelola Absensi
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/voucher') ?>">
-                            <i class="fas fa-ticket-alt me-2"></i> Kelola Voucher
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/dokumen') ?>">
-                            <i class="fas fa-folder-open me-2"></i> Dokumen
-                        </a>
-                        <a class="nav-link" href="<?= site_url('admin/laporan') ?>">
-                            <i class="fas fa-chart-line me-2"></i> Laporan
-                        </a>
-                        <hr class="my-3" style="border-color: rgba(255,255,255,0.2);">
-                        <a class="nav-link text-warning" href="<?= site_url('auth/logout') ?>">
-                            <i class="fas fa-sign-out-alt me-2"></i> Logout
-                        </a>
-                    </nav>
-                </div>
-            </div>
-
-            <!-- Main Content -->
-            <div class="col-md-9 col-lg-10">
-                <div class="main-content p-4">
-                    <!-- Header -->
-                    <div class="content-card mb-4">
-                        <div class="content-header">
-                            <div class="row align-items-center">
-                                <div class="col">
-                                    <h2 class="mb-2">
-                                        <i class="fas fa-user-check me-3"></i>Kelola Reviewer
-                                    </h2>
-                                    <p class="mb-0 opacity-75">Manajemen reviewer untuk proses review abstrak</p>
-                                </div>
-                                <div class="col-auto">
-                                    <button class="btn btn-light btn-custom" data-bs-toggle="modal" data-bs-target="#addReviewerModal">
-                                        <i class="fas fa-plus me-2"></i>Tambah Reviewer
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Search and Filter Section -->
-                    <div class="search-filter-section">
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="fas fa-search"></i></span>
-                                    <input type="text" class="form-control" id="searchReviewer" placeholder="Cari reviewer...">
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <select class="form-select" id="filterStatus">
-                                    <option value="">Semua Status</option>
-                                    <option value="aktif">Aktif</option>
-                                    <option value="nonaktif">Nonaktif</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <select class="form-select" id="filterCategory">
-                                    <option value="">Semua Kategori</option>
-                                    <?php if (!empty($categories)): ?>
-                                        <?php foreach ($categories as $category): ?>
-                                            <option value="<?= esc($category['nama_kategori']) ?>">
-                                                <?= esc($category['nama_kategori']) ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <button class="btn btn-outline-secondary w-100" onclick="resetFilters()">
-                                    <i class="fas fa-redo me-2"></i>Reset
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Statistics Cards -->
-                    <div class="row g-4 mb-4">
-                        <div class="col-md-3">
-                            <div class="stat-card" style="border-left-color: var(--primary-color);">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-user-check fa-2x text-primary"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="mb-0"><?= $total_reviewers ?? 0 ?></h3>
-                                        <small class="text-muted">Total Reviewer</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="stat-card" style="border-left-color: var(--success-color);">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-check-circle fa-2x text-success"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="mb-0"><?= $active_reviewers ?? 0 ?></h3>
-                                        <small class="text-muted">Reviewer Aktif</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="stat-card" style="border-left-color: var(--info-color);">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-tags fa-2x text-info"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="mb-0"><?= $total_categories ?? 0 ?></h3>
-                                        <small class="text-muted">Total Kategori</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="stat-card" style="border-left-color: var(--warning-color);">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-percentage fa-2x text-warning"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="mb-0">
-                                            <?= $total_reviewers > 0 ? round(($active_reviewers / $total_reviewers) * 100) : 0 ?>%
-                                        </h3>
-                                        <small class="text-muted">Tingkat Aktivasi</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Reviewers Grid -->
-                    <div class="row g-4" id="reviewersGrid">
-                        <?php if (!empty($reviewers)): ?>
-                            <?php foreach ($reviewers as $reviewer): ?>
-                                <div class="col-lg-6 col-xl-4 reviewer-item" 
-                                     data-name="<?= strtolower(esc($reviewer['nama_lengkap'])) ?>"
-                                     data-email="<?= strtolower(esc($reviewer['email'])) ?>"
-                                     data-status="<?= esc($reviewer['status']) ?>"
-                                     data-categories="<?= strtolower(implode(',', array_column($reviewer['categories'], 'nama_kategori'))) ?>">
-                                    <div class="reviewer-card">
-                                        <div class="reviewer-header">
-                                            <div class="d-flex align-items-center">
-                                                <div class="reviewer-avatar me-3">
-                                                    <?= strtoupper(substr($reviewer['nama_lengkap'], 0, 1)) ?>
-                                                </div>
-                                                <div class="flex-grow-1">
-                                                    <h6 class="mb-1 fw-bold"><?= esc($reviewer['nama_lengkap']) ?></h6>
-                                                    <small class="text-muted"><?= esc($reviewer['email']) ?></small>
-                                                    <div class="mt-2">
-                                                        <span class="badge <?= $reviewer['status'] === 'aktif' ? 'bg-success' : 'bg-secondary' ?>">
-                                                            <?= ucfirst($reviewer['status']) ?>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div class="dropdown">
-                                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                                        <i class="fas fa-ellipsis-v"></i>
-                                                    </button>
-                                                    <ul class="dropdown-menu">
-                                                        <li><a class="dropdown-item" href="<?= site_url('admin/reviewer/detail/' . $reviewer['id_user']) ?>">
-                                                            <i class="fas fa-eye me-2"></i>Detail
-                                                        </a></li>
-                                                        <li><a class="dropdown-item" href="#" onclick="toggleStatus(<?= $reviewer['id_user'] ?>, '<?= $reviewer['status'] ?>')">
-                                                            <i class="fas fa-power-off me-2"></i><?= $reviewer['status'] === 'aktif' ? 'Nonaktifkan' : 'Aktifkan' ?>
-                                                        </a></li>
-                                                        <li><hr class="dropdown-divider"></li>
-                                                        <li><a class="dropdown-item text-danger" href="#" onclick="deleteReviewer(<?= $reviewer['id_user'] ?>, '<?= esc($reviewer['nama_lengkap']) ?>')">
-                                                            <i class="fas fa-trash me-2"></i>Hapus
-                                                        </a></li>
-                                                    </ul>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="reviewer-body">
-                                            <!-- Performance Stats -->
-                                            <div class="row mb-3">
-                                                <div class="col-4 text-center">
-                                                    <div class="fw-bold text-primary"><?= $reviewer['total_reviews'] ?? 0 ?></div>
-                                                    <small class="text-muted">Total Review</small>
-                                                </div>
-                                                <div class="col-4 text-center">
-                                                    <div class="fw-bold text-warning"><?= $reviewer['pending_reviews'] ?? 0 ?></div>
-                                                    <small class="text-muted">Pending</small>
-                                                </div>
-                                                <div class="col-4 text-center">
-                                                    <div class="fw-bold text-success">
-                                                        <?= $reviewer['total_reviews'] > 0 ? round((($reviewer['total_reviews'] - $reviewer['pending_reviews']) / $reviewer['total_reviews']) * 100) : 0 ?>%
-                                                    </div>
-                                                    <small class="text-muted">Selesai</small>
-                                                </div>
-                                            </div>
-
-                                            <!-- Performance Bar -->
-                                            <div class="performance-bar mb-3">
-                                                <div class="performance-fill bg-success" style="width: <?= $reviewer['total_reviews'] > 0 ? round((($reviewer['total_reviews'] - $reviewer['pending_reviews']) / $reviewer['total_reviews']) * 100) : 0 ?>%"></div>
-                                            </div>
-
-                                            <!-- Categories -->
-                                            <div class="mb-3">
-                                                <label class="small text-muted fw-semibold mb-2">KATEGORI REVIEW:</label>
-                                                <div>
-                                                    <?php if (!empty($reviewer['categories'])): ?>
-                                                        <?php foreach ($reviewer['categories'] as $category): ?>
-                                                            <span class="category-badge bg-primary text-white">
-                                                                <?= esc($category['nama_kategori']) ?>
-                                                            </span>
-                                                        <?php endforeach; ?>
-                                                    <?php else: ?>
-                                                        <small class="text-muted">Belum ada kategori</small>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
-
-                                            <!-- Actions -->
-                                            <div class="d-flex gap-2">
-                                                <button class="btn btn-outline-info btn-custom btn-sm flex-fill" 
-                                                        onclick="assignCategory(<?= $reviewer['id_user'] ?>, '<?= esc($reviewer['nama_lengkap']) ?>')">
-                                                    <i class="fas fa-plus me-1"></i>Kategori
-                                                </button>
-                                                <a href="<?= site_url('admin/reviewer/detail/' . $reviewer['id_user']) ?>" 
-                                                   class="btn btn-outline-primary btn-custom btn-sm flex-fill">
-                                                    <i class="fas fa-chart-line me-1"></i>Performa
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="col-12">
-                                <div class="empty-state">
-                                    <i class="fas fa-user-check"></i>
-                                    <h4>Belum Ada Reviewer</h4>
-                                    <p>Mulai dengan menambahkan reviewer pertama untuk sistem review abstrak.</p>
-                                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addReviewerModal">
-                                        <i class="fas fa-plus me-2"></i>Tambah Reviewer
-                                    </button>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <!-- No Results Message -->
-                    <div class="col-12 d-none" id="noResults">
-                        <div class="empty-state">
-                            <i class="fas fa-search"></i>
-                            <h4>Tidak Ada Hasil</h4>
-                            <p>Tidak ditemukan reviewer yang sesuai dengan filter pencarian.</p>
-                            <button class="btn btn-outline-primary" onclick="resetFilters()">
-                                <i class="fas fa-redo me-2"></i>Reset Filter
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <!-- HEADER (seragam dengan dashboard) -->
+      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3"> 
+        <div>
+          <h3 class="welcome-text mb-1">
+            <i class="bi bi-person-check me-2"></i>Kelola Reviewer
+          </h3>
+          <div class="text-muted">Manajemen reviewer untuk proses review abstrak</div>
         </div>
-    </div>
-
-    <!-- Add Reviewer Modal -->
-    <div class="modal fade" id="addReviewerModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fas fa-user-plus me-2"></i>Tambah Reviewer Baru
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <form action="<?= site_url('admin/reviewer/store') ?>" method="POST" id="addReviewerForm">
-                    <div class="modal-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Nama Lengkap <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" name="nama_lengkap" required>
-                                    <div class="invalid-feedback"></div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label class="form-label">Email <span class="text-danger">*</span></label>
-                                    <input type="email" class="form-control" name="email" required>
-                                    <div class="invalid-feedback"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Password <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <input type="password" class="form-control" name="password" required minlength="6" id="password">
-                                <button class="btn btn-outline-secondary" type="button" onclick="togglePassword()">
-                                    <i class="fas fa-eye" id="passwordToggle"></i>
-                                </button>
-                            </div>
-                            <small class="text-muted">Minimal 6 karakter</small>
-                            <div class="invalid-feedback"></div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Kategori Review <span class="text-danger">*</span></label>
-                            <div class="row">
-                                <?php if (!empty($categories)): ?>
-                                    <?php foreach ($categories as $category): ?>
-                                        <div class="col-md-6 mb-2">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="categories[]" 
-                                                       value="<?= $category['id_kategori'] ?>" id="cat_<?= $category['id_kategori'] ?>">
-                                                <label class="form-check-label" for="cat_<?= $category['id_kategori'] ?>">
-                                                    <?= esc($category['nama_kategori']) ?>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <div class="col-12">
-                                        <div class="alert alert-warning">
-                                            <i class="fas fa-exclamation-triangle me-2"></i>
-                                            Belum ada kategori yang tersedia. Silakan buat kategori terlebih dahulu.
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                            <div class="invalid-feedback d-block" id="categoriesError" style="display: none !important;"></div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-2"></i>Simpan Reviewer
-                        </button>
-                    </div>
-                </form>
-            </div>
+        <div class="text-end d-none d-md-block">
+          <small class="text-muted d-block">Terakhir update</small>
+          <strong><?= date('d M Y, H:i') ?></strong>
         </div>
-    </div>
+      </div>
 
-    <!-- Assign Category Modal -->
-    <div class="modal fade" id="assignCategoryModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">
-                        <i class="fas fa-tags me-2"></i>Assign Kategori
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <form action="<?= site_url('admin/reviewer/assignCategory') ?>" method="POST">
-                    <div class="modal-body">
-                        <input type="hidden" name="reviewer_id" id="assignReviewerId">
-                        <div class="mb-3">
-                            <label class="form-label">Reviewer</label>
-                            <input type="text" class="form-control" id="assignReviewerName" readonly>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Pilih Kategori</label>
-                            <select class="form-select" name="category_id" required>
-                                <option value="">Pilih Kategori</option>
-                                <?php if (!empty($categories)): ?>
-                                    <?php foreach ($categories as $category): ?>
-                                        <option value="<?= $category['id_kategori'] ?>">
-                                            <?= esc($category['nama_kategori']) ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-2"></i>Assign
-                        </button>
-                    </div>
-                </form>
+      <!-- KPI -->
+      <div class="row g-3 mb-3">
+        <div class="col-6 col-xl-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-primary"><i class="bi bi-people"></i></div>
+              <div class="ms-3">
+                <div class="stat-number"><?= number_format($total_reviewers) ?></div>
+                <div class="text-muted">Total Reviewer</div>
+              </div>
             </div>
+          </div>
         </div>
-    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script>
-        // Search and Filter Functions
-        function filterReviewers() {
-            const searchTerm = document.getElementById('searchReviewer').value.toLowerCase();
-            const statusFilter = document.getElementById('filterStatus').value;
-            const categoryFilter = document.getElementById('filterCategory').value.toLowerCase();
-            const reviewerItems = document.querySelectorAll('.reviewer-item');
-            let visibleCount = 0;
+        <div class="col-6 col-xl-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-success"><i class="bi bi-check2-circle"></i></div>
+              <div class="ms-3">
+                <div class="stat-number"><?= number_format($active_reviewers) ?></div>
+                <div class="text-muted">Reviewer Aktif</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-            reviewerItems.forEach(item => {
-                const name = item.dataset.name;
-                const email = item.dataset.email;
-                const status = item.dataset.status;
-                const categories = item.dataset.categories;
+        <div class="col-6 col-xl-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-info"><i class="bi bi-tags"></i></div>
+              <div class="ms-3">
+                <div class="stat-number"><?= number_format($total_categories) ?></div>
+                <div class="text-muted">Total Kategori</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                const matchesSearch = name.includes(searchTerm) || email.includes(searchTerm);
-                const matchesStatus = !statusFilter || status === statusFilter;
-                const matchesCategory = !categoryFilter || categories.includes(categoryFilter);
+        <div class="col-6 col-xl-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-warning"><i class="bi bi-percent"></i></div>
+              <div class="ms-3">
+                <div class="stat-number"><?= $activation_rate ?>%</div>
+                <div class="text-muted">Tingkat Aktivasi</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-                if (matchesSearch && matchesStatus && matchesCategory) {
-                    item.style.display = 'block';
-                    visibleCount++;
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-
-            // Show/hide no results message
-            const noResults = document.getElementById('noResults');
-            if (visibleCount === 0 && reviewerItems.length > 0) {
-                noResults.classList.remove('d-none');
-            } else {
-                noResults.classList.add('d-none');
-            }
-        }
-
-        function resetFilters() {
-            document.getElementById('searchReviewer').value = '';
-            document.getElementById('filterStatus').value = '';
-            document.getElementById('filterCategory').value = '';
-            filterReviewers();
-        }
-
-        function togglePassword() {
-            const passwordField = document.getElementById('password');
-            const passwordToggle = document.getElementById('passwordToggle');
-            
-            if (passwordField.type === 'password') {
-                passwordField.type = 'text';
-                passwordToggle.classList.remove('fa-eye');
-                passwordToggle.classList.add('fa-eye-slash');
-            } else {
-                passwordField.type = 'password';
-                passwordToggle.classList.remove('fa-eye-slash');
-                passwordToggle.classList.add('fa-eye');
-            }
-        }
-
-        function assignCategory(reviewerId, reviewerName) {
-            document.getElementById('assignReviewerId').value = reviewerId;
-            document.getElementById('assignReviewerName').value = reviewerName;
-            new bootstrap.Modal(document.getElementById('assignCategoryModal')).show();
-        }
-
-        function toggleStatus(reviewerId, currentStatus) {
-            const action = currentStatus === 'aktif' ? 'nonaktifkan' : 'aktifkan';
-            
-            Swal.fire({
-                title: `${action.charAt(0).toUpperCase() + action.slice(1)} Reviewer?`,
-                text: `Apakah Anda yakin ingin ${action} reviewer ini?`,
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: currentStatus === 'aktif' ? '#f59e0b' : '#10b981',
-                cancelButtonColor: '#6b7280',
-                confirmButtonText: `Ya, ${action.charAt(0).toUpperCase() + action.slice(1)}!`,
-                cancelButtonText: 'Batal'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = `<?= site_url('admin/reviewer/toggleStatus') ?>/${reviewerId}`;
-                }
-            });
-        }
-
-        function deleteReviewer(reviewerId, reviewerName) {
-            Swal.fire({
-                title: 'Hapus Reviewer?',
-                text: `Apakah Anda yakin ingin menghapus reviewer "${reviewerName}"?`,
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#6b7280',
-                confirmButtonText: 'Ya, Hapus!',
-                cancelButtonText: 'Batal'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = `<?= site_url('admin/reviewer/delete') ?>/${reviewerId}`;
-                }
-            });
-        }
-
-        // Event Listeners
-        document.addEventListener('DOMContentLoaded', function() {
-            // Add event listeners for search and filter
-            document.getElementById('searchReviewer').addEventListener('input', filterReviewers);
-            document.getElementById('filterStatus').addEventListener('change', filterReviewers);
-            document.getElementById('filterCategory').addEventListener('change', filterReviewers);
-
-            // Form validation
-            const addReviewerForm = document.getElementById('addReviewerForm');
-            addReviewerForm.addEventListener('submit', function(e) {
-                const requiredFields = addReviewerForm.querySelectorAll('[required]');
-                let isValid = true;
-                
-                // Clear previous validation
-                requiredFields.forEach(field => {
-                    field.classList.remove('is-invalid');
-                    const feedback = field.parentNode.querySelector('.invalid-feedback');
-                    if (feedback) feedback.textContent = '';
-                });
-
-                // Validate required fields
-                requiredFields.forEach(field => {
-                    if (!field.value.trim()) {
-                        field.classList.add('is-invalid');
-                        const feedback = field.parentNode.querySelector('.invalid-feedback');
-                        if (feedback) feedback.textContent = 'Field ini wajib diisi.';
-                        isValid = false;
-                    }
-                });
-
-                // Check if at least one category is selected
-                const categories = addReviewerForm.querySelectorAll('input[name="categories[]"]:checked');
-                if (categories.length === 0) {
-                    document.getElementById('categoriesError').textContent = 'Pilih setidaknya satu kategori review.';
-                    document.getElementById('categoriesError').style.display = 'block';
-                    isValid = false;
-                } else {
-                    document.getElementById('categoriesError').style.display = 'none';
-                }
-                
-                if (!isValid) {
-                    e.preventDefault();
-                    Swal.fire('Error!', 'Mohon lengkapi semua field yang diperlukan', 'error');
-                }
-            });
-
-            // Show alerts
-            <?php if (session('success')): ?>
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Berhasil!',
-                    text: '<?= addslashes(session('success')) ?>',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
-            <?php endif; ?>
-
-            <?php if (session('error')): ?>
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error!',
-                    text: '<?= addslashes(session('error')) ?>',
-                });
-            <?php endif; ?>
-
-            <?php if (session('errors')): ?>
-                let errorMessages = '';
-                <?php foreach (session('errors') as $error): ?>
-                    errorMessages += '<?= addslashes($error) ?>\n';
+      <!-- FILTERS -->
+      <div class="card shadow-sm mb-3">
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-md-4">
+              <div class="position-relative">
+                <input type="text" class="form-control ps-5" id="searchReviewer" placeholder="Cari reviewer (nama/email)...">
+                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" id="filterStatus">
+                <option value="">Semua Status</option>
+                <option value="aktif">Aktif</option>
+                <option value="nonaktif">Nonaktif</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" id="filterCategory">
+                <option value="">Semua Kategori</option>
+                <?php foreach ($categories as $c): ?>
+                  <option value="<?= strtolower(esc($c['nama_kategori'])) ?>"><?= esc($c['nama_kategori']) ?></option>
                 <?php endforeach; ?>
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Validation Error!',
-                    text: errorMessages,
-                });
+              </select>
+            </div>
+            <div class="col-md-2 text-md-end">
+              <div class="d-grid d-md-block">
+                <button class="btn btn-outline-secondary me-2 mb-2 mb-md-0" onclick="resetFilters()">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Reset
+                </button>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addReviewerModal">
+                  <i class="bi bi-plus-lg me-1"></i>Tambah
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRID REVIEWERS -->
+      <div class="row g-3" id="reviewersGrid">
+        <?php if (!empty($reviewers)): ?>
+          <?php foreach ($reviewers as $rv):
+            $name   = $rv['nama_lengkap'] ?? '-';
+            $email  = $rv['email'] ?? '-';
+            $status = strtolower($rv['status'] ?? 'nonaktif');
+            $tot    = (int)($rv['total_reviews'] ?? 0);
+            $pend   = (int)($rv['pending_reviews'] ?? 0);
+            $done   = max(0, $tot - $pend);
+            $pct    = $tot > 0 ? round(($done / $tot) * 100) : 0;
+            $cats   = $rv['categories'] ?? []; // array of ['id_kategori','nama_kategori']
+            $catsStr= strtolower(implode(',', array_map(fn($x)=>$x['nama_kategori'] ?? '', $cats)));
+          ?>
+            <div class="col-lg-6 col-xl-4 reviewer-item"
+                 data-name="<?= strtolower(esc($name)) ?>"
+                 data-email="<?= strtolower(esc($email)) ?>"
+                 data-status="<?= esc($status) ?>"
+                 data-categories="<?= esc($catsStr) ?>">
+              <div class="card shadow-sm h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-start">
+                    <div class="user-avatar me-3">
+                      <?= strtoupper(substr($name,0,1)) ?>
+                    </div>
+                    <div class="flex-fill">
+                      <div class="d-flex justify-content-between">
+                        <div>
+                          <div class="fw-semibold"><?= esc($name) ?></div>
+                          <small class="text-muted"><?= esc($email) ?></small>
+                          <div class="mt-2">
+                            <span class="badge <?= $status==='aktif'?'bg-success':'bg-secondary' ?>"><?= ucfirst($status) ?></span>
+                          </div>
+                        </div>
+                        <div class="dropdown">
+                          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots-vertical"></i>
+                          </button>
+                          <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                              <a class="dropdown-item" href="<?= site_url('admin/reviewer/detail/'.(int)$rv['id_user']) ?>">
+                                <i class="bi bi-eye me-2"></i>Detail
+                              </a>
+                            </li>
+                            <li>
+                              <a class="dropdown-item" href="#"
+                                 onclick="toggleStatus(<?= (int)$rv['id_user'] ?>,'<?= $status ?>')">
+                                <i class="bi bi-power me-2"></i><?= $status==='aktif'?'Nonaktifkan':'Aktifkan' ?>
+                              </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                              <a class="dropdown-item text-danger" href="#"
+                                 onclick="deleteReviewer(<?= (int)$rv['id_user'] ?>,'<?= esc(addslashes($name)) ?>')">
+                                <i class="bi bi-trash me-2"></i>Hapus
+                              </a>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Stats -->
+                  <div class="row text-center mt-3">
+                    <div class="col-4">
+                      <div class="fw-bold text-primary"><?= $tot ?></div>
+                      <small class="text-muted">Total</small>
+                    </div>
+                    <div class="col-4">
+                      <div class="fw-bold text-warning"><?= $pend ?></div>
+                      <small class="text-muted">Pending</small>
+                    </div>
+                    <div class="col-4">
+                      <div class="fw-bold text-success"><?= $pct ?>%</div>
+                      <small class="text-muted">Selesai</small>
+                    </div>
+                  </div>
+
+                  <div class="progress mt-2" style="height:8px;">
+                    <div class="progress-bar bg-success" role="progressbar" style="width: <?= $pct ?>%;"></div>
+                  </div>
+
+                  <!-- Categories -->
+                  <div class="mt-3">
+                    <label class="small text-muted fw-semibold d-block mb-1">Kategori review:</label>
+                    <?php if (!empty($cats)): ?>
+                      <div class="d-flex flex-wrap gap-1">
+                        <?php foreach ($cats as $c): ?>
+                          <span class="badge bg-primary"><?= esc($c['nama_kategori']) ?></span>
+                        <?php endforeach; ?>
+                      </div>
+                    <?php else: ?>
+                      <small class="text-muted">Belum ada kategori</small>
+                    <?php endif; ?>
+                  </div>
+
+                  <!-- Actions -->
+                  <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-outline-info btn-sm flex-fill"
+                            onclick="assignCategory(<?= (int)$rv['id_user'] ?>,'<?= esc(addslashes($name)) ?>')">
+                      <i class="bi bi-plus-lg me-1"></i>Kategori
+                    </button>
+                    <a class="btn btn-outline-primary btn-sm flex-fill"
+                       href="<?= site_url('admin/reviewer/detail/'.(int)$rv['id_user']) ?>">
+                      <i class="bi bi-graph-up me-1"></i>Performa
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        <?php else: ?>
+          <div class="col-12">
+            <div class="p-4 text-center border rounded-3 bg-light-subtle">
+              <div class="mb-2"><i class="bi bi-people fs-3 text-secondary"></i></div>
+              <div class="fw-semibold">Belum ada reviewer</div>
+              <div class="text-muted small mb-3">Tambah reviewer pertama untuk memulai proses review.</div>
+              <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addReviewerModal">
+                <i class="bi bi-plus-lg me-1"></i>Tambah Reviewer
+              </button>
+            </div>
+          </div>
+        <?php endif; ?>
+      </div>
+
+      <!-- No Results -->
+      <div class="d-none" id="noResults">
+        <div class="p-4 text-center border rounded-3 bg-light-subtle mt-3">
+          <div class="mb-2"><i class="bi bi-search fs-3 text-secondary"></i></div>
+          <div class="fw-semibold">Tidak ada hasil</div>
+          <div class="text-muted small mb-3">Ubah kata kunci atau reset filter.</div>
+          <button class="btn btn-outline-primary" onclick="resetFilters()">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Filter
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- MODALS -->
+<!-- Add Reviewer -->
+<div class="modal fade" id="addReviewerModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Tambah Reviewer Baru</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <form action="<?= site_url('admin/reviewer/store') ?>" method="POST" id="addReviewerForm">
+      <?= csrf_field() ?>
+      <div class="modal-body">
+        <div class="row">
+          <div class="col-md-6"><div class="mb-3">
+            <label class="form-label">Nama Lengkap <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="nama_lengkap" required>
+            <div class="invalid-feedback"></div>
+          </div></div>
+          <div class="col-md-6"><div class="mb-3">
+            <label class="form-label">Email <span class="text-danger">*</span></label>
+            <input type="email" class="form-control" name="email" required>
+            <div class="invalid-feedback"></div>
+          </div></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <input type="password" class="form-control" name="password" id="password" minlength="6" required>
+            <button class="btn btn-outline-secondary" type="button" onclick="togglePassword()">
+              <i id="passwordToggle" class="bi bi-eye"></i>
+            </button>
+          </div>
+          <small class="text-muted">Minimal 6 karakter</small>
+          <div class="invalid-feedback"></div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Kategori Review <span class="text-danger">*</span></label>
+          <div class="row">
+            <?php if (!empty($categories)): ?>
+              <?php foreach ($categories as $c): ?>
+                <div class="col-md-6 mb-2">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="categories[]" value="<?= (int)$c['id_kategori'] ?>" id="cat_<?= (int)$c['id_kategori'] ?>">
+                    <label class="form-check-label" for="cat_<?= (int)$c['id_kategori'] ?>"><?= esc($c['nama_kategori']) ?></label>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            <?php else: ?>
+              <div class="col-12">
+                <div class="alert alert-warning mb-0">
+                  <i class="bi bi-exclamation-triangle me-2"></i>Belum ada kategori. Buat kategori terlebih dahulu.
+                </div>
+              </div>
             <?php endif; ?>
+          </div>
+          <div class="invalid-feedback d-block" id="categoriesError" style="display:none!important;"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-save me-1"></i>Simpan</button>
+      </div>
+    </form>
+  </div></div>
+</div>
 
-            // Animate cards on load
-            const cards = document.querySelectorAll('.reviewer-card, .stat-card');
-            cards.forEach((card, index) => {
-                setTimeout(() => {
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateY(20px)';
-                    card.style.transition = 'all 0.5s ease';
-                    
-                    setTimeout(() => {
-                        card.style.opacity = '1';
-                        card.style.transform = 'translateY(0)';
-                    }, 100);
-                }, index * 50);
-            });
+<!-- Assign Category -->
+<div class="modal fade" id="assignCategoryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header bg-primary text-white">
+      <h5 class="modal-title"><i class="bi bi-tags me-2"></i>Assign Kategori</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <form action="<?= site_url('admin/reviewer/assignCategory') ?>" method="POST">
+      <?= csrf_field() ?>
+      <div class="modal-body">
+        <input type="hidden" name="reviewer_id" id="assignReviewerId">
+        <div class="mb-3">
+          <label class="form-label">Reviewer</label>
+          <input type="text" class="form-control" id="assignReviewerName" readonly>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Pilih Kategori</label>
+          <select class="form-select" name="category_id" required>
+            <option value="">Pilih Kategori</option>
+            <?php foreach ($categories as $c): ?>
+              <option value="<?= (int)$c['id_kategori'] ?>"><?= esc($c['nama_kategori']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-save me-1"></i>Assign</button>
+      </div>
+    </form>
+  </div></div>
+</div>
 
-            // Performance bar animation
-            setTimeout(() => {
-                document.querySelectorAll('.performance-fill').forEach(fill => {
-                    const width = fill.style.width;
-                    fill.style.width = '0%';
-                    setTimeout(() => {
-                        fill.style.width = width;
-                    }, 500);
-                });
-            }, 1000);
-        });
+<?= $this->include('partials/footer') ?>
 
-        // Mobile sidebar toggle
-        function toggleSidebar() {
-            document.querySelector('.sidebar').classList.toggle('show');
-        }
-    </script>
-</body>
-</html>
+<style>
+  :root{
+    --primary-color:#2563eb; --info-color:#06b6d4; --success-color:#10b981; --warning-color:#f59e0b; --danger-color:#ef4444;
+  }
+  body{ background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%); font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
+
+  .header-section.header-blue{
+    background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+    color:#fff; padding:28px 24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
+  }
+  .header-section.header-blue .welcome-text{ color:#fff; font-weight:800; font-size:2rem; }
+  .header-section.header-blue .text-muted, .header-section.header-blue strong{ color:rgba(255,255,255,.9)!important; }
+  
+  .welcome-text{ color:var(--primary-color); font-weight:700; }
+
+  .stat-card{
+    background:#fff; border-radius:14px; padding:20px; box-shadow:0 8px 28px rgba(0,0,0,.08);
+    border-left:4px solid #e9ecef; position:relative; overflow:hidden;
+  }
+  .stat-card:before{
+    content:''; position:absolute; left:0; top:0; height:4px; width:100%;
+    background:linear-gradient(90deg,var(--primary-color),var(--info-color));
+  }
+  .stat-icon{ width:56px; height:56px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:22px; }
+  .stat-number{ font-size:2rem; font-weight:800; color:#1e293b; line-height:1; }
+
+  .user-avatar{
+    width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff;
+    background:linear-gradient(135deg,var(--primary-color),var(--info-color));
+  }
+
+  #content main>.container-fluid{ margin-top:.25rem; }
+</style>
+
+<script>
+  // ===== Filter logic =====
+  function filterReviewers(){
+    const q   = (document.getElementById('searchReviewer').value || '').toLowerCase();
+    const st  = document.getElementById('filterStatus').value;
+    const cat = (document.getElementById('filterCategory').value || '').toLowerCase();
+
+    let visible = 0;
+    document.querySelectorAll('.reviewer-item').forEach(card=>{
+      const name = card.dataset.name || '';
+      const mail = card.dataset.email || '';
+      const s    = card.dataset.status || '';
+      const cats = card.dataset.categories || '';
+
+      const okQ   = !q   || name.includes(q) || mail.includes(q);
+      const okSt  = !st  || s === st;
+      const okCat = !cat || cats.includes(cat);
+
+      const show = okQ && okSt && okCat;
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+
+    const noRes = document.getElementById('noResults');
+    if (visible === 0 && document.querySelectorAll('.reviewer-item').length > 0) {
+      noRes.classList.remove('d-none');
+    } else {
+      noRes.classList.add('d-none');
+    }
+  }
+  function resetFilters(){
+    document.getElementById('searchReviewer').value = '';
+    document.getElementById('filterStatus').value = '';
+    document.getElementById('filterCategory').value = '';
+    filterReviewers();
+  }
+
+  // ===== Misc helpers =====
+  function togglePassword(){
+    const field = document.getElementById('password');
+    const icon  = document.getElementById('passwordToggle');
+    if(field.type === 'password'){ field.type='text'; icon.classList.remove('bi-eye'); icon.classList.add('bi-eye-slash'); }
+    else{ field.type='password'; icon.classList.remove('bi-eye-slash'); icon.classList.add('bi-eye'); }
+  }
+
+  function assignCategory(id, name){
+    document.getElementById('assignReviewerId').value   = id;
+    document.getElementById('assignReviewerName').value = name;
+    new bootstrap.Modal(document.getElementById('assignCategoryModal')).show();
+  }
+
+  function toggleStatus(id, current){
+    const action = current === 'aktif' ? 'Nonaktifkan' : 'Aktifkan';
+    if (!window.Swal){
+      if(confirm(action+' reviewer ini?')) location.href = '<?= site_url('admin/reviewer/toggleStatus') ?>/'+id;
+      return;
+    }
+    Swal.fire({
+      title: action+' Reviewer?',
+      text: 'Apakah Anda yakin?',
+      icon: 'question',
+      showCancelButton:true,
+      confirmButtonColor: current==='aktif' ? '#f59e0b' : '#10b981',
+      cancelButtonColor:'#6b7280',
+      confirmButtonText:'Ya, '+action, cancelButtonText:'Batal'
+    }).then(r=>{ if(r.isConfirmed){ location.href = '<?= site_url('admin/reviewer/toggleStatus') ?>/'+id; } });
+  }
+
+  function deleteReviewer(id, name){
+    if (!window.Swal){
+      if(confirm('Hapus reviewer "'+name+'"?')) location.href = '<?= site_url('admin/reviewer/delete') ?>/'+id;
+      return;
+    }
+    Swal.fire({
+      title:'Hapus Reviewer?', text:'"' + name + '" akan dihapus permanen.',
+      icon:'warning', showCancelButton:true, confirmButtonColor:'#ef4444', cancelButtonColor:'#6b7280',
+      confirmButtonText:'Ya, Hapus', cancelButtonText:'Batal'
+    }).then(r=>{ if(r.isConfirmed){ location.href = '<?= site_url('admin/reviewer/delete') ?>/'+id; } });
+  }
+
+  // ===== Form validation (add reviewer) =====
+  document.getElementById('addReviewerForm')?.addEventListener('submit', function(e){
+    let ok = true;
+    const reqs = this.querySelectorAll('[required]');
+    reqs.forEach(f=>{
+      f.classList.remove('is-invalid');
+      const fb = f.parentNode.querySelector('.invalid-feedback'); if(fb) fb.textContent='';
+      if(!f.value.trim()){ f.classList.add('is-invalid'); if(fb) fb.textContent='Field ini wajib diisi.'; ok=false; }
+    });
+    const checked = this.querySelectorAll('input[name="categories[]"]:checked');
+    const catErr  = document.getElementById('categoriesError');
+    if(checked.length===0){ catErr.textContent='Pilih setidaknya satu kategori review.'; catErr.style.display='block'; ok=false; }
+    else { catErr.style.display='none'; }
+    if(!ok){ e.preventDefault(); if(window.Swal) Swal.fire('Error!','Mohon lengkapi data wajib','error'); }
+  });
+
+  // ===== Bind filters & flash =====
+  document.addEventListener('DOMContentLoaded', ()=>{
+    document.getElementById('searchReviewer')?.addEventListener('input', filterReviewers);
+    document.getElementById('filterStatus')?.addEventListener('change', filterReviewers);
+    document.getElementById('filterCategory')?.addEventListener('change', filterReviewers);
+
+    <?php if (session('success')): ?>
+      window.Swal?.fire({icon:'success',title:'Berhasil!',text:'<?= esc(session('success')) ?>',timer:2800,showConfirmButton:false});
+    <?php endif; ?>
+    <?php if (session('error')): ?>
+      window.Swal?.fire({icon:'error',title:'Error!',text:'<?= esc(session('error')) ?>'});
+    <?php endif; ?>
+    <?php if (session('errors')): ?>
+      window.Swal?.fire({icon:'error',title:'Validation Error!',html:'<?= esc(implode("<br>", (array)session("errors"))) ?>'});
+    <?php endif; ?>
+  });
+</script>

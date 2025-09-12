@@ -98,12 +98,10 @@ $routes->group('admin', [
     $routes->get('dashboard', 'Dashboard::index');
 
     // Users
-    $routes->get ('users',                'User::index');
-    $routes->post('users/store',          'User::store');
-    $routes->get ('users/edit/(:num)',    'User::edit/$1');
-    $routes->post('users/update/(:num)',  'User::update/$1');
-    $routes->post('users/delete/(:num)',  'User::delete/$1');
-    $routes->get ('users/detail/(:num)',  'User::detail/$1');
+    $routes->get ('users',               'User::index');
+    $routes->get ('users/edit/(:num)',   'User::edit/$1');      // return JSON untuk modal edit
+    $routes->post('users/update/(:num)', 'User::update/$1');    // submit update dari modal
+    $routes->get ('users/delete/(:num)', 'User::delete/$1');    // pakai GET -> sesuai window.location.href
 
     // Abstrak
     $routes->get ('abstrak',                       'Abstrak::index');
@@ -111,10 +109,18 @@ $routes->group('admin', [
     $routes->post('abstrak/assign/(:num)',         'Abstrak::assign/$1');
     $routes->post('abstrak/update-status',         'Abstrak::updateStatus');
     $routes->post('abstrak/bulk-update-status',    'Abstrak::bulkUpdateStatus');
-    $routes->post('abstrak/delete/(:num)',         'Abstrak::delete/$1');
+
+    // PERUBAHAN: izinkan GET/POST untuk delete karena view memanggil via window.location.href (GET)
+    $routes->match(['get','post'], 'abstrak/delete/(:num)', 'Abstrak::delete/$1');
+
     $routes->get ('abstrak/download/(:num)',       'Abstrak::downloadFile/$1');
     $routes->get ('abstrak/export',                'Abstrak::export');
     $routes->get ('abstrak/statistics',            'Abstrak::statistics');
+
+    // PERUBAHAN: alias sesuai AJAX di view: /admin/reviewer/by-category/{id}
+    $routes->get ('reviewer/by-category/(:num)',   'Abstrak::getReviewersByCategory/$1');
+
+    // Tetap sediakan route lama untuk kompatibilitas (kalau ada referensi lama)
     $routes->get ('abstrak/reviewers-by-category/(:num)', 'Abstrak::getReviewersByCategory/$1');
 
     // Reviewer
@@ -184,7 +190,6 @@ $routes->group('admin', [
     $routes->get ('voucher/force-delete/(:num)','Voucher::forceDelete/$1');
     $routes->get ('voucher/toggle-status/(:num)','Voucher::toggleStatus/$1');
     $routes->get ('voucher/detail/(:num)',     'Voucher::detail/$1');
-    $routes->get ('voucher/generate-code',     'Voucher::generateCode');
     $routes->post('voucher/validate',          'Voucher::validateVoucher');
     $routes->get ('voucher/export',            'Voucher::export');
 
@@ -229,9 +234,8 @@ $routes->group('presenter', [
     $routes->post('pembayaran/validate-voucher',      'Pembayaran::validateVoucher');
 
     // Absensi (unlock setelah pembayaran terverifikasi)
-    $routes->get ('absensi',                       'Absensi::index');
-    $routes->get ('absensi/detail/(:num)',         'Absensi::detail/$1'); // <-- DITAMBAHKAN (pakai "detail")
-    $routes->post('absensi/scan',                  'Absensi::scan');
+    $routes->get ('absensi',     'Absensi::index');
+    $routes->post('absensi/scan','Absensi::scan');
 
     // Dokumen
     $routes->get ('dokumen/loa',                         'Dokumen::loa');
