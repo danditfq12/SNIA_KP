@@ -24,18 +24,6 @@ $total_revenue       = (int)($total_revenue ?? 0);
           </h3>
           <div class="text-muted">Kelola dan verifikasi pembayaran dari peserta</div>
         </div>
-        <div class="text-end d-none d-md-block">
-          <div class="btn-group">
-            <a href="<?= site_url('admin/pembayaran/export') ?>" class="btn btn-light btn-sm">
-              <i class="bi bi-download me-1"></i>Export
-            </a>
-            <button class="btn btn-outline-light btn-sm" id="btnStatistik" type="button">
-              <i class="bi bi-bar-chart-line me-1"></i>Statistik
-            </button>
-            <button class="btn btn-outline-light btn-sm" id="btnRefresh" type="button">
-              <i class="bi bi-arrow-clockwise me-1"></i>Refresh
-            </button>
-          </div>
           <div class="mt-2 small text-white-50">Terakhir update <strong><?= date('d M Y, H:i') ?></strong></div>
         </div>
       </div>

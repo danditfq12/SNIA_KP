@@ -25,234 +25,325 @@ $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
     <div class="container-fluid p-3 p-md-4">
 
       <!-- HEADER (seragam: header-blue) -->
-      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3">
-        <div>
+      <div class="header-section header-blue d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+        <div class="mb-2 mb-md-0">
           <h3 class="welcome-text mb-1">
             <i class="bi bi-speedometer2 me-2"></i>Dashboard Admin
           </h3>
           <div class="text-white-50">Ringkasan status sistem SNIA</div>
         </div>
-        <div class="text-end d-none d-md-block">
+        <div class="text-start text-md-end">
           <small class="text-white-50 d-block">Terakhir login</small>
           <strong class="text-white"><?= date('d M Y, H:i') ?></strong>
         </div>
       </div>
 
-      <!-- KPI 4 KOTAK -->
-      <div class="row g-3 mb-3">
-        <div class="col-6 col-xl-3">
-          <div class="stat-card shadow-sm h-100">
+      <!-- KPI 4 KOTAK - Responsive Grid -->
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+          <div class="stat-card stat-warning shadow-sm h-100">
             <div class="d-flex align-items-center">
               <div class="stat-icon bg-warning"><i class="bi bi-cash-coin"></i></div>
-              <div class="ms-3">
+              <div class="ms-3 flex-fill">
                 <div class="stat-number" data-num="<?= $pembayaran_pending ?>"><?= number_format($pembayaran_pending) ?></div>
-                <div class="text-muted">Pembayaran perlu ACC</div>
+                <div class="stat-label text-muted">Pembayaran Pending</div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="col-6 col-xl-3">
-          <div class="stat-card shadow-sm h-100">
+        <div class="col-6 col-lg-3">
+          <div class="stat-card stat-primary shadow-sm h-100">
             <div class="d-flex align-items-center">
               <div class="stat-icon bg-primary"><i class="bi bi-file-earmark-text"></i></div>
-              <div class="ms-3">
+              <div class="ms-3 flex-fill">
                 <div class="stat-number" data-num="<?= $abstrak_masuk ?>"><?= number_format($abstrak_masuk) ?></div>
-                <div class="text-muted">Abstrak masuk</div>
+                <div class="stat-label text-muted">Abstrak Masuk</div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="col-6 col-xl-3">
-          <div class="stat-card shadow-sm h-100">
+        <div class="col-6 col-lg-3">
+          <div class="stat-card stat-danger shadow-sm h-100">
             <div class="d-flex align-items-center">
               <div class="stat-icon bg-danger"><i class="bi bi-person-gear"></i></div>
-              <div class="ms-3">
+              <div class="ms-3 flex-fill">
                 <div class="stat-number" data-num="<?= $abstrak_unassigned ?>"><?= number_format($abstrak_unassigned) ?></div>
-                <div class="text-muted">Belum ditugaskan</div>
+                <div class="stat-label text-muted">Belum Ditugaskan</div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="col-6 col-xl-3">
-          <div class="stat-card shadow-sm h-100">
+        <div class="col-6 col-lg-3">
+          <div class="stat-card stat-success shadow-sm h-100">
             <div class="d-flex align-items-center">
               <div class="stat-icon bg-success"><i class="bi bi-calendar2-event"></i></div>
-              <div class="ms-3">
+              <div class="ms-3 flex-fill">
                 <div class="stat-number" data-num="<?= $total_event ?>"><?= number_format($total_event) ?></div>
-                <div class="text-muted">Total event dibuat</div>
+                <div class="stat-label text-muted">Total Event</div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ROW 1: Pembayaran pending + Abstrak masuk -->
-      <div class="row g-3 mb-3">
-        <!-- Pembayaran pending -->
+
+
+      <!-- Content Cards Row -->
+      <div class="row g-3 mb-4">
+        <!-- Pembayaran Pending -->
         <div class="col-12 col-xl-6">
           <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="card-title mb-0"><i class="bi bi-cash-coin me-2 text-warning"></i>Pembayaran menunggu verifikasi</h5>
-                <a href="<?= site_url('admin/pembayaran') ?>" class="small">Kelola</a>
+            <div class="card-header bg-transparent border-0 pb-0">
+              <div class="d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                  <i class="bi bi-cash-coin me-2 text-warning"></i>Pembayaran Pending
+                </h5>
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-three-dots-vertical"></i>
+                  </button>
+                  <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="<?= site_url('admin/pembayaran') ?>">Semua Pembayaran</a></li>
+                    <li><a class="dropdown-item" href="<?= site_url('admin/pembayaran/export') ?>">Export Data</a></li>
+                  </ul>
+                </div>
               </div>
+            </div>
+            <div class="card-body pt-2">
               <?php if (!empty($pendingPayments)): ?>
                 <div class="table-responsive">
-                  <table class="table table-sm align-middle">
+                  <table class="table table-sm table-hover align-middle">
                     <thead class="table-light">
                       <tr>
                         <th>Nama</th>
-                        <th>Event</th>
+                        <th class="d-none d-md-table-cell">Event</th>
                         <th class="text-end">Jumlah</th>
-                        <th class="text-nowrap">Tanggal</th>
-                        <th></th>
+                        <th class="text-nowrap d-none d-sm-table-cell">Tanggal</th>
+                        <th width="80"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      <?php foreach ($pendingPayments as $p): ?>
+                      <?php foreach (array_slice($pendingPayments, 0, 5) as $p): ?>
                         <tr>
-                          <td><?= esc($p['nama_lengkap'] ?? '-') ?></td>
-                          <td><?= esc($p['event_title'] ?? 'Event') ?></td>
-                          <td class="text-end">Rp <?= number_format((float)($p['jumlah'] ?? 0), 0, ',', '.') ?></td>
-                          <td class="text-nowrap"><?= esc($fmtDate($p['tanggal_bayar'] ?? null)) ?></td>
+                          <td>
+                            <div class="fw-semibold"><?= esc($p['nama_lengkap'] ?? '-') ?></div>
+                            <div class="small text-muted d-md-none"><?= esc($p['event_title'] ?? 'Event') ?></div>
+                          </td>
+                          <td class="d-none d-md-table-cell">
+                            <div class="text-truncate" style="max-width: 150px;">
+                              <?= esc($p['event_title'] ?? 'Event') ?>
+                            </div>
+                          </td>
                           <td class="text-end">
-                            <a href="<?= site_url('admin/pembayaran/detail/'.(int)($p['id_pembayaran'] ?? 0)) ?>" class="btn btn-sm btn-outline-primary">Detail</a>
+                            <span class="badge bg-warning text-dark">
+                              Rp <?= number_format((float)($p['jumlah'] ?? 0), 0, ',', '.') ?>
+                            </span>
+                          </td>
+                          <td class="text-nowrap d-none d-sm-table-cell">
+                            <small class="text-muted"><?= esc($fmtDate($p['tanggal_bayar'] ?? null)) ?></small>
+                          </td>
+                          <td class="text-end">
+                            <a href="<?= site_url('admin/pembayaran/detail/'.(int)($p['id_pembayaran'] ?? 0)) ?>" 
+                               class="btn btn-sm btn-outline-primary">
+                              <i class="bi bi-eye d-md-none"></i>
+                              <span class="d-none d-md-inline">Detail</span>
+                            </a>
                           </td>
                         </tr>
                       <?php endforeach; ?>
                     </tbody>
                   </table>
                 </div>
+                <?php if (count($pendingPayments) > 5): ?>
+                  <div class="text-center pt-2 border-top">
+                    <a href="<?= site_url('admin/pembayaran') ?>" class="btn btn-sm btn-outline-warning">
+                      Lihat Semua (<?= count($pendingPayments) ?>)
+                    </a>
+                  </div>
+                <?php endif; ?>
               <?php else: ?>
-                <div class="p-4 text-center border rounded-3 bg-light-subtle">
-                  <div class="mb-2"><i class="bi bi-wallet2 fs-3 text-secondary"></i></div>
-                  <div class="fw-semibold">Tidak ada pembayaran pending</div>
-                  <div class="text-muted small">Semua pembayaran telah diverifikasi.</div>
+                <div class="text-center py-5">
+                  <div class="mb-3"><i class="bi bi-check-circle fs-1 text-success"></i></div>
+                  <h6 class="fw-semibold">Semua Pembayaran Terverifikasi</h6>
+                  <p class="text-muted small mb-0">Tidak ada pembayaran yang menunggu verifikasi.</p>
                 </div>
               <?php endif; ?>
             </div>
           </div>
         </div>
 
-        <!-- Abstrak masuk terbaru -->
+        <!-- Recent Abstracts -->
         <div class="col-12 col-xl-6">
           <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="card-title mb-0"><i class="bi bi-file-earmark-text me-2 text-primary"></i>Abstrak masuk terbaru</h5>
-                <a href="<?= site_url('admin/abstrak') ?>" class="small">Kelola</a>
+            <div class="card-header bg-transparent border-0 pb-0">
+              <div class="d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                  <i class="bi bi-file-earmark-text me-2 text-primary"></i>Abstrak Terbaru
+                </h5>
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-three-dots-vertical"></i>
+                  </button>
+                  <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="<?= site_url('admin/abstrak') ?>">Semua Abstrak</a></li>
+                    <li><a class="dropdown-item" href="<?= site_url('admin/abstrak/export') ?>">Export Data</a></li>
+                  </ul>
+                </div>
               </div>
-
-              <div class="vstack gap-2 activities-scroll">
+            </div>
+            <div class="card-body pt-2">
+              <div class="activities-scroll">
                 <?php if (!empty($recent_abstrak)): ?>
-                  <?php foreach ($recent_abstrak as $ab):
+                  <?php foreach (array_slice($recent_abstrak, 0, 6) as $ab):
                     $st  = strtolower($ab['status'] ?? 'menunggu');
-                    $cls = $st==='menunggu'?'bg-warning text-dark':($st==='diterima'?'bg-success':($st==='ditolak'?'bg-danger':'bg-secondary'));
+                    $badgeClass = match($st) {
+                      'menunggu' => 'bg-warning text-dark',
+                      'sedang_direview' => 'bg-info',
+                      'diterima' => 'bg-success',
+                      'ditolak' => 'bg-danger',
+                      'revisi' => 'bg-secondary',
+                      default => 'bg-secondary'
+                    };
                   ?>
-                    <div class="notice">
-                      <div class="d-flex align-items-start gap-2">
-                        <i class="bi bi-journal-text text-primary mt-1"></i>
-                        <div class="flex-fill">
-                          <div class="title"><?= esc(mb_strimwidth($ab['judul'] ?? '-', 0, 70, '...')) ?></div>
-                          <div class="meta">oleh <?= esc($ab['nama_lengkap'] ?? '-') ?> · <?= esc($fmtDate($ab['created_at'] ?? null)) ?></div>
+                    <div class="notice mb-2">
+                      <div class="d-flex align-items-start gap-3">
+                        <div class="notice-icon">
+                          <i class="bi bi-journal-text text-primary"></i>
                         </div>
-                        <span class="badge <?= $cls ?>"><?= ucfirst($st) ?></span>
+                        <div class="flex-fill min-width-0">
+                          <div class="notice-title fw-semibold text-truncate" title="<?= esc($ab['judul'] ?? '-') ?>">
+                            <?= esc(mb_strimwidth($ab['judul'] ?? '-', 0, 50, '...')) ?>
+                          </div>
+                          <div class="notice-meta small text-muted">
+                            oleh <?= esc($ab['nama_lengkap'] ?? '-') ?> • <?= esc($fmtDate($ab['created_at'] ?? null)) ?>
+                          </div>
+                        </div>
+                        <div class="flex-shrink-0">
+                          <span class="badge <?= $badgeClass ?>"><?= ucfirst($st) ?></span>
+                        </div>
                       </div>
                     </div>
                   <?php endforeach; ?>
                 <?php else: ?>
-                  <div class="p-4 text-center border rounded-3 bg-light-subtle">
-                    <div class="mb-2"><i class="bi bi-inbox fs-3 text-secondary"></i></div>
-                    <div class="fw-semibold">Belum ada abstrak</div>
-                    <div class="text-muted small">Abstrak terbaru akan tampil di sini.</div>
+                  <div class="text-center py-5">
+                    <div class="mb-3"><i class="bi bi-inbox fs-1 text-muted"></i></div>
+                    <h6 class="fw-semibold">Belum Ada Abstrak</h6>
+                    <p class="text-muted small mb-0">Abstrak yang dikirim akan tampil di sini.</p>
                   </div>
                 <?php endif; ?>
               </div>
-
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ROW 2: Abstrak belum ditugaskan + Event terbaru -->
+      <!-- Bottom Row -->
       <div class="row g-3">
-        <!-- Unassigned abstrak -->
+        <!-- Unassigned Abstracts -->
         <div class="col-12 col-xl-6">
           <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="card-title mb-0"><i class="bi bi-person-gear me-2 text-danger"></i>Abstrak belum ditugaskan ke reviewer</h5>
-                <a href="<?= site_url('admin/reviewer') ?>" class="small">Tugaskan</a>
+            <div class="card-header bg-transparent border-0 pb-0">
+              <div class="d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                  <i class="bi bi-person-gear me-2 text-danger"></i>Perlu Penugasan Reviewer
+                </h5>
+                <a href="<?= site_url('admin/reviewer') ?>" class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-arrow-right me-1"></i>Kelola
+                </a>
               </div>
-
-              <div class="vstack gap-2 activities-scroll">
+            </div>
+            <div class="card-body pt-2">
+              <div class="activities-scroll">
                 <?php if (!empty($unassigned_list)): ?>
-                  <?php foreach ($unassigned_list as $ua): ?>
-                    <div class="notice">
-                      <div class="d-flex align-items-start gap-2">
-                        <i class="bi bi-exclamation-triangle text-danger mt-1"></i>
-                        <div class="flex-fill">
-                          <div class="title"><?= esc(mb_strimwidth($ua['judul'] ?? '-', 0, 70, '...')) ?></div>
-                          <div class="meta">oleh <?= esc($ua['nama_lengkap'] ?? '-') ?> · <?= esc($fmtDate($ua['created_at'] ?? null)) ?></div>
+                  <?php foreach (array_slice($unassigned_list, 0, 5) as $ua): ?>
+                    <div class="notice mb-2">
+                      <div class="d-flex align-items-start gap-3">
+                        <div class="notice-icon">
+                          <i class="bi bi-exclamation-triangle text-danger"></i>
                         </div>
-                        <a href="<?= site_url('admin/reviewer') ?>" class="btn btn-sm btn-outline-danger">Tugaskan</a>
+                        <div class="flex-fill min-width-0">
+                          <div class="notice-title fw-semibold text-truncate" title="<?= esc($ua['judul'] ?? '-') ?>">
+                            <?= esc(mb_strimwidth($ua['judul'] ?? '-', 0, 50, '...')) ?>
+                          </div>
+                          <div class="notice-meta small text-muted">
+                            oleh <?= esc($ua['nama_lengkap'] ?? '-') ?> • <?= esc($fmtDate($ua['created_at'] ?? null)) ?>
+                          </div>
+                        </div>
+                        <div class="flex-shrink-0">
+                          <a href="<?= site_url('admin/abstrak/detail/'.(int)($ua['id_abstrak'] ?? 0)) ?>" 
+                             class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-person-plus d-md-none"></i>
+                            <span class="d-none d-md-inline">Tugaskan</span>
+                          </a>
+                        </div>
                       </div>
                     </div>
                   <?php endforeach; ?>
                 <?php else: ?>
-                  <div class="p-4 text-center border rounded-3 bg-light-subtle">
-                    <div class="mb-2"><i class="bi bi-check2-circle fs-3 text-success"></i></div>
-                    <div class="fw-semibold">Semua abstrak sudah ditugaskan</div>
-                    <div class="text-muted small">Tidak ada antrian penugasan reviewer.</div>
+                  <div class="text-center py-5">
+                    <div class="mb-3"><i class="bi bi-check2-circle fs-1 text-success"></i></div>
+                    <h6 class="fw-semibold">Semua Abstrak Ditugaskan</h6>
+                    <p class="text-muted small mb-0">Tidak ada antrian penugasan reviewer.</p>
                   </div>
                 <?php endif; ?>
               </div>
-
             </div>
           </div>
         </div>
 
-        <!-- Event terbaru -->
+        <!-- Recent Events -->
         <div class="col-12 col-xl-6">
           <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="card-title mb-0"><i class="bi bi-calendar-event me-2 text-success"></i>Event terbaru</h5>
-                <a href="<?= site_url('admin/event') ?>" class="small">Kelola</a>
+            <div class="card-header bg-transparent border-0 pb-0">
+              <div class="d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                  <i class="bi bi-calendar-event me-2 text-success"></i>Event Terbaru
+                </h5>
+                <a href="<?= site_url('admin/event') ?>" class="btn btn-sm btn-outline-success">
+                  <i class="bi bi-arrow-right me-1"></i>Kelola
+                </a>
               </div>
-
-              <div class="vstack gap-2 activities-scroll">
+            </div>
+            <div class="card-body pt-2">
+              <div class="activities-scroll">
                 <?php if (!empty($recent_events)): ?>
-                  <?php foreach ($recent_events as $ev): ?>
-                    <div class="notice">
-                      <div class="d-flex align-items-start gap-2">
-                        <i class="bi bi-calendar3 text-success mt-1"></i>
-                        <div class="flex-fill">
-                          <div class="title"><?= esc(mb_strimwidth($ev['title'] ?? 'Event', 0, 70, '...')) ?></div>
-                          <div class="meta">
-                            <?= esc($fmtDate($ev['event_date'] ?? null)) ?> ·
-                            <?= esc($ev['event_time'] ?? '-') ?> ·
+                  <?php foreach (array_slice($recent_events, 0, 5) as $ev): ?>
+                    <div class="notice mb-2">
+                      <div class="d-flex align-items-start gap-3">
+                        <div class="notice-icon">
+                          <i class="bi bi-calendar3 text-success"></i>
+                        </div>
+                        <div class="flex-fill min-width-0">
+                          <div class="notice-title fw-semibold text-truncate" title="<?= esc($ev['title'] ?? 'Event') ?>">
+                            <?= esc(mb_strimwidth($ev['title'] ?? 'Event', 0, 50, '...')) ?>
+                          </div>
+                          <div class="notice-meta small text-muted">
+                            <?= esc($fmtDate($ev['event_date'] ?? null)) ?> • 
+                            <?= esc($ev['event_time'] ?? '-') ?> • 
                             <?= esc(ucfirst($ev['format'] ?? '-')) ?>
                           </div>
                         </div>
-                        <span class="badge <?= !empty($ev['is_active']) ? 'bg-success':'bg-secondary' ?>">
-                          <?= !empty($ev['is_active']) ? 'Aktif' : 'Nonaktif' ?>
-                        </span>
+                        <div class="flex-shrink-0">
+                          <span class="badge <?= !empty($ev['is_active']) ? 'bg-success':'bg-secondary' ?>">
+                            <?= !empty($ev['is_active']) ? 'Aktif' : 'Nonaktif' ?>
+                          </span>
+                        </div>
                       </div>
                     </div>
                   <?php endforeach; ?>
                 <?php else: ?>
-                  <div class="p-4 text-center border rounded-3 bg-light-subtle">
-                    <div class="mb-2"><i class="bi bi-calendar-x fs-3 text-secondary"></i></div>
-                    <div class="fw-semibold">Belum ada event</div>
-                    <div class="text-muted small">Buat event baru di menu Kelola Event.</div>
+                  <div class="text-center py-5">
+                    <div class="mb-3"><i class="bi bi-calendar-x fs-1 text-muted"></i></div>
+                    <h6 class="fw-semibold">Belum Ada Event</h6>
+                    <p class="text-muted small mb-0">
+                      <a href="<?= site_url('admin/event') ?>" class="text-decoration-none">Buat event baru</a>
+                    </p>
                   </div>
                 <?php endif; ?>
               </div>
-
             </div>
           </div>
         </div>
@@ -264,55 +355,336 @@ $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
 
 <?= $this->include('partials/footer') ?>
 
-<!-- ====== STYLES (seragam dengan Voucher/Dokumen) ====== -->
 <style>
-  :root{
-    --primary-color:#2563eb; --success-color:#10b981; --warning-color:#f59e0b; --danger-color:#ef4444; --info-color:#06b6d4;
+:root {
+  --primary-color: #2563eb;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  --info-color: #06b6d4;
+  --secondary-color: #6b7280;
+}
+
+body {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* Header Section */
+.header-section.header-blue {
+  background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+  color: #fff;
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(37, 99, 235, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.header-section.header-blue::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.welcome-text {
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.8rem;
+}
+
+@media (max-width: 768px) {
+  .welcome-text {
+    font-size: 1.5rem;
   }
-  body{ background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%); font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
+}
 
-  .header-section.header-blue{
-    background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
-    color:#fff; padding:28px 24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
+/* Stat Cards */
+.stat-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid #f1f5f9;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 4px;
+  width: 100%;
+}
+
+.stat-card.stat-primary::before { background: linear-gradient(90deg, var(--primary-color), var(--info-color)); }
+.stat-card.stat-success::before { background: linear-gradient(90deg, var(--success-color), #059669); }
+.stat-card.stat-warning::before { background: linear-gradient(90deg, var(--warning-color), #d97706); }
+.stat-card.stat-danger::before { background: linear-gradient(90deg, var(--danger-color), #dc2626); }
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.stat-number {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #1e293b;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.stat-action {
+  margin-top: 12px;
+}
+
+@media (max-width: 576px) {
+  .stat-number {
+    font-size: 1.5rem;
   }
-  .header-section .welcome-text{ color:#fff; font-weight:800; font-size:2rem; }
-
-  .stat-card{
-    background:#fff; border-radius:14px; padding:20px; box-shadow:0 8px 28px rgba(0,0,0,.08);
-    border-left:4px solid #e9ecef; position:relative; overflow:hidden;
+  .stat-label {
+    font-size: 0.8rem;
   }
-  .stat-card:before{
-    content:''; position:absolute; left:0; top:0; height:4px; width:100%;
-    background:linear-gradient(90deg,var(--primary-color),var(--info-color));
+  .stat-card {
+    padding: 16px;
   }
-  .stat-icon{ width:56px; height:56px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:22px; }
-  .stat-number{ font-size:2rem; font-weight:800; color:#1e293b; line-height:1; }
+}
 
-  .activities-scroll{ max-height: 320px; overflow:auto; padding-right: 6px; }
-  .activities-scroll::-webkit-scrollbar{ width:8px; }
-  .activities-scroll::-webkit-scrollbar-thumb{ background:#ccd6e0; border-radius:8px; }
+/* Cards */
+.card {
+  border: 1px solid #f1f5f9;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.3s ease;
+}
 
-  .notice{ border:1px solid #eef2f6; border-radius:12px; padding:12px; background:#fff; transition:.15s ease; }
-  .notice:hover{ box-shadow:0 8px 18px rgba(0,0,0,.06); }
-  .notice .title{ font-weight:600; }
-  .notice .meta{ font-size:.85rem; color:#e5e7eb; color:#6c757d; }
+.card:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
 
-  /* jarak aman di bawah header global */
-  #content main>.container-fluid{ margin-top:.25rem; }
+.card-header {
+  background: transparent !important;
+  border-bottom: 1px solid #f1f5f9;
+  padding: 20px 20px 12px;
+}
+
+.card-body {
+  padding: 20px;
+}
+
+/* Activities Scroll */
+.activities-scroll {
+  max-height: 350px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.activities-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.activities-scroll::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 3px;
+}
+
+.activities-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.activities-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Notice Items */
+.notice {
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+  transition: all 0.2s ease;
+}
+
+.notice:hover {
+  border-color: #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.notice-icon i {
+  font-size: 18px;
+  margin-top: 2px;
+}
+
+.notice-title {
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #1e293b;
+}
+
+.notice-meta {
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.min-width-0 {
+  min-width: 0;
+}
+
+/* Responsive Utilities */
+@media (max-width: 768px) {
+  .container-fluid {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  
+  main {
+    padding-top: 60px !important;
+  }
+  
+  .header-section {
+    padding: 20px;
+  }
+  
+  .card-body {
+    padding: 16px;
+  }
+  
+  .card-header {
+    padding: 16px 16px 8px;
+  }
+}
+
+/* Table Responsive Improvements */
+.table-responsive {
+  border-radius: 8px;
+}
+
+.table th {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.table td {
+  font-size: 0.875rem;
+  vertical-align: middle;
+}
+
+/* Badge Styles */
+.badge {
+  font-weight: 500;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+}
+
+/* Button Improvements */
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.875rem;
+}
+
+/* Animation for stat numbers */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stat-number {
+  animation: countUp 0.6s ease-out;
+}
+
+/* Loading state */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
 </style>
 
-<!-- ====== SCRIPTS (animasi angka KPI) ====== -->
 <script>
-  (function(){
-    const els = document.querySelectorAll('.stat-number');
-    els.forEach(el=>{
-      const target = parseInt(el.getAttribute('data-num')||'0',10);
-      let cur = 0; const step = Math.max(1, Math.round(target/40));
-      const id = setInterval(()=>{
-        cur += step;
-        if(cur >= target){ cur = target; clearInterval(id); }
-        el.textContent = new Intl.NumberFormat('id-ID').format(cur);
-      }, 18);
+document.addEventListener('DOMContentLoaded', function() {
+  // Animated counter for statistics
+  const animateCounters = () => {
+    const counters = document.querySelectorAll('.stat-number[data-num]');
+    
+    counters.forEach(counter => {
+      const target = parseInt(counter.getAttribute('data-num') || '0', 10);
+      const increment = Math.max(1, Math.ceil(target / 30));
+      let current = 0;
+      
+      const updateCounter = () => {
+        if (current < target) {
+          current = Math.min(current + increment, target);
+          counter.textContent = new Intl.NumberFormat('id-ID').format(current);
+          requestAnimationFrame(updateCounter);
+        } else {
+          counter.textContent = new Intl.NumberFormat('id-ID').format(target);
+        }
+      };
+      
+      updateCounter();
     });
-  })();
+  };
+
+  // Start counter animation
+  setTimeout(animateCounters, 200);
+
+  // Auto-refresh stats every 5 minutes
+  setInterval(() => {
+    fetch('<?= site_url("admin/dashboard/getStats") ?>')
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Update KPI values if needed
+          console.log('Stats updated:', data.stats);
+        }
+      })
+      .catch(error => console.log('Stats refresh failed:', error));
+  }, 300000); // 5 minutes
+
+  // Initialize tooltips if Bootstrap tooltips are available
+  if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+  }
+
+  // Smooth scroll for anchor links
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+      e.preventDefault();
+      const target = document.querySelector(this.getAttribute('href'));
+      if (target) {
+        target.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }
+    });
+  });
+});
 </script>

@@ -52,7 +52,7 @@ class Abstrak extends BaseController
         ksort($eventOptions);
 
         // Grouping per event + ringkasan status
-        $grouped = []; // [event_id => ['event_title'=>..., 'items'=>[], 'summary'=>['pending'=>..,'diterima'=>..,'ditolak'=>..,'revisi'=>..]]]
+        $grouped = [];
         foreach ($rows as $r) {
             $eid   = (int)($r['event_id'] ?? 0);
             $etitle= $r['event_title'] ?? 'Event';
@@ -75,10 +75,13 @@ class Abstrak extends BaseController
             $grouped[$eid]['items'][] = $r;
         }
 
+        // Convert to array values for view compatibility
+        $byEvent = array_values($grouped);
+
         return view('role/reviewer/abstrak', [
             'title'        => 'Daftar Abstrak',
             'abstrak'      => $rows,      // untuk tampilan "Semua"
-            'byEvent'      => $grouped,   // untuk tampilan "Per Event"
+            'byEvent'      => $byEvent,   // untuk tampilan "Per Event"
             'eventOptions' => $eventOptions,
         ]);
     }
@@ -111,24 +114,5 @@ class Abstrak extends BaseController
         }
 
         return view('role/reviewer/detail_abstrak', ['abstrak' => $abstrak]);
-    }
-
-    public function saveReview()
-    {
-        $idReviewer = (int) (session('id_user') ?? 0);
-        if (!$idReviewer || session('role') !== 'reviewer') {
-            return redirect()->to(site_url('auth/login'));
-        }
-
-        $data = [
-            'id_abstrak'     => (int) $this->request->getPost('id_abstrak'),
-            'id_reviewer'    => $idReviewer,
-            'keputusan'      => $this->request->getPost('keputusan'),
-            'komentar'       => $this->request->getPost('komentar'),
-            'tanggal_review' => date('Y-m-d H:i:s'),
-        ];
-
-        $this->reviewModel->insert($data);
-        return redirect()->to('reviewer/riwayat')->with('success', 'Review berhasil disimpan');
     }
 }
