@@ -23,20 +23,22 @@ $q     = $q ?? '';
         </div>
       </div>
 
-      <!-- Search Box (kartu biru) -->
+      <!-- Search Box (kartu biru) - COMPACT -->
       <div class="card shadow-sm mb-3 border-0 overflow-hidden">
         <div class="card-header bg-gradient-primary text-white">
           <div class="d-flex align-items-center justify-content-between">
-            <h5 class="mb-0"><i class="bi bi-search me-2"></i>Cari Event</h5>
+            <h6 class="mb-0"><i class="bi bi-search me-2"></i>Cari Event</h6>
           </div>
         </div>
-        <div class="card-body">
-          <form class="row g-2" method="get" action="/presenter/events">
-            <div class="col-12 col-md-9">
-              <input class="form-control form-control-lg" name="q" value="<?= esc($q) ?>" placeholder="Ketik judul/lokasi/kata kunci...">
+        <div class="card-body search-compact">
+          <form class="row g-2 align-items-center" method="get" action="/presenter/events">
+            <div class="col-12 col-md-8">
+              <input class="form-control" name="q" value="<?= esc($q) ?>" placeholder="Ketik judul/lokasi/kata kunci...">
             </div>
-            <div class="col-12 col-md-3 d-grid">
-              <button class="btn btn-primary btn-lg"><i class="bi bi-search me-1"></i>Cari</button>
+            <div class="col-12 col-md-4 d-grid">
+              <button class="btn btn-primary">
+                <i class="bi bi-search me-1"></i>Cari
+              </button>
             </div>
           </form>
         </div>
@@ -52,7 +54,7 @@ $q     = $q ?? '';
             <div class="text-muted">Tidak ada event yang membuka pendaftaran.</div>
           <?php else: ?>
             <div class="row g-3">
-              <?php foreach ($available as $e): 
+              <?php foreach ($available as $e):
                 $st = $statusIndex[(int)$e['id']] ?? null;
                 $label = $st['label'] ?? 'Belum terdaftar';
                 $hint  = $st['hint']  ?? '';
@@ -104,7 +106,7 @@ $q     = $q ?? '';
             <div class="text-muted">Belum ada event yang ditutup.</div>
           <?php else: ?>
             <div class="row g-3">
-              <?php foreach ($closed as $e): 
+              <?php foreach ($closed as $e):
                 $st = $statusIndex[(int)$e['id']] ?? null;
                 $label = $st['label'] ?? '—';
                 $hint  = $st['hint']  ?? '';
@@ -155,6 +157,20 @@ $q     = $q ?? '';
     background:#fff; border-radius:14px; padding:16px; border:1px solid #eef2f7;
   }
   .opacity-90{ opacity:.92; }
+
+  /* Compact search */
+  .search-compact .form-control,
+  .search-compact .btn{
+    height: 42px;
+    border-radius: 10px;
+    font-size: .95rem;
+  }
+  .search-compact .form-control{ padding: .45rem .75rem; }
+  @media (max-width: 767.98px){
+    .header-section.header-blue{ padding:18px; }
+    .search-compact .form-control,
+    .search-compact .btn{ height: 40px; font-size: .92rem; }
+  }
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>

@@ -15,26 +15,18 @@ $routes->get('/', 'Home::index');
 // Enhanced QR System Routes (URUTAN PENTING)
 // ---------------------------------------------------
 $routes->group('qr', static function ($routes) {
-    // /qr → halaman scanner
     $routes->get('/', 'QRAttendance::showScannerInterface');
-
-    // scanner UI
     $routes->get('scanner', 'QRAttendance::showScannerInterface');
     $routes->get('mobile',  'QRAttendance::showScannerInterface');
-
-    // submit hasil scan / token
     $routes->post('process', 'QRAttendance::process');
-
-    // generate QR untuk admin
     $routes->post('generate/(:num)', 'QRAttendance::generateEventQRCodes/$1', ['filter' => 'role:admin']);
 
-    // debug only
     if (ENVIRONMENT === 'development') {
         $routes->get('debug/(:segment)', 'QRAttendance::debugQR/$1');
         $routes->get('test/(:num)',      'QRAttendance::generateTestQR/$1');
     }
 
-    // GENERIC token scan (HARUS PALING AKHIR)
+    // HARUS PALING AKHIR
     $routes->get('(:segment)', 'QRAttendance::scan/$1');
 });
 
@@ -60,9 +52,10 @@ $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], static function 
 $routes->group('notif', ['filter' => 'auth'], static function ($routes) {
     $routes->get('recent',       'Notif::recent');
     $routes->get('count',        'Notif::count');
-    // (opsional, kalau ada): $routes->get('list', 'Notif::list');
     $routes->post('read/(:num)', 'Notif::markRead/$1');
     $routes->match(['get','post'], 'read-all', 'Notif::readAll');
+
+    $routes->get('activities',   'Notif::activities'); // feed "Aktivitas Terbaru"
 });
 
 // ---------------------------------------------------
@@ -99,9 +92,9 @@ $routes->group('admin', [
 
     // Users
     $routes->get ('users',               'User::index');
-    $routes->get ('users/edit/(:num)',   'User::edit/$1');      // return JSON untuk modal edit
-    $routes->post('users/update/(:num)', 'User::update/$1');    // submit update dari modal
-    $routes->get ('users/delete/(:num)', 'User::delete/$1');    // pakai GET -> sesuai window.location.href
+    $routes->get ('users/edit/(:num)',   'User::edit/$1');
+    $routes->post('users/update/(:num)', 'User::update/$1');
+    $routes->get ('users/delete/(:num)', 'User::delete/$1');
 
     // Abstrak
     $routes->get ('abstrak',                       'Abstrak::index');
@@ -109,10 +102,7 @@ $routes->group('admin', [
     $routes->post('abstrak/assign/(:num)',         'Abstrak::assign/$1');
     $routes->post('abstrak/update-status',         'Abstrak::updateStatus');
     $routes->post('abstrak/bulk-update-status',    'Abstrak::bulkUpdateStatus');
-
-    // Izinkan GET/POST untuk delete (karena view panggil via window.location.href)
     $routes->match(['get','post'], 'abstrak/delete/(:num)', 'Abstrak::delete/$1');
-
     $routes->get ('abstrak/download/(:num)',       'Abstrak::downloadFile/$1');
     $routes->get ('abstrak/export',                'Abstrak::export');
     $routes->get ('abstrak/statistics',            'Abstrak::statistics');
@@ -132,7 +122,7 @@ $routes->group('admin', [
     $routes->get ('reviewer/export',          'Reviewer::export');
     $routes->get ('reviewer/statistics',      'Reviewer::getStatistics');
 
-    // Event (sensitif → POST untuk ubah)
+    // Event
     $routes->get ('event',                  'Event::index');
     $routes->post('event/store',            'Event::store');
     $routes->get ('event/edit/(:num)',      'Event::edit/$1');
@@ -198,7 +188,7 @@ $routes->group('admin', [
 });
 
 // ---------------------------------------------------
-// Presenter Routes
+// Presenter Routes (FIXED)
 // ---------------------------------------------------
 $routes->group('presenter', [
     'filter'    => 'role:presenter',
@@ -209,26 +199,19 @@ $routes->group('presenter', [
     // Event
     $routes->get ('events',                      'Event::index');
     $routes->get ('events/detail/(:num)',        'Event::detail/$1');
-
-    // ✅ daftar via GET (konfirmasi di front-end → hit endpoint ini)
     $routes->get ('events/register/(:num)',      'Event::register/$1');
-
-    // (opsional) kalau kamu masih mau dukung POST juga, biarkan baris ini:
-    // $routes->post('events/register/(:num)',      'Event::register/$1');
-
-    // ✅ batal pendaftaran
     $routes->get ('events/cancel/(:num)',        'Event::cancel/$1');
 
-    // Abstrak
-    $routes->get ('abstrak',                          'Abstrak::index');           // list/status
-    $routes->get ('abstrak/create',                   'Abstrak::create');          // tanpa event
-    $routes->get ('abstrak/create/(:num)',            'Abstrak::create/$1');       // dengan event
-    $routes->post('abstrak/store',                    'Abstrak::store');           // submit upload
-    $routes->get ('abstrak/detail/(:num)',            'Abstrak::detail/$1');       // (kalau butuh)
-    $routes->get ('abstrak/download/(:segment)',      'Abstrak::download/$1');     // existing
+    // Abstrak (create hanya dengan event_id)
+    $routes->get ('abstrak',                          'Abstrak::index');
+    $routes->get ('abstrak/create/(:num)',            'Abstrak::create/$1');
+    $routes->post('abstrak/store',                    'Abstrak::store');
+    $routes->get ('abstrak/detail/(:num)',            'Abstrak::detail/$1');
+    $routes->get ('abstrak/download/(:segment)',      'Abstrak::download/$1');
 
-    // Pembayaran
+    // Pembayaran: INDEX → INSTRUCTION → CREATE → DETAIL
     $routes->get ('pembayaran',                       'Pembayaran::index');
+    $routes->get ('pembayaran/instruction/(:num)',    'Pembayaran::instruction/$1');
     $routes->get ('pembayaran/create/(:num)',         'Pembayaran::create/$1');
     $routes->post('pembayaran/store',                 'Pembayaran::store');
     $routes->get ('pembayaran/detail/(:num)',         'Pembayaran::detail/$1');
@@ -237,15 +220,20 @@ $routes->group('presenter', [
     $routes->get ('pembayaran/cancel/(:num)',         'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher',      'Pembayaran::validateVoucher');
 
-    // Absensi
-    $routes->get ('absensi',     'Absensi::index');
-    $routes->post('absensi/scan','Absensi::scan');
+    // Absensi (tambahkan detail per event)
+    $routes->get ('absensi',              'Absensi::index');
+    $routes->get ('absensi/event/(:num)', 'Absensi::show/$1');
+    $routes->post('absensi/scan',         'Absensi::scan');
 
-    // Dokumen
-    $routes->get ('dokumen/loa',                          'Dokumen::loa');
-    $routes->get ('dokumen/loa/download/(:segment)',      'Dokumen::downloadLoa/$1');
-    $routes->get ('dokumen/sertifikat',                   'Dokumen::sertifikat');
-    $routes->get ('dokumen/sertifikat/download/(:segment)','Dokumen::downloadSertifikat/$1');
+    // Dokumen — tambah index gabungan LOA + Sertifikat
+    $routes->get ('dokumen',                                'Dokumen::index');
+    // Link lama masih didukung → redirect ke index + anchor
+    $routes->get ('dokumen/loa',                            'Dokumen::loa');
+    $routes->get ('dokumen/sertifikat',                     'Dokumen::sertifikat');
+
+    // Download
+    $routes->get ('dokumen/loa/download/(:segment)',        'Dokumen::downloadLoa/$1');
+    $routes->get ('dokumen/sertifikat/download/(:segment)', 'Dokumen::downloadSertifikat/$1');
 });
 
 // ---------------------------------------------------
@@ -265,7 +253,7 @@ $routes->group('audience', [
 
     // Pembayaran
     $routes->get ('pembayaran',                       'Pembayaran::index');
-    $routes->get ('pembayaran/instruction/(:num)',    'Pembayaran::instruction/$1'); // penting untuk flow baru
+    $routes->get ('pembayaran/instruction/(:num)',    'Pembayaran::instruction/$1');
     $routes->get ('pembayaran/create/(:num)',         'Pembayaran::create/$1');
     $routes->post('pembayaran/store',                 'Pembayaran::store');
     $routes->get ('pembayaran/detail/(:num)',         'Pembayaran::detail/$1');
@@ -275,10 +263,10 @@ $routes->group('audience', [
     $routes->post('pembayaran/validate-voucher',      'Pembayaran::validateVoucher');
 
     // Absensi
-    $routes->get ('absensi',              'Absensi::index');   // list event + riwayat
-    $routes->get ('absensi/event/(:num)', 'Absensi::show/$1'); // detail (scan / token)
-    $routes->get ('absensi/token',        'Absensi::token');   // optional GET form
-    $routes->post('absensi/scan',         'Absensi::scan');    // submit token
+    $routes->get ('absensi',              'Absensi::index');
+    $routes->get ('absensi/event/(:num)', 'Absensi::show/$1');
+    $routes->get ('absensi/token',        'Absensi::token');
+    $routes->post('absensi/scan',         'Absensi::scan');
 
     // Dokumen
     $routes->get ('dokumen/sertifikat',                    'Dokumen::sertifikat');

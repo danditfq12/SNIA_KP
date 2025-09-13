@@ -1,10 +1,9 @@
 <?php
-$title           = $title ?? 'Abstrak';
-$availableEvents = $availableEvents ?? [];
-$aktif           = $aktif ?? [];
-$riwayat         = $riwayat ?? [];
-$kpi             = $kpi ?? ['total'=>0,'menunggu'=>0,'sedang_direview'=>0,'revisi'=>0,'diterima'=>0,'ditolak'=>0];
+$title   = $title ?? 'Abstrak';
+$events  = $events ?? [];
+$history = $history ?? [];
 ?>
+
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
 <?= $this->include('partials/alerts') ?>
@@ -13,66 +12,97 @@ $kpi             = $kpi ?? ['total'=>0,'menunggu'=>0,'sedang_direview'=>0,'revis
   <main class="flex-fill" style="padding-top:70px;">
     <div class="container-fluid p-3 p-md-4">
 
-      <!-- HEADER -->
+      <!-- Header Biru -->
       <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3">
         <div>
-          <h2 class="welcome-text mb-1"><i class="bi bi-file-earmark-text"></i> Abstrak</h2>
-          <div class="text-white-50">Kirim, pantau status, dan riwayat abstrak Anda</div>
+          <h3 class="welcome-text mb-1"><i class="bi bi-journal-text me-2"></i>Abstrak</h3>
+          <div class="text-white-50">Upload & pantau status abstrak</div>
+        </div>
+        <div class="text-end d-none d-md-block">
+          <small class="text-white-50 d-block">Hari ini</small>
+          <strong class="text-white"><?= date('d M Y') ?></strong>
         </div>
       </div>
 
-      <!-- KPI -->
-      <div class="row g-3 mb-3">
-        <?php
-          $box = [
-            ['Total', $kpi['total'] ?? 0, 'bi-collection'],
-            ['Menunggu', $kpi['menunggu'] ?? 0, 'bi-hourglass-split'],
-            ['Sedang direview', $kpi['sedang_direview'] ?? 0, 'bi-search'],
-            ['Revisi', $kpi['revisi'] ?? 0, 'bi-arrow-counterclockwise'],
-            ['Diterima', $kpi['diterima'] ?? 0, 'bi-check2-circle'],
-            ['Ditolak', $kpi['ditolak'] ?? 0, 'bi-x-circle'],
-          ];
-        ?>
-        <?php foreach ($box as [$label,$val,$icon]): ?>
-          <div class="col-6 col-md-4 col-xl-2">
-            <div class="stat-card shadow-sm h-100">
-              <div class="d-flex align-items-center">
-                <div class="stat-icon bg-primary"><i class="bi <?= $icon ?>"></i></div>
-                <div class="ms-3">
-                  <div class="stat-number"><?= number_format((int)$val) ?></div>
-                  <div class="text-muted small"><?= esc($label) ?></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        <?php endforeach; ?>
-      </div>
-
-      <!-- EVENT TERSEDIA UNTUK UPLOAD -->
-      <div class="card shadow-sm mb-4">
+      <!-- Daftar Abstrak Per Event -->
+      <div class="card shadow-sm mb-4 border-0 overflow-hidden">
         <div class="card-header bg-gradient-primary text-white">
-          <strong><i class="bi bi-calendar-plus me-1"></i> Event tersedia untuk upload abstrak</strong>
+          <h5 class="mb-0"><i class="bi bi-lightning-charge me-2"></i>Event Terdaftar</h5>
         </div>
         <div class="card-body">
-          <?php if (empty($availableEvents)): ?>
-            <div class="text-muted">Tidak ada event yang membuka upload abstrak, atau Anda sudah mengirim abstrak aktif.</div>
+          <?php if (empty($events)): ?>
+            <div class="text-muted">Anda belum terdaftar di event mana pun.</div>
           <?php else: ?>
             <div class="row g-3">
-              <?php foreach ($availableEvents as $e): ?>
+              <?php foreach ($events as $eid => $row):
+                $abs        = $row['abstract'] ?? null;
+                $absStatus  = strtolower($abs['status'] ?? '');
+                $payStatus  = strtolower($row['payment_status'] ?? ''); // OPTIONAL: kirim dari controller kalau ada
+                // Badge di pojok
+                $badgeClass = [
+                  'menunggu'        => 'warning',
+                  'sedang_direview' => 'info',
+                  'diterima'        => 'success',
+                  'ditolak'         => 'danger',
+                  'revisi'          => 'primary',
+                ][$absStatus] ?? 'secondary';
+                $badgeLabel = $abs ? ucfirst($absStatus) : 'Belum Upload';
+
+                // Hint/keterangan di bawah
+                if (!$abs) {
+                  $hint = 'Menunggu abstrak';
+                } elseif (in_array($absStatus, ['menunggu','sedang_direview'])) {
+                  $hint = 'Menunggu review abstrak';
+                } elseif ($absStatus === 'revisi') {
+                  $hint = 'Diminta revisi';
+                } elseif ($absStatus === 'diterima') {
+                  if ($payStatus === 'verified')      $hint = 'Terdaftar';
+                  elseif ($payStatus === 'pending')    $hint = 'Pembayaran pending';
+                  elseif ($payStatus === 'rejected')   $hint = 'Pembayaran ditolak';
+                  else                                  $hint = 'Silakan lakukan pembayaran';
+                } elseif ($absStatus === 'ditolak') {
+                  $hint = 'Abstrak ditolak';
+                } else {
+                  $hint = '';
+                }
+              ?>
               <div class="col-12 col-md-6 col-xl-4">
-                <div class="event-card">
-                  <div class="d-flex justify-content-between align-items-start">
-                    <h6 class="mb-1"><?= esc($e['title']) ?></h6>
-                    <span class="badge bg-success">Open</span>
+                <div class="event-card h-100 shadow-sm">
+                  <div class="d-flex align-items-start justify-content-between mb-2">
+                    <h5 class="mb-0"><?= esc($row['event']['title'] ?? '-') ?></h5>
+                    <span class="badge bg-<?= $badgeClass ?>"><?= esc($badgeLabel) ?></span>
                   </div>
                   <div class="small text-muted mb-2">
-                    Tgl Event: <?= date('d M Y', strtotime($e['event_date'])) ?><br>
-                    Deadline Abstrak: <?= !empty($e['abstract_deadline']) ? date('d M Y', strtotime($e['abstract_deadline'])) : '-' ?>
+                    Tanggal Event:
+                    <strong><?= isset($row['event']['event_date']) ? date('d M Y', strtotime($row['event']['event_date'])) : '-' ?></strong><br>
+                    Deadline Abstrak:
+                    <strong><?= !empty($row['event']['abstract_deadline']) ? date('d M Y H:i', strtotime($row['event']['abstract_deadline'])) : '-' ?></strong><br>
+                    Format:
+                    <strong>
+                      <?php
+                        $format = strtolower($row['event']['format'] ?? '');
+                        echo $format === 'both' ? 'Hybrid' : ucfirst($format ?: '-');
+                      ?>
+                    </strong>
                   </div>
-                  <a class="btn btn-primary btn-sm w-100"
-                     href="/presenter/abstrak/create/<?= (int)$e['id'] ?>">
-                    <i class="bi bi-upload"></i> Upload Abstrak
-                  </a>
+                  <?php if ($hint): ?>
+                    <div class="text-muted small mb-2"><?= esc($hint) ?></div>
+                  <?php endif; ?>
+                  <div class="d-flex gap-2">
+                    <?php if ($row['can_upload']): ?>
+                      <a class="btn btn-primary flex-fill" href="/presenter/abstrak/create/<?= (int)$eid ?>">
+                        <i class="bi bi-upload"></i> Upload Abstrak
+                      </a>
+                    <?php elseif ($abs): ?>
+                      <a class="btn btn-primary flex-fill" href="/presenter/abstrak/detail/<?= (int)$abs['id_abstrak'] ?>">
+                        <i class="bi bi-list"></i> Daftar
+                      </a>
+                    <?php else: ?>
+                      <button class="btn btn-secondary flex-fill" disabled>
+                        <i class="bi bi-ban"></i> Tidak Bisa Upload
+                      </button>
+                    <?php endif; ?>
+                  </div>
                 </div>
               </div>
               <?php endforeach; ?>
@@ -81,97 +111,34 @@ $kpi             = $kpi ?? ['total'=>0,'menunggu'=>0,'sedang_direview'=>0,'revis
         </div>
       </div>
 
-      <!-- TABEL ABSTRAK AKTIF -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-light">
-          <strong><i class="bi bi-activity me-1"></i> Sedang Berjalan</strong>
-          <div class="small text-muted">Abstrak yang sedang menunggu, direview, atau butuh revisi</div>
+      <!-- Riwayat Abstrak -->
+      <div class="card shadow-sm mb-4 border-0 overflow-hidden">
+        <div class="card-header bg-gradient-primary text-white">
+          <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Riwayat Abstrak</h5>
         </div>
-        <div class="card-body p-0">
-          <?php if (empty($aktif)): ?>
-            <div class="p-3 text-muted">Belum ada abstrak aktif.</div>
+        <div class="card-body">
+          <?php if (empty($history)): ?>
+            <div class="text-muted">Belum ada riwayat abstrak diterima/ditolak.</div>
           <?php else: ?>
-          <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Event</th>
-                  <th>Judul</th>
-                  <th>Kategori</th>
-                  <th>Status</th>
-                  <th>Upload</th>
-                  <th style="min-width:160px;">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($aktif as $a):
-                  $st = strtolower($a['status']);
-                  $badge = [
-                    'menunggu'        => 'secondary',
-                    'sedang_direview' => 'warning',
-                    'revisi'          => 'info',
-                  ][$st] ?? 'secondary';
-                ?>
-                <tr>
-                  <td><?= esc($a['event_title'] ?? '-') ?></td>
-                  <td class="text-break"><?= esc($a['judul'] ?? '-') ?></td>
-                  <td><?= esc($a['nama_kategori'] ?? '-') ?></td>
-                  <td><span class="badge bg-<?= $badge ?>"><?= strtoupper($a['status']) ?></span></td>
-                  <td><?= !empty($a['tanggal_upload']) ? date('d M Y H:i', strtotime($a['tanggal_upload'])) : '-' ?></td>
-                  <td class="d-flex flex-wrap gap-2">
-                    <a href="/presenter/abstrak/detail/<?= (int)$a['id_abstrak'] ?>" class="btn btn-outline-primary btn-sm">
-                      <i class="bi bi-eye"></i> Detail
-                    </a>
-                    <?php if ($st === 'revisi'): ?>
-                      <a href="/presenter/abstrak/detail/<?= (int)$a['id_abstrak'] ?>" class="btn btn-warning btn-sm">
-                        <i class="bi bi-upload"></i> Upload Revisi
-                      </a>
-                    <?php endif; ?>
-                    <a href="/presenter/abstrak/download/<?= esc($a['file_abstrak'], 'attr') ?>" class="btn btn-outline-secondary btn-sm">
-                      <i class="bi bi-download"></i> File
-                    </a>
-                  </td>
-                </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
-          <?php endif; ?>
-        </div>
-      </div>
-
-      <!-- RIWAYAT (DITERIMA/DITOLAK) -->
-      <div class="card shadow-sm">
-        <div class="card-header bg-light">
-          <strong><i class="bi bi-journal-text me-1"></i> Riwayat</strong>
-          <div class="small text-muted">Masuk ke riwayat jika abstrak sudah DITERIMA atau DITOLAK</div>
-        </div>
-        <div class="card-body p-0">
-          <?php if (empty($riwayat)): ?>
-            <div class="p-3 text-muted">Belum ada riwayat.</div>
-          <?php else: ?>
-          <ul class="list-group list-group-flush">
-            <?php foreach ($riwayat as $r):
-              $st = strtolower($r['status']);
-              $badge = $st==='diterima' ? 'success' : 'danger';
-            ?>
-            <li class="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
-              <div>
-                <div class="fw-semibold"><?= esc($r['event_title'] ?? '-') ?></div>
-                <div class="small text-muted text-break"><?= esc($r['judul'] ?? '-') ?></div>
+            <div class="row g-3">
+              <?php foreach ($history as $h):
+                $badgeClass = $h['status'] === 'diterima' ? 'success' : 'danger';
+              ?>
+              <div class="col-12 col-md-6 col-xl-4">
+                <div class="event-card h-100 shadow-sm">
+                  <h6 class="mb-1"><?= esc($h['judul']) ?></h6>
+                  <div class="small text-muted mb-2"><?= esc($h['nama_kategori'] ?? '-') ?></div>
+                  <span class="badge bg-<?= $badgeClass ?>"><?= ucfirst($h['status']) ?></span>
+                  <div class="small text-muted mt-2">
+                    <?= !empty($h['tanggal_upload']) ? date('d M Y H:i', strtotime($h['tanggal_upload'])) : '-' ?>
+                  </div>
+                  <a class="btn btn-outline-primary btn-sm mt-2" href="/presenter/abstrak/detail/<?= (int)$h['id_abstrak'] ?>">
+                    <i class="bi bi-eye"></i> Detail
+                  </a>
+                </div>
               </div>
-              <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="badge bg-<?= $badge ?>"><?= strtoupper($r['status']) ?></span>
-                <a href="/presenter/abstrak/detail/<?= (int)$r['id_abstrak'] ?>" class="btn btn-outline-primary btn-sm">
-                  <i class="bi bi-eye"></i> Detail
-                </a>
-                <a href="/presenter/abstrak/download/<?= esc($r['file_abstrak'], 'attr') ?>" class="btn btn-outline-secondary btn-sm">
-                  <i class="bi bi-download"></i> File
-                </a>
-              </div>
-            </li>
-            <?php endforeach; ?>
-          </ul>
+              <?php endforeach; ?>
+            </div>
           <?php endif; ?>
         </div>
       </div>
@@ -184,18 +151,22 @@ $kpi             = $kpi ?? ['total'=>0,'menunggu'=>0,'sedang_direview'=>0,'revis
 
 <style>
   :root{
-    --primary:#2563eb; --primary-deep:#1e40af;
-    --muted:#64748b;
+    --primary-color:#2563eb; --info-color:#06b6d4; --success-color:#10b981; --secondary:#475569;
   }
   .header-section.header-blue{
-    background:linear-gradient(135deg,var(--primary),var(--primary-deep));
-    color:#fff; padding:20px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
+    background:linear-gradient(135deg,var(--primary-color),#1e40af);
+    color:#fff; padding:24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
   }
-  .welcome-text{ font-weight:500; font-size:1.25rem; }
-  .stat-card{ background:#fff; border-radius:14px; padding:16px; border-left:4px solid #e9ecef; }
-  .stat-icon{ width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px; }
-  .stat-number{ font-size:1.4rem; font-weight:600; color:#0f172a; }
-  .event-card{ background:#fff; border:1px solid #eef2f7; border-radius:14px; padding:14px; box-shadow:0 4px 14px rgba(15,23,42,.06); height:100%; }
-  .card{ border-radius:14px; }
-  .btn{ border-radius:10px; }
+  .welcome-text{ font-weight:700; }
+  .bg-gradient-primary{ background:linear-gradient(135deg,var(--primary-color),var(--info-color))!important; }
+  .event-card{
+    background:#f3f4f6; /* lebih gelap */
+    border-radius:14px;
+    padding:16px;
+    border:1px solid #e5e7eb;
+  }
+  @media (max-width: 767.98px){
+    .event-card{ padding:14px; }
+    .header-section.header-blue{ padding:18px; }
+  }
 </style>

@@ -1,16 +1,8 @@
 <?php
-  // Defaults & helpers
-  $title          = $title ?? 'Dokumen';
-  $activeTab      = $activeTab ?? 'loa'; // 'loa' | 'sertifikat'
-  $loa_documents  = $loa_documents ?? [];
-  $eligible_loa   = $eligible_loa ?? [];
-  $certificates   = $certificates ?? [];
-  $eligible_cert  = $eligible_cert ?? [];
-  $fmtD  = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
-  $fmtDT = fn($s)=> $s ? date('d M Y H:i', strtotime($s)) : '-';
-  $base = function($p){ return esc(basename((string)$p)); };
+$title      = $title ?? 'Dokumen Saya';
+$loa        = $loa ?? [];
+$sertifikat = $sertifikat ?? [];
 ?>
-
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
 <?= $this->include('partials/alerts') ?>
@@ -19,211 +11,99 @@
   <main class="flex-fill" style="padding-top:70px;">
     <div class="container-fluid p-3 p-md-4">
 
-      <!-- HERO -->
-      <div class="abs-hero mb-3">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="abs-title">Dokumen</div>
-            <div class="abs-sub">LOA & Sertifikat untuk event yang kamu ikuti (Presenter).</div>
-          </div>
-          <div class="d-none d-md-flex gap-2">
-            <a href="<?= site_url('presenter/events') ?>" class="btn btn-light text-primary fw-semibold">
-              <i class="bi bi-calendar2-event me-1"></i>Lihat Event
-            </a>
-          </div>
+      <!-- Header -->
+      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h3 class="welcome-text mb-1"><i class="bi bi-files me-2"></i>Dokumen</h3>
+          <div class="text-white-50">Unduh LOA & Sertifikat Anda</div>
         </div>
-
-        <!-- Tabs -->
-        <div class="mt-3">
-          <ul class="nav nav-pills">
-            <li class="nav-item me-2">
-              <a class="nav-link <?= $activeTab==='loa'?'active':'' ?>" href="<?= site_url('presenter/dokumen/loa') ?>">
-                <i class="bi bi-file-earmark-text me-1"></i>LOA
-                <?php if ($activeTab==='loa'): ?>
-                  <span class="badge bg-light text-dark ms-1"><?= count($loa_documents) ?></span>
-                <?php endif; ?>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link <?= $activeTab==='sertifikat'?'active':'' ?>" href="<?= site_url('presenter/dokumen/sertifikat') ?>">
-                <i class="bi bi-award me-1"></i>Sertifikat
-                <?php if ($activeTab==='sertifikat'): ?>
-                  <span class="badge bg-light text-dark ms-1"><?= count($certificates) ?></span>
-                <?php endif; ?>
-              </a>
-            </li>
-          </ul>
+        <div class="text-end d-none d-md-block">
+          <small class="text-white-50 d-block">Hari ini</small>
+          <strong class="text-white"><?= date('d M Y') ?></strong>
         </div>
       </div>
 
-      <?php if ($activeTab === 'loa'): ?>
-        <!-- === LOA === -->
-
-        <div class="card shadow-sm border-0 mb-3">
-          <div class="card-body">
-            <h5 class="card-title mb-3">LOA Anda</h5>
-
-            <?php if (!empty($loa_documents)): ?>
-              <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                  <thead class="table-light">
-                    <tr>
-                      <th>Event</th>
-                      <th class="text-nowrap">Tanggal Event</th>
-                      <th class="text-nowrap">Diunggah</th>
-                      <th>Nama File</th>
-                      <th class="text-end">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <?php foreach ($loa_documents as $d): ?>
-                      <tr>
-                        <td>
-                          <div class="fw-semibold"><?= esc($d['event_title'] ?? 'Event') ?></div>
-                          <div class="small text-muted"><?= esc($d['event_time'] ?? '-') ?></div>
-                        </td>
-                        <td class="text-nowrap"><?= esc($fmtD($d['event_date'] ?? null)) ?></td>
-                        <td class="text-nowrap"><?= esc($fmtDT($d['uploaded_at'] ?? null)) ?></td>
-                        <td><?= esc($base($d['file_path'] ?? '')) ?></td>
-                        <td class="text-end">
-                          <a target="_blank"
-                             href="<?= site_url('presenter/dokumen/loa/download/'.rawurlencode($base($d['file_path'] ?? ''))) ?>"
-                             class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-download me-1"></i>Unduh
-                          </a>
-                          <a href="<?= site_url('presenter/events/detail/'.($d['event_id'] ?? 0)) ?>"
-                             class="btn btn-sm btn-light">Event</a>
-                        </td>
-                      </tr>
-                    <?php endforeach; ?>
-                  </tbody>
-                </table>
-              </div>
-            <?php else: ?>
-              <div class="p-4 text-center border rounded-3 bg-light-subtle">
-                <div class="mb-2"><i class="bi bi-file-earmark-text fs-3 text-secondary"></i></div>
-                <div class="fw-semibold">Belum ada LOA</div>
-                <div class="text-muted small">LOA muncul setelah <strong>abstrak diacc</strong> dan <strong>pembayaran terverifikasi</strong>.</div>
-              </div>
-            <?php endif; ?>
+      <div class="card shadow-sm border-0 overflow-hidden">
+        <div class="card-header bg-gradient-primary text-white">
+          <div class="d-flex align-items-center justify-content-between">
+            <h5 class="mb-0"><i class="bi bi-collection me-2"></i>Daftar Dokumen</h5>
           </div>
         </div>
+        <div class="card-body">
 
-        <div class="card shadow-sm border-0">
-          <div class="card-body">
-            <h5 class="card-title mb-3">Event Eligible LOA</h5>
+          <ul class="nav nav-pills mb-3" id="docTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="loa-tab" data-bs-toggle="pill" data-bs-target="#loa-pane" type="button" role="tab">LOA</button>
+            </li>
+            <li class="nav-item ms-2" role="presentation">
+              <button class="nav-link" id="serti-tab" data-bs-toggle="pill" data-bs-target="#serti-pane" type="button" role="tab">Sertifikat</button>
+            </li>
+          </ul>
 
-            <?php if (!empty($eligible_loa)): ?>
-              <div class="list-group">
-                <?php foreach ($eligible_loa as $e): ?>
-                  <div class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                      <div class="fw-semibold"><?= esc($e['title'] ?? 'Event') ?></div>
-                      <div class="small text-muted"><?= esc($fmtD($e['event_date'] ?? null)) ?></div>
-                      <div class="mt-1">
-                        <span class="badge bg-success-subtle text-success border">Abstrak: diacc</span>
-                        <span class="badge bg-success-subtle text-success border ms-1">Pembayaran: verified</span>
-                      </div>
+          <div class="tab-content" id="docTabsContent">
+            <!-- LOA -->
+            <div class="tab-pane fade show active" id="loa-pane" role="tabpanel" aria-labelledby="loa-tab">
+              <?php if (empty($loa)): ?>
+                <div class="text-muted">Belum ada LOA.</div>
+              <?php else: ?>
+                <div class="list-group list-group-flush">
+                  <?php foreach ($loa as $d):
+                    $file  = (string)($d['file_path'] ?? '');
+                    $fname = $file !== '' ? basename($file) : '';
+                  ?>
+                  <div class="list-group-item d-flex flex-column flex-md-row align-items-md-center justify-content-between">
+                    <div class="mb-2 mb-md-0">
+                      <div class="fw-semibold"><?= esc($d['event_title'] ?? '—') ?></div>
+                      <div class="small text-muted"><?= !empty($d['created_at']) ? date('d M Y H:i', strtotime($d['created_at'])) : '-' ?></div>
                     </div>
-                    <a href="<?= site_url('presenter/events/detail/'.($e['id'] ?? 0)) ?>" class="btn btn-sm btn-outline-primary">
-                      Lihat Event
-                    </a>
-                  </div>
-                <?php endforeach; ?>
-              </div>
-            <?php else: ?>
-              <div class="text-muted small">Tidak ada event yang memenuhi syarat LOA saat ini.</div>
-            <?php endif; ?>
-          </div>
-        </div>
-
-      <?php else: ?>
-        <!-- === SERTIFIKAT === -->
-
-        <div class="card shadow-sm border-0 mb-3">
-          <div class="card-body">
-            <h5 class="card-title mb-3">Sertifikat Anda</h5>
-
-            <?php if (!empty($certificates)): ?>
-              <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                  <thead class="table-light">
-                    <tr>
-                      <th>Event</th>
-                      <th class="text-nowrap">Tanggal Event</th>
-                      <th class="text-nowrap">Diunggah</th>
-                      <th>Nama File</th>
-                      <th class="text-end">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <?php foreach ($certificates as $d): ?>
-                      <tr>
-                        <td>
-                          <div class="fw-semibold"><?= esc($d['event_title'] ?? 'Event') ?></div>
-                          <div class="small text-muted"><?= esc($d['event_time'] ?? '-') ?></div>
-                        </td>
-                        <td class="text-nowrap"><?= esc($fmtD($d['event_date'] ?? null)) ?></td>
-                        <td class="text-nowrap"><?= esc($fmtDT($d['uploaded_at'] ?? null)) ?></td>
-                        <td><?= esc($base($d['file_path'] ?? '')) ?></td>
-                        <td class="text-end">
-                          <a target="_blank"
-                             href="<?= site_url('presenter/dokumen/sertifikat/download/'.rawurlencode($base($d['file_path'] ?? ''))) ?>"
-                             class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-download me-1"></i>Unduh
-                          </a>
-                          <a href="<?= site_url('presenter/events/detail/'.($d['event_id'] ?? 0)) ?>"
-                             class="btn btn-sm btn-light">Event</a>
-                        </td>
-                      </tr>
-                    <?php endforeach; ?>
-                  </tbody>
-                </table>
-              </div>
-            <?php else: ?>
-              <div class="p-4 text-center border rounded-3 bg-light-subtle">
-                <div class="mb-2"><i class="bi bi-award fs-3 text-secondary"></i></div>
-                <div class="fw-semibold">Belum ada sertifikat</div>
-                <div class="text-muted small">Sertifikat muncul setelah kamu <strong>hadir</strong> di event & pembayaran terverifikasi.</div>
-              </div>
-            <?php endif; ?>
-          </div>
-        </div>
-
-        <div class="card shadow-sm border-0">
-          <div class="card-body">
-            <h5 class="card-title mb-3">Event Eligible Sertifikat</h5>
-
-            <?php if (!empty($eligible_cert)): ?>
-              <div class="list-group">
-                <?php foreach ($eligible_cert as $e): ?>
-                  <div class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                      <div class="fw-semibold"><?= esc($e['title'] ?? 'Event') ?></div>
-                      <div class="small text-muted"><?= esc($fmtD($e['event_date'] ?? null)) ?></div>
-                      <div class="mt-1">
-                        <span class="badge bg-success-subtle text-success border">Hadir</span>
-                        <span class="badge bg-success-subtle text-success border ms-1">Pembayaran: verified</span>
-                        <?php if (!empty($e['attendance_time'])): ?>
-                          <span class="badge bg-light text-secondary border ms-1">
-                            <i class="bi bi-clock me-1"></i><?= esc($fmtDT($e['attendance_time'])) ?>
-                          </span>
-                        <?php endif; ?>
-                      </div>
+                    <div class="d-flex gap-2">
+                      <?php if ($fname !== ''): ?>
+                        <a class="btn btn-primary" href="/presenter/dokumen/loa/download/<?= rawurlencode($fname) ?>">
+                          <i class="bi bi-download"></i> Unduh
+                        </a>
+                      <?php else: ?>
+                        <span class="text-danger small">File tidak tersedia.</span>
+                      <?php endif; ?>
                     </div>
-                    <a href="<?= site_url('presenter/events/detail/'.($e['id'] ?? 0)) ?>" class="btn btn-sm btn-outline-primary">
-                      Lihat Event
-                    </a>
                   </div>
-                <?php endforeach; ?>
-              </div>
-            <?php else: ?>
-              <div class="text-muted small">Tidak ada event yang memenuhi syarat sertifikat saat ini.</div>
-            <?php endif; ?>
-          </div>
-        </div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
 
-      <?php endif; ?>
+            <!-- Sertifikat -->
+            <div class="tab-pane fade" id="serti-pane" role="tabpanel" aria-labelledby="serti-tab">
+              <?php if (empty($sertifikat)): ?>
+                <div class="text-muted">Belum ada sertifikat.</div>
+              <?php else: ?>
+                <div class="list-group list-group-flush">
+                  <?php foreach ($sertifikat as $d):
+                    $file  = (string)($d['file_path'] ?? '');
+                    $fname = $file !== '' ? basename($file) : '';
+                  ?>
+                  <div class="list-group-item d-flex flex-column flex-md-row align-items-md-center justify-content-between">
+                    <div class="mb-2 mb-md-0">
+                      <div class="fw-semibold"><?= esc($d['event_title'] ?? '—') ?></div>
+                      <div class="small text-muted"><?= !empty($d['created_at']) ? date('d M Y H:i', strtotime($d['created_at'])) : '-' ?></div>
+                    </div>
+                    <div class="d-flex gap-2">
+                      <?php if ($fname !== ''): ?>
+                        <a class="btn btn-primary" href="/presenter/dokumen/sertifikat/download/<?= rawurlencode($fname) ?>">
+                          <i class="bi bi-download"></i> Unduh
+                        </a>
+                      <?php else: ?>
+                        <span class="text-danger small">File tidak tersedia.</span>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+
+        </div>
+      </div>
 
     </div>
   </main>
@@ -232,8 +112,22 @@
 <?= $this->include('partials/footer') ?>
 
 <style>
-/* Reuse gaya hero & KPI dari contoh pembayaran */
-.abs-hero{background:linear-gradient(90deg,#2563eb,#60a5fa);border-radius:16px;color:#fff;padding:14px 16px;box-shadow:0 6px 20px rgba(37,99,235,.18);}
-.abs-title{font-weight:800;line-height:1.2;font-size:clamp(18px,4.2vw,24px);}
-.abs-sub{opacity:.95;font-size:.95rem;}
+  :root{ --primary-color:#2563eb; --info-color:#06b6d4; }
+  .header-section.header-blue{
+    background:linear-gradient(135deg,var(--primary-color),#1e40af);
+    color:#fff; padding:24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
+  }
+  .welcome-text{ font-weight:700; }
+  .bg-gradient-primary{ background:linear-gradient(135deg,var(--primary-color),var(--info-color))!important; }
 </style>
+
+<script>
+  // aktifkan tab berdasar hash (#loa / #sertifikat)
+  (function(){
+    const hash = (location.hash||'').toLowerCase();
+    const loaBtn   = document.getElementById('loa-tab');
+    const sertiBtn = document.getElementById('serti-tab');
+    if(hash === '#sertifikat' && sertiBtn){ new bootstrap.Tab(sertiBtn).show(); }
+    if(hash === '#loa' && loaBtn){ new bootstrap.Tab(loaBtn).show(); }
+  })();
+</script>
