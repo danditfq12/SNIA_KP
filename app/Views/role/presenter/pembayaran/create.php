@@ -1,8 +1,8 @@
 <?php
-  $title = $title ?? 'Pembayaran Event';
-  $event = $event ?? [];
-  $price = (float)($price ?? 0);
-  $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
+$title = $title ?? 'Upload Bukti Pembayaran';
+$event = $event ?? [];
+$price = (int)($price ?? 0);
+$latestPay = $latestPay ?? null;
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
@@ -11,73 +11,69 @@
 <div id="content">
   <main class="flex-fill" style="padding-top:70px;">
     <div class="container-fluid p-3 p-md-4">
-      <div class="abs-hero mb-3">
-        <div class="d-flex justify-content-between align-items-center">
-          <div>
-            <div class="abs-title">Pembayaran Event</div>
-            <div class="abs-sub">Upload bukti pembayaran untuk konfirmasi partisipasi.</div>
-          </div>
+
+      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 class="welcome-text mb-1"><i class="bi bi-cash-coin"></i> Upload Bukti Pembayaran</h2>
+          <div class="text-white-50"><?= esc($event['title'] ?? '-') ?></div>
         </div>
       </div>
 
-      <div class="row g-3">
-        <div class="col-12 col-lg-5">
-          <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <h5 class="card-title mb-2"><?= esc($event['title'] ?? 'Event') ?></h5>
-              <div class="text-muted small mb-2">
-                <?= esc($fmtDate($event['event_date'] ?? null)) ?> · <?= esc($event['event_time'] ?? '-') ?> · Lokasi: <?= esc($event['location'] ?? '-') ?><br>
-                Format Event: <?= esc(strtoupper($event['format'] ?? '-')) ?> · Mode Presenter: <strong>OFFLINE</strong>
-              </div>
-              <hr>
-              <div class="d-flex justify-content-between">
-                <div class="fw-semibold">Biaya Presenter</div>
-                <div class="fw-bold">Rp <?= number_format($price, 0, ',', '.') ?></div>
-              </div>
-              <div class="small text-muted mt-2">Kamu bisa memasukkan kode voucher kalau ada.</div>
-            </div>
-          </div>
+      <div class="card shadow-sm">
+        <div class="card-header bg-gradient-primary text-white">
+          <strong>Total yang harus dibayar: Rp <?= number_format($price,0,',','.') ?></strong>
         </div>
+        <div class="card-body">
+          <form method="post" action="/presenter/pembayaran/store" enctype="multipart/form-data">
+            <?= csrf_field() ?>
+            <input type="hidden" name="event_id" value="<?= (int)($event['id'] ?? 0) ?>">
 
-        <div class="col-12 col-lg-7">
-          <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <h5 class="card-title mb-3">Form Pembayaran</h5>
-              <form method="post" action="<?= site_url('presenter/pembayaran/store') ?>" enctype="multipart/form-data">
-                <?= csrf_field() ?>
-                <input type="hidden" name="event_id" value="<?= (int)($event['id'] ?? 0) ?>">
-
-                <div class="mb-3">
-                  <label class="form-label">Kode Voucher (opsional)</label>
-                  <div class="input-group">
-                    <input type="text" class="form-control" name="voucher" id="voucherInput" placeholder="SNIA50" autocomplete="off">
-                    <button class="btn btn-outline-secondary" type="button" id="btnCheckVoucher">Cek</button>
-                  </div>
-                  <div class="form-text" id="voucherHelp">Masukkan kode, lalu klik Cek.</div>
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label">Bukti Pembayaran (JPG/PNG/WebP/PDF)</label>
-                  <input type="file" name="bukti" class="form-control" accept=".jpg,.jpeg,.png,.webp,.pdf" required>
-                </div>
-
-                <div class="d-grid">
-                  <button class="btn btn-primary" type="submit"><i class="bi bi-upload me-1"></i>Upload Pembayaran</button>
-                </div>
-              </form>
-
-              <div class="alert alert-light border mt-3 mb-0">
-                <div class="fw-semibold mb-1">Catatan:</div>
-                <ul class="mb-0 small">
-                  <li>Pastikan jumlah transfer sesuai dengan biaya di atas.</li>
-                  <li>Setelah diunggah, status akan menjadi <strong>Pending</strong> sampai diverifikasi admin.</li>
-                  <li>Kamu bisa membatalkan selama pembayaran belum terverifikasi.</li>
-                </ul>
-              </div>
+            <div class="mb-3">
+              <label class="form-label">Metode Pembayaran</label>
+              <select name="metode" class="form-select" required>
+                <option value="">— Pilih —</option>
+                <option value="transfer_bank">Transfer Bank</option>
+                <option value="ewallet">E-Wallet</option>
+                <option value="lainnya">Lainnya</option>
+              </select>
             </div>
-          </div>
+
+            <div class="mb-3">
+              <label class="form-label">Jumlah (Rp)</label>
+              <input type="number" name="jumlah" class="form-control" min="1" value="<?= $price ?>" required>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Kode Voucher (opsional)</label>
+              <input type="text" name="kode_voucher" class="form-control" placeholder="KODEPROMO">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Bukti Pembayaran (JPG/PNG/PDF)</label>
+              <input type="file" name="bukti_bayar" class="form-control" accept=".jpg,.jpeg,.png,.pdf" required>
+              <div class="form-text">Pastikan informasi transfer terlihat jelas.</div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Catatan (opsional)</label>
+              <textarea name="keterangan" class="form-control" rows="3" placeholder="Tambahkan catatan jika perlu."></textarea>
+            </div>
+
+            <div class="d-flex gap-2">
+              <a href="/presenter/events/detail/<?= (int)($event['id'] ?? 0) ?>" class="btn btn-outline-secondary">Kembali</a>
+              <button class="btn btn-success"><i class="bi bi-upload"></i> Kirim Pembayaran</button>
+            </div>
+          </form>
         </div>
       </div>
+
+      <?php if ($latestPay): ?>
+      <div class="alert alert-info mt-3">
+        <i class="bi bi-info-circle"></i>
+        Anda memiliki pembayaran terakhir dengan status <strong><?= strtoupper($latestPay['status']) ?></strong>.
+        Lihat <a href="/presenter/pembayaran/detail/<?= (int)$latestPay['id_pembayaran'] ?>" class="alert-link">detail pembayaran</a>.
+      </div>
+      <?php endif; ?>
 
     </div>
   </main>
@@ -86,37 +82,9 @@
 <?= $this->include('partials/footer') ?>
 
 <style>
-.abs-hero{background:linear-gradient(90deg,#2563eb,#60a5fa);border-radius:16px;color:#fff;padding:14px 16px;box-shadow:0 6px 20px rgba(37,99,235,.18);}
-.abs-title{font-weight:800;line-height:1.2;font-size:clamp(18px,4.2vw,24px);}
-.abs-sub{opacity:.9;font-size:.95rem;}
+  :root{ --primary:#2563eb; --primary-deep:#1e40af; }
+  .header-section.header-blue{ background:linear-gradient(135deg,var(--primary),var(--primary-deep)); color:#fff; padding:20px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12); }
+  .welcome-text{ font-weight:500; font-size:1.25rem; }
+  .card{ border-radius:14px; }
+  .btn{ border-radius:10px; }
 </style>
-
-<script>
-(function(){
-  const btn = document.getElementById('btnCheckVoucher');
-  const inp = document.getElementById('voucherInput');
-  const help= document.getElementById('voucherHelp');
-  btn?.addEventListener('click', async function(){
-    const code = (inp.value || '').trim();
-    if(!code){ help.textContent = 'Kode kosong.'; help.className='form-text text-danger'; return; }
-    help.textContent = 'Memeriksa...'; help.className='form-text';
-    try{
-      const res = await fetch('<?= site_url('presenter/pembayaran/validate-voucher') ?>', {
-        method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
-        body: new URLSearchParams({code, event_id:'<?= (int)($event['id'] ?? 0) ?>'})
-      });
-      const j = await res.json();
-      if(j.ok){
-        help.textContent = 'Voucher OK. Diskon: Rp ' + (Math.round((j.discount||0))).toLocaleString('id-ID');
-        help.className='form-text text-success';
-      }else{
-        help.textContent = j.message || 'Voucher tidak berlaku.';
-        help.className='form-text text-danger';
-      }
-    }catch(e){
-      help.textContent = 'Gagal memeriksa voucher.'; help.className='form-text text-danger';
-    }
-  });
-})();
-</script>

@@ -4,241 +4,268 @@ namespace App\Controllers\Role\Presenter;
 
 use App\Controllers\BaseController;
 use App\Models\EventModel;
+use App\Models\EventRegistrationModel;
 use App\Models\AbstrakModel;
 use App\Models\PembayaranModel;
 use App\Models\AbsensiModel;
 
 class Event extends BaseController
 {
-    protected EventModel $eventM;
-    protected AbstrakModel $absM;
-    protected PembayaranModel $payM;
-    protected AbsensiModel $attM;
+    protected EventModel $eventModel;
+    protected EventRegistrationModel $regModel;
+    protected AbstrakModel $abstrakModel;
+    protected PembayaranModel $pembayaranModel;
+    protected AbsensiModel $absensiModel;
 
     public function __construct()
     {
-        $this->eventM = new EventModel();
-        $this->absM   = new AbstrakModel();
-        $this->payM   = new PembayaranModel();
-        $this->attM   = new AbsensiModel();
+        $this->eventModel      = new EventModel();
+        $this->regModel        = new EventRegistrationModel();
+        $this->abstrakModel    = new AbstrakModel();
+        $this->pembayaranModel = new PembayaranModel();
+        $this->absensiModel    = new AbsensiModel();
+        helper(['date', 'text']);
     }
 
-    private function uid(): int
-    {
-        return (int) (session('id_user') ?? 0);
-    }
-
-    private function abstractLabel(?string $status): ?string
-    {
-        if ($status === null || $status === '') return null;
-        $status = strtolower($status);
-        // ubah "diterima" -> "Di-ACC"
-        return $status === 'diterima' ? 'Di-ACC' : ucfirst(str_replace('_',' ', $status));
-    }
-
-    private function latestAbstract(int $eventId, int $userId): ?array
-    {
-        return $this->absM->where('event_id', $eventId)
-                          ->where('id_user', $userId)
-                          ->orderBy('tanggal_upload','DESC')
-                          ->first() ?: null;
-    }
-
-    private function latestPayment(int $eventId, int $userId): ?array
-    {
-        return $this->payM->where('event_id', $eventId)
-                          ->where('id_user', $userId)
-                          ->orderBy('tanggal_bayar','DESC')
-                          ->first() ?: null;
-    }
-
-    private function computeState(array $event, int $userId): array
-    {
-        $evId     = (int)$event['id'];
-        $abstract = $this->latestAbstract($evId, $userId);
-        $payment  = $this->latestPayment($evId, $userId);
-
-        $registered = (bool)($abstract || $payment);
-
-        $state = [
-            'registered'      => $registered,
-            'step'            => 1,
-            'status_key'      => 'abstract_required',
-            'status_label'    => 'Butuh Abstrak',
-            'abstract'        => $abstract,
-            'abstract_label'  => $this->abstractLabel($abstract['status'] ?? null),
-            'payment'         => $payment,
-            'payment_label'   => $payment['status'] ?? null,
-            'verified'        => false,
-        ];
-
-        if (!$abstract) return $state;
-
-        $ast = strtolower($abstract['status'] ?? '');
-        switch ($ast) {
-            case 'menunggu':
-            case 'sedang_direview':
-                $state['step']         = 2;
-                $state['status_key']   = 'abstract_pending';
-                $state['status_label'] = 'Abstrak Diproses';
-                return $state;
-
-            case 'revisi':
-                $state['step']         = 1;
-                $state['status_key']   = 'abstract_revision';
-                $state['status_label'] = 'Perlu Revisi';
-                return $state;
-
-            case 'ditolak':
-                $state['step']         = 1;
-                $state['status_key']   = 'abstract_rejected';
-                $state['status_label'] = 'Abstrak Ditolak';
-                return $state;
-
-            case 'diterima': // Di-ACC
-                if (!$payment) {
-                    $state['step']         = 3;
-                    $state['status_key']   = 'payment_required';
-                    $state['status_label'] = 'Menunggu Pembayaran';
-                    return $state;
-                }
-                $pst = strtolower($payment['status'] ?? '');
-                if ($pst === 'pending') {
-                    $state['step']         = 4;
-                    $state['status_key']   = 'payment_pending';
-                    $state['status_label'] = 'Verifikasi Pembayaran';
-                    return $state;
-                }
-                if ($pst === 'rejected') {
-                    $state['step']         = 3;
-                    $state['status_key']   = 'payment_rejected';
-                    $state['status_label'] = 'Pembayaran Ditolak';
-                    return $state;
-                }
-                if ($pst === 'verified') {
-                    $state['step']         = 5;
-                    $state['status_key']   = 'completed';
-                    $state['status_label'] = 'Siap Ikut Event';
-                    $state['verified']     = true;
-                    return $state;
-                }
-                return $state;
-        }
-        return $state;
-    }
-
+    /** INDEX: daftar event (tersedia & ditutup), status singkat per-event */
     public function index()
     {
-        $uid = $this->uid();
-        if (!$uid || session('role') !== 'presenter') {
-            return redirect()->to(site_url('auth/login'));
-        }
+        $userId   = (int) session()->get('id_user');
+        $q        = trim($this->request->getGet('q') ?? '');
 
-        $q = trim((string)$this->request->getGet('q'));
+        // Event aktif (untuk box "tersedia")
+        $available = $this->eventModel->getEventsWithOpenRegistration();
 
-        $builder = $this->eventM->where('is_active', true);
+        // Semua event (untuk pisahin yg ditutup)
+        $all = $this->eventModel
+            ->orderBy('event_date', 'DESC')
+            ->findAll();
+
+        // Filter by search (optional)
         if ($q !== '') {
-            $builder->groupStart()->like('title', $q)->orLike('location', $q)->groupEnd();
+            $filterBy = function(array $rows) use ($q) {
+                return array_values(array_filter($rows, function($e) use ($q) {
+                    $hay = strtolower(($e['title'] ?? '') . ' ' . ($e['description'] ?? '') . ' ' . ($e['location'] ?? ''));
+                    return str_contains($hay, strtolower($q));
+                }));
+            };
+            $available = $filterBy($available);
+            $all       = $filterBy($all);
         }
-        $events = $builder->orderBy('event_date','ASC')->orderBy('event_time','ASC')->findAll();
 
-        $out = [];
-        foreach ($events as $e) {
-            $state     = $this->computeState($e, $uid);
-            $regOpen   = $this->eventM->isRegistrationOpen((int)$e['id']); // tutup otomatis jika lewat deadline / sudah mulai
-            $out[] = [
-                'id'             => (int)$e['id'],
-                'title'          => $e['title'],
-                'event_date'     => $e['event_date'],
-                'event_time'     => $e['event_time'],
-                'location'       => $e['location'] ?? '-',
-                'format'         => $e['format'] ?? '-',   // online/offline/both
-                'reg_open'       => (bool)$regOpen,
-                'state'          => $state,
-                'abstract_badge' => $state['abstract_label'],
-                'payment_badge'  => $state['payment_label'],
-            ];
+        // Registrasi user map-by-event
+        $userRegs = [];
+        foreach ($this->regModel->listByUser($userId) as $r) {
+            $userRegs[(int)$r['id_event']] = $r;
         }
+
+        // Buat status singkat untuk index
+        $statusIndex = [];
+        foreach ($all as $ev) {
+            $statusIndex[(int)$ev['id']] = $this->computeFlowStatus($ev['id'], $userId);
+        }
+
+        // Event ditutup = all - available - (masih terdaftar meskipun pendaftaran tutup tetap muncul di "ditutup")
+        $availableIds = array_column($available, 'id');
+        $closed = array_values(array_filter($all, function($e) use ($availableIds){
+            return !in_array($e['id'], $availableIds);
+        }));
 
         return view('role/presenter/events/index', [
-            'title'  => 'Event Presenter',
-            'events' => $out,
-            'q'      => $q,
+            'title'       => 'Event',
+            'available'   => $available,
+            'closed'      => $closed,
+            'userRegs'    => $userRegs,
+            'statusIndex' => $statusIndex,
+            'q'           => $q,
         ]);
     }
 
-    public function detail(int $id)
+    /** DETAIL: informasi lengkap + CTA sesuai state */
+    public function detail($id)
     {
-        $uid = $this->uid();
-        if (!$uid || session('role') !== 'presenter') {
-            return redirect()->to(site_url('auth/login'));
+        $userId = (int) session()->get('id_user');
+        $event  = $this->eventModel->find($id);
+        if (!$event) {
+            return redirect()->to('/presenter/events')->with('error','Event tidak ditemukan.');
         }
 
-        $e = $this->eventM->find($id);
-        if (!$e || !($e['is_active'] ?? false)) {
-            return redirect()->to(site_url('presenter/events'))->with('error','Event tidak ditemukan atau tidak aktif.');
-        }
+        $reg = $this->regModel->findUserReg($event['id'], $userId);
 
-        $state    = $this->computeState($e, $uid);
-        $regOpen  = $this->eventM->isRegistrationOpen((int)$e['id']);
+        // abstrak terbaru user di event ini (yang bukan ditolak final)
+        $abstrak = $this->abstrakModel
+            ->where('id_user', $userId)
+            ->where('event_id', $event['id'])
+            ->orderBy('id_abstrak','DESC')
+            ->first();
+
+        // pembayaran terakhir di event ini
+        $payment = $this->pembayaranModel
+            ->where('id_user', $userId)
+            ->where('event_id', $event['id'])
+            ->orderBy('id_pembayaran', 'DESC')
+            ->first();
+
+        $flow = $this->computeFlowStatus($event['id'], $userId);
 
         return view('role/presenter/events/detail', [
             'title'   => 'Detail Event',
-            'event'   => $e,
-            'state'   => $state,
-            'regOpen' => (bool)$regOpen,
+            'event'   => $event,
+            'reg'     => $reg,
+            'abstrak' => $abstrak,
+            'payment' => $payment,
+            'flow'    => $flow,
+            'price'   => $this->eventModel->getEventPrice($event['id'], 'presenter', 'offline'),
+            'isOpen'  => $this->eventModel->isRegistrationOpen($event['id']),
         ]);
     }
 
-    public function showRegistrationForm(int $id)
+    /** REGISTER: langsung tercatat (role presenter → offline) */
+    public function register($id)
     {
-        $uid = $this->uid();
-        if (!$uid || session('role') !== 'presenter') {
-            return redirect()->to(site_url('auth/login'));
+        $userId = (int) session()->get('id_user');
+
+        // Safety: pendaftaran masih dibuka?
+        if (!$this->eventModel->isRegistrationOpen((int)$id)) {
+            return redirect()->to('/presenter/events/detail/'.$id)
+                ->with('error', 'Pendaftaran untuk event ini sudah ditutup.');
         }
 
-        $e = $this->eventM->find($id);
-        if (!$e || !($e['is_active'] ?? false)) {
-            return redirect()->to(site_url('presenter/events'))->with('error','Event tidak ditemukan atau tidak aktif.');
+        $regId = $this->regModel->createPresenterRegistration((int)$id, $userId);
+        if ($regId) {
+            return redirect()->to('/presenter/events/detail/'.$id)
+                ->with('success', 'Berhasil mendaftar. Silakan kirim abstrak.');
         }
 
-        if (!$this->eventM->isRegistrationOpen($id)) {
-            return redirect()->to(site_url('presenter/events/detail/'.$id))
-                             ->with('error','Pendaftaran event telah ditutup.');
-        }
-
-        $abs = $this->latestAbstract($id, $uid);
-        $pay = $this->latestPayment($id, $uid);
-
-        if ($pay && strtolower($pay['status']) === 'verified') {
-            return redirect()->to(site_url('presenter/events/detail/'.$id))
-                             ->with('warning','Kamu sudah terverifikasi pada event ini.');
-        }
-
-        return view('role/presenter/events/register', [
-            'title'    => 'Konfirmasi Pendaftaran',
-            'event'    => $e,
-            'abstract' => $abs,
-            'payment'  => $pay,
-        ]);
+        return redirect()->to('/presenter/events/detail/'.$id)->with('error','Gagal mendaftar.');
     }
 
-    public function register(int $id)
+    /** Batalkan pendaftaran (hanya kalau belum kirim abstrak) */
+    public function cancel($id)
     {
-        $uid = $this->uid();
-        if (!$uid || session('role') !== 'presenter') {
-            return redirect()->to(site_url('auth/login'));
-        }
-        if (!$this->request->is('post')) {
-            return redirect()->to(site_url('presenter/events/register/'.$id));
-        }
-        if (!$this->eventM->isRegistrationOpen($id)) {
-            return redirect()->to(site_url('presenter/events/detail/'.$id))
-                             ->with('error','Pendaftaran event telah ditutup.');
+        $userId = (int) session()->get('id_user');
+        $reg    = $this->regModel->findUserReg((int)$id, $userId);
+        if (!$reg) {
+            return redirect()->to('/presenter/events/detail/'.$id)->with('error','Pendaftaran tidak ditemukan.');
         }
 
-        // langsung arahkan ke halaman upload abstrak
-        return redirect()->to(site_url('presenter/abstrak?event_id=' . $id))
-                         ->with('message','Silakan upload abstrak untuk memulai pendaftaran.');
+        // Sudah ada abstrak? larang batal
+        $hasAbstract = $this->abstrakModel
+            ->where('id_user', $userId)
+            ->where('event_id', (int)$id)
+            ->countAllResults() > 0;
+
+        if ($hasAbstract) {
+            return redirect()->to('/presenter/events/detail/'.$id)
+                ->with('error','Tidak dapat membatalkan karena Anda sudah mengunggah abstrak.');
+        }
+
+        $this->regModel->delete($reg['id']);
+        return redirect()->to('/presenter/events')->with('success','Pendaftaran dibatalkan.');
+    }
+
+    /** Menyusun status flow untuk index & detail */
+    private function computeFlowStatus(int $eventId, int $userId): array
+    {
+        $reg = $this->regModel->findUserReg($eventId, $userId);
+
+        // default
+        $state = 'belum_daftar';
+        $label = 'Belum terdaftar';
+        $hint  = 'Klik Daftar untuk mulai';
+        $can   = ['register' => true];
+
+        if ($reg) {
+            // cek abstrak
+            $ab = $this->abstrakModel
+                ->where('id_user', $userId)
+                ->where('event_id', $eventId)
+                ->orderBy('id_abstrak','DESC')
+                ->first();
+
+            // cek payment
+            $pay = $this->pembayaranModel
+                ->where('id_user', $userId)
+                ->where('event_id', $eventId)
+                ->orderBy('id_pembayaran','DESC')
+                ->first();
+
+            // cek absensi (sudah hadir?)
+            $hadir = $this->absensiModel
+                ->where('id_user', $userId)
+                ->where('event_id', $eventId)
+                ->where('status', 'hadir')
+                ->countAllResults() > 0;
+
+            if (!$ab) {
+                $state = 'upload_abstrak';
+                $label = 'Silakan upload abstrak';
+                $hint  = 'Wajib sebelum pembayaran';
+                $can   = ['upload' => true, 'cancel' => true];
+            } else {
+                switch ($ab['status']) {
+                    case 'menunggu':
+                    case 'sedang_direview':
+                        $state = 'menunggu_abstrak';
+                        $label = 'Menunggu hasil abstrak';
+                        $hint  = 'Tunggu ACC/revisi/ditolak';
+                        $can   = ['view_abstrak' => true];
+                        break;
+                    case 'revisi':
+                        $state = 'revisi_abstrak';
+                        $label = 'Revisi abstrak';
+                        $hint  = 'Silakan unggah ulang dokumen revisi';
+                        $can   = ['reupload' => true];
+                        break;
+                    case 'ditolak':
+                        $state = 'abstrak_ditolak';
+                        $label = 'Abstrak ditolak';
+                        $hint  = 'Anda dapat kirim ulang abstrak baru';
+                        $can   = ['upload' => true];
+                        break;
+                    case 'diterima':
+                        // cek payment
+                        if (!$pay) {
+                            $state = 'bayar';
+                            $label = 'Silakan lakukan pembayaran';
+                            $hint  = 'Unggah bukti pembayaran';
+                            $can   = ['pay' => true];
+                        } else {
+                            if ($pay['status'] === 'pending') {
+                                $state = 'pembayaran_pending';
+                                $label = 'Menunggu verifikasi pembayaran';
+                                $hint  = 'Admin akan memverifikasi';
+                                $can   = ['pay_detail' => true];
+                            } elseif ($pay['status'] === 'rejected') {
+                                $state = 'pembayaran_ditolak';
+                                $label = 'Pembayaran ditolak';
+                                $hint  = 'Periksa catatan & unggah ulang';
+                                $can   = ['pay_reupload' => true];
+                            } elseif ($pay['status'] === 'verified') {
+                                if ($hadir) {
+                                    $state = 'sudah_absen';
+                                    $label = 'Sudah absen';
+                                    $hint  = 'Terima kasih telah hadir';
+                                    $can   = ['absen_detail' => true];
+                                } else {
+                                    $state = 'siap_absen';
+                                    $label = 'Silakan absen saat event';
+                                    $hint  = 'Tersedia saat event berlangsung';
+                                    $can   = ['absen' => true];
+                                }
+                            }
+                        }
+                        break;
+                }
+            }
+        }
+
+        return [
+            'state' => $state,
+            'label' => $label,
+            'hint'  => $hint,
+            'can'   => $can,
+            'reg'   => $reg,
+        ];
     }
 }

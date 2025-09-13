@@ -67,4 +67,34 @@ class EventRegistrationModel extends Model
     {
         return $this->update($id, ['status' => 'lunas']);
     }
+    // Tambahkan di akhir class EventRegistrationModel
+
+    /** Buat registrasi khusus PRESENTER:
+     *  - mode_kehadiran: offline
+     *  - status: menunggu_abstrak
+     */
+    // app/Models/EventRegistrationModel.php
+
+public function createPresenterRegistration(int $idEvent, int $idUser): int
+{
+    if ($old = $this->findUserReg($idEvent, $idUser)) {
+        return (int)$old['id'];
+    }
+    $this->insert([
+        'id_event'       => $idEvent,
+        'id_user'        => $idUser,
+        'mode_kehadiran' => 'offline',
+        // ✅ alternatif 4: pakai status yang SUDAH diizinkan oleh constraint DB
+        'status'         => 'menunggu_pembayaran',
+        'qr_token'       => bin2hex(random_bytes(16)),
+    ]);
+    return (int)$this->getInsertID();
+}
+
+
+    /** Ubah status registrasi → menunggu pembayaran (dipanggil saat abstrak diterima) */
+    public function markAwaitingPayment(int $id): bool
+    {
+        return $this->update($id, ['status' => 'menunggu_pembayaran']);
+    }
 }

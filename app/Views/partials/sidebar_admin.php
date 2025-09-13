@@ -9,7 +9,7 @@ $active = function (string $slug) use ($seg1, $seg2): bool {
 };
 ?>
 <style>
-  :root{ --admin-sidebar-w: 300px; }       /* << Lebar konsisten (ubah di sini bila perlu) */
+  :root{ --admin-sidebar-w: 300px; }
   body{ padding-left: var(--admin-sidebar-w) !important; }
 
   .admin-sidebar{
@@ -46,7 +46,6 @@ $active = function (string $slug) use ($seg1, $seg2): bool {
   .admin-sidebar .nav-link.is-active{
     background:rgba(255,255,255,.22); color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.12) inset
   }
-  /* Hapus titik aktif (jika ada implementasi sebelumnya) */
   .admin-sidebar .nav-link .active-pill,
   .admin-sidebar .nav-link::after{ display:none !important; content:none !important; }
 </style>
@@ -65,44 +64,37 @@ $active = function (string $slug) use ($seg1, $seg2): bool {
       <span class="ico"><i class="bi bi-speedometer2"></i></span><span>Dashboard</span>
     </a>
 
+    <!-- Bagian Manajemen -->
     <div class="menu-label">Manajemen</div>
-
     <a class="nav-link <?= $active('users') ? 'is-active':'' ?>" href="<?= site_url('admin/users') ?>">
       <span class="ico"><i class="bi bi-people-fill"></i></span><span>Manajemen User</span>
     </a>
-
     <a class="nav-link <?= $active('abstrak') ? 'is-active':'' ?>" href="<?= site_url('admin/abstrak') ?>">
       <span class="ico"><i class="bi bi-file-earmark-text"></i></span><span>Manajemen Abstrak</span>
     </a>
-
-    <a class="nav-link <?= $active('reviewer') ? 'is-active':'' ?>" href="<?= site_url('admin/reviewer') ?>">
-      <span class="ico"><i class="bi bi-person-check"></i></span><span>Kelola Reviewer</span>
-    </a>
-
-    <a class="nav-link <?= $active('event') ? 'is-active':'' ?>" href="<?= site_url('admin/event') ?>">
-      <span class="ico"><i class="bi bi-calendar2-event"></i></span><span>Kelola Event</span>
-    </a>
-
     <a class="nav-link <?= $active('pembayaran') ? 'is-active':'' ?>" href="<?= site_url('admin/pembayaran') ?>">
       <span class="ico"><i class="bi bi-credit-card"></i></span><span>Verifikasi Pembayaran</span>
     </a>
 
+    <!-- Bagian Kelola -->
+    <div class="menu-label">Kelola</div>
+    <a class="nav-link <?= $active('event') ? 'is-active':'' ?>" href="<?= site_url('admin/event') ?>">
+      <span class="ico"><i class="bi bi-calendar2-event"></i></span><span>Kelola Event</span>
+    </a>
     <a class="nav-link <?= $active('absensi') ? 'is-active':'' ?>" href="<?= site_url('admin/absensi') ?>">
       <span class="ico"><i class="bi bi-qr-code-scan"></i></span><span>Kelola Absensi</span>
     </a>
-
     <a class="nav-link <?= $active('voucher') ? 'is-active':'' ?>" href="<?= site_url('admin/voucher') ?>">
       <span class="ico"><i class="bi bi-ticket-detailed"></i></span><span>Kelola Voucher</span>
     </a>
-
     <a class="nav-link <?= $active('dokumen') ? 'is-active':'' ?>" href="<?= site_url('admin/dokumen') ?>">
-      <span class="ico"><i class="bi bi-folder2-open"></i></span><span>Dokumen</span>
+      <span class="ico"><i class="bi bi-folder2-open"></i></span><span>Kelola Dokumen</span>
     </a>
 
+    <!-- Bagian Pelaporan -->
     <div class="menu-label">Pelaporan</div>
     <a class="nav-link <?= $active('laporan') ? 'is-active':'' ?>" href="<?= site_url('admin/laporan') ?>">
       <span class="ico"><i class="bi bi-graph-up-arrow"></i></span><span>Laporan</span>
     </a>
-    <!-- Tidak ada Logout di sidebar -->
   </nav>
 </aside>

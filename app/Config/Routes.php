@@ -110,17 +110,15 @@ $routes->group('admin', [
     $routes->post('abstrak/update-status',         'Abstrak::updateStatus');
     $routes->post('abstrak/bulk-update-status',    'Abstrak::bulkUpdateStatus');
 
-    // PERUBAHAN: izinkan GET/POST untuk delete karena view memanggil via window.location.href (GET)
+    // Izinkan GET/POST untuk delete (karena view panggil via window.location.href)
     $routes->match(['get','post'], 'abstrak/delete/(:num)', 'Abstrak::delete/$1');
 
     $routes->get ('abstrak/download/(:num)',       'Abstrak::downloadFile/$1');
     $routes->get ('abstrak/export',                'Abstrak::export');
     $routes->get ('abstrak/statistics',            'Abstrak::statistics');
 
-    // PERUBAHAN: alias sesuai AJAX di view: /admin/reviewer/by-category/{id}
+    // Reviewer helper alias
     $routes->get ('reviewer/by-category/(:num)',   'Abstrak::getReviewersByCategory/$1');
-
-    // Tetap sediakan route lama untuk kompatibilitas (kalau ada referensi lama)
     $routes->get ('abstrak/reviewers-by-category/(:num)', 'Abstrak::getReviewersByCategory/$1');
 
     // Reviewer
@@ -141,9 +139,9 @@ $routes->group('admin', [
     $routes->post('event/update/(:num)',    'Event::update/$1');
     $routes->post('event/delete/(:num)',    'Event::delete/$1');
     $routes->get ('event/detail/(:num)',    'Event::detail/$1');
-    $routes->post('event/toggle-registration/(:num)',      'Event::toggleRegistration/$1');
+    $routes->post('event/toggle-registration/(:num)',       'Event::toggleRegistration/$1');
     $routes->post('event/toggle-abstract-submission/(:num)','Event::toggleAbstractSubmission/$1');
-    $routes->post('event/toggle-status/(:num)',           'Event::toggleStatus/$1');
+    $routes->post('event/toggle-status/(:num)',             'Event::toggleStatus/$1');
     $routes->get ('event/export',           'Event::export');
     $routes->get ('event/statistics',       'Event::statistics');
 
@@ -156,7 +154,7 @@ $routes->group('admin', [
     $routes->post('pembayaran/bulk-verifikasi',       'Pembayaran::bulkVerifikasi');
     $routes->get ('pembayaran/export',                'Pembayaran::export');
     $routes->get ('pembayaran/statistik',             'Pembayaran::statistik');
-    $routes->post('pembayaran/delete/(:num)',         'Pembayaran::delete/$1'); // (jangan duplikasi)
+    $routes->post('pembayaran/delete/(:num)',         'Pembayaran::delete/$1');
 
     // Absensi (admin)
     $routes->get ('absensi',                    'Absensi::index');
@@ -179,7 +177,7 @@ $routes->group('admin', [
     $routes->post('dokumen/generateBulkLOA',            'Dokumen::generateBulkLOA');
     $routes->post('dokumen/generateBulkSertifikat',     'Dokumen::generateBulkSertifikat');
     $routes->get ('dokumen/getVerifiedPresenters/(:num)','Dokumen::getVerifiedPresenters/$1');
-    $routes->get ('dokumen/getAttendees/(:num)',         'Dokumen::getAttendees/$1');
+    $routes->get ('dokumen/getAttendees/(:num)',        'Dokumen::getAttendees/$1');
 
     // Voucher
     $routes->get ('voucher',                   'Voucher::index');
@@ -211,16 +209,23 @@ $routes->group('presenter', [
     // Event
     $routes->get ('events',                      'Event::index');
     $routes->get ('events/detail/(:num)',        'Event::detail/$1');
-    $routes->get ('events/register/(:num)',      'Event::showRegistrationForm/$1');
-    $routes->post('events/register/(:num)',      'Event::register/$1');
-    $routes->post('events/calculate-price',      'Event::calculatePrice');
+
+    // ✅ daftar via GET (konfirmasi di front-end → hit endpoint ini)
+    $routes->get ('events/register/(:num)',      'Event::register/$1');
+
+    // (opsional) kalau kamu masih mau dukung POST juga, biarkan baris ini:
+    // $routes->post('events/register/(:num)',      'Event::register/$1');
+
+    // ✅ batal pendaftaran
+    $routes->get ('events/cancel/(:num)',        'Event::cancel/$1');
 
     // Abstrak
-    $routes->get ('abstrak',                     'Abstrak::index');
-    $routes->post('abstrak/upload',              'Abstrak::upload');
-    $routes->get ('abstrak/status',              'Abstrak::status');
-    $routes->get ('abstrak/detail/(:num)',       'Abstrak::detail/$1');
-    $routes->get ('abstrak/download/(:segment)', 'Abstrak::download/$1');
+    $routes->get ('abstrak',                          'Abstrak::index');           // list/status
+    $routes->get ('abstrak/create',                   'Abstrak::create');          // tanpa event
+    $routes->get ('abstrak/create/(:num)',            'Abstrak::create/$1');       // dengan event
+    $routes->post('abstrak/store',                    'Abstrak::store');           // submit upload
+    $routes->get ('abstrak/detail/(:num)',            'Abstrak::detail/$1');       // (kalau butuh)
+    $routes->get ('abstrak/download/(:segment)',      'Abstrak::download/$1');     // existing
 
     // Pembayaran
     $routes->get ('pembayaran',                       'Pembayaran::index');
@@ -228,19 +233,18 @@ $routes->group('presenter', [
     $routes->post('pembayaran/store',                 'Pembayaran::store');
     $routes->get ('pembayaran/detail/(:num)',         'Pembayaran::detail/$1');
     $routes->get ('pembayaran/download-bukti/(:num)', 'Pembayaran::downloadBukti/$1');
-    $routes->post('pembayaran/reupload/(:num)',       'Pembayaran::reupload/$1'); // tambahan dari HEAD
-    $routes->get ('pembayaran/cancel/(:num)',         'Pembayaran::cancel/$1');   // kompatibilitas lama
-    $routes->post('pembayaran/cancel/(:num)',         'Pembayaran::cancel/$1');   // disarankan: POST
+    $routes->post('pembayaran/reupload/(:num)',       'Pembayaran::reupload/$1');
+    $routes->get ('pembayaran/cancel/(:num)',         'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher',      'Pembayaran::validateVoucher');
 
-    // Absensi (unlock setelah pembayaran terverifikasi)
+    // Absensi
     $routes->get ('absensi',     'Absensi::index');
     $routes->post('absensi/scan','Absensi::scan');
 
     // Dokumen
-    $routes->get ('dokumen/loa',                         'Dokumen::loa');
-    $routes->get ('dokumen/loa/download/(:segment)',     'Dokumen::downloadLoa/$1');
-    $routes->get ('dokumen/sertifikat',                  'Dokumen::sertifikat');
+    $routes->get ('dokumen/loa',                          'Dokumen::loa');
+    $routes->get ('dokumen/loa/download/(:segment)',      'Dokumen::downloadLoa/$1');
+    $routes->get ('dokumen/sertifikat',                   'Dokumen::sertifikat');
     $routes->get ('dokumen/sertifikat/download/(:segment)','Dokumen::downloadSertifikat/$1');
 });
 

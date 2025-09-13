@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Controllers\Role\Presenter;
 
 use App\Controllers\BaseController;
@@ -9,350 +8,211 @@ use App\Models\AbstrakModel;
 
 class Pembayaran extends BaseController
 {
-    protected EventModel $eventM;
-    protected PembayaranModel $payM;
-    protected AbstrakModel $absM;
-    protected \CodeIgniter\Database\BaseConnection $db;
+    protected EventModel $eventModel;
+    protected PembayaranModel $payModel;
+    protected AbstrakModel $absModel;
 
     public function __construct()
     {
-        $this->eventM = new EventModel();
-        $this->payM   = new PembayaranModel();
-        $this->absM   = new AbstrakModel();
-        $this->db     = \Config\Database::connect();
-        helper(['form','url']);
+        $this->eventModel = new EventModel();
+        $this->payModel   = new PembayaranModel();
+        $this->absModel   = new AbstrakModel();
     }
 
-    private function uid(): int
-    {
-        return (int) (session('id_user') ?? 0);
-    }
-
-    private function ensureAuth(): ?\CodeIgniter\HTTP\RedirectResponse
-    {
-        if (!$this->uid() || session('role') !== 'presenter') {
-            return redirect()->to(site_url('auth/login'));
-        }
-        return null;
-    }
-
-    private function resolvePresenterPrice(array $ev): float
-    {
-        // Prefer specific field if ada, fallback ke pricing matrix, else 0
-        if (isset($ev['presenter_fee_offline']) && is_numeric($ev['presenter_fee_offline'])) {
-            return (float) $ev['presenter_fee_offline'];
-        }
-        // fallback: coba pricing matrix
-        try {
-            if (method_exists($this->eventM, 'getPricingMatrix')) {
-                $mx = $this->eventM->getPricingMatrix((int)$ev['id']);
-                if (isset($mx['presenter']['offline'])) return (float) $mx['presenter']['offline'];
-                if (isset($mx['presenter'])) return (float) $mx['presenter'];
-            }
-        } catch (\Throwable $e) {}
-        return 0.0;
-    }
-
-    private function hasAbstractDiAcc(int $eventId, int $userId): bool
-    {
-        $last = $this->absM->where('event_id', $eventId)
-                           ->where('id_user', $userId)
-                           ->orderBy('tanggal_upload','DESC')
-                           ->first();
-        return $last && strtolower((string)$last['status']) === 'diterima';
-    }
-
-    private function latestPaymentForEvent(int $eventId, int $userId): ?array
-    {
-        return $this->payM->where('event_id', $eventId)
-                          ->where('id_user', $userId)
-                          ->orderBy('tanggal_bayar','DESC')
-                          ->first() ?: null;
-    }
-
-    /** List semua pembayaran milik presenter */
+    /** LIST / HISTORY */
     public function index()
     {
-        if ($redir = $this->ensureAuth()) return $redir;
-        $uid = $this->uid();
+        $userId = (int) session()->get('id_user');
 
-        $rows = $this->payM->select('pembayaran.*, e.title, e.event_date, e.event_time')
-                           ->join('events e', 'e.id = pembayaran.event_id', 'left')
-                           ->where('pembayaran.id_user', $uid)
-                           ->orderBy('pembayaran.tanggal_bayar','DESC')
-                           ->findAll();
-
-        // ringkasan
-        $stats = ['total'=>0,'pending'=>0,'verified'=>0,'rejected'=>0,'canceled'=>0];
-        foreach ($rows as $r) {
-            $stats['total']++;
-            $st = strtolower((string)$r['status']);
-            if (isset($stats[$st])) $stats[$st]++;
-        }
+        $history = $this->payModel->getPembayaranWithUser(); // akan ambil semua, filter manual
+        // filter hanya milik user ini
+        $history = array_values(array_filter($history, fn($r) => (int)$r['id_user'] === $userId));
 
         return view('role/presenter/pembayaran/index', [
-            'title'    => 'Pembayaran Presenter',
-            'payments' => $rows,
-            'stats'    => $stats,
+            'title'   => 'Pembayaran Saya',
+            'history' => $history,
         ]);
     }
 
-    /** Form create pembayaran utk event tertentu */
+    /** FORM BUAT PEMBAYARAN BARU (DARI DETAIL EVENT) */
     public function create(int $eventId)
     {
-        if ($redir = $this->ensureAuth()) return $redir;
-        $uid = $this->uid();
+        $userId = (int) session()->get('id_user');
 
-        $ev = $this->eventM->find($eventId);
-        if (!$ev || !($ev['is_active'] ?? false)) {
-            return redirect()->to(site_url('presenter/events'))
-                ->with('error','Event tidak ditemukan atau tidak aktif.');
+        $event = $this->eventModel->find($eventId);
+        if (!$event) {
+            return redirect()->to('/presenter/events')->with('error', 'Event tidak ditemukan.');
         }
 
-        // Pendaftaran harus open
-        if (!$this->eventM->isRegistrationOpen($eventId)) {
-            return redirect()->to(site_url('presenter/events/detail/'.$eventId))
-                ->with('error','Pendaftaran event telah ditutup.');
+        // Hanya boleh bayar kalau abstrak SUDAH DITERIMA
+        $accepted = $this->absModel->where('id_user', $userId)
+                                   ->where('event_id', $eventId)
+                                   ->where('status', 'diterima')
+                                   ->countAllResults() > 0;
+        if (!$accepted) {
+            return redirect()->to('/presenter/events/detail/'.$eventId)
+                ->with('error', 'Pembayaran hanya dapat dilakukan setelah abstrak Anda diterima.');
         }
 
-        // Wajib abstrak diterima
-        if (!$this->hasAbstractDiAcc($eventId, $uid)) {
-            return redirect()->to(site_url('presenter/events/detail/'.$eventId))
-                ->with('warning','Abstrak kamu belum Di-ACC. Selesaikan dulu sebelum pembayaran.');
-        }
-
-        // Tidak boleh jika sudah verified
-        $latest = $this->latestPaymentForEvent($eventId, $uid);
-        if ($latest && strtolower((string)$latest['status']) === 'verified') {
-            return redirect()->to(site_url('presenter/pembayaran/detail/'.$latest['id_pembayaran']))
-                ->with('warning','Pembayaran untuk event ini sudah terverifikasi.');
-        }
-
-        $price = $this->resolvePresenterPrice($ev);
+        // Cek apakah ada payment terakhir (untuk prefill/larangan duplikat)
+        $latest = $this->payModel->where('id_user', $userId)
+                                 ->where('event_id', $eventId)
+                                 ->orderBy('id_pembayaran','DESC')
+                                 ->first();
 
         return view('role/presenter/pembayaran/create', [
-            'title' => 'Pembayaran Event',
-            'event' => $ev,
-            'price' => $price,
+            'title'     => 'Upload Bukti Pembayaran',
+            'event'     => $event,
+            'latestPay' => $latest,
+            'price'     => (int)($event['presenter_fee_offline'] ?? 0), // presenter offline price
         ]);
     }
 
-    /** Simpan pembayaran (upload bukti) */
+    /** SIMPAN PEMBAYARAN BARU */
     public function store()
     {
-        if ($redir = $this->ensureAuth()) return $redir;
-        if (!$this->request->is('post')) return redirect()->to(site_url('presenter/pembayaran'));
+        $userId   = (int) session()->get('id_user');
+        $eventId  = (int) $this->request->getPost('event_id');
+        $metode   = trim((string) $this->request->getPost('metode'));
+        $jumlah   = (int) $this->request->getPost('jumlah');
+        $voucher  = $this->request->getPost('kode_voucher'); // optional
+        $keterangan = trim((string) $this->request->getPost('keterangan'));
 
-        $uid      = $this->uid();
-        $eventId  = (int)$this->request->getPost('event_id');
-        $voucher  = trim((string)$this->request->getPost('voucher'));
-        $ev       = $this->eventM->find($eventId);
-
-        if (!$ev || !($ev['is_active'] ?? false)) {
-            return redirect()->back()->withInput()->with('error','Event tidak valid.');
-        }
-        if (!$this->eventM->isRegistrationOpen($eventId)) {
-            return redirect()->to(site_url('presenter/events/detail/'.$eventId))
-                ->with('error','Pendaftaran event telah ditutup.');
-        }
-        if (!$this->hasAbstractDiAcc($eventId, $uid)) {
-            return redirect()->to(site_url('presenter/events/detail/'.$eventId))
-                ->with('warning','Abstrak kamu belum Di-ACC.');
+        if (!$eventId || !$metode || !$jumlah) {
+            return redirect()->back()->withInput()->with('error', 'Lengkapi data pembayaran.');
         }
 
-        // jika ada pending/rejected — biarkan buat baru atau arahkan? Di sini kita arahkan ke pending terakhir
-        $existing = $this->latestPaymentForEvent($eventId, $uid);
-        if ($existing && in_array(strtolower((string)$existing['status']), ['pending','verified'], true)) {
-            return redirect()->to(site_url('presenter/pembayaran/detail/'.$existing['id_pembayaran']))
-                ->with('warning','Kamu sudah memiliki pembayaran aktif untuk event ini.');
+        // Hanya boleh bayar kalau abstrak SUDAH DITERIMA
+        $accepted = $this->absModel->where('id_user', $userId)
+                                   ->where('event_id', $eventId)
+                                   ->where('status', 'diterima')
+                                   ->countAllResults() > 0;
+        if (!$accepted) {
+            return redirect()->to('/presenter/events/detail/'.$eventId)
+                ->with('error', 'Pembayaran hanya dapat dilakukan setelah abstrak Anda diterima.');
         }
 
-        // hitung jumlah
-        $amount = $this->resolvePresenterPrice($ev);
-        $discount = 0.0;
-        if ($voucher !== '') {
-            $v = $this->validateVoucherCode($voucher, $uid, $eventId);
-            if ($v['ok']) {
-                $discount = (float) $v['discount'];
-            } else {
-                // voucher salah → tetap proses tanpa voucher, beri warning
-                session()->setFlashdata('warning', $v['message'] ?? 'Voucher tidak berlaku.');
-            }
-        }
-        $final = max(0, $amount - $discount);
-
-        // file
-        $file = $this->request->getFile('bukti');
+        $file = $this->request->getFile('bukti_bayar');
         if (!$file || !$file->isValid()) {
-            return redirect()->back()->withInput()->with('error','Bukti pembayaran tidak valid.');
+            return redirect()->back()->withInput()->with('error', 'Bukti bayar tidak valid.');
         }
-        // validasi mime sederhana
-        $allow = ['image/jpeg','image/png','image/webp','application/pdf'];
-        if (!in_array($file->getMimeType(), $allow, true)) {
-            return redirect()->back()->withInput()->with('error','Format bukti harus JPG/PNG/WebP/PDF.');
+        $ext = strtolower($file->getClientExtension());
+        if (!in_array($ext, ['jpg','jpeg','png','pdf'])) {
+            return redirect()->back()->withInput()->with('error', 'Bukti harus JPG/PNG/PDF.');
         }
 
-        $dir = WRITEPATH . 'uploads/bukti';
-        if (!is_dir($dir)) @mkdir($dir, 0775, true);
-        $newName = 'pay_'.$uid.'_'.$eventId.'_'.time().'.'.strtolower($file->getExtension() ?: 'dat');
-        $file->move($dir, $newName, true);
-        $relPath = 'uploads/bukti/'.$newName;
+        // Simpan bukti ke WRITEPATH/uploads/pembayaran
+        $dir = WRITEPATH.'uploads/pembayaran/';
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        $ts   = date('YmdHis');
+        $name = "pay_{$userId}_{$eventId}_{$ts}.{$ext}";
+        if (!$file->move($dir, $name)) {
+            return redirect()->back()->withInput()->with('error', 'Gagal menyimpan bukti pembayaran.');
+        }
 
-        // insert
-        $data = [
-            'id_user'            => $uid,
+        // (opsional) apply voucher → contoh dummy (sesuaikan dg VoucherModel.validate)
+        $idVoucher = null;
+        if ($voucher) {
+            // TODO: panggil validator voucher kamu di sini
+            // $idVoucher = ...; $jumlah = ... (setelah diskon)
+        }
+
+        // Insert pembayaran (status pending)
+        $this->payModel->insert([
+            'id_user'            => $userId,
             'event_id'           => $eventId,
-            'participation_type' => 'presenter_offline',
-            'jumlah'             => $final,
+            'metode'             => $metode,
+            'jumlah'             => $jumlah,
+            'bukti_bayar'        => $name,
             'status'             => 'pending',
-            'bukti'              => $relPath,
-            'voucher_code'       => ($voucher !== '') ? $voucher : null,
-            'discount'           => $discount,
             'tanggal_bayar'      => date('Y-m-d H:i:s'),
-        ];
-        $this->payM->insert($data, true);
-        $pid = (int) $this->payM->getInsertID();
+            'id_voucher'         => $idVoucher,
+            'keterangan'         => $keterangan,
+            'participation_type' => 'offline', // presenter default
+        ]);
 
-        return redirect()->to(site_url('presenter/pembayaran/detail/'.$pid))
-            ->with('message','Pembayaran berhasil diunggah. Menunggu verifikasi admin.');
+        $idPay = (int) $this->payModel->getInsertID();
+
+        return redirect()->to('/presenter/pembayaran/detail/'.$idPay)
+            ->with('success','Bukti pembayaran terkirim. Menunggu verifikasi admin.');
     }
 
-    /** Detail pembayaran */
+    /** DETAIL PEMBAYARAN */
     public function detail(int $id)
     {
-        if ($redir = $this->ensureAuth()) return $redir;
-        $uid = $this->uid();
+        $userId = (int) session()->get('id_user');
 
-        $row = $this->payM->select('pembayaran.*, e.title, e.event_date, e.event_time, e.location')
-                          ->join('events e', 'e.id = pembayaran.event_id', 'left')
-                          ->where('pembayaran.id_pembayaran', $id)
-                          ->where('pembayaran.id_user', $uid)
-                          ->first();
+        $row = $this->payModel->where('id_pembayaran', $id)->first();
+        if (!$row || (int)$row['id_user'] !== $userId) {
+            return redirect()->to('/presenter/pembayaran')->with('error','Data pembayaran tidak ditemukan.');
+        }
 
-        if (!$row) return redirect()->to(site_url('presenter/pembayaran'))->with('error','Data pembayaran tidak ditemukan.');
+        $event = $this->eventModel->find((int)$row['event_id']);
 
         return view('role/presenter/pembayaran/detail', [
-            'title'    => 'Detail Pembayaran',
-            'payment'  => $row,
+            'title' => 'Detail Pembayaran',
+            'pay'   => $row,
+            'event' => $event,
         ]);
     }
 
-    /** Reupload bukti untuk payment non-verified */
+    /** RE-UPLOAD (kalau ditolak atau ingin ganti selama pending) */
     public function reupload(int $id)
     {
-        if ($redir = $this->ensureAuth()) return $redir;
-        if (!$this->request->is('post')) return redirect()->to(site_url('presenter/pembayaran/detail/'.$id));
-        $uid = $this->uid();
+        $userId = (int) session()->get('id_user');
 
-        $row = $this->payM->where('id_pembayaran', $id)
-                          ->where('id_user', $uid)->first();
-        if (!$row) return redirect()->to(site_url('presenter/pembayaran'))->with('error','Data pembayaran tidak ditemukan.');
-        if (strtolower((string)$row['status']) === 'verified') {
-            return redirect()->to(site_url('presenter/pembayaran/detail/'.$id))->with('warning','Pembayaran sudah terverifikasi.');
+        $row = $this->payModel->where('id_pembayaran', $id)->first();
+        if (!$row || (int)$row['id_user'] !== $userId) {
+            return redirect()->to('/presenter/pembayaran')->with('error','Data pembayaran tidak ditemukan.');
         }
 
-        $file = $this->request->getFile('bukti');
+        if (!in_array(strtolower($row['status']), ['pending','rejected'])) {
+            return redirect()->to('/presenter/pembayaran/detail/'.$id)
+                ->with('error','Tidak dapat mengunggah ulang pada status saat ini.');
+        }
+
+        $file = $this->request->getFile('bukti_bayar');
         if (!$file || !$file->isValid()) {
-            return redirect()->back()->with('error','Berkas bukti tidak valid.');
+            return redirect()->back()->with('error', 'File tidak valid.');
         }
-        $allow = ['image/jpeg','image/png','image/webp','application/pdf'];
-        if (!in_array($file->getMimeType(), $allow, true)) {
-            return redirect()->back()->with('error','Format bukti harus JPG/PNG/WebP/PDF.');
+        $ext = strtolower($file->getClientExtension());
+        if (!in_array($ext, ['jpg','jpeg','png','pdf'])) {
+            return redirect()->back()->with('error', 'Bukti harus JPG/PNG/PDF.');
         }
 
-        $dir = WRITEPATH . 'uploads/bukti';
-        if (!is_dir($dir)) @mkdir($dir, 0775, true);
-        $newName = 'pay_'.$uid.'_'.$row['event_id'].'_re_'.time().'.'.strtolower($file->getExtension() ?: 'dat');
-        $file->move($dir, $newName, true);
-        $relPath = 'uploads/bukti/'.$newName;
+        $dir = WRITEPATH.'uploads/pembayaran/';
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        $ts   = date('YmdHis');
+        $name = "pay_{$userId}_{$row['event_id']}_{$ts}.{$ext}";
+        if (!$file->move($dir, $name)) {
+            return redirect()->back()->with('error', 'Gagal menyimpan file.');
+        }
 
-        $this->payM->update($id, [
-            'bukti'         => $relPath,
-            'status'        => 'pending', // reset untuk diverifikasi ulang
-            'tanggal_bayar' => date('Y-m-d H:i:s'),
+        $this->payModel->update($id, [
+            'bukti_bayar' => $name,
+            'status'      => 'pending',
+            'keterangan'  => 'Re-upload oleh user (presenter)',
         ]);
 
-        return redirect()->to(site_url('presenter/pembayaran/detail/'.$id))
-            ->with('message','Bukti pembayaran diperbarui. Menunggu verifikasi ulang.');
+        return redirect()->to('/presenter/pembayaran/detail/'.$id)
+            ->with('success','Bukti pembayaran berhasil diunggah ulang. Menunggu verifikasi.');
     }
 
-    /** Batalkan pembayaran (selama belum verified) */
+    /** (Opsional) Batalkan pembayaran selama pending */
     public function cancel(int $id)
     {
-        if ($redir = $this->ensureAuth()) return $redir;
-        $uid = $this->uid();
+        $userId = (int) session()->get('id_user');
 
-        $row = $this->payM->where('id_pembayaran', $id)->where('id_user', $uid)->first();
-        if (!$row) return redirect()->to(site_url('presenter/pembayaran'))->with('error','Data pembayaran tidak ditemukan.');
-        if (strtolower((string)$row['status']) === 'verified') {
-            return redirect()->to(site_url('presenter/pembayaran/detail/'.$id))->with('warning','Tidak dapat dibatalkan karena sudah terverifikasi.');
+        $row = $this->payModel->where('id_pembayaran', $id)->first();
+        if (!$row || (int)$row['id_user'] !== $userId) {
+            return redirect()->to('/presenter/pembayaran')->with('error','Data pembayaran tidak ditemukan.');
         }
 
-        $this->payM->update($id, ['status'=>'canceled']);
-        return redirect()->to(site_url('presenter/pembayaran'))->with('message','Pembayaran dibatalkan.');
-    }
-
-    /** Download bukti yang diunggah */
-    public function downloadBukti(int $id)
-    {
-        if ($redir = $this->ensureAuth()) return $redir;
-        $uid = $this->uid();
-
-        $row = $this->payM->where('id_pembayaran', $id)->where('id_user', $uid)->first();
-        if (!$row || empty($row['bukti'])) return redirect()->back()->with('error','Bukti tidak ditemukan.');
-
-        $path = WRITEPATH . $row['bukti'];
-        if (!is_file($path)) return redirect()->back()->with('error','File bukti hilang di server.');
-
-        return $this->response->download($path, null)->setFileName(basename($path));
-    }
-
-    /** AJAX: validasi voucher  */
-    public function validateVoucher()
-    {
-        if ($redir = $this->ensureAuth()) return $redir;
-        if (!$this->request->isAJAX()) return $this->response->setJSON(['ok'=>false,'message'=>'Bad request'])->setStatusCode(400);
-
-        $code    = trim((string)$this->request->getPost('code'));
-        $eventId = (int)$this->request->getPost('event_id');
-        $uid     = $this->uid();
-
-        $res = $this->validateVoucherCode($code, $uid, $eventId);
-        return $this->response->setJSON($res);
-    }
-
-    /** helper validasi voucher (defensive — table name flexible) */
-    private function validateVoucherCode(string $code, int $userId, int $eventId): array
-    {
-        $code = strtoupper(trim($code));
-        if ($code === '') return ['ok'=>false,'message'=>'Kode voucher kosong.'];
-
-        $table = $this->db->table('voucher');
-        try {
-            $voucher = $table->where('code', $code)->where('status', 'active')->get()->getRowArray();
-        } catch (\Throwable $e) {
-            // fallback jika nama tabel berbeda
-            $voucher = $this->db->table('vouchers')->where('code', $code)->where('status','active')->get()->getRowArray();
+        if (strtolower($row['status']) !== 'pending') {
+            return redirect()->to('/presenter/pembayaran/detail/'.$id)->with('error','Hanya pembayaran pending yang bisa dibatalkan.');
         }
 
-        if (!$voucher) return ['ok'=>false,'message'=>'Voucher tidak ditemukan / tidak aktif.'];
-
-        // kalau ada kolom event_id dan diikat ke event lain
-        if (!empty($voucher['event_id']) && (int)$voucher['event_id'] !== $eventId) {
-            return ['ok'=>false,'message'=>'Voucher tidak berlaku untuk event ini.'];
-        }
-
-        // hitung diskon
-        $discount = 0.0;
-        if (!empty($voucher['type']) && strtolower($voucher['type']) === 'percent') {
-            $ev = $this->eventM->find($eventId);
-            $base = $this->resolvePresenterPrice($ev ?: []);
-            $pct  = (float)($voucher['value'] ?? 0);
-            $discount = max(0.0, $base * ($pct/100.0));
-        } else {
-            $discount = (float)($voucher['value'] ?? 0);
-        }
-
-        return ['ok'=>true,'discount'=>$discount,'message'=>'Voucher diterapkan.'];
+        $this->payModel->delete($id);
+        return redirect()->to('/presenter/pembayaran')->with('success','Pembayaran dibatalkan.');
     }
 }

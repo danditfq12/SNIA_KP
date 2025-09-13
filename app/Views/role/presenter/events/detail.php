@@ -1,29 +1,10 @@
 <?php
-  /** @var array $event, $state */
-  $e = $event ?? [];
-  $s = $state ?? [];
-
-  $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
-  $tgl     = $fmtDate($e['event_date'] ?? null);
-  $jam     = $e['event_time'] ?? '-';
-
-  $step    = (int)($s['step'] ?? 1);
-  $sKey    = (string)($s['status_key'] ?? '');
-  $sLab    = (string)($s['status_label'] ?? '');
-  $ctaTxt  = (string)($s['cta_text'] ?? 'Kembali');
-  $ctaUrl  = (string)($s['cta_url'] ?? site_url('presenter/events'));
-
-  $stepClass = match ($sKey) {
-    'abstract_required','abstract_revision','abstract_rejected' => 'bg-warning',
-    'abstract_pending','payment_pending'                       => 'bg-info',
-    'payment_required'                                         => 'bg-primary',
-    'payment_rejected'                                         => 'bg-danger',
-    'completed'                                                => 'bg-success',
-    default                                                    => 'bg-secondary'
-  };
-
-  $absBadge = $s['abstract_label'] ?? null;
-  $payBadge = $s['payment_label'] ?? null;
+$event   = $event ?? [];
+$reg     = $reg ?? null;
+$abstrak = $abstrak ?? null;
+$payment = $payment ?? null;
+$flow    = $flow ?? ['state'=>'belum_daftar','label'=>'Belum terdaftar','hint'=>''];
+$price   = (int)($price ?? 0);
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -34,86 +15,118 @@
   <main class="flex-fill" style="padding-top:70px;">
     <div class="container-fluid p-3 p-md-4">
 
-      <div class="d-flex align-items-center mb-3">
-        <a href="<?= site_url('presenter/events') ?>" class="btn btn-light me-2"><i class="bi bi-arrow-left"></i></a>
+      <!-- Header -->
+      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3">
         <div>
-          <h3 class="mb-0"><?= esc($e['title'] ?? 'Event') ?></h3>
-          <small class="text-muted">Workflow presenter untuk event ini.</small>
+          <h3 class="welcome-text mb-1"><i class="bi bi-info-circle me-2"></i><?= esc($event['title'] ?? 'Event') ?></h3>
+          <div class="text-white-50">Detail event & status pendaftaran</div>
+        </div>
+        <div class="text-end d-none d-md-block">
+          <small class="text-white-50 d-block">Tanggal event</small>
+          <strong class="text-white"><?= date('d M Y', strtotime($event['event_date'])) ?> • <?= esc($event['event_time']) ?></strong>
         </div>
       </div>
 
       <div class="row g-3">
-        <div class="col-12 col-lg-8">
-          <div class="card shadow-sm border-0">
+        <!-- Kiri: Info Event -->
+        <div class="col-12 col-lg-7">
+          <div class="card shadow-sm border-0 mb-3">
+            <div class="card-header bg-gradient-primary text-white">
+              <h5 class="mb-0"><i class="bi bi-calendar-event me-2"></i>Informasi Event</h5>
+            </div>
             <div class="card-body">
-
-              <!-- HERO -->
-              <div class="abs-hero mb-3">
-                <div class="d-flex flex-column flex-md-row align-items-md-start justify-content-between gap-2">
-                  <div>
-                    <div class="abs-title mb-1"><?= esc($e['title'] ?? 'Event') ?></div>
-                    <div class="abs-tags">
-                      <span class="abs-tag"><i class="bi bi-calendar-event"></i> <?= esc($tgl) ?></span>
-                      <span class="abs-tag"><i class="bi bi-clock"></i> <?= esc($jam) ?></span>
-                      <span class="abs-tag"><i class="bi bi-geo-alt"></i> <?= esc($e['location'] ?? '-') ?></span>
-                      <span class="abs-tag"><i class="bi bi-people"></i> OFFLINE</span>
-                    </div>
-                  </div>
-                  <div class="text-md-end">
-                    <div class="small opacity-75">Status</div>
-                    <span class="badge <?= $stepClass ?> text-uppercase"><?= esc($sLab) ?></span>
-                  </div>
-                </div>
+              <div class="mb-2"><strong>Format:</strong> <?= strtoupper($event['format']) ?></div>
+              <div class="mb-2"><strong>Lokasi:</strong> <?= esc($event['location'] ?: '-') ?></div>
+              <?php if (!empty($event['zoom_link'])): ?>
+                <div class="mb-2"><strong>Zoom:</strong> <a href="<?= esc($event['zoom_link']) ?>" target="_blank">Link</a></div>
+              <?php endif; ?>
+              <div class="mb-2"><strong>Harga Presenter:</strong> Rp <?= number_format($price,0,',','.') ?></div>
+              <hr>
+              <div class="mb-2 small text-muted">
+                Tutup Pendaftaran: <strong><?= $event['registration_deadline'] ? date('d M Y H:i', strtotime($event['registration_deadline'])) : '-' ?></strong><br>
+                Batas Abstrak: <strong><?= $event['abstract_deadline'] ? date('d M Y H:i', strtotime($event['abstract_deadline'])) : '-' ?></strong>
               </div>
-
-              <!-- Ringkasan status -->
-              <div class="d-flex flex-wrap gap-2 mb-3">
-                <span class="badge bg-secondary-subtle text-secondary">
-                  Abstrak: <?= esc($absBadge ?? 'Belum ada') ?>
-                </span>
-                <?php if ($payBadge): ?>
-                  <span class="badge bg-secondary-subtle text-secondary">
-                    Pembayaran: <?= esc(ucfirst($payBadge)) ?>
-                  </span>
-                <?php endif; ?>
-              </div>
-
-              <!-- CTA -->
-              <div class="d-flex flex-wrap gap-2">
-                <a class="btn btn-primary" href="<?= esc($ctaUrl) ?>">
-                  <i class="bi bi-arrow-right-circle me-1"></i><?= esc($ctaTxt) ?>
-                </a>
-                <?php if (($s['verified'] ?? false) === true): ?>
-                  <a class="btn btn-outline-secondary" href="<?= site_url('presenter/absensi') ?>">
-                    <i class="bi bi-qr-code-scan me-1"></i>Absensi
-                  </a>
-                  <a class="btn btn-outline-success" href="<?= site_url('presenter/dokumen/loa') ?>">
-                    <i class="bi bi-file-earmark-text me-1"></i>LOA
-                  </a>
-                <?php endif; ?>
-              </div>
-
-              <div class="mt-3 small text-muted">
-                Langkah: 1) Upload abstrak → 2) Review → 3) Pembayaran → 4) Verifikasi → 5) Ikut event.
-              </div>
-
+              <p class="mb-0"><?= esc($event['description'] ?? '') ?></p>
             </div>
           </div>
         </div>
 
-        <div class="col-12 col-lg-4">
-          <div class="card shadow-sm border-0">
+        <!-- Kanan: Status & Aksi -->
+        <div class="col-12 col-lg-5">
+          <div class="card shadow-sm border-0 mb-3">
+            <div class="card-header bg-gradient-primary text-white">
+              <h5 class="mb-0"><i class="bi bi-flag me-2"></i>Status</h5>
+            </div>
             <div class="card-body">
-              <div class="fw-semibold mb-2">Info</div>
-              <ul class="small mb-0">
-                <li>Presenter mengikuti event secara <strong>OFFLINE</strong>.</li>
-                <li>Fitur pembayaran muncul setelah abstrak <strong>Di-ACC</strong>.</li>
-                <li>Setelah pembayaran <em>verified</em>, absensi & LOA aktif.</li>
+              <div class="mb-2">
+                <span class="badge rounded-pill bg-primary-subtle text-primary fw-normal"><?= esc($flow['label']) ?></span>
+                <?php if (!empty($flow['hint'])): ?>
+                  <div class="small text-muted mt-1"><?= esc($flow['hint']) ?></div>
+                <?php endif; ?>
+              </div>
+
+              <ul class="list-group list-group-flush mb-3">
+                <li class="list-group-item d-flex justify-content-between">
+                  <span>Pendaftaran</span>
+                  <strong><?= $reg ? 'Terdaftar' : 'Belum' ?></strong>
+                </li>
+                <li class="list-group-item d-flex justify-content-between">
+                  <span>Abstrak</span>
+                  <strong><?= $abstrak['status'] ?? 'Belum' ?></strong>
+                </li>
+                <li class="list-group-item d-flex justify-content-between">
+                  <span>Pembayaran</span>
+                  <strong><?= $payment['status'] ?? 'Belum' ?></strong>
+                </li>
               </ul>
+
+              <div class="d-grid gap-2">
+                <?php if (!$reg): ?>
+                  <button class="btn btn-primary" onclick="confirmRegister(<?= (int)$event['id'] ?>)">
+                    <i class="bi bi-box-arrow-in-right"></i> Daftar
+                  </button>
+                <?php endif; ?>
+
+                <?php if ($reg && ($flow['can']['cancel'] ?? false)): ?>
+                  <button class="btn btn-outline-danger" onclick="confirmCancel(<?= (int)$event['id'] ?>)">
+                    <i class="bi bi-x-circle"></i> Batalkan Pendaftaran
+                  </button>
+                <?php endif; ?>
+
+                <?php if ($reg && ($flow['can']['upload'] ?? false)): ?>
+                  <a class="btn btn-primary" href="/presenter/abstrak?event=<?= (int)$event['id'] ?>">
+                    <i class="bi bi-upload"></i> Upload Abstrak
+                  </a>
+                <?php endif; ?>
+
+                <?php if ($reg && ($flow['can']['reupload'] ?? false)): ?>
+                  <a class="btn btn-warning" href="/presenter/abstrak?event=<?= (int)$event['id'] ?>">
+                    <i class="bi bi-arrow-repeat"></i> Unggah Ulang Revisi
+                  </a>
+                <?php endif; ?>
+
+                <?php if ($reg && ($flow['can']['pay'] ?? false)): ?>
+                  <a class="btn btn-success" href="/presenter/pembayaran/create/<?= (int)$event['id'] ?>">
+                    <i class="bi bi-cash-coin"></i> Lanjut Bayar
+                  </a>
+                <?php endif; ?>
+
+                <?php if ($reg && (($flow['can']['pay_detail'] ?? false) || ($flow['can']['pay_reupload'] ?? false))): ?>
+                  <a class="btn btn-outline-success" href="/presenter/pembayaran/detail/<?= (int)($payment['id_pembayaran'] ?? 0) ?>">
+                    <i class="bi bi-receipt"></i> Lihat Pembayaran
+                  </a>
+                <?php endif; ?>
+
+                <?php if ($reg && ($flow['can']['absen'] ?? false)): ?>
+                  <a class="btn btn-info" href="/presenter/absensi">
+                    <i class="bi bi-qr-code-scan"></i> Buka Halaman Absensi
+                  </a>
+                <?php endif; ?>
+              </div>
+
             </div>
           </div>
         </div>
-
       </div>
 
     </div>
@@ -123,19 +136,33 @@
 <?= $this->include('partials/footer') ?>
 
 <style>
-  .abs-hero{
-    background: linear-gradient(90deg,#2563eb,#60a5fa);
-    border-radius:16px; color:#fff; padding:14px 16px;
-    box-shadow: 0 6px 20px rgba(37,99,235,.18);
+  :root{
+    --primary-color:#2563eb; --info-color:#06b6d4;
   }
-  .abs-title{ font-weight:800; line-height:1.2; font-size: clamp(18px,4.2vw,24px); }
-  .abs-tags{ display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.25rem; }
-  .abs-tag{
-    background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.22);
-    color:#fff; border-radius:999px; padding:.28rem .6rem; font-size:.85rem;
-    display:inline-flex; align-items:center; gap:.45rem;
+  .header-section.header-blue{
+    background:linear-gradient(135deg,var(--primary-color),#1e40af);
+    color:#fff; padding:24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
   }
-  @media (min-width:576px){
-    .abs-hero{ padding:18px 20px; border-radius:18px; }
-  }
+  .bg-gradient-primary{ background:linear-gradient(135deg,var(--primary-color),var(--info-color))!important; }
 </style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+function confirmRegister(id){
+  Swal.fire({
+    title:'Daftar event?',
+    text:'Anda akan tercatat sebagai presenter event ini.',
+    icon:'question', showCancelButton:true,
+    confirmButtonText:'Ya, daftar', cancelButtonText:'Batal'
+  }).then(r=>{ if(r.isConfirmed){ location.href='/presenter/events/register/'+id; }});
+}
+function confirmCancel(id){
+  Swal.fire({
+    title:'Batalkan pendaftaran?',
+    text:'Pendaftaran akan dihapus. Tindakan ini tidak bisa dibatalkan.',
+    icon:'warning', showCancelButton:true,
+    confirmButtonText:'Ya, batalkan', cancelButtonText:'Tidak'
+  }).then(r=>{ if(r.isConfirmed){ location.href='/presenter/events/cancel/'+id; }});
+}
+</script>

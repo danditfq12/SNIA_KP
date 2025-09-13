@@ -1,260 +1,104 @@
-<?= view('partials/header', ['title' => $title ?? 'Detail Abstrak']) ?>
-<?= view('partials/sidebar_presenter', ['active' => 'abstrak']) ?>
+<?php
+$title = $title ?? 'Detail Abstrak';
+$d     = $data  ?? [];
+$badge = $badge ?? 'secondary';
+?>
+<?= $this->include('partials/header') ?>
+<?= $this->include('partials/sidebar_presenter') ?>
+<?= $this->include('partials/alerts') ?>
 
-<main id="content" class="p-4">
-  <?= view('partials/alerts') ?>
+<div id="content">
+  <main class="flex-fill" style="padding-top:70px;">
+    <div class="container-fluid p-3 p-md-4">
 
-  <?php
-    $labelMap = [
-      'menunggu'        => ['label'=>'menunggu','class'=>'warning'],
-      'sedang_direview' => ['label'=>'sedang direview','class'=>'info'],
-      'diterima'        => ['label'=>'diacc','class'=>'success'], // tampil "diacc"
-      'ditolak'         => ['label'=>'ditolak','class'=>'danger'],
-      'revisi'          => ['label'=>'revisi','class'=>'secondary'],
-    ];
-    $cur = $labelMap[$abstract['status']] ?? ['label'=>$abstract['status'],'class'=>'secondary'];
-  ?>
-
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <div>
-      <h3 class="mb-1"><?= esc($abstract['judul']) ?></h3>
-      <div class="small text-muted">
-        Event: <?= esc($abstract['event_title'] ?? '—') ?> ·
-        Upload: <?= date('d M Y H:i', strtotime($abstract['tanggal_upload'])) ?> ·
-        Kategori: <?= esc($abstract['nama_kategori'] ?? '-') ?>
-      </div>
-    </div>
-    <div>
-      <span class="badge bg-<?= $cur['class'] ?>"><?= esc($cur['label']) ?></span>
-    </div>
-  </div>
-
-  <div class="card mb-3">
-    <div class="card-body">
-      <div class="d-flex gap-2 flex-wrap">
-        <a class="btn btn-outline-secondary"
-           href="<?= site_url('presenter/abstrak/download/'.$abstract['file_abstrak']) ?>">
-          <i class="bi bi-download me-1"></i> Download File
-        </a>
-
-        <?php if ($can_revise): ?>
-          <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#revModal">
-            <i class="bi bi-pencil-square me-1"></i> Upload Revisi
-          </button>
-        <?php endif; ?>
-      </div>
-    </div>
-  </div>
-
-  <div class="row g-3">
-    <div class="col-lg-7">
-      <div class="card">
-        <div class="card-header bg-light"><strong>Ringkasan</strong></div>
-        <div class="card-body">
-          <dl class="row mb-0">
-            <dt class="col-sm-4">Author</dt>
-            <dd class="col-sm-8"><?= esc($abstract['author_name'] ?? '-') ?></dd>
-
-            <dt class="col-sm-4">Revisi ke</dt>
-            <dd class="col-sm-8"><?= (int)$abstract['revisi_ke'] ?></dd>
-
-            <?php if (!empty($event['abstract_deadline'])): ?>
-              <dt class="col-sm-4">Deadline Submission</dt>
-              <dd class="col-sm-8"><?= date('d M Y H:i', strtotime($event['abstract_deadline'])) ?></dd>
-            <?php endif; ?>
-          </dl>
+      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h2 class="welcome-text mb-1"><i class="bi bi-file-text"></i> Detail Abstrak</h2>
+          <div class="text-white-50"><?= esc($d['event_title'] ?? '-') ?></div>
+        </div>
+        <div>
+          <span class="badge bg-<?= $badge ?>"><?= strtoupper($d['status'] ?? 'MENUNGGU') ?></span>
         </div>
       </div>
-    </div>
-    <div class="col-lg-5">
-      <div class="card">
-        <div class="card-header bg-light"><strong>Riwayat Review</strong></div>
+
+      <div class="card shadow-sm mb-3">
         <div class="card-body">
-          <?php if (!empty($reviews)): ?>
-            <div class="vstack gap-3">
-              <?php foreach ($reviews as $r): ?>
-                <div class="border rounded p-2">
-                  <div class="small text-muted">
-                    <?= esc($r['reviewer_name'] ?? 'Reviewer') ?> ·
-                    <?= date('d M Y H:i', strtotime($r['tanggal_review'])) ?>
-                  </div>
-                  <div><?= nl2br(esc($r['catatan'] ?? '-')) ?></div>
-                  <?php if (!empty($r['status'])): ?>
-                    <span class="badge bg-secondary mt-1"><?= esc($r['status']) ?></span>
-                  <?php endif; ?>
-                </div>
-              <?php endforeach; ?>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="mb-2"><strong>Judul</strong><br><span class="text-break"><?= esc($d['judul'] ?? '-') ?></span></div>
+              <div class="mb-2"><strong>Kategori</strong><br><?= esc($d['nama_kategori'] ?? '-') ?></div>
+              <div class="mb-2"><strong>Status</strong><br><span class="badge bg-<?= $badge ?>"><?= strtoupper($d['status'] ?? '-') ?></span></div>
             </div>
-          <?php else: ?>
-            <div class="text-muted">Belum ada review.</div>
-          <?php endif; ?>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</main>
-
-<?php if ($can_revise): ?>
-<!-- Modal Revisi -->
-<div class="modal fade" id="revModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <form class="modal-content" action="<?= site_url('presenter/abstrak/upload') ?>" method="post" enctype="multipart/form-data">
-      <input type="hidden" name="revision_id" value="<?= (int)$abstract['id_abstrak'] ?>">
-      <input type="hidden" name="event_id" value="<?= (int)$abstract['event_id'] ?>">
-      <input type="hidden" name="id_kategori" value="<?= (int)$abstract['id_kategori'] ?>">
-
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Upload Revisi</h5>
-        <button class="btn-close" data-bs-dismiss="modal" type="button"></button>
-      </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label">Judul (boleh diubah)</label>
-          <input type="text" name="judul" class="form-control" value="<?= esc($abstract['judul']) ?>" maxlength="255" required>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">File Baru (PDF/DOC/DOCX · maks 10MB)</label>
-          <input type="file" name="file_abstrak" class="form-control" accept=".pdf,.doc,.docx" required>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Batal</button>
-        <button class="btn btn-warning" type="submit"><i class="bi bi-upload me-1"></i> Upload Revisi</button>
-      </div>
-    </form>
-  </div>
-</div>
-<?php endif; ?>
-
-<?= view('partials/footer') ?>
-<?= view('partials/header', ['title' => $title ?? 'Detail Abstrak']) ?>
-<?= view('partials/sidebar_presenter', ['active' => 'abstrak']) ?>
-
-<main id="content" class="p-4">
-  <?= view('partials/alerts') ?>
-
-  <?php
-    $labelMap = [
-      'menunggu'        => ['label'=>'menunggu','class'=>'warning'],
-      'sedang_direview' => ['label'=>'sedang direview','class'=>'info'],
-      'diterima'        => ['label'=>'diacc','class'=>'success'], // tampil "diacc"
-      'ditolak'         => ['label'=>'ditolak','class'=>'danger'],
-      'revisi'          => ['label'=>'revisi','class'=>'secondary'],
-    ];
-    $cur = $labelMap[$abstract['status']] ?? ['label'=>$abstract['status'],'class'=>'secondary'];
-  ?>
-
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <div>
-      <h3 class="mb-1"><?= esc($abstract['judul']) ?></h3>
-      <div class="small text-muted">
-        Event: <?= esc($abstract['event_title'] ?? '—') ?> ·
-        Upload: <?= date('d M Y H:i', strtotime($abstract['tanggal_upload'])) ?> ·
-        Kategori: <?= esc($abstract['nama_kategori'] ?? '-') ?>
-      </div>
-    </div>
-    <div>
-      <span class="badge bg-<?= $cur['class'] ?>"><?= esc($cur['label']) ?></span>
-    </div>
-  </div>
-
-  <div class="card mb-3">
-    <div class="card-body">
-      <div class="d-flex gap-2 flex-wrap">
-        <a class="btn btn-outline-secondary"
-           href="<?= site_url('presenter/abstrak/download/'.$abstract['file_abstrak']) ?>">
-          <i class="bi bi-download me-1"></i> Download File
-        </a>
-
-        <?php if ($can_revise): ?>
-          <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#revModal">
-            <i class="bi bi-pencil-square me-1"></i> Upload Revisi
-          </button>
-        <?php endif; ?>
-      </div>
-    </div>
-  </div>
-
-  <div class="row g-3">
-    <div class="col-lg-7">
-      <div class="card">
-        <div class="card-header bg-light"><strong>Ringkasan</strong></div>
-        <div class="card-body">
-          <dl class="row mb-0">
-            <dt class="col-sm-4">Author</dt>
-            <dd class="col-sm-8"><?= esc($abstract['author_name'] ?? '-') ?></dd>
-
-            <dt class="col-sm-4">Revisi ke</dt>
-            <dd class="col-sm-8"><?= (int)$abstract['revisi_ke'] ?></dd>
-
-            <?php if (!empty($event['abstract_deadline'])): ?>
-              <dt class="col-sm-4">Deadline Submission</dt>
-              <dd class="col-sm-8"><?= date('d M Y H:i', strtotime($event['abstract_deadline'])) ?></dd>
-            <?php endif; ?>
-          </dl>
-        </div>
-      </div>
-    </div>
-    <div class="col-lg-5">
-      <div class="card">
-        <div class="card-header bg-light"><strong>Riwayat Review</strong></div>
-        <div class="card-body">
-          <?php if (!empty($reviews)): ?>
-            <div class="vstack gap-3">
-              <?php foreach ($reviews as $r): ?>
-                <div class="border rounded p-2">
-                  <div class="small text-muted">
-                    <?= esc($r['reviewer_name'] ?? 'Reviewer') ?> ·
-                    <?= date('d M Y H:i', strtotime($r['tanggal_review'])) ?>
-                  </div>
-                  <div><?= nl2br(esc($r['catatan'] ?? '-')) ?></div>
-                  <?php if (!empty($r['status'])): ?>
-                    <span class="badge bg-secondary mt-1"><?= esc($r['status']) ?></span>
-                  <?php endif; ?>
-                </div>
-              <?php endforeach; ?>
+            <div class="col-md-6">
+              <div class="mb-2"><strong>Tanggal Upload</strong><br><?= !empty($d['tanggal_upload']) ? date('d M Y H:i', strtotime($d['tanggal_upload'])) : '-' ?></div>
+              <div class="mb-2"><strong>Revisi Ke</strong><br><?= (int)($d['revisi_ke'] ?? 0) ?></div>
+              <div class="mb-2">
+                <strong>File</strong><br>
+                <?php if (!empty($d['file_abstrak'])): ?>
+                  <a class="btn btn-outline-secondary btn-sm" href="/presenter/abstrak/download/<?= esc($d['file_abstrak'],'attr') ?>">
+                    <i class="bi bi-download"></i> Unduh
+                  </a>
+                <?php else: ?>
+                  <span class="text-muted">-</span>
+                <?php endif; ?>
+              </div>
             </div>
-          <?php else: ?>
-            <div class="text-muted">Belum ada review.</div>
-          <?php endif; ?>
+          </div>
+
+          <?php
+            $st = strtolower($d['status'] ?? 'menunggu');
+            if ($st === 'menunggu') {
+              $info = ['secondary','Abstrak Anda sudah diterima sistem dan menunggu untuk direview.'];
+            } elseif ($st === 'sedang_direview') {
+              $info = ['warning','Abstrak sedang direview oleh reviewer. Mohon tunggu.'];
+            } elseif ($st === 'revisi') {
+              $info = ['info','Mohon upload file revisi Anda pada form di bawah ini.'];
+            } elseif ($st === 'diterima') {
+              $info = ['success','Selamat! Abstrak diterima. Silakan lanjutkan ke pembayaran.'];
+            } else { // ditolak
+              $info = ['danger','Maaf, abstrak ditolak. Anda bisa mengirim abstrak baru pada event lain.'];
+            }
+          ?>
+          <div class="alert alert-<?= $info[0] ?> mt-2">
+            <i class="bi bi-info-circle"></i> <?= $info[1] ?>
+          </div>
         </div>
       </div>
+
+      <?php if (strtolower($d['status'] ?? '') === 'revisi'): ?>
+      <div class="card shadow-sm">
+        <div class="card-header bg-light"><strong>Upload Revisi</strong></div>
+        <div class="card-body">
+          <form method="post" action="/presenter/abstrak/uploadRevisi/<?= (int)($d['id_abstrak'] ?? 0) ?>" enctype="multipart/form-data">
+            <?= csrf_field() ?>
+            <div class="mb-3">
+              <label class="form-label">File Abstrak (PDF/DOC/DOCX)</label>
+              <input type="file" name="file_abstrak" class="form-control" required>
+              <div class="form-text">Unggah file revisi Anda.</div>
+            </div>
+            <button class="btn btn-warning"><i class="bi bi-upload"></i> Kirim Revisi</button>
+          </form>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <div class="mt-3">
+        <a href="/presenter/abstrak" class="btn btn-outline-secondary">Kembali</a>
+      </div>
+
     </div>
-  </div>
-
-</main>
-
-<?php if ($can_revise): ?>
-<!-- Modal Revisi -->
-<div class="modal fade" id="revModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <form class="modal-content" action="<?= site_url('presenter/abstrak/upload') ?>" method="post" enctype="multipart/form-data">
-      <input type="hidden" name="revision_id" value="<?= (int)$abstract['id_abstrak'] ?>">
-      <input type="hidden" name="event_id" value="<?= (int)$abstract['event_id'] ?>">
-      <input type="hidden" name="id_kategori" value="<?= (int)$abstract['id_kategori'] ?>">
-
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Upload Revisi</h5>
-        <button class="btn-close" data-bs-dismiss="modal" type="button"></button>
-      </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label">Judul (boleh diubah)</label>
-          <input type="text" name="judul" class="form-control" value="<?= esc($abstract['judul']) ?>" maxlength="255" required>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">File Baru (PDF/DOC/DOCX · maks 10MB)</label>
-          <input type="file" name="file_abstrak" class="form-control" accept=".pdf,.doc,.docx" required>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Batal</button>
-        <button class="btn btn-warning" type="submit"><i class="bi bi-upload me-1"></i> Upload Revisi</button>
-      </div>
-    </form>
-  </div>
+  </main>
 </div>
-<?php endif; ?>
 
-<?= view('partials/footer') ?>
+<?= $this->include('partials/footer') ?>
+
+<style>
+  :root{ --primary:#2563eb; --primary-deep:#1e40af; }
+  .header-section.header-blue{
+    background:linear-gradient(135deg,var(--primary),var(--primary-deep));
+    color:#fff; padding:20px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
+  }
+  .welcome-text{ font-weight:500; font-size:1.25rem; }
+  .card{ border-radius:14px; }
+  .btn{ border-radius:10px; }
+</style>

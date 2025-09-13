@@ -1,251 +1,214 @@
 <?php
-/**
- * @var array|null $event
- * @var array|null $attendance   // ['status','waktu_scan',...]
- * @var bool       $hasVerifiedPayment
- * @var array|null $timing       // ['can_attend' => bool, 'message' => string] (opsional)
- */
+$title    = $title ?? 'Detail Absensi';
+$event    = $event ?? [];
+$payment  = $payment ?? [];
+$window   = $window ?? ['is_open'=>false,'start_ts'=>null,'end_ts'=>null,'reason'=>''];
+$attended = $attended ?? false;
 
-$event        = $event ?? [];
-$title        = esc($event['title'] ?? 'Event');
-$eventId      = (int)($event['id'] ?? 0);
-$eventDate    = $event['event_date'] ?? null;
-$eventTime    = $event['event_time'] ?? null;
-$venue        = $event['venue'] ?? ($event['lokasi'] ?? '-');
-
-// Presenter selalu offline
-$presenterMode = 'Offline';
-
-// Info mode audience (kalau ada di schema-mu)
-$audienceMode = $event['audience_mode']
-    ?? $event['mode_audience']
-    ?? $event['audience_participation_type']
-    ?? 'Tidak diketahui';
-
-// Timing (fallback kalau controller belum ngasih $timing)
-$canAttend       = $timing['can_attend'] ?? false;
-$timingMessage   = $timing['message']    ?? ($eventDate === date('Y-m-d')
-                        ? 'Absensi tersedia untuk event hari ini.'
-                        : 'Absensi dibuka pada hari H acara.');
-
-// Sudah absen?
-$alreadyAttend = !empty($attendance);
-$attStatus     = $attendance['status'] ?? null;
-$attTime       = !empty($attendance['waktu_scan']) ? date('d M Y H:i', strtotime($attendance['waktu_scan'])) : null;
-
-// Helper URL
-$backUrl   = site_url('presenter/absensi');
-$scanUrl   = site_url('qr/scanner');           // scanner universal (tab baru)
-$ajaxScan  = site_url('presenter/absensi/scan'); // endpoint AJAX presenter
+$startText = $window['start_ts'] ? date('d M Y H:i', $window['start_ts']) : '-';
+$endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
 ?>
+<?= $this->include('partials/header') ?>
+<?= $this->include('partials/sidebar_presenter') ?>
+<?= $this->include('partials/alerts') ?>
 
-<div class="container py-4" id="content">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <div>
-      <h4 class="mb-1"><?= $title ?></h4>
-      <div class="text-muted small">
-        <i class="bi bi-calendar2-week me-1"></i>
-        <?= $eventDate ? date('d M Y', strtotime($eventDate)) : '-' ?>
-        <?php if ($eventTime): ?>
-          · <i class="bi bi-clock me-1"></i><?= esc($eventTime) ?>
-        <?php endif; ?>
-        · <i class="bi bi-geo-alt me-1"></i><?= esc($venue) ?>
+<div id="content">
+  <main class="flex-fill" style="padding-top:70px;">
+    <div class="container-fluid p-3 p-md-4">
+
+      <!-- HEADER -->
+      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 class="welcome-text mb-1"><i class="bi bi-qr-code"></i> Detail Absensi</h2>
+          <div class="text-white-50">Event: <?= esc($event['title'] ?? '-') ?></div>
+        </div>
+        <div class="text-end d-none d-md-block">
+          <small class="text-white-50 d-block">Window Absensi</small>
+          <strong class="text-white"><?= $startText ?> - <?= $endText ?></strong>
+        </div>
       </div>
-    </div>
-    <div>
-      <a href="<?= $backUrl ?>" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left-short me-1"></i>Kembali
-      </a>
-    </div>
-  </div>
 
-  <?php if (!$hasVerifiedPayment): ?>
-    <div class="alert alert-danger d-flex align-items-start" role="alert">
-      <i class="bi bi-shield-exclamation me-2 fs-5"></i>
-      <div>
-        <strong>Pembayaran belum terverifikasi.</strong><br>
-        Fitur absensi akan aktif setelah pembayaran Anda diverifikasi. Silakan cek halaman
-        <a href="<?= site_url('presenter/pembayaran') ?>" class="alert-link">Pembayaran</a>.
-      </div>
-    </div>
-  <?php endif; ?>
-
-  <?php if ($alreadyAttend): ?>
-    <div class="alert alert-success d-flex align-items-start" role="alert">
-      <i class="bi bi-check2-circle me-2 fs-5"></i>
-      <div>
-        <strong>Absensi tercatat.</strong><br>
-        Status: <span class="badge bg-success"><?= strtoupper(esc($attStatus)) ?></span>
-        <?php if ($attTime): ?> · Waktu: <?= $attTime ?><?php endif; ?>
-      </div>
-    </div>
-  <?php endif; ?>
-
-  <div class="row g-4">
-    <!-- Kolom aksi absensi -->
-    <div class="col-lg-7">
-      <div class="card">
-        <div class="card-body">
-          <h5 class="card-title mb-3">
-            <i class="bi bi-qr-code-scan me-2"></i>Absensi Presenter
-          </h5>
-
-          <div class="mb-3">
-            <?php if ($hasVerifiedPayment): ?>
-              <div class="alert <?= $canAttend ? 'alert-info' : 'alert-warning' ?> mb-3" role="alert">
-                <i class="bi bi-info-circle me-1"></i><?= esc($timingMessage) ?>
+      <!-- STATUS + AKSI -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="status-dot <?= $attended ? 'bg-success' : ($window['is_open'] ? 'bg-primary' : 'bg-secondary') ?>"></div>
+            <div>
+              <div class="fw-semibold mb-1">Status</div>
+              <?php if ($attended): ?>
+                <div class="text-success"><i class="bi bi-check-circle"></i> Anda sudah tercatat hadir.</div>
+              <?php elseif ($window['is_open']): ?>
+                <div class="text-primary"><i class="bi bi-door-open"></i> Window absensi sedang dibuka.</div>
+              <?php else: ?>
+                <div class="text-muted"><i class="bi bi-lock"></i> Window absensi tertutup <?= $window['reason'] ? '('.esc($window['reason']).')' : '' ?>.</div>
+              <?php endif; ?>
+              <div class="small text-muted mt-1">
+                Lokasi: <?= esc($event['location'] ?? '-') ?>
+                <?php if (!empty($event['format'])): ?> · Format: <?= strtoupper(esc($event['format'])) ?><?php endif; ?>
               </div>
-            <?php endif; ?>
-
-            <ul class="small text-muted mb-3">
-              <li>QR ini khusus <strong>Presenter</strong> (mode: Offline).</li>
-              <li>Pastikan kamera/QR scanner berfungsi dengan baik.</li>
-              <li>Jika QR bermasalah, gunakan input token di bawah.</li>
-            </ul>
-          </div>
-
-          <div class="d-flex gap-2 flex-wrap mb-3">
-            <a href="<?= $scanUrl ?>" target="_blank"
-               class="btn btn-primary"
-               <?= (!$hasVerifiedPayment || $alreadyAttend || !$canAttend) ? 'aria-disabled="true" tabindex="-1" onclick="return false;"' : '' ?>>
-              <i class="bi bi-camera-video me-1"></i>Buka Scanner QR
-            </a>
-
-            <?php if ($alreadyAttend): ?>
-              <span class="badge bg-success align-self-center">
-                <i class="bi bi-check2 me-1"></i>Sudah Absen
-              </span>
-            <?php elseif (!$hasVerifiedPayment): ?>
-              <span class="badge bg-danger align-self-center">
-                <i class="bi bi-x-circle me-1"></i>Pembayaran Belum Terverifikasi
-              </span>
-            <?php elseif (!$canAttend): ?>
-              <span class="badge bg-secondary align-self-center">
-                <i class="bi bi-lock me-1"></i>Belum Waktunya
-              </span>
-            <?php endif; ?>
-          </div>
-
-          <!-- Fallback: Input token manual (pakai AJAX ke presenter/absensi/scan) -->
-          <form id="tokenForm" class="row g-2" autocomplete="off">
-            <?= csrf_field() ?>
-            <input type="hidden" name="event_id" value="<?= $eventId ?>">
-            <div class="col-md-8">
-              <label for="qr_token" class="form-label small text-muted mb-1">Masukkan Token/QR Code (fallback)</label>
-              <input type="text" name="qr_code" id="qr_token" class="form-control"
-                     placeholder="EVENT_<?= $eventId ?>_PRESENTER_XXXX"
-                     <?= (!$hasVerifiedPayment || $alreadyAttend || !$canAttend) ? 'disabled' : '' ?>>
             </div>
-            <div class="col-md-4 d-flex align-items-end">
-              <button type="submit" class="btn btn-outline-primary w-100"
-                      <?= (!$hasVerifiedPayment || $alreadyAttend || !$canAttend) ? 'disabled' : '' ?>>
-                <i class="bi bi-arrow-right-circle me-1"></i>Kirim Token
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <?php if (!$attended && $window['is_open']): ?>
+              <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#tokenModal">
+                <i class="bi bi-input-cursor-text"></i> Masukkan Token & Absen
               </button>
+            <?php else: ?>
+              <button class="btn btn-outline-secondary" disabled>
+                <i class="bi bi-input-cursor-text"></i> Masukkan Token
+              </button>
+            <?php endif; ?>
+            <a href="/qr" target="_blank" class="btn btn-outline-primary">
+              <i class="bi bi-qr-code-scan"></i> Buka Scanner
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- INFO EVENT -->
+      <div class="row g-3">
+        <div class="col-12 col-lg-8">
+          <div class="card shadow-sm h-100">
+            <div class="card-header bg-light"><strong><i class="bi bi-info-circle"></i> Informasi Event</strong></div>
+            <div class="card-body">
+              <h5 class="mb-2"><?= esc($event['title'] ?? '-') ?></h5>
+              <div class="text-muted small mb-3"><?= nl2br(esc($event['description'] ?? '-')) ?></div>
+              <div class="row gy-2">
+                <div class="col-12 col-md-6">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-calendar-event text-primary"></i>
+                    <div>
+                      <div class="small text-muted">Tanggal</div>
+                      <div class="fw-semibold">
+                        <?= $event['event_date'] ? date('d M Y', strtotime($event['event_date'])) : '-' ?>
+                        <?= $event['event_time'] ? ' · '.esc($event['event_time']) : '' ?>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-12 col-md-6">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-geo-alt text-primary"></i>
+                    <div>
+                      <div class="small text-muted">Lokasi</div>
+                      <div class="fw-semibold"><?= esc($event['location'] ?? '-') ?></div>
+                    </div>
+                  </div>
+                </div>
+                <?php if (!empty($event['zoom_link'])): ?>
+                <div class="col-12">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-camera-video text-primary"></i>
+                    <div>
+                      <div class="small text-muted">Link Zoom</div>
+                      <a href="<?= esc($event['zoom_link']) ?>" target="_blank" class="fw-semibold">Buka Tautan</a>
+                    </div>
+                  </div>
+                </div>
+                <?php endif; ?>
+              </div>
             </div>
-          </form>
+          </div>
+        </div>
 
-          <div id="tokenAlert" class="mt-3" style="display:none;"></div>
+        <!-- INFO BAYAR -->
+        <div class="col-12 col-lg-4">
+          <div class="card shadow-sm h-100">
+            <div class="card-header bg-light"><strong><i class="bi bi-receipt"></i> Status Pembayaran</strong></div>
+            <div class="card-body">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-success">Verified</span>
+                <div class="small text-muted">Anda berhak melakukan absensi.</div>
+              </div>
+              <div class="small text-muted">Metode</div>
+              <div class="fw-semibold mb-2"><?= esc($payment['metode'] ?? '-') ?></div>
+
+              <div class="small text-muted">Jumlah</div>
+              <div class="fw-semibold">Rp <?= number_format((int)($payment['jumlah'] ?? 0), 0, ',', '.') ?></div>
+            </div>
+          </div>
         </div>
       </div>
+
     </div>
-
-    <!-- Kolom info event -->
-    <div class="col-lg-5">
-      <div class="card">
-        <div class="card-body">
-          <h6 class="text-muted text-uppercase mb-3">Info Event</h6>
-
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="text-muted">Tanggal</span>
-            <strong><?= $eventDate ? date('d M Y', strtotime($eventDate)) : '-' ?></strong>
-          </div>
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="text-muted">Waktu</span>
-            <strong><?= $eventTime ? esc($eventTime) : '-' ?></strong>
-          </div>
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="text-muted">Tempat</span>
-            <strong><?= esc($venue) ?></strong>
-          </div>
-          <hr>
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="text-muted">Mode Presenter</span>
-            <span class="badge bg-primary"><?= $presenterMode ?></span>
-          </div>
-          <div class="d-flex justify-content-between align-items-center">
-            <span class="text-muted">Mode Audience</span>
-            <span class="badge bg-secondary"><?= ucfirst($audienceMode) ?></span>
-          </div>
-        </div>
-      </div>
-
-      <div class="card mt-3">
-        <div class="card-body">
-          <h6 class="text-muted text-uppercase mb-3">Panduan Cepat</h6>
-          <ol class="small mb-0">
-            <li>Buka <em>Scanner QR</em> atau masukkan token pada kotak di kiri.</li>
-            <li>Pastikan Anda berada di lokasi event (offline).</li>
-            <li>Setelah berhasil, status absensi akan berubah menjadi <strong>Hadir</strong>.</li>
-          </ol>
-        </div>
-      </div>
-    </div>
-  </div>
+  </main>
 </div>
 
+<!-- MODAL TOKEN -->
+<div class="modal fade" id="tokenModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <form action="/presenter/absensi/scan" method="POST" id="tokenForm">
+      <?= csrf_field() ?>
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-input-cursor-text me-2"></i> Masukkan Token</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="event_id" value="<?= (int)($event['id'] ?? 0) ?>">
+        <div class="mb-2">
+          <label class="form-label">Token Kehadiran <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" name="token" required placeholder="Masukkan token dari panitia">
+          <div class="form-text">Diberikan panitia saat sesi berlangsung.</div>
+        </div>
+        <div class="alert alert-info small mb-0">
+          Window absensi: <strong><?= $startText ?> - <?= $endText ?></strong>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i> Konfirmasi & Absen</button>
+      </div>
+    </form>
+  </div></div>
+</div>
+
+<?= $this->include('partials/footer') ?>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-(function(){
-  const form   = document.getElementById('tokenForm');
-  const alertB = document.getElementById('tokenAlert');
-
-  if (!form) return;
-
-  form.addEventListener('submit', async function(e){
+  // Konfirmasi sebelum submit token
+  document.getElementById('tokenForm')?.addEventListener('submit', function(e){
     e.preventDefault();
-
-    const fd = new FormData(form);
-    // kirim hanya qr_code (endpoint presenter/absensi/scan cuma butuh itu)
-    const payload = new URLSearchParams();
-    payload.append('qr_code', fd.get('qr_code') || '');
-    // CSRF (kalau aktif)
-    <?php if (function_exists('csrf_token')): ?>
-      payload.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
-    <?php endif; ?>
-
-    alertB.style.display = 'none';
-    alertB.className = '';
-    alertB.innerHTML = '';
-
-    try{
-      const res = await fetch('<?= $ajaxScan ?>', {
-        method: 'POST',
-        headers: { 'X-Requested-With':'XMLHttpRequest', 'Content-Type':'application/x-www-form-urlencoded' },
-        body: payload.toString()
-      });
-      const data = await res.json();
-
-      if (data.success){
-        alertB.className = 'alert alert-success';
-        alertB.innerHTML = `<i class="bi bi-check2-circle me-1"></i>${data.message || 'Berhasil'}`
-          + (data.data?.attendance_time ? ` · ${data.data.attendance_date} ${data.data.attendance_time}` : '');
-        alertB.style.display = 'block';
-
-        // disable input & tombol
-        form.querySelector('#qr_token').setAttribute('disabled','disabled');
-        form.querySelector('button[type="submit"]').setAttribute('disabled','disabled');
-
-        // refresh halaman biar status "Sudah Absen" tampil
-        setTimeout(()=> location.reload(), 1200);
-      } else {
-        alertB.className = 'alert alert-danger';
-        alertB.innerHTML = `<i class="bi bi-x-circle me-1"></i>${data.message || 'Gagal memproses token.'}`;
-        alertB.style.display = 'block';
-      }
-    } catch(err){
-      alertB.className = 'alert alert-danger';
-      alertB.innerHTML = `<i class="bi bi-x-circle me-1"></i>Terjadi kesalahan jaringan.`;
-      alertB.style.display = 'block';
-    }
+    Swal.fire({
+      title: 'Kirim token absensi?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Kirim',
+      cancelButtonText: 'Batal'
+    }).then(r=>{ if (r.isConfirmed) this.submit(); });
   });
-})();
+
+  // Flash helper (opsional, kalau partials/alerts kamu belum SweetAlert)
+  <?php if (session('success')): ?>
+    Swal.fire({ icon:'success', title:'Berhasil', text:'<?= esc(session('success')) ?>', timer:2400, showConfirmButton:false });
+  <?php endif; ?>
+  <?php if (session('error')): ?>
+    Swal.fire({ icon:'error', title:'Gagal', text:'<?= esc(session('error')) ?>' });
+  <?php endif; ?>
+  <?php if (session('info')): ?>
+    Swal.fire({ icon:'info', title:'Info', text:'<?= esc(session('info')) ?>' });
+  <?php endif; ?>
 </script>
+
+<style>
+  :root{
+    --primary-color:#2563eb; --info-color:#06b6d4; --success-color:#10b981; --secondary:#64748b;
+  }
+  body{ background:#f8fafc; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+  .header-section.header-blue{
+    background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+    color:#fff; padding:22px; border-radius:14px; box-shadow:0 8px 28px rgba(0,0,0,.12);
+  }
+  .welcome-text{ font-size:1.35rem; font-weight:500; }
+
+  .status-dot{ width:12px; height:12px; border-radius:50%; }
+  .status-dot.bg-success{ background:#16a34a; }
+  .status-dot.bg-primary{ background:#2563eb; }
+  .status-dot.bg-secondary{ background:#94a3b8; }
+
+  .card { border-radius:14px; }
+  .btn { border-radius:10px; }
+  .badge{ border-radius:8px; }
+</style>

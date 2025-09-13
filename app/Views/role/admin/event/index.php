@@ -1,10 +1,16 @@
 <?php
+use CodeIgniter\I18n\Time;
+
 $title  = $title ?? 'Kelola Event';
 $stats  = $stats ?? [
   'total_events'=>0,'active_events'=>0,'verified_registrations'=>0,'total_revenue'=>0,
 ];
 $events = $events ?? [];
 helper(['number','csrf']);
+
+// min tanggal event = besok (Asia/Jakarta)
+$tz           = 'Asia/Jakarta';
+$minEventDate = Time::now($tz)->addDays(1)->toDateString();
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
@@ -182,7 +188,8 @@ helper(['number','csrf']);
         <div class="row">
           <div class="col-md-6 mb-3">
             <label class="form-label">Tanggal Event <span class="text-danger">*</span></label>
-            <input type="date" class="form-control" name="event_date" required>
+            <!-- PATCH: min besok -->
+            <input type="date" class="form-control" name="event_date" required min="<?= esc($minEventDate) ?>">
           </div>
           <div class="col-md-6 mb-3">
             <label class="form-label">Waktu Event <span class="text-danger">*</span></label>
@@ -331,7 +338,7 @@ async function fetchJSON(url, options = {}) {
   const ct = res.headers.get('content-type') || '';
   if (!ct.includes('application/json')) {
     const text = await res.text();
-    throw new Error('Server mengirim respons non-JSON. Cek sesi/CSRF.'); // hindari Unexpected token '<'
+    throw new Error('Server mengirim respons non-JSON. Cek sesi/CSRF.');
   }
   return res.json();
 }
@@ -366,6 +373,8 @@ document.addEventListener('DOMContentLoaded', function(){
   initCurrencyInputs(document);
   setupFormHandlers();
   handleFormatChange();
+  // PATCH: pastikan min tanggal terpasang saat DOM siap / form dinamis
+  setMinEventDateInputs();
 });
 
 function setupFormHandlers(){
@@ -497,7 +506,7 @@ function populateEditForm(event){
       <label class="form-label">Audience (Online) *</label>
       <div class="input-group">
         <span class="input-group-text">Rp</span>
-        <input type="text" class="form-control currency" name="audience_fee_online" value="${fmt(event.audience_fee_online)}" required>
+        <input type="text" class="form-control currency" name="audience_fee_online" value="\${fmt(event.audience_fee_online)}" required>
       </div>
     </div>` : '';
 
@@ -506,7 +515,7 @@ function populateEditForm(event){
       <label class="form-label">Audience (Offline) *</label>
       <div class="input-group">
         <span class="input-group-text">Rp</span>
-        <input type="text" class="form-control currency" name="audience_fee_offline" value="${fmt(event.audience_fee_offline)}" required>
+        <input type="text" class="form-control currency" name="audience_fee_offline" value="\${fmt(event.audience_fee_offline)}" required>
       </div>
     </div>` : '';
 
@@ -544,7 +553,9 @@ function populateEditForm(event){
     <div class="row">
       <div class="col-md-6 mb-3">
         <label class="form-label">Tanggal Event *</label>
-        <input type="date" class="form-control" name="event_date" value="${event.event_date}" required>
+        <!-- PATCH: min besok utk edit -->
+        <input type="date" class="form-control" name="event_date" value="${event.event_date}" required
+               min="${new Date(Date.now()+86400000).toISOString().slice(0,10)}">
       </div>
       <div class="col-md-6 mb-3">
         <label class="form-label">Waktu Event *</label>
@@ -628,5 +639,24 @@ function deleteEvent(id){
     icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', cancelButtonColor:'#3085d6',
     confirmButtonText:'Ya, Hapus!', cancelButtonText:'Batal'
   }).then(r=>{ if(r.isConfirmed) makeRequest(`<?= base_url("admin/event/delete") ?>/${id}`, 'hapus event'); });
+}
+
+/* PATCH: enforce min besok utk semua input tanggal (add & edit dinamis) */
+function setMinEventDateInputs(){
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0,10);
+
+  // form tambah
+  const addDate = document.querySelector('#addEventForm input[name="event_date"]');
+  if (addDate) addDate.setAttribute('min', tomorrow);
+
+  // form edit (dinamis)
+  const editContainer = document.getElementById('editFormContent');
+  if (editContainer) {
+    const mo = new MutationObserver(() => {
+      const editDate = document.querySelector('#editEventForm input[name="event_date"]');
+      if (editDate) editDate.setAttribute('min', tomorrow);
+    });
+    mo.observe(editContainer, { childList: true, subtree: true });
+  }
 }
 </script>

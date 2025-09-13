@@ -470,22 +470,53 @@ class Event extends BaseController
 
 
     private function validateEventDates()
-    {
-        $eventDate = $this->request->getPost('event_date');
-        $regDL     = $this->request->getPost('registration_deadline');
-        $absDL     = $this->request->getPost('abstract_deadline');
+{
+    // Pastikan semua perbandingan tanggal pakai zona waktu Jakarta
+    $tz        = new \DateTimeZone('Asia/Jakarta');
 
-        if (strtotime($eventDate) <= time()) {
-            return ['valid' => false, 'message' => 'Tanggal event harus di masa depan.'];
+    $eventDate = (string) $this->request->getPost('event_date');
+    $regDL     = $this->request->getPost('registration_deadline');
+    $absDL     = $this->request->getPost('abstract_deadline');
+
+    // Normalisasi: event_date hanya bertipe 'Y-m-d'
+    $eventDT = \DateTime::createFromFormat('Y-m-d', $eventDate, $tz);
+    if (!$eventDT) {
+        return ['valid' => false, 'message' => 'Format tanggal event tidak valid.'];
+    }
+
+    // "Hari ini" di Jakarta (jam 00:00) — kita larang event untuk tanggal ini
+    $today = new \DateTime('today', $tz);
+
+    // Larang hari ini & masa lalu
+    if ($eventDT <= $today) {
+        return ['valid' => false, 'message' => 'Tanggal event tidak boleh hari ini atau di masa lalu.'];
+    }
+
+    // Jika ada deadline pendaftaran/abstrak, pastikan sebelum tanggal event
+    // Catatan: input bertipe datetime-local, jadi kita parse fleksibel dengan strtotime
+    if (!empty($regDL)) {
+        $regTS = strtotime($regDL);
+        if ($regTS === false) {
+            return ['valid' => false, 'message' => 'Format batas pendaftaran tidak valid.'];
         }
-        if ($regDL && strtotime($regDL) >= strtotime($eventDate)) {
+        if ($regTS >= $eventDT->getTimestamp()) {
             return ['valid' => false, 'message' => 'Batas pendaftaran harus sebelum tanggal event.'];
         }
-        if ($absDL && strtotime($absDL) >= strtotime($eventDate)) {
+    }
+
+    if (!empty($absDL)) {
+        $absTS = strtotime($absDL);
+        if ($absTS === false) {
+            return ['valid' => false, 'message' => 'Format batas submit abstrak tidak valid.'];
+        }
+        if ($absTS >= $eventDT->getTimestamp()) {
             return ['valid' => false, 'message' => 'Batas submit abstrak harus sebelum tanggal event.'];
         }
-        return ['valid' => true];
     }
+
+    return ['valid' => true];
+}
+
 
     private function checkEventDependencies($eventId)
     {

@@ -1,269 +1,212 @@
 <?php
-
 namespace App\Controllers\Role\Presenter;
 
 use App\Controllers\BaseController;
-use App\Models\AbstrakModel;
 use App\Models\EventModel;
+use App\Models\AbstrakModel;
 use App\Models\KategoriAbstrakModel;
-use App\Models\ReviewModel;
 
 class Abstrak extends BaseController
 {
-    protected $abstrakModel;
-    protected $eventModel;
-    protected $kategoriModel;
-    protected $reviewModel;
-    protected $db;
+    protected EventModel $eventModel;
+    protected AbstrakModel $absModel;
+    protected KategoriAbstrakModel $katModel;
 
     public function __construct()
     {
-        $this->abstrakModel  = new AbstrakModel();
-        $this->eventModel    = new EventModel();
-        $this->kategoriModel = new KategoriAbstrakModel();
-        $this->reviewModel   = new ReviewModel();
-        $this->db            = \Config\Database::connect();
+        $this->eventModel = new EventModel();
+        $this->absModel   = new AbstrakModel();
+        $this->katModel   = new KategoriAbstrakModel();
     }
 
+    /** INDEX */
     public function index()
     {
-        $userId  = (int) session('id_user');
-        $eventId = (int) ($this->request->getGet('event_id') ?? 0);
+        $userId = (int) session()->get('id_user');
 
-        // pakai method model (selaras admin style)
-        $abstracts  = [];
-        $available  = [];
-        $categories = [];
+        // Event yang masih bisa upload abstrak (dan user belum punya abstrak aktif di event tsb)
+        $availableEvents = $this->eventModel->getAvailableEventsForUser($userId);
 
-        try { $abstracts  = $this->abstrakModel->getByUserWithDetails($userId); } 
-        catch (\Throwable $e) { log_message('error','abstrak.index[getByUserWithDetails] '.$e->getMessage()); }
+        // Abstrak milik user + relasi (event/kategori)
+        $all = $this->absModel->getByUserWithDetails($userId);
 
-        try { $available  = $this->eventModel->getAvailableEventsForUser($userId); }
-        catch (\Throwable $e) { log_message('error','abstrak.index[getAvailableEventsForUser] '.$e->getMessage()); }
+        // Kelompokkan
+        $aktif   = []; // menunggu, sedang_direview, revisi
+        $riwayat = []; // diterima, ditolak
+        foreach ($all as $row) {
+            $st = strtolower($row['status'] ?? 'menunggu');
+            if (in_array($st, ['menunggu','sedang_direview','revisi'], true)) {
+                $aktif[] = $row;
+            } else { // 'diterima' / 'ditolak'
+                $riwayat[] = $row;
+            }
+        }
 
-        try { $categories = $this->kategoriModel->findAll(); }
-        catch (\Throwable $e) { log_message('error','abstrak.index[categories] '.$e->getMessage()); }
+        // KPI kecil
+        $kpi = [
+            'total'           => count($all),
+            'menunggu'        => count(array_filter($all, fn($r)=>strtolower($r['status'])==='menunggu')),
+            'sedang_direview' => count(array_filter($all, fn($r)=>strtolower($r['status'])==='sedang_direview')),
+            'revisi'          => count(array_filter($all, fn($r)=>strtolower($r['status'])==='revisi')),
+            'diterima'        => count(array_filter($all, fn($r)=>strtolower($r['status'])==='diterima')),
+            'ditolak'         => count(array_filter($all, fn($r)=>strtolower($r['status'])==='ditolak')),
+        ];
 
         return view('role/presenter/abstrak/index', [
-            'title'             => 'Manajemen Abstrak',
-            'abstracts'         => $abstracts,
-            'available_events'  => $available,
-            'categories'        => $categories,
-            'selected_event_id' => $eventId,
+            'title'           => 'Abstrak',
+            'availableEvents' => $availableEvents,
+            'aktif'           => $aktif,
+            'riwayat'         => $riwayat,
+            'kpi'             => $kpi,
         ]);
     }
 
-    public function upload()
+    /** FORM UPLOAD BARU */
+    public function create(int $eventId)
     {
-        $userId = (int) session('id_user');
-        if ($this->request->getMethod() !== 'post') {
-            return redirect()->to('presenter/abstrak');
-        }
-
-        $rules = [
-            'event_id'     => 'required|integer',
-            'id_kategori'  => 'required|integer',
-            'judul'        => 'required|min_length[5]|max_length[255]',
-            'file_abstrak' => [
-                'rules'  => 'uploaded[file_abstrak]|max_size[file_abstrak,10240]|ext_in[file_abstrak,pdf,doc,docx]',
-                'errors' => [
-                    'uploaded' => 'File abstrak wajib diupload.',
-                    'max_size' => 'Maksimal 10MB.',
-                    'ext_in'   => 'Format harus PDF/DOC/DOCX.'
-                ]
-            ],
-        ];
-        if (!$this->validate($rules)) {
-            return $this->respondFormError('Validasi gagal.', $this->validator->getErrors());
-        }
-
-        $eventId    = (int) $this->request->getPost('event_id');
-        $kategoriId = (int) $this->request->getPost('id_kategori');
-        $judul      = trim((string) $this->request->getPost('judul'));
-        $file       = $this->request->getFile('file_abstrak');
-        $revisionId = (int) ($this->request->getPost('revision_id') ?? 0);
-
-        // cek event & window submit
-        $event = $this->eventModel->find($eventId);
+        $userId = (int) session()->get('id_user');
+        $event  = $this->eventModel->find($eventId);
         if (!$event) {
-            return $this->respondFormError('Event tidak ditemukan.');
+            return redirect()->to('/presenter/abstrak')->with('error','Event tidak ditemukan.');
         }
+
+        // Cek event masih open untuk abstract
         if (!$this->eventModel->isAbstractSubmissionOpen($eventId)) {
-            return $this->respondFormError('Periode submission abstrak sudah ditutup.');
+            return redirect()->to('/presenter/abstrak')->with('error','Pengumpulan abstrak untuk event ini sudah ditutup.');
         }
 
-        // cek existing
-        $existing = $this->abstrakModel
-            ->where('id_user', $userId)
+        // Larang upload baru jika sudah ada abstrak aktif (menunggu/sedang_direview)
+        $hasActive = $this->absModel->where('id_user', $userId)
             ->where('event_id', $eventId)
-            ->orderBy('tanggal_upload', 'DESC')
-            ->first();
+            ->whereIn('status', ['menunggu','sedang_direview'])
+            ->countAllResults() > 0;
 
-        if ($existing && !$revisionId && !in_array($existing['status'], ['ditolak', 'revisi'], true)) {
-            return $this->respondFormError('Anda sudah mengirim abstrak untuk event ini.');
+        if ($hasActive) {
+            return redirect()->to('/presenter/abstrak')->with('error','Anda telah mengirim abstrak dan sedang menunggu review.');
         }
 
-        $this->db->transStart();
-        try {
-            // === simpan file via Model (standar admin: uploads/abstrak/) ===
-            $storedName = $this->abstrakModel->moveUploadedFile($file, $userId, $eventId);
+        $kategori = $this->katModel->orderBy('nama_kategori','ASC')->findAll();
 
-            $nowWIB = (new \DateTime('now', new \DateTimeZone('Asia/Jakarta')))->format('Y-m-d H:i:s');
-
-            $payload = [
-                'id_user'        => $userId,
-                'event_id'       => $eventId,
-                'id_kategori'    => $kategoriId,
-                'judul'          => $judul,
-                'file_abstrak'   => $storedName,
-                'status'         => 'menunggu',
-                'tanggal_upload' => $nowWIB,
-                'revisi_ke'      => 0,
-            ];
-
-            // === flow tetap: revisi eksplisit, upgrade kiriman lama, atau insert baru ===
-            if ($revisionId) {
-                $old = $this->abstrakModel
-                    ->where('id_abstrak', $revisionId)
-                    ->where('id_user', $userId)
-                    ->first();
-                if (!$old) throw new \RuntimeException('Abstrak revisi tidak ditemukan.');
-
-                $payload['revisi_ke'] = (int) $old['revisi_ke'] + 1;
-                $this->abstrakModel->update($revisionId, $payload);
-                $abstrakId = $revisionId;
-
-            } elseif ($existing && in_array($existing['status'], ['ditolak', 'revisi'], true)) {
-                $payload['revisi_ke'] = (int) $existing['revisi_ke'] + 1;
-                $this->abstrakModel->update($existing['id_abstrak'], $payload);
-                $abstrakId = (int) $existing['id_abstrak'];
-
-            } else {
-                $this->abstrakModel->insert($payload);
-                $abstrakId = (int) $this->abstrakModel->getInsertID();
-            }
-
-            $this->db->transComplete();
-            if ($this->db->transStatus() === false) {
-                throw new \RuntimeException('Transaksi gagal.');
-            }
-
-            return $this->respondFormSuccess(
-                'Abstrak berhasil diupload. Silakan tunggu proses review.',
-                site_url('presenter/abstrak/detail/'.$abstrakId)
-            );
-
-        } catch (\Throwable $e) {
-            $this->db->transRollback();
-            log_message('error', 'abstrak.upload '.$e->getMessage());
-            return $this->respondFormError('Terjadi kesalahan: '.$e->getMessage());
-        }
+        return view('role/presenter/abstrak/create', [
+            'title'    => 'Kirim Abstrak',
+            'event'    => $event,
+            'kategori' => $kategori,
+        ]);
     }
 
-    public function detail($id)
+    /** SIMPAN UPLOAD BARU */
+    public function store()
     {
-        $userId = (int) session('id_user');
+        $userId   = (int) session()->get('id_user');
+        $eventId  = (int) $this->request->getPost('event_id');
+        $idKat    = (int) $this->request->getPost('id_kategori');
+        $judul    = trim((string)$this->request->getPost('judul'));
 
-        try {
-            // ambil detail via Model (selaras admin)
-            $abstract = $this->abstrakModel->getDetailWithRelationsForUser((int)$id, $userId);
-            if (!$abstract) {
-                return redirect()->to('presenter/abstrak')->with('error', 'Abstrak tidak ditemukan.');
-            }
-
-            $reviews    = $this->reviewModel->getByAbstrakWithReviewer((int)$id);
-            $event      = $this->eventModel->find($abstract['event_id']);
-            $categories = $this->kategoriModel->findAll();
-
-        } catch (\Throwable $e) {
-            log_message('error', 'abstrak.detail '.$e->getMessage());
-            return redirect()->to('presenter/abstrak')->with('error', 'Gagal memuat detail abstrak.');
+        if (!$eventId || !$idKat || !$judul) {
+            return redirect()->back()->withInput()->with('error','Lengkapi data.');
         }
 
-        $canRevise = in_array($abstract['status'], ['revisi', 'ditolak'], true)
-                  && $this->eventModel->isAbstractSubmissionOpen($abstract['event_id']);
+        // Re-check gate
+        if (!$this->eventModel->isAbstractSubmissionOpen($eventId)) {
+            return redirect()->to('/presenter/abstrak')->with('error','Pengumpulan abstrak ditutup.');
+        }
+        $hasActive = $this->absModel->where('id_user', $userId)
+            ->where('event_id', $eventId)
+            ->whereIn('status', ['menunggu','sedang_direview'])
+            ->countAllResults() > 0;
+        if ($hasActive) {
+            return redirect()->to('/presenter/abstrak')->with('error','Anda telah mengirim abstrak dan sedang menunggu review.');
+        }
+
+        $file = $this->request->getFile('file_abstrak');
+        try {
+            $savedName = $this->absModel->moveUploadedFile($file, $userId, $eventId);
+        } catch (\Throwable $e) {
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+
+        $this->absModel->insert([
+            'id_user'        => $userId,
+            'id_kategori'    => $idKat,
+            'event_id'       => $eventId,
+            'judul'          => $judul,
+            'file_abstrak'   => $savedName,
+            'status'         => 'menunggu',
+            'tanggal_upload' => date('Y-m-d H:i:s'),
+            'revisi_ke'      => 0,
+        ]);
+
+        return redirect()->to('/presenter/abstrak')
+            ->with('success','Abstrak terkirim. Status: menunggu review.');
+    }
+
+    /** DETAIL */
+    public function detail(int $id)
+    {
+        $userId = (int) session()->get('id_user');
+        $row = $this->absModel->getDetailWithRelationsForUser($id, $userId);
+        if (!$row) {
+            return redirect()->to('/presenter/abstrak')->with('error','Data tidak ditemukan.');
+        }
+
+        // badge
+        $st = strtolower($row['status'] ?? 'menunggu');
+        $badge = match ($st) {
+            'menunggu'         => 'secondary',
+            'sedang_direview'  => 'warning',
+            'revisi'           => 'info',
+            'diterima'         => 'success',
+            'ditolak'          => 'danger',
+            default            => 'secondary'
+        };
 
         return view('role/presenter/abstrak/detail', [
-            'title'      => 'Detail Abstrak',
-            'abstract'   => $abstract,
-            'reviews'    => $reviews,
-            'event'      => $event,
-            'categories' => $categories,
-            'can_revise' => $canRevise,
+            'title' => 'Detail Abstrak',
+            'data'  => $row,
+            'badge' => $badge,
         ]);
     }
 
-    public function download($file)
+    /** UPLOAD REVISI (hanya saat status revisi) */
+    public function uploadRevisi(int $id)
     {
-        $userId = (int) session('id_user');
+        $userId = (int) session()->get('id_user');
 
-        $row = $this->abstrakModel
-            ->where('id_user', $userId)
-            ->where('file_abstrak', $file)
-            ->first();
-
+        $row = $this->absModel->where('id_abstrak', $id)
+                              ->where('id_user', $userId)
+                              ->first();
         if (!$row) {
-            return redirect()->to('presenter/abstrak')->with('error', 'File tidak ditemukan / tidak berhak.');
+            return redirect()->to('/presenter/abstrak')->with('error','Abstrak tidak ditemukan.');
+        }
+        if (strtolower($row['status']) !== 'revisi') {
+            return redirect()->to('/presenter/abstrak/detail/'.$id)->with('error','Hanya dapat upload revisi saat status revisi.');
         }
 
-        // standarisasi path seperti admin (pakai 'abstrak', fallback ke legacy 'abstraks')
-        $possiblePaths = [
-            WRITEPATH.'uploads/abstrak/'.$file,
-            FCPATH  .'uploads/abstrak/'.$file,
-            WRITEPATH.'uploads/abstraks/'.$file, // legacy
-            FCPATH  .'uploads/abstraks/'.$file, // legacy
-        ];
-
-        foreach ($possiblePaths as $p) {
-            if (is_file($p)) {
-                return $this->response->download($p, null)->setFileName($file);
-            }
-        }
-        return redirect()->to('presenter/abstrak')->with('error', 'File tidak ada di server.');
-    }
-
-    public function status()
-    {
-        if (!$this->request->isAJAX()) {
-            return redirect()->to('presenter/abstrak');
-        }
-
-        $userId = (int) session('id_user');
-
+        $file = $this->request->getFile('file_abstrak');
         try {
-            $rows = $this->abstrakModel->getByUserWithDetails($userId);
-            $out  = [];
-            foreach ($rows as $r) {
-                $out[] = [
-                    'id'           => (int) $r['id_abstrak'],
-                    'title'        => $r['judul'],
-                    'event'        => $r['event_title'],
-                    'status'       => $r['status'],
-                    'upload_date'  => $r['tanggal_upload'],
-                    'revision'     => (int) $r['revisi_ke'],
-                ];
-            }
-            return $this->response->setJSON(['success'=>true,'data'=>$out]);
+            $savedName = $this->absModel->moveUploadedFile($file, $userId, (int)$row['event_id']);
         } catch (\Throwable $e) {
-            log_message('error','abstrak.status '.$e->getMessage());
-            return $this->response->setJSON(['success'=>false,'message'=>'Gagal memuat status.']);
+            return redirect()->back()->with('error', $e->getMessage());
         }
+
+        $this->absModel->update($id, [
+            'file_abstrak'   => $savedName,
+            'status'         => 'menunggu',
+            'tanggal_upload' => date('Y-m-d H:i:s'),
+            'revisi_ke'      => (int)($row['revisi_ke'] ?? 0) + 1,
+        ]);
+
+        return redirect()->to('/presenter/abstrak/detail/'.$id)->with('success','File revisi terkirim. Status kembali menunggu review.');
     }
 
-    /* ==== helpers (unchanged API) ==== */
-    private function respondFormError(string $msg, $errors = null)
+    /** DOWNLOAD FILE */
+    public function download(string $segment)
     {
-        if ($this->request->isAJAX()) {
-            return $this->response->setJSON(['success'=>false,'message'=>$msg,'errors'=>$errors]);
+        // keamanan sederhana: hanya file di folder abstrak
+        $path = WRITEPATH.'uploads/abstrak/'.basename($segment);
+        if (!is_file($path)) {
+            return redirect()->back()->with('error','File tidak ditemukan.');
         }
-        return redirect()->back()->withInput()->with('error', $msg);
-    }
-
-    private function respondFormSuccess(string $msg, string $redirectUrl)
-    {
-        if ($this->request->isAJAX()) {
-            return $this->response->setJSON(['success'=>true,'message'=>$msg,'redirect_url'=>$redirectUrl]);
-        }
-        return redirect()->to($redirectUrl)->with('success', $msg);
+        return $this->response->download($path, null);
     }
 }
