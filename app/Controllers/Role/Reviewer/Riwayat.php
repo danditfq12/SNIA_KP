@@ -18,14 +18,29 @@ class Riwayat extends BaseController
     {
         $idReviewer = session('id_user');
 
-        $reviews = $this->reviewModel
-                        ->select('review.*, abstrak.judul, users.nama_lengkap')
-                        ->join('abstrak', 'abstrak.id_abstrak = review.id_abstrak')
-                        ->join('users', 'users.id_user = abstrak.id_user')
-                        ->where('review.id_reviewer', $idReviewer)
-                        ->orderBy('review.tanggal_review', 'DESC')
-                        ->findAll();
+        if (!$idReviewer) {
+            return redirect()->to('auth/login');
+        }
 
-        return view('role/reviewer/riwayat', ['reviews' => $reviews]);
+        // ✅ Fixed: Include nama_kategori yang dibutuhkan view
+        $riwayat = $this->reviewModel
+            ->select('
+                review.*, 
+                abstrak.judul, 
+                users.nama_lengkap,
+                kategori_abstrak.nama_kategori
+            ')
+            ->join('abstrak', 'abstrak.id_abstrak = review.id_abstrak')
+            ->join('users', 'users.id_user = abstrak.id_user')
+            ->join('kategori_abstrak', 'kategori_abstrak.id_kategori = abstrak.id_kategori', 'left')
+            ->where('review.id_reviewer', $idReviewer)
+            ->where('review.keputusan IS NOT NULL') // hanya yang sudah di-review
+            ->orderBy('review.tanggal_review', 'DESC')
+            ->findAll();
+
+        return view('role/reviewer/riwayat', [
+            'title'   => 'Riwayat Review',
+            'riwayat' => $riwayat
+        ]);
     }
 }
