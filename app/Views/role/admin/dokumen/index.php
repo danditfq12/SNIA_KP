@@ -434,21 +434,31 @@ $current_tipe  = $current_tipe  ?? '';
     dt.on('draw', ()=>initTooltips(document.getElementById('content')));
   });
 
-  // ===== Dependent selects & form action =====
+  // ===== LOA: Only for Presenters =====
   $('#loaEventId').on('change', function(){
     const id=$(this).val(), $sel=$('#loaUserId');
+    console.log('LOA Event ID selected:', id);
+    
     $sel.html('<option value="">Loading...</option>').prop('disabled', true);
     if(id){
       $.get('<?= site_url('admin/dokumen/getVerifiedPresenters/') ?>'+id)
         .done(res=>{
+          console.log('LOA Response:', res);
           $sel.prop('disabled', false);
           if(res.status==='success' && (res.data||[]).length){
             $sel.html('<option value="">-- Pilih Presenter --</option>');
-            res.data.forEach(u=> $sel.append(`<option value="${u.id_user}">${u.nama_lengkap} (${u.email})</option>`));
+            res.data.forEach(user => {
+              const participationType = user.participation_type ? ` (${user.participation_type})` : '';
+              $sel.append(`<option value="${user.id_user}">${user.nama_lengkap} (${user.email})${participationType}</option>`);
+            });
           }else{
+            console.log('No verified presenters found');
             $sel.html('<option value="">Tidak ada presenter yang memenuhi syarat</option>');
           }
-        }).fail(()=>{ $sel.prop('disabled', false).html('<option value="">Gagal memuat</option>'); });
+        }).fail((xhr, status, error)=>{
+          console.error('LOA Request failed:', error, xhr.responseText);
+          $sel.prop('disabled', false).html('<option value="">Gagal memuat data presenter</option>');
+        });
       $('#loaForm').attr('action','<?= site_url('admin/dokumen/uploadLoa/') ?>'+id);
     }else{
       $sel.prop('disabled', false).html('<option value="">-- Pilih Event terlebih dahulu --</option>');
@@ -456,23 +466,54 @@ $current_tipe  = $current_tipe  ?? '';
     }
   });
 
+  // ===== Certificate: For All Attendees (Presenter, Audience Online, Audience Offline) =====
   $('#sertifikatEventId').on('change', function(){
     const id=$(this).val(), $sel=$('#sertifikatUserId');
+    console.log('Certificate Event ID selected:', id);
+    
     $sel.html('<option value="">Loading...</option>').prop('disabled', true);
     if(id){
       $.get('<?= site_url('admin/dokumen/getAttendees/') ?>'+id)
         .done(res=>{
+          console.log('Certificate Response:', res);
           $sel.prop('disabled', false);
           if(res.status==='success' && (res.data||[]).length){
             $sel.html('<option value="">-- Pilih Peserta --</option>');
-            res.data.forEach(u=>{
-              const role = u.role ? ` - ${u.role}` : '';
-              $sel.append(`<option value="${u.id_user}">${u.nama_lengkap} (${u.email})${role}</option>`);
+            
+            // Group by role for better organization
+            const groupedUsers = {};
+            res.data.forEach(user => {
+              const role = user.role || 'unknown';
+              if (!groupedUsers[role]) {
+                groupedUsers[role] = [];
+              }
+              groupedUsers[role].push(user);
+            });
+            
+            // Add options with role grouping
+            Object.keys(groupedUsers).sort().forEach(role => {
+              if (groupedUsers[role].length > 0) {
+                // Add optgroup header
+                const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+                const optgroup = $(`<optgroup label="${roleLabel}"></optgroup>`);
+                
+                groupedUsers[role].forEach(user => {
+                  const participationType = user.participation_type ? ` - ${user.participation_type}` : '';
+                  const roleInfo = user.role ? ` (${user.role}${participationType})` : '';
+                  optgroup.append(`<option value="${user.id_user}">${user.nama_lengkap} - ${user.email}${roleInfo}</option>`);
+                });
+                
+                $sel.append(optgroup);
+              }
             });
           }else{
+            console.log('No attendees found');
             $sel.html('<option value="">Tidak ada peserta yang memenuhi syarat</option>');
           }
-        }).fail(()=>{ $sel.prop('disabled', false).html('<option value="">Gagal memuat</option>'); });
+        }).fail((xhr, status, error)=>{
+          console.error('Certificate Request failed:', error, xhr.responseText);
+          $sel.prop('disabled', false).html('<option value="">Gagal memuat data peserta</option>');
+        });
       $('#sertifikatForm').attr('action','<?= site_url('admin/dokumen/uploadSertifikat/') ?>'+id);
     }else{
       $sel.prop('disabled', false).html('<option value="">-- Pilih Event terlebih dahulu --</option>');
@@ -480,29 +521,318 @@ $current_tipe  = $current_tipe  ?? '';
     }
   });
 
-  // ===== Delete =====
+  // ===== Delete Function =====
   function deleteDocument(id){
     Swal.fire({
-      title:'Hapus Dokumen?', text:'File akan dihapus permanen.',
-      icon:'warning', showCancelButton:true,
-      confirmButtonColor:'#d33', cancelButtonColor:'#6b7280',
-      confirmButtonText:'Ya, Hapus', cancelButtonText:'Batal'
+      title:'Hapus Dokumen?', 
+      text:'File akan dihapus permanen dari server dan database.',
+      icon:'warning', 
+      showCancelButton:true,
+      confirmButtonColor:'#d33', 
+      cancelButtonColor:'#6b7280',
+      confirmButtonText:'Ya, Hapus', 
+      cancelButtonText:'Batal'
     }).then(r=>{
       if(r.isConfirmed){
-        const form=document.createElement('form'); form.method='POST'; form.action='<?= site_url('admin/dokumen/delete/') ?>'+id;
+        const form=document.createElement('form'); 
+        form.method='POST'; 
+        form.action='<?= site_url('admin/dokumen/delete/') ?>'+id;
+        
         <?php if (function_exists('csrf_token')): ?>
-          const i=document.createElement('input'); i.type='hidden'; i.name='<?= csrf_token() ?>'; i.value='<?= csrf_hash() ?>'; form.appendChild(i);
+          const i=document.createElement('input'); 
+          i.type='hidden'; 
+          i.name='<?= csrf_token() ?>'; 
+          i.value='<?= csrf_hash() ?>'; 
+          form.appendChild(i);
         <?php endif; ?>
-        document.body.appendChild(form); form.submit();
+        
+        document.body.appendChild(form); 
+        form.submit();
       }
     });
   }
 
-  // ===== Flash SweetAlert =====
+  // ===== Form Validation Before Submit =====
+  $('#loaForm').on('submit', function(e) {
+    const eventId = $('#loaEventId').val();
+    const userId = $('#loaUserId').val();
+    const file = $('input[name="loa_file"]')[0].files[0];
+    
+    if (!eventId) {
+      e.preventDefault();
+      Swal.fire('Error', 'Pilih event terlebih dahulu.', 'error');
+      return false;
+    }
+    
+    if (!userId) {
+      e.preventDefault();
+      Swal.fire('Error', 'Pilih presenter terlebih dahulu.', 'error');
+      return false;
+    }
+    
+    if (!file) {
+      e.preventDefault();
+      Swal.fire('Error', 'Pilih file LOA untuk diupload.', 'error');
+      return false;
+    }
+    
+    // Check file size (5MB = 5242880 bytes)
+    if (file.size > 5242880) {
+      e.preventDefault();
+      Swal.fire('Error', 'Ukuran file tidak boleh lebih dari 5MB.', 'error');
+      return false;
+    }
+    
+    // Check file extension
+    const allowedExtensions = ['pdf', 'doc', 'docx'];
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    if (!allowedExtensions.includes(fileExtension)) {
+      e.preventDefault();
+      Swal.fire('Error', 'File harus berformat PDF, DOC, atau DOCX.', 'error');
+      return false;
+    }
+  });
+
+  $('#sertifikatForm').on('submit', function(e) {
+    const eventId = $('#sertifikatEventId').val();
+    const userId = $('#sertifikatUserId').val();
+    const file = $('input[name="sertifikat_file"]')[0].files[0];
+    
+    if (!eventId) {
+      e.preventDefault();
+      Swal.fire('Error', 'Pilih event terlebih dahulu.', 'error');
+      return false;
+    }
+    
+    if (!userId) {
+      e.preventDefault();
+      Swal.fire('Error', 'Pilih peserta terlebih dahulu.', 'error');
+      return false;
+    }
+    
+    if (!file) {
+      e.preventDefault();
+      Swal.fire('Error', 'Pilih file sertifikat untuk diupload.', 'error');
+      return false;
+    }
+    
+    // Check file size (5MB = 5242880 bytes)
+    if (file.size > 5242880) {
+      e.preventDefault();
+      Swal.fire('Error', 'Ukuran file tidak boleh lebih dari 5MB.', 'error');
+      return false;
+    }
+    
+    // Check file extension
+    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    if (!allowedExtensions.includes(fileExtension)) {
+      e.preventDefault();
+      Swal.fire('Error', 'File harus berformat PDF, JPG, JPEG, atau PNG.', 'error');
+      return false;
+    }
+  });
+
+  // ===== Bulk Forms Validation =====
+  $('#bulkLoaForm').on('submit', function(e) {
+    const eventId = $('select[name="event_id"]', this).val();
+    if (!eventId) {
+      e.preventDefault();
+      Swal.fire('Error', 'Pilih event untuk generate bulk LOA.', 'error');
+      return false;
+    }
+    
+    // Show confirmation
+    e.preventDefault();
+    Swal.fire({
+      title: 'Generate Bulk LOA?',
+      text: 'LOA akan dibuat untuk semua presenter dengan pembayaran terverifikasi.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#17a2b8',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Ya, Generate',
+      cancelButtonText: 'Batal'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.submit();
+      }
+    });
+  });
+
+  $('#bulkSertifikatForm').on('submit', function(e) {
+    const eventId = $('select[name="event_id"]', this).val();
+    if (!eventId) {
+      e.preventDefault();
+      Swal.fire('Error', 'Pilih event untuk generate bulk sertifikat.', 'error');
+      return false;
+    }
+    
+    // Show confirmation
+    e.preventDefault();
+    Swal.fire({
+      title: 'Generate Bulk Sertifikat?',
+      text: 'Sertifikat akan dibuat untuk semua peserta yang tercatat hadir (presenter, audience online, audience offline).',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#6c757d',
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Ya, Generate',
+      cancelButtonText: 'Batal'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.submit();
+      }
+    });
+  });
+
+  // ===== Show file info when selected =====
+  $('input[type="file"]').on('change', function() {
+    const file = this.files[0];
+    const $parent = $(this).closest('.mb-3');
+    const $info = $parent.find('.file-info');
+    
+    // Remove existing info
+    $info.remove();
+    
+    if (file) {
+      const sizeInMB = (file.size / 1024 / 1024).toFixed(2);
+      const infoHtml = `
+        <div class="file-info mt-2 p-2 bg-light rounded">
+          <small class="text-muted">
+            <i class="bi bi-file-earmark me-1"></i>
+            <strong>${file.name}</strong> (${sizeInMB} MB)
+          </small>
+        </div>
+      `;
+      $(this).after(infoHtml);
+    }
+  });
+
+  // ===== Flash Messages =====
   <?php if (session('success')): ?>
-    Swal.fire({ icon:'success', title:'Berhasil!', text:'<?= esc(session('success')) ?>', timer:2600, showConfirmButton:false });
+    Swal.fire({ 
+      icon:'success', 
+      title:'Berhasil!', 
+      text:'<?= esc(session('success')) ?>', 
+      timer:3000, 
+      showConfirmButton:false 
+    });
   <?php endif; ?>
+  
   <?php if (session('error')): ?>
-    Swal.fire({ icon:'error', title:'Error!', text:'<?= esc(session('error')) ?>' });
+    Swal.fire({ 
+      icon:'error', 
+      title:'Error!', 
+      text:'<?= esc(session('error')) ?>'
+    });
   <?php endif; ?>
+
+  // ===== Auto refresh stats every 30 seconds =====
+  setInterval(function() {
+    // You can add AJAX call here to refresh statistics if needed
+    console.log('Stats refresh check at', new Date());
+  }, 30000);
+
+  // ===== Reset form when modal is closed =====
+  $('.modal').on('hidden.bs.modal', function() {
+    const $form = $(this).find('form');
+    $form[0].reset();
+    $form.find('select').prop('disabled', false).html('<option value="">-- Pilih Event --</option>');
+    $form.find('.file-info').remove();
+    $form.attr('action', '');
+  });
+
+  // ===== Add loading states =====
+  $('form').on('submit', function() {
+    const $btn = $(this).find('button[type="submit"]');
+    const originalText = $btn.html();
+    $btn.prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i>Processing...');
+    
+    // Re-enable after 10 seconds as fallback
+    setTimeout(() => {
+      $btn.prop('disabled', false).html(originalText);
+    }, 10000);
+  });
+</script>
+
+<!-- Updated Modal Content for Sertifikat to clarify it's for all participants -->
+<div class="modal fade" id="uploadSertifikatModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form action="" method="POST" enctype="multipart/form-data" id="sertifikatForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Upload Sertifikat</h5>
+        <button class="btn-close btn-close-white" type="button" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <?= csrf_field() ?>
+        <div class="mb-3">
+          <label class="form-label">Event *</label>
+          <select class="form-select" name="event_id" id="sertifikatEventId" required>
+            <option value="">-- Pilih Event --</option>
+            <?php foreach ($events as $e): ?>
+              <option value="<?= $e['id'] ?>"><?= esc($e['title']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Peserta *</label>
+          <select class="form-select" name="user_id" id="sertifikatUserId" required>
+            <option value="">-- Pilih Event terlebih dahulu --</option>
+          </select>
+          <div class="form-text">
+            <i class="bi bi-info-circle me-1"></i>
+            Menampilkan semua peserta yang hadir: <strong>Presenter</strong>, <strong>Audience Online</strong>, dan <strong>Audience Offline</strong>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">File Sertifikat *</label>
+          <input type="file" class="form-control" name="sertifikat_file" accept=".pdf,.jpg,.jpeg,.png" required>
+          <div class="form-text">PDF / JPG / PNG · maks 5MB</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-warning" type="submit"><i class="bi bi-upload me-1"></i>Upload Sertifikat</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Updated Bulk Sertifikat Modal -->
+<div class="modal fade" id="bulkSertifikatModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form action="<?= site_url('admin/dokumen/generateBulkSertifikat') ?>" method="POST" id="bulkSertifikatForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-stars me-2"></i>Generate Bulk Sertifikat</h5>
+        <button class="btn-close btn-close-white" type="button" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <?= csrf_field() ?>
+        <div class="mb-3">
+          <label class="form-label">Event *</label>
+          <select class="form-select" name="event_id" required>
+            <option value="">-- Pilih Event --</option>
+            <?php foreach ($events as $e): ?>
+              <option value="<?= $e['id'] ?>"><?= esc($e['title']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="alert alert-warning mb-0">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Sertifikat akan dibuat untuk <strong>semua peserta yang tercatat hadir</strong>:
+          <ul class="mb-0 mt-2">
+            <li><strong>Presenter</strong> (offline)</li>
+            <li><strong>Audience Online</strong></li>
+            <li><strong>Audience Offline</strong></li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-secondary" type="submit"><i class="bi bi-stars me-1"></i>Generate Sertifikat</button>
+      </div>
+    </form>
+  </div>
+</div>
 </script>
