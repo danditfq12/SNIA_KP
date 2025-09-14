@@ -13,16 +13,16 @@ class ReviewModel extends Model
 
     protected $allowedFields    = [
         'id_abstrak',
-        'id_reviewer',     // users.id_user dengan role=reviewer
-        'keputusan',       // pending | diterima | ditolak | revisi
+        'id_reviewer',
+        'keputusan',
         'komentar',
-        'tanggal_review',  // nullable saat baru assign
+        'tanggal_review',
     ];
 
     protected $useTimestamps = false;
 
     /**
-     * (BARU) Semua review untuk satu abstrak (tanpa join)
+     * Semua review untuk satu abstrak
      */
     public function getByAbstrak(int $idAbstrak): array
     {
@@ -32,7 +32,7 @@ class ReviewModel extends Model
     }
 
     /**
-     * (BARU) Semua review + nama reviewer (untuk detail)
+     * Semua review + nama reviewer
      */
     public function getByAbstrakWithReviewer(int $idAbstrak): array
     {
@@ -45,19 +45,17 @@ class ReviewModel extends Model
     }
 
     /**
-     * (BARU) Cek apakah sudah ada assignment pending untuk abstrak
+     * Cek apakah sudah ada assignment pending
      */
     public function hasPendingReview(int $idAbstrak): bool
     {
-        $row = $this->where('id_abstrak', $idAbstrak)
-            ->where('keputusan', 'pending')
-            ->first();
-
-        return !empty($row);
+        return $this->where('id_abstrak', $idAbstrak)
+                   ->where('keputusan', 'pending')
+                   ->countAllResults() > 0;
     }
 
     /**
-     * (BARU) Assign reviewer → membuat row review dengan keputusan 'pending'
+     * FIXED: Assign reviewer dengan string kosong untuk NOT NULL constraint
      */
     public function assignReviewer(int $idAbstrak, int $idReviewer): bool
     {
@@ -65,27 +63,27 @@ class ReviewModel extends Model
             'id_abstrak'     => $idAbstrak,
             'id_reviewer'    => $idReviewer,
             'keputusan'      => 'pending',
-            'komentar'       => null,
-            'tanggal_review' => null,
+            'komentar'       => '', // Empty string instead of NULL
+            'tanggal_review' => date('Y-m-d H:i:s'), // Current timestamp instead of NULL
         ];
         return (bool)$this->insert($data, false);
     }
 
     /**
-     * (BARU) Update keputusan/komentar (mis. saat reviewer submit)
+     * Update keputusan/komentar saat reviewer submit
      */
     public function updateDecision(int $idReview, string $keputusan, ?string $komentar = null): bool
     {
         $data = [
             'keputusan'      => $keputusan,
-            'komentar'       => $komentar,
+            'komentar'       => $komentar ?: '', // Ensure not null
             'tanggal_review' => date('Y-m-d H:i:s'),
         ];
         return $this->update($idReview, $data);
     }
 
     /**
-     * (BARU) Hitung ringkas keputusan per abstrak
+     * Hitung ringkas keputusan per abstrak
      */
     public function countByDecision(int $idAbstrak): array
     {
@@ -99,5 +97,26 @@ class ReviewModel extends Model
             $out[$r['keputusan']] = (int)$r['jml'];
         }
         return $out;
+    }
+
+    /**
+     * Get reviews with proper handling of empty comments
+     */
+    public function getReviewsForDisplay(int $idAbstrak): array
+    {
+        $reviews = $this->getByAbstrakWithReviewer($idAbstrak);
+        
+        // Process untuk display - jangan tampilkan komentar kosong untuk pending
+        foreach ($reviews as &$review) {
+            if ($review['keputusan'] === 'pending' && empty(trim($review['komentar']))) {
+                $review['display_comment'] = null; // Untuk view logic
+                $review['is_pending'] = true;
+            } else {
+                $review['display_comment'] = $review['komentar'];
+                $review['is_pending'] = false;
+            }
+        }
+        
+        return $reviews;
     }
 }

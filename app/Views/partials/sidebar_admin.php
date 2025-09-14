@@ -72,6 +72,9 @@ $active = function (string $slug) use ($seg1, $seg2): bool {
     <a class="nav-link <?= $active('abstrak') ? 'is-active':'' ?>" href="<?= site_url('admin/abstrak') ?>">
       <span class="ico"><i class="bi bi-file-earmark-text"></i></span><span>Manajemen Abstrak</span>
     </a>
+    <a class="nav-link <?= $active('kategori') ? 'is-active':'' ?>" href="<?= site_url('admin/kategori') ?>">
+      <span class="ico"><i class="bi bi-tags-fill"></i></span><span>Kategori Abstrak</span>
+    </a>
     <a class="nav-link <?= $active('pembayaran') ? 'is-active':'' ?>" href="<?= site_url('admin/pembayaran') ?>">
       <span class="ico"><i class="bi bi-credit-card"></i></span><span>Verifikasi Pembayaran</span>
     </a>

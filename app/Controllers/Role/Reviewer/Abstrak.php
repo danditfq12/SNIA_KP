@@ -86,6 +86,9 @@ class Abstrak extends BaseController
         ]);
     }
 
+    /**
+     * Detail abstrak + form review dalam satu halaman
+     */
     public function detail($id)
     {
         $idReviewer = (int) (session('id_user') ?? 0);
@@ -93,26 +96,51 @@ class Abstrak extends BaseController
             return redirect()->to(site_url('auth/login'));
         }
 
-        // Pastikan abstrak memang ditugaskan ke reviewer ini
-        $abstrak = $this->abstrakModel
-            ->select('
-                abstrak.*,
-                users.nama_lengkap,
-                kategori_abstrak.nama_kategori,
-                e.title as event_title, e.id as event_id, e.event_date, e.event_time
-            ')
-            ->join('users','users.id_user = abstrak.id_user')
-            ->join('kategori_abstrak','kategori_abstrak.id_kategori = abstrak.id_kategori','left')
-            ->join('review','review.id_abstrak = abstrak.id_abstrak','inner')
-            ->join('events e','e.id = abstrak.event_id','left')
-            ->where('review.id_reviewer', $idReviewer)
-            ->where('abstrak.id_abstrak', (int)$id)
-            ->first();
+        try {
+            $idAbstrak = (int) $id;
+            
+            // Pastikan abstrak memang ditugaskan ke reviewer ini
+            $abstrak = $this->abstrakModel
+                ->select('
+                    abstrak.*,
+                    users.nama_lengkap, users.email,
+                    kategori_abstrak.nama_kategori,
+                    e.title as event_title, e.id as event_id, 
+                    e.event_date, e.event_time
+                ')
+                ->join('users','users.id_user = abstrak.id_user')
+                ->join('kategori_abstrak','kategori_abstrak.id_kategori = abstrak.id_kategori','left')
+                ->join('review','review.id_abstrak = abstrak.id_abstrak','inner')
+                ->join('events e','e.id = abstrak.event_id','left')
+                ->where('review.id_reviewer', $idReviewer)
+                ->where('abstrak.id_abstrak', $idAbstrak)
+                ->first();
 
-        if (!$abstrak) {
-            return redirect()->to('reviewer/abstrak')->with('error', 'Abstrak tidak ditemukan / bukan tugas Anda.');
+            if (!$abstrak) {
+                return redirect()->to('reviewer/abstrak')->with('error', 'Abstrak tidak ditemukan / bukan tugas Anda.');
+            }
+
+            // Ambil data review yang ada
+            $existingReview = $this->reviewModel
+                ->where('id_abstrak', $idAbstrak)
+                ->where('id_reviewer', $idReviewer)
+                ->first();
+
+            // Cek apakah sudah di-review
+            $isReviewed = $existingReview && $existingReview['keputusan'] !== 'pending';
+
+            $data = [
+                'title' => 'Detail Abstrak - Review',
+                'abstrak' => $abstrak,
+                'existingReview' => $existingReview,
+                'isReviewed' => $isReviewed
+            ];
+
+            return view('role/reviewer/detail_abstrak', $data);
+
+        } catch (\Exception $e) {
+            log_message('error', 'Reviewer abstrak detail error: ' . $e->getMessage());
+            return redirect()->to('reviewer/abstrak')->with('error', 'Terjadi kesalahan. Silakan coba lagi.');
         }
-
-        return view('role/reviewer/detail_abstrak', ['abstrak' => $abstrak]);
     }
 }

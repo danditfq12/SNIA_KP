@@ -185,6 +185,13 @@ $routes->group('admin', [
     $routes->get('laporan',         'Laporan::index');
     $routes->get('laporan/export',  'Laporan::export');
     $routes->get('laporan/chart-data', 'Laporan::getChartData');
+
+    // Routes untuk kategori abstrak
+    $routes->get('kategori', 'Kategori::index');
+    $routes->post('kategori/store', 'Kategori::store');
+    $routes->get('kategori/show/(:num)', 'Kategori::show/$1');
+    $routes->post('kategori/update/(:num)', 'Kategori::update/$1');
+    $routes->delete('kategori/delete/(:num)', 'Kategori::delete/$1');
 });
 
 // ---------------------------------------------------
@@ -280,12 +287,22 @@ $routes->group('reviewer', [
     'filter'    => 'role:reviewer',
     'namespace' => 'App\Controllers\Role\Reviewer',
 ], static function ($routes) {
-    $routes->get('dashboard',       'Dashboard::index');
-    $routes->get('abstrak',         'Abstrak::index');
-    $routes->get('abstrak/(:num)',  'Abstrak::detail/$1');
-    $routes->post('review/(:num)',  'Review::store/$1');
-    $routes->get('riwayat',         'Riwayat::index');
+    $routes->get('dashboard', 'Dashboard::index');
+    $routes->get('notifications', 'Dashboard::getNotifications');
+    
+    // Abstrak routes
+    $routes->get('abstrak', 'Abstrak::index');
+    $routes->get('abstrak/(:num)', 'Abstrak::detail/$1');
+    
+    // Review routes - HARUS SEBELUM route yang lebih general
+    $routes->post('review/(:num)', 'Review::store/$1');
+    $routes->get('review/file/(:any)', 'Review::file/$1');
+    $routes->get('review/download/(:any)', 'Review::download/$1');
+    
+    // Riwayat
+    $routes->get('riwayat', 'Riwayat::index');
 });
+
 
 // ---------------------------------------------------
 // Public API

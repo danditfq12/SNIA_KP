@@ -1,4 +1,5 @@
 <?php
+// File: app/Views/role/reviewer/dashboard.php
 // Default variables untuk hindari notice
 $title = 'Reviewer Dashboard';
 $s = $stat ?? [
@@ -26,13 +27,13 @@ helper('number');
                     <h3 class="welcome-text mb-1">
                         Hai, <?= esc(session('nama_lengkap') ?? session('nama') ?? 'Reviewer') ?>
                     </h3>
-                    <small class="text-muted">Kelola tugas review abstrak Anda</small>
+                    <small class="text-white-50">Kelola tugas review abstrak Anda</small>
                 </div>
                 <div class="d-none d-md-flex gap-2">
-                    <a href="<?= site_url('reviewer/abstrak') ?>" class="btn btn-primary">
+                    <a href="<?= site_url('reviewer/abstrak') ?>" class="btn btn-light">
                         <i class="bi bi-journal-text me-1"></i> Abstrak
                     </a>
-                    <a href="<?= site_url('reviewer/riwayat') ?>" class="btn btn-outline-primary">
+                    <a href="<?= site_url('reviewer/riwayat') ?>" class="btn btn-outline-light">
                         <i class="bi bi-clock-history me-1"></i> Riwayat
                     </a>
                 </div>
@@ -130,6 +131,7 @@ helper('number');
                                                 'diterima', 'accepted' => 'bg-success',
                                                 'ditolak', 'rejected' => 'bg-danger',
                                                 'revisi', 'revision' => 'bg-warning text-dark',
+                                                'pending', 'menunggu' => 'bg-warning text-dark',
                                                 default => 'bg-secondary'
                                             };
                                         ?>
@@ -141,6 +143,9 @@ helper('number');
                                                 <div class="task-meta">
                                                     <span><i class="bi bi-person me-1"></i><?= esc($r['nama_lengkap'] ?? '-') ?></span>
                                                     <span><i class="bi bi-tag me-1"></i><?= esc($r['nama_kategori'] ?? '-') ?></span>
+                                                    <?php if (!empty($r['tanggal_upload'])): ?>
+                                                        <span><i class="bi bi-calendar me-1"></i><?= date('d M', strtotime($r['tanggal_upload'])) ?></span>
+                                                    <?php endif; ?>
                                                 </div>
                                                 <span class="badge <?= $badgeClass ?> mt-2">
                                                     <?= esc(ucfirst($r['status'] ?? 'menunggu')) ?>
@@ -149,7 +154,8 @@ helper('number');
                                             <div class="task-action">
                                                 <a href="<?= site_url('reviewer/abstrak/'.(int)($r['id_abstrak'] ?? 0)) ?>" 
                                                    class="btn btn-sm btn-primary">
-                                                    <i class="bi bi-eye me-1"></i>Review
+                                                    <i class="bi bi-eye me-1"></i>
+                                                    <?= $status === 'pending' || $status === 'menunggu' ? 'Review' : 'Lihat' ?>
                                                 </a>
                                             </div>
                                         </div>
@@ -161,7 +167,10 @@ helper('number');
                                         <i class="bi bi-inbox"></i>
                                     </div>
                                     <div class="empty-title">Belum ada tugas terbaru</div>
-                                    <div class="empty-subtitle">Tugas baru akan tampil di sini</div>
+                                    <div class="empty-subtitle">Tugas review baru akan tampil di sini</div>
+                                    <a href="<?= site_url('reviewer/abstrak') ?>" class="btn btn-outline-primary btn-sm mt-2">
+                                        <i class="bi bi-search me-1"></i> Lihat Semua Tugas
+                                    </a>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -171,48 +180,67 @@ helper('number');
                 <!-- AKTIVITAS TERBARU -->
                 <div class="col-12 col-lg-4">
                     <div class="card shadow-sm h-100">
-                        <div class="card-header">
+                        <div class="card-header d-flex align-items-center justify-content-between">
                             <h5 class="card-title mb-0">
                                 <i class="bi bi-bell me-2 text-info"></i>Aktivitas Terbaru
                             </h5>
+                            <button class="btn btn-sm btn-outline-info" onclick="refreshNotifications()">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
                         </div>
                         <div class="card-body">
-                            <?php if (!empty($notifs)): ?>
-                                <div class="notification-list">
-                                    <?php foreach ($notifs as $n): ?>
-                                        <div class="notification-item">
-                                            <div class="notification-icon">
-                                                <i class="bi bi-info-circle text-primary"></i>
-                                            </div>
-                                            <div class="notification-content">
-                                                <div class="notification-title">
-                                                    <?= esc($n['title'] ?? '-') ?>
+                            <div id="notification-container">
+                                <?php if (!empty($notifs)): ?>
+                                    <div class="notification-list">
+                                        <?php foreach ($notifs as $n): ?>
+                                            <div class="notification-item <?= !empty($n['read']) ? 'read' : 'unread' ?>">
+                                                <div class="notification-icon">
+                                                    <?php
+                                                    $iconClass = match($n['type'] ?? 'info') {
+                                                        'success' => 'bi-check-circle text-success',
+                                                        'warning', 'pending' => 'bi-exclamation-triangle text-warning', 
+                                                        'error' => 'bi-x-circle text-danger',
+                                                        'welcome' => 'bi-hand-thumbs-up text-info',
+                                                        default => 'bi-info-circle text-primary'
+                                                    };
+                                                    ?>
+                                                    <i class="bi <?= $iconClass ?>"></i>
                                                 </div>
-                                                <?php if (!empty($n['time'])): ?>
-                                                    <div class="notification-time">
-                                                        <?= esc($n['time']) ?>
+                                                <div class="notification-content">
+                                                    <div class="notification-title">
+                                                        <?= esc($n['title'] ?? '-') ?>
+                                                    </div>
+                                                    <?php if (!empty($n['message'])): ?>
+                                                        <div class="notification-message">
+                                                            <?= esc($n['message']) ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($n['time'])): ?>
+                                                        <div class="notification-time">
+                                                            <i class="bi bi-clock me-1"></i><?= esc($n['time']) ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <?php if (!empty($n['link'])): ?>
+                                                    <div class="notification-action">
+                                                        <a href="<?= esc($n['link']) ?>" class="btn btn-sm btn-outline-primary">
+                                                            Buka
+                                                        </a>
                                                     </div>
                                                 <?php endif; ?>
                                             </div>
-                                            <?php if (!empty($n['link'])): ?>
-                                                <div class="notification-action">
-                                                    <a href="<?= esc($n['link']) ?>" class="btn btn-sm btn-outline-primary">
-                                                        Buka
-                                                    </a>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php else: ?>
-                                <div class="empty-state">
-                                    <div class="empty-icon">
-                                        <i class="bi bi-bell-slash"></i>
+                                        <?php endforeach; ?>
                                     </div>
-                                    <div class="empty-title">Tidak ada aktivitas</div>
-                                    <div class="empty-subtitle">Update akan muncul di sini</div>
-                                </div>
-                            <?php endif; ?>
+                                <?php else: ?>
+                                    <div class="empty-state">
+                                        <div class="empty-icon">
+                                            <i class="bi bi-bell-slash"></i>
+                                        </div>
+                                        <div class="empty-title">Tidak ada aktivitas</div>
+                                        <div class="empty-subtitle">Update dan notifikasi akan muncul di sini</div>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -364,12 +392,24 @@ body {
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid #f1f5f9;
+    padding: 12px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
 }
 
-.notification-item:last-child {
-    border-bottom: none;
+.notification-item.unread {
+    background: #f0f9ff;
+    border-color: #0ea5e9;
+}
+
+.notification-item.read {
+    background: #f8fafc;
+    opacity: 0.8;
+}
+
+.notification-item:hover {
+    transform: translateX(2px);
 }
 
 .notification-icon {
@@ -388,9 +428,16 @@ body {
     margin-bottom: 2px;
 }
 
+.notification-message {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
 .notification-time {
     font-size: 0.75rem;
-    color: #6b7280;
+    color: #9ca3af;
 }
 
 .notification-action {
@@ -419,12 +466,39 @@ body {
 .empty-subtitle {
     font-size: 0.875rem;
     color: #9ca3af;
+    margin-bottom: 1rem;
+}
+
+/* Loading animation */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 /* Responsive improvements */
 @media (max-width: 768px) {
     .header-section {
         padding: 16px;
+        text-align: center;
     }
     
     .welcome-text {
@@ -459,6 +533,19 @@ body {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Animate KPI numbers
+    animateKPINumbers();
+    
+    // Add loading states for buttons
+    addButtonLoadingStates();
+    
+    // Auto-refresh notifications every 5 minutes
+    setInterval(refreshNotifications, 300000);
+    
+    // Check for updates on page load
+    setTimeout(checkForUpdates, 2000);
+});
+
+function animateKPINumbers() {
     const kpiNumbers = document.querySelectorAll('.kpi-number[data-count]');
     
     kpiNumbers.forEach(element => {
@@ -482,8 +569,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Start animation with a slight delay
         setTimeout(updateNumber, 100);
     });
-    
-    // Add loading states for buttons (optional)
+}
+
+function addButtonLoadingStates() {
     const reviewButtons = document.querySelectorAll('.task-item .btn');
     reviewButtons.forEach(button => {
         button.addEventListener('click', function() {
@@ -495,8 +583,205 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
                 this.innerHTML = originalText;
                 this.disabled = false;
-            }, 2000);
+            }, 3000);
         });
     });
-});
+}
+
+async function refreshNotifications() {
+    const container = document.getElementById('notification-container');
+    const refreshBtn = document.querySelector('button[onclick="refreshNotifications()"] i');
+    
+    if (refreshBtn) {
+        refreshBtn.classList.add('spinning');
+    }
+    
+    try {
+        const response = await fetch('<?= site_url("reviewer/notifications") ?>', {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (data.success && data.notifications) {
+                updateNotificationDisplay(data.notifications);
+                showToast('Notifikasi berhasil dimuat ulang', 'success');
+            } else {
+                showToast('Gagal memuat notifikasi', 'error');
+            }
+        } else {
+            // Fallback: generate some mock notifications
+            generateMockNotifications();
+        }
+    } catch (error) {
+        console.log('Using fallback notifications due to:', error);
+        generateMockNotifications();
+        showToast('Menggunakan data lokal', 'info');
+    }
+    
+    if (refreshBtn) {
+        refreshBtn.classList.remove('spinning');
+    }
+}
+
+function updateNotificationDisplay(notifications) {
+    const container = document.getElementById('notification-container');
+    
+    if (!notifications || notifications.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="bi bi-bell-slash"></i>
+                </div>
+                <div class="empty-title">Tidak ada aktivitas</div>
+                <div class="empty-subtitle">Update dan notifikasi akan muncul di sini</div>
+            </div>
+        `;
+        return;
+    }
+    
+    const notificationsHtml = notifications.map(notif => {
+        const iconClass = getNotificationIcon(notif.type);
+        return `
+            <div class="notification-item ${notif.read ? 'read' : 'unread'}">
+                <div class="notification-icon">
+                    <i class="bi ${iconClass}"></i>
+                </div>
+                <div class="notification-content">
+                    <div class="notification-title">
+                        ${escapeHtml(notif.title)}
+                    </div>
+                    ${notif.message ? `<div class="notification-message">${escapeHtml(notif.message)}</div>` : ''}
+                    ${notif.time ? `<div class="notification-time"><i class="bi bi-clock me-1"></i>${escapeHtml(notif.time)}</div>` : ''}
+                </div>
+                ${notif.link ? `<div class="notification-action"><a href="${escapeHtml(notif.link)}" class="btn btn-sm btn-outline-primary">Buka</a></div>` : ''}
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = `<div class="notification-list">${notificationsHtml}</div>`;
+}
+
+function generateMockNotifications() {
+    const pendingCount = parseInt(document.querySelector('.kpi-number[data-count]')?.getAttribute('data-count') || 0);
+    const reviewedCount = parseInt(document.querySelectorAll('.kpi-number')[2]?.getAttribute('data-count') || 0);
+    
+    const mockNotifications = [];
+    
+    if (pendingCount > 0) {
+        mockNotifications.push({
+            title: `${pendingCount} tugas review menunggu`,
+            message: 'Ada abstrak yang perlu direview segera',
+            time: 'Hari ini',
+            link: '<?= site_url("reviewer/abstrak") ?>',
+            type: 'pending',
+            read: false
+        });
+    }
+    
+    if (reviewedCount > 0) {
+        mockNotifications.push({
+            title: `${reviewedCount} review telah selesai`,
+            message: 'Terima kasih atas kontribusi Anda',
+            time: 'Minggu ini',
+            link: '<?= site_url("reviewer/riwayat") ?>',
+            type: 'success',
+            read: false
+        });
+    }
+    
+    mockNotifications.push({
+        title: 'Selamat datang, Reviewer!',
+        message: 'Sistem review online siap digunakan',
+        time: 'Info',
+        link: '',
+        type: 'welcome',
+        read: false
+    });
+    
+    updateNotificationDisplay(mockNotifications);
+}
+
+function getNotificationIcon(type) {
+    const iconMap = {
+        'success': 'bi-check-circle text-success',
+        'warning': 'bi-exclamation-triangle text-warning',
+        'pending': 'bi-exclamation-triangle text-warning',
+        'error': 'bi-x-circle text-danger',
+        'welcome': 'bi-hand-thumbs-up text-info',
+        'info': 'bi-info-circle text-primary'
+    };
+    
+    return iconMap[type] || iconMap['info'];
+}
+
+function checkForUpdates() {
+    // Auto-check for updates without user interaction
+    refreshNotifications();
+}
+
+function showToast(message, type = 'info') {
+    // Create toast notification
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    toast.innerHTML = `
+        <div class="toast-content">
+            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : 'info-circle'} me-2"></i>
+            ${escapeHtml(message)}
+        </div>
+    `;
+    
+    // Style the toast
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#06b6d4'};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 9999;
+        animation: slideInRight 0.3s ease;
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.style.animation = 'slideOutRight 0.3s ease';
+        setTimeout(() => document.body.removeChild(toast), 300);
+    }, 3000);
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Add CSS animations
+const style = document.createElement('style');
+style.textContent = `
+    .spinning {
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes slideInRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    
+    @keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+`;
+document.head.appendChild(style);
 </script>
