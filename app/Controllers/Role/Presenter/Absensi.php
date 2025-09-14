@@ -3,72 +3,98 @@
 namespace App\Controllers\Role\Presenter;
 
 use App\Controllers\BaseController;
+use App\Models\AbsensiModel;
 use App\Models\PembayaranModel;
 use App\Models\EventModel;
-use App\Models\AbsensiModel;
+use App\Models\UserModel;
 
 class Absensi extends BaseController
 {
-    protected $payModel;
-    protected $eventModel;
     protected $absensiModel;
+    protected $pembayaranModel;
+    protected $eventModel;
+    protected $userModel;
+    protected $db;
 
     public function __construct()
     {
-        $this->payModel     = new PembayaranModel();
-        $this->eventModel   = new EventModel();
+        // Set timezone ke WIB
+        date_default_timezone_set('Asia/Jakarta');
+        
         $this->absensiModel = new AbsensiModel();
+        $this->pembayaranModel = new PembayaranModel();
+        $this->eventModel = new EventModel();
+        $this->userModel = new UserModel();
+        $this->db = \Config\Database::connect();
     }
 
-    /** Kalkulasi window absensi (mulai & selesai) */
+    /**
+     * Get current time in WIB
+     */
+    private function getCurrentTimeWIB()
+    {
+        return new \DateTime('now', new \DateTimeZone('Asia/Jakarta'));
+    }
+
+    /**
+     * Convert timestamp to WIB DateTime
+     */
+    private function toWIBDateTime($timestamp)
+    {
+        $dt = new \DateTime();
+        $dt->setTimestamp($timestamp);
+        $dt->setTimezone(new \DateTimeZone('Asia/Jakarta'));
+        return $dt;
+    }
+
+    /**
+     * Calculate attendance window (start & end time) - FIXED WITH WIB
+     */
     private function getAttendanceWindow(array $event): array
     {
-        // start = event_date + event_time
         $startStr = trim(($event['event_date'] ?? '') . ' ' . ($event['event_time'] ?? '00:00:00'));
-        $start    = strtotime($startStr) ?: null;
-
-        // end = attendance_end_at (jika ada & valid) else start + 4 jam
+        $start = strtotime($startStr) ?: null;
         $end = null;
-
-        // Jika skema kamu punya kolom opsional attendance_end_at → pakai
-        if (!empty($event['attendance_end_at'])) {
-            $end = strtotime($event['attendance_end_at']);
+        if ($start) {
+            $end = $start + (4 * 3600); // 4 hours duration
         }
 
-        if (!$end && $start) {
-            $end = $start + (4 * 3600); // default 4 jam
-        }
+        // Gunakan WIB timezone
+        $nowWIB = $this->getCurrentTimeWIB();
+        $nowTimestamp = $nowWIB->getTimestamp();
+        
+        $open = ($start && $end) ? ($nowTimestamp >= ($start - 1800) && $nowTimestamp <= $end) : false; // 30 min early
 
-        $now  = time();
-        $open = ($start && $end) ? ($now >= $start && $now <= $end) : false;
-
-        // Alasan kenapa tertutup
         $reason = '';
         if ($start && $end && !$open) {
-            if ($now < $start) {
-                $reason = 'Event belum dimulai';
-            } elseif ($now > $end) {
-                $reason = 'Event sudah ditutup';
+            if ($nowTimestamp < ($start - 1800)) {
+                $remaining = ($start - 1800) - $nowTimestamp;
+                $hours = floor($remaining / 3600);
+                $minutes = floor(($remaining % 3600) / 60);
+                $reason = "Akan dibuka dalam {$hours}j {$minutes}m";
+            } elseif ($nowTimestamp > $end) {
+                $reason = 'Window absensi sudah ditutup';
             }
         }
 
         return [
             'start_ts' => $start,
-            'end_ts'   => $end,
-            'is_open'  => $open,
-            'reason'   => $reason,
+            'end_ts' => $end,
+            'is_open' => $open,
+            'reason' => $reason,
+            'current_time_wib' => $nowWIB->format('Y-m-d H:i:s'), // Tambahan info WIB
         ];
     }
 
     /**
-     * Enhanced QR Token validation with role-based access control
+     * Enhanced QR Token validation with role-based access control - FIXED WITH WIB
      */
     private function validateQRToken($token, $eventId)
     {
         $token = $this->cleanQRToken($token);
         log_message('debug', "Validating QR token for presenter: {$token}");
 
-        // Format 1: Standard format EVENT_{event_id}_{role}_{participation_type}_{date}_{hash}
+        // Standard format EVENT_{event_id}_{role}_{participation_type}_{date}_{hash}
         $standardPattern = '/^EVENT_(\d+)_([a-z]+)_([a-z]+)_(\d{8})_([a-f0-9]+)$/i';
         if (preg_match($standardPattern, $token, $matches)) {
             $tokenEventId = (int) $matches[1];
@@ -76,8 +102,6 @@ class Absensi extends BaseController
             $participationType = strtolower($matches[3]);
             $date = $matches[4];
             $providedHash = strtolower($matches[5]);
-
-            log_message('debug', "Standard QR format - Event: {$tokenEventId}, Role: {$role}, Type: {$participationType}");
 
             // Check event ID match
             if ($tokenEventId !== $eventId) {
@@ -88,7 +112,7 @@ class Absensi extends BaseController
                 ];
             }
 
-            // Role validation for presenter - only allow 'presenter' or 'all'
+            // Role validation for presenter
             if ($role !== 'presenter' && $role !== 'all') {
                 $roleDisplayNames = [
                     'audience' => 'Audience',
@@ -104,10 +128,12 @@ class Absensi extends BaseController
                 ];
             }
 
-            // Date validation (allow yesterday to today for flexibility)
-            $currentDate = date('Ymd');
-            $yesterday = date('Ymd', strtotime('-1 day'));
-            $tomorrow = date('Ymd', strtotime('+1 day'));
+            // Date validation dengan WIB
+            $nowWIB = $this->getCurrentTimeWIB();
+            $currentDate = $nowWIB->format('Ymd');
+            $yesterday = $nowWIB->modify('-1 day')->format('Ymd');
+            $nowWIB = $this->getCurrentTimeWIB(); // Reset
+            $tomorrow = $nowWIB->modify('+1 day')->format('Ymd');
             
             if (!in_array($date, [$yesterday, $currentDate, $tomorrow])) {
                 return [
@@ -115,11 +141,6 @@ class Absensi extends BaseController
                     'message' => 'QR Code sudah kedaluwarsa atau belum valid untuk tanggal ini.',
                     'code' => 'EXPIRED_DATE'
                 ];
-            }
-
-            // Hash validation with multiple possible keys
-            if (!$this->validateHashWithMultipleKeys($eventId, $role, $participationType, $date, $providedHash)) {
-                log_message('warning', "Hash mismatch for presenter QR but allowing access - Event: {$eventId}");
             }
 
             return [
@@ -132,12 +153,11 @@ class Absensi extends BaseController
             ];
         }
 
-        // Format 2: Simple format EVENT_{event_id}_{date} (treated as universal)
+        // Simple format EVENT_{event_id}_{date}
         $simplePattern = '/^EVENT_(\d+)_(\d{8})$/i';
         if (preg_match($simplePattern, $token, $matches)) {
             $tokenEventId = (int) $matches[1];
-            $date = $matches[2];
-
+            
             if ($tokenEventId !== $eventId) {
                 return [
                     'valid' => false,
@@ -151,12 +171,12 @@ class Absensi extends BaseController
                 'event_id' => $tokenEventId,
                 'role' => 'all',
                 'participation_type' => 'all',
-                'date' => $date,
+                'date' => $matches[2],
                 'message' => 'QR Code Universal valid untuk Presenter'
             ];
         }
 
-        // Format 3: Numeric format (just event ID) - treated as universal
+        // Numeric format (just event ID)
         if (is_numeric($token)) {
             $tokenEventId = (int) $token;
             
@@ -173,15 +193,14 @@ class Absensi extends BaseController
                 'event_id' => $tokenEventId,
                 'role' => 'all',
                 'participation_type' => 'all',
-                'date' => date('Ymd'),
+                'date' => $this->getCurrentTimeWIB()->format('Ymd'), // WIB date
                 'message' => 'QR Code Universal valid untuk Presenter'
             ];
         }
 
-        // Format 4: Admin generated format
+        // Admin generated format
         $adminPattern = '/^(ADMIN|MANUAL|BULK)_(\d+)_(\d{8})/i';
         if (preg_match($adminPattern, $token, $matches)) {
-            $type = strtoupper($matches[1]);
             $tokenEventId = (int) $matches[2];
             
             if ($tokenEventId !== $eventId) {
@@ -198,7 +217,7 @@ class Absensi extends BaseController
                 'role' => 'all',
                 'participation_type' => 'all',
                 'date' => $matches[3],
-                'message' => "QR Code Admin ({$type}) valid untuk Presenter",
+                'message' => "QR Code Admin valid untuk Presenter",
                 'admin_generated' => true
             ];
         }
@@ -208,50 +227,39 @@ class Absensi extends BaseController
             $tokenEventId = (int) $matches[1];
             
             if ($tokenEventId === $eventId) {
-                log_message('info', "Fallback QR validation success for presenter - Event: {$eventId}");
                 return [
                     'valid' => true,
                     'event_id' => $tokenEventId,
                     'role' => 'all',
                     'participation_type' => 'all',
-                    'date' => date('Ymd'),
+                    'date' => $this->getCurrentTimeWIB()->format('Ymd'), // WIB date
                     'message' => 'QR Code valid (format fallback)'
                 ];
             }
         }
-
-        log_message('error', "QR validation failed for presenter - Invalid format: {$token}");
         
         return [
             'valid' => false,
-            'message' => 'Format QR Code tidak dikenali atau tidak valid untuk Presenter. Pastikan menggunakan QR Code yang diberikan panitia.',
+            'message' => 'Format QR Code tidak dikenali atau tidak valid untuk Presenter.',
             'code' => 'INVALID_FORMAT'
         ];
     }
 
-    /**
-     * Clean QR token from various formats
-     */
     private function cleanQRToken($token)
     {
         $token = trim($token);
         $token = urldecode($token);
         $token = ltrim($token, '/');
         
-        // If it's a URL, extract the token part
         if (strpos($token, 'http') === 0 || strpos($token, '/') !== false) {
             $urlParts = parse_url($token);
             if (isset($urlParts['path'])) {
                 $pathParts = explode('/', trim($urlParts['path'], '/'));
-                
-                // Look for EVENT_ pattern in path
                 foreach ($pathParts as $part) {
                     if (strpos($part, 'EVENT_') === 0) {
                         return $part;
                     }
                 }
-                
-                // If no EVENT_ found, use last segment
                 return end($pathParts);
             }
         }
@@ -260,195 +268,198 @@ class Absensi extends BaseController
     }
 
     /**
-     * Validate hash with multiple possible keys for compatibility
+     * INDEX - Show attendance dashboard - FIXED WITH WIB
      */
-    private function validateHashWithMultipleKeys($eventId, $role, $participationType, $date, $providedHash)
-    {
-        $secretKeys = [
-            getenv('app.encryption.key') ?: 'SNIA_QR_SECRET_KEY_2024',
-            'SNIA_QR_SECRET_KEY_2024',
-            'SNIA_QR_SECRET_2024',
-            'SNIA_SECRET',
-            'SNIA_QR_SECRET_KEY_2025'
-        ];
-
-        foreach ($secretKeys as $secretKey) {
-            $data = $eventId . $role . $participationType . $date . $secretKey;
-            $expectedHash = substr(hash('sha256', $data), 0, 16);
-            
-            if (hash_equals($expectedHash, $providedHash)) {
-                return true;
-            }
-            
-            // Try different hash lengths
-            for ($length = 8; $length <= 16; $length += 4) {
-                $shortHash = substr($expectedHash, 0, $length);
-                if (hash_equals($shortHash, $providedHash)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /** INDEX → tampil box, tombol "Absen" ke detail */
     public function index()
     {
         $userId = (int) session()->get('id_user');
 
-        // Event yang pembayarannya verified (presenter)
-        $verified = $this->payModel->select('pembayaran.*, e.*')
+        $verified = $this->pembayaranModel
+            ->select('pembayaran.*, e.*')
             ->join('events e', 'e.id = pembayaran.event_id', 'left')
             ->where('pembayaran.id_user', $userId)
             ->where('pembayaran.status', 'verified')
             ->orderBy('e.event_date', 'ASC')
             ->findAll();
 
-        $today = date('Y-m-d');
-
+        $todayWIB = $this->getCurrentTimeWIB()->format('Y-m-d');
         $boxesToday = [];
-        $boxesNext  = [];
+        $boxesNext = [];
 
         foreach ($verified as $p) {
-            $event = $p; // karena join e.* sudah keambil
-            $att   = $this->getAttendanceWindow($event);
+            $event = $p;
+            $att = $this->getAttendanceWindow($event);
 
             $box = [
-                'event_id'   => (int)$event['id'],
-                'title'      => $event['title'],
-                'date'       => $event['event_date'],
-                'time'       => $event['event_time'],
-                'location'   => $event['location'] ?? null,
-                'format'     => $event['format'] ?? null,
-                'window'     => $att,
-                'attended'   => $this->absensiModel->hasUserAttended($userId, (int)$event['id']),
+                'event_id' => (int)$event['id'],
+                'title' => $event['title'],
+                'date' => $event['event_date'],
+                'time' => $event['event_time'],
+                'location' => $event['location'] ?? null,
+                'format' => $event['format'] ?? null,
+                'window' => $att,
+                'attended' => $this->absensiModel->hasUserAttended($userId, (int)$event['id']),
             ];
 
-            if (($event['event_date'] ?? '') === $today) {
+            if (($event['event_date'] ?? '') === $todayWIB) {
                 $boxesToday[] = $box;
-            } elseif (($event['event_date'] ?? '') > $today) {
+            } elseif (($event['event_date'] ?? '') > $todayWIB) {
                 $boxesNext[] = $box;
             }
         }
 
         $kpi = [
-            'count_today'  => count($boxesToday),
-            'count_next'   => count($boxesNext),
-            'count_hadir'  => $this->absensiModel->countUserAttendance($userId),
+            'count_today' => count($boxesToday),
+            'count_next' => count($boxesNext),
+            'count_hadir' => $this->absensiModel->countUserAttendance($userId),
+            'current_time_wib' => $this->getCurrentTimeWIB()->format('Y-m-d H:i:s') // Tambahan info
         ];
 
         return view('role/presenter/absensi/index', [
-            'title'      => 'Absensi',
+            'title' => 'Absensi',
             'boxesToday' => $boxesToday,
-            'boxesNext'  => $boxesNext,
-            'kpi'        => $kpi,
+            'boxesNext' => $boxesNext,
+            'kpi' => $kpi,
         ]);
     }
 
-    /** DETAIL → dari tombol "Absen" */
+    /**
+     * SHOW - Show attendance detail for specific event
+     */
     public function show(int $eventId)
     {
         $userId = (int) session()->get('id_user');
-        if (!$eventId) {
-            return redirect()->to('/presenter/absensi')->with('error','Event tidak valid.');
-        }
-
+        
         $event = $this->eventModel->find($eventId);
         if (!$event) {
-            return redirect()->to('/presenter/absensi')->with('error','Event tidak ditemukan.');
+            return redirect()->to('/presenter/absensi')->with('error', 'Event tidak ditemukan.');
         }
 
-        $pay = $this->payModel->where('id_user',$userId)
-                             ->where('event_id',$eventId)
-                             ->where('status','verified')
-                             ->first();
+        $pay = $this->pembayaranModel
+            ->where('id_user', $userId)
+            ->where('event_id', $eventId)
+            ->where('status', 'verified')
+            ->first();
+        
         if (!$pay) {
             return redirect()->to('/presenter/absensi')
-                           ->with('error','Akses ditolak. Pembayaran belum terverifikasi.');
+                ->with('error', 'Akses ditolak. Pembayaran belum terverifikasi.');
         }
 
-        $window   = $this->getAttendanceWindow($event);
+        $window = $this->getAttendanceWindow($event);
         $attended = $this->absensiModel->hasUserAttended($userId, $eventId);
 
         return view('role/presenter/absensi/detail', [
-            'title'    => 'Detail Absensi',
-            'event'    => $event,
-            'payment'  => $pay,
-            'window'   => $window,
+            'title' => 'Detail Absensi',
+            'event' => $event,
+            'payment' => $pay,
+            'window' => $window,
             'attended' => $attended,
         ]);
     }
 
-    /** POST token → hanya boleh saat window absensi terbuka */
+    /**
+     * SCAN - Process QR token submission (ENHANCED) - FIXED WITH WIB
+     */
     public function scan()
     {
-        if ($this->request->getMethod() !== 'post') {
-            return redirect()->to('/presenter/absensi');
+        // Support both POST and AJAX requests
+        if (!$this->request->is('post')) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Method not allowed'
+            ]);
         }
 
-        $userId  = (int) session()->get('id_user');
+        $userId = (int) session()->get('id_user');
         $eventId = (int) $this->request->getPost('event_id');
         $rawToken = trim((string) $this->request->getPost('token'));
+        $isAjax = $this->request->isAJAX();
 
         if (!$eventId || $rawToken === '') {
-            return redirect()->back()->with('error', 'Event dan token wajib diisi.');
+            $message = 'Event dan token wajib diisi.';
+            return $isAjax ? 
+                $this->response->setJSON(['success' => false, 'message' => $message]) :
+                redirect()->back()->with('error', $message);
         }
 
         log_message('debug', "Presenter scanning QR - User: {$userId}, Event: {$eventId}, Token: {$rawToken}");
 
-        // Validate QR token with role restrictions
+        // Validate QR token
         $validation = $this->validateQRToken($rawToken, $eventId);
         
         if (!$validation['valid']) {
             log_message('warning', "QR validation failed for presenter - {$validation['message']}");
-            return redirect()->back()->with('error', $validation['message']);
+            return $isAjax ?
+                $this->response->setJSON([
+                    'success' => false, 
+                    'message' => $validation['message'],
+                    'code' => $validation['code'] ?? 'VALIDATION_ERROR'
+                ]) :
+                redirect()->back()->with('error', $validation['message']);
         }
 
         $event = $this->eventModel->find($eventId);
         if (!$event) {
-            return redirect()->back()->with('error', 'Event tidak valid.');
+            $message = 'Event tidak valid.';
+            return $isAjax ?
+                $this->response->setJSON(['success' => false, 'message' => $message]) :
+                redirect()->back()->with('error', $message);
         }
 
         // Check payment verification
-        $pay = $this->payModel->where('id_user',$userId)
-                             ->where('event_id',$eventId)
-                             ->where('status','verified')
-                             ->first();
+        $pay = $this->pembayaranModel
+            ->where('id_user', $userId)
+            ->where('event_id', $eventId)
+            ->where('status', 'verified')
+            ->first();
+        
         if (!$pay) {
-            return redirect()->back()->with('error', 'Akses absensi ditolak. Pembayaran belum terverifikasi.');
+            $message = 'Akses absensi ditolak. Pembayaran belum terverifikasi.';
+            return $isAjax ?
+                $this->response->setJSON(['success' => false, 'message' => $message]) :
+                redirect()->back()->with('error', $message);
         }
 
         // Check attendance window
         $window = $this->getAttendanceWindow($event);
         if (!$window['is_open']) {
-            $msg = $window['reason'] ?: 'Window absensi belum dibuka/sudah ditutup.';
-            return redirect()->back()->with('error', $msg);
+            $message = $window['reason'] ?: 'Window absensi belum dibuka/sudah ditutup.';
+            return $isAjax ?
+                $this->response->setJSON(['success' => false, 'message' => $message]) :
+                redirect()->back()->with('error', $message);
         }
 
         // Check if already attended
         if ($this->absensiModel->hasUserAttended($userId, $eventId)) {
-            return redirect()->back()->with('info', 'Anda sudah tercatat hadir pada event ini.');
+            $message = 'Anda sudah tercatat hadir pada event ini.';
+            return $isAjax ?
+                $this->response->setJSON(['success' => false, 'message' => $message, 'already_attended' => true]) :
+                redirect()->back()->with('info', $message);
         }
 
+        // Get user info for logging
+        $user = $this->userModel->find($userId);
+
         // Begin transaction
-        $db = \Config\Database::connect();
-        $db->transStart();
+        $this->db->transStart();
 
         try {
-            // Generate unique attendance QR code
-            $attendanceQRCode = 'PRESENTER_SCAN_' . $eventId . '_' . $userId . '_' . date('YmdHis');
+            // Generate unique attendance QR code dengan WIB timestamp
+            $wibTime = $this->getCurrentTimeWIB();
+            $attendanceQRCode = 'PRESENTER_SCAN_' . $eventId . '_' . $userId . '_' . $wibTime->format('YmdHis');
             
-            // Insert absensi record
+            // Insert absensi record dengan WIB timestamp
             $attendanceData = [
-                'id_user'        => $userId,
-                'event_id'       => $eventId,
-                'qr_code'        => $attendanceQRCode,
-                'status'         => 'hadir',
-                'waktu_scan'     => date('Y-m-d H:i:s'),
-                'marked_by_admin'=> null,
-                'notes'          => "QR scan by Presenter - Role: {$validation['role']}, Type: {$validation['participation_type']}" . 
-                                   (isset($validation['admin_generated']) ? ' [Admin Generated]' : '')
+                'id_user' => $userId,
+                'event_id' => $eventId,
+                'qr_code' => $attendanceQRCode,
+                'status' => 'hadir',
+                'waktu_scan' => $wibTime->format('Y-m-d H:i:s'), // WIB timestamp
+                'marked_by_admin' => null,
+                'notes' => "QR scan by Presenter ({$user['nama_lengkap']}) - Role: {$validation['role']}, Type: {$validation['participation_type']}" . 
+                          (isset($validation['admin_generated']) ? ' [Admin Generated]' : '') .
+                          " - Token: " . substr($rawToken, 0, 50) . " - WIB: " . $wibTime->format('Y-m-d H:i:s')
             ];
 
             $insertId = $this->absensiModel->insert($attendanceData);
@@ -457,39 +468,76 @@ class Absensi extends BaseController
                 throw new \Exception('Gagal mencatat kehadiran dalam database.');
             }
 
-            // Log activity
-            $this->logActivity($userId, "Presenter QR attendance - Event: {$event['title']}, QR Role: {$validation['role']}");
+            // Log activity dengan WIB timestamp
+            $this->logActivity($userId, "Presenter QR attendance - Event: {$event['title']}, QR Role: {$validation['role']} - WIB: " . $wibTime->format('Y-m-d H:i:s'));
 
-            $db->transComplete();
+            $this->db->transComplete();
 
-            if ($db->transStatus() === FALSE) {
+            if ($this->db->transStatus() === FALSE) {
                 throw new \Exception('Database transaction failed.');
             }
 
-            log_message('info', "Presenter attendance successful - User: {$userId}, Event: {$eventId}, Role: {$validation['role']}");
+            log_message('info', "Presenter attendance successful - User: {$userId}, Event: {$eventId}, Role: {$validation['role']} - WIB: " . $wibTime->format('Y-m-d H:i:s'));
 
-            return redirect()->to('/presenter/absensi/event/'.$eventId)
-                             ->with('success', 'Absensi berhasil dicatat! Terima kasih telah hadir sebagai Presenter.');
+            $successMessage = 'Absensi berhasil dicatat! Terima kasih telah hadir sebagai Presenter.';
+
+            if ($isAjax) {
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => $successMessage,
+                    'data' => [
+                        'attendance_id' => $insertId,
+                        'participant_name' => $user['nama_lengkap'],
+                        'participant_role' => 'Presenter',
+                        'event_title' => $event['title'],
+                        'attendance_time' => $wibTime->format('H:i:s'),
+                        'attendance_date' => $wibTime->format('d/m/Y'),
+                        'attendance_datetime_wib' => $wibTime->format('Y-m-d H:i:s'),
+                        'qr_role' => $validation['role'],
+                        'participation_type' => 'offline'
+                    ]
+                ]);
+            } else {
+                return redirect()->to('/presenter/absensi/event/' . $eventId)
+                    ->with('success', $successMessage);
+            }
 
         } catch (\Exception $e) {
-            $db->transRollback();
+            $this->db->transRollback();
             log_message('error', 'Presenter attendance error: ' . $e->getMessage());
             
-            return redirect()->back()->with('error', 'Gagal mencatat kehadiran: ' . $e->getMessage());
+            $errorMessage = 'Gagal mencatat kehadiran: ' . $e->getMessage();
+            
+            if ($isAjax) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => $errorMessage
+                ]);
+            } else {
+                return redirect()->back()->with('error', $errorMessage);
+            }
         }
     }
 
     /**
-     * Log user activity
+     * NEW: AJAX endpoint for QR scanner integration
+     */
+    public function scanAjax()
+    {
+        return $this->scan(); // Reuse the enhanced scan method
+    }
+
+    /**
+     * Log user activity dengan WIB timestamp
      */
     private function logActivity($userId, $activity)
     {
         try {
-            $db = \Config\Database::connect();
-            $db->table('log_aktivitas')->insert([
+            $wibTime = $this->getCurrentTimeWIB();
+            $this->db->table('log_aktivitas')->insert([
                 'id_user' => $userId,
                 'aktivitas' => $activity,
-                'waktu' => date('Y-m-d H:i:s')
+                'waktu' => $wibTime->format('Y-m-d H:i:s') // WIB timestamp
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Failed to log presenter activity: ' . $e->getMessage());

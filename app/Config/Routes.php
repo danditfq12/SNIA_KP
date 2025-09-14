@@ -274,6 +274,7 @@ $routes->group('audience', [
     $routes->get ('absensi/event/(:num)', 'Absensi::show/$1');
     $routes->get ('absensi/token',        'Absensi::token');
     $routes->post('absensi/scan',         'Absensi::scan');
+    $routes->post('absensi/scan-ajax',        'Absensi::scanAjax');    
 
     // Dokumen
     $routes->get ('dokumen/sertifikat',                    'Dokumen::sertifikat');

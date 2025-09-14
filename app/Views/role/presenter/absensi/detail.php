@@ -5,8 +5,25 @@ $payment  = $payment ?? [];
 $window   = $window ?? ['is_open'=>false,'start_ts'=>null,'end_ts'=>null,'reason'=>''];
 $attended = $attended ?? false;
 
-$startText = $window['start_ts'] ? date('d M Y H:i', $window['start_ts']) : '-';
-$endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
+// Set timezone ke WIB untuk konsistensi
+date_default_timezone_set('Asia/Jakarta');
+
+// Helper function untuk konversi ke WIB
+function toWIBFormat($timestamp, $format = 'd M Y H:i') {
+    if (!$timestamp) return '-';
+    $dt = new DateTime();
+    $dt->setTimestamp($timestamp);
+    $dt->setTimezone(new DateTimeZone('Asia/Jakarta'));
+    return $dt->format($format);
+}
+
+// Format waktu dengan WIB
+$startText = toWIBFormat($window['start_ts']);
+$endText   = toWIBFormat($window['end_ts']);
+
+// Ambil waktu WIB saat ini untuk display
+$currentWIB = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
+$currentWIBString = $currentWIB->format('Y-m-d H:i:s');
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
@@ -21,9 +38,10 @@ $endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
         <div>
           <h2 class="welcome-text mb-1"><i class="bi bi-qr-code"></i> Detail Absensi</h2>
           <div class="text-white-50">Event: <?= esc($event['title'] ?? '-') ?></div>
+          <div class="text-white-50 small">Waktu Sekarang (WIB): <?= $currentWIBString ?></div>
         </div>
         <div class="text-end d-none d-md-block">
-          <small class="text-white-50 d-block">Window Absensi</small>
+          <small class="text-white-50 d-block">Window Absensi (WIB)</small>
           <strong class="text-white"><?= $startText ?> - <?= $endText ?></strong>
         </div>
       </div>
@@ -61,6 +79,9 @@ $endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
                 Lokasi: <?= esc($event['location'] ?? '-') ?>
                 <?php if (!empty($event['format'])): ?> · Format: <?= strtoupper(esc($event['format'])) ?><?php endif; ?>
                 · Role: <span class="badge bg-purple">Presenter</span>
+                <?php if (isset($window['current_time_wib'])): ?>
+                · Waktu WIB: <?= $window['current_time_wib'] ?>
+                <?php endif; ?>
               </div>
             </div>
           </div>
@@ -71,7 +92,7 @@ $endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
                 <i class="bi bi-input-cursor-text"></i> Masukkan Token & Absen
               </button>
               <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#qrScannerModal">
-                <i class="bi bi-qr-code-scan"></i> Scan QR Code
+                <i class="bi bi-qr-code-scan"></i> Scan QR Code Real-time
               </button>
             <?php else: ?>
               <button class="btn btn-outline-secondary" disabled>
@@ -85,7 +106,7 @@ $endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
         </div>
       </div>
 
-      <!-- INFO EVENT -->
+      <!-- INFO EVENT & PAYMENT (unchanged) -->
       <div class="row g-3">
         <div class="col-12 col-lg-8">
           <div class="card shadow-sm h-100">
@@ -98,10 +119,17 @@ $endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
                   <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-calendar-event text-primary"></i>
                     <div>
-                      <div class="small text-muted">Tanggal</div>
+                      <div class="small text-muted">Tanggal & Waktu (WIB)</div>
                       <div class="fw-semibold">
-                        <?= $event['event_date'] ? date('d M Y', strtotime($event['event_date'])) : '-' ?>
-                        <?= $event['event_time'] ? ' · '.esc($event['event_time']) : '' ?>
+                        <?php if ($event['event_date']): ?>
+                          <?php 
+                          $eventDateTime = $event['event_date'] . ' ' . ($event['event_time'] ?? '00:00:00');
+                          $eventDt = new DateTime($eventDateTime, new DateTimeZone('Asia/Jakarta'));
+                          ?>
+                          <?= $eventDt->format('d M Y') ?> · <?= $eventDt->format('H:i') ?> WIB
+                        <?php else: ?>
+                          -
+                        <?php endif; ?>
                       </div>
                     </div>
                   </div>
@@ -142,7 +170,6 @@ $endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
               </div>
               <div class="small text-muted">Metode</div>
               <div class="fw-semibold mb-2"><?= esc($payment['metode'] ?? '-') ?></div>
-
               <div class="small text-muted">Jumlah</div>
               <div class="fw-semibold">Rp <?= number_format((int)($payment['jumlah'] ?? 0), 0, ',', '.') ?></div>
             </div>
@@ -167,7 +194,6 @@ $endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
         <div class="modal-body">
           <input type="hidden" name="event_id" value="<?= (int)($event['id'] ?? 0) ?>">
           
-          <!-- Role restriction notice -->
           <div class="alert alert-warning small mb-3">
             <i class="bi bi-shield-exclamation me-2"></i>
             <strong>Khusus Presenter:</strong> Pastikan QR Code yang Anda scan adalah QR Code <strong>Presenter</strong> atau <strong>Universal</strong>. QR Code audience tidak dapat digunakan.
@@ -182,8 +208,9 @@ $endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
           <div class="alert alert-info small mb-0">
             <div class="d-flex justify-content-between align-items-center">
               <div>
-                <strong>Window absensi:</strong><br>
-                <?= $startText ?> - <?= $endText ?>
+                <strong>Window absensi (WIB):</strong><br>
+                <?= $startText ?> - <?= $endText ?><br>
+                <small class="text-muted">Waktu sekarang: <?= $currentWIBString ?> WIB</small>
               </div>
               <span class="badge bg-purple">Presenter</span>
             </div>
@@ -198,15 +225,29 @@ $endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
   </div>
 </div>
 
-<!-- MODAL QR SCANNER - IMPROVED VERSION -->
+<!-- MODAL QR SCANNER - Real-time Database Integration -->
 <div class="modal fade" id="qrScannerModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-qr-code-scan me-2"></i> Scan QR Code - Presenter</h5>
+        <h5 class="modal-title"><i class="bi bi-qr-code-scan me-2"></i> Scan QR Code - Real-time Presenter</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" id="closeScannerBtn"></button>
       </div>
       <div class="modal-body text-center">
+        <!-- Real-time Status Alert -->
+        <div class="alert alert-success mb-3" id="realtime-status">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-wifi fs-5"></i>
+            <div class="text-start">
+              <strong>Mode Real-time Aktif (WIB)</strong>
+              <div class="small mt-1">
+                QR Code yang valid akan langsung disimpan ke database dengan timestamp WIB tanpa konfirmasi tambahan.
+                <br><strong>Waktu sekarang:</strong> <span id="current-wib-time"><?= $currentWIBString ?></span> WIB
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Role restriction notice -->
         <div class="alert alert-warning mb-3">
           <div class="d-flex align-items-center gap-2">
@@ -248,6 +289,14 @@ $endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
           <strong>QR Code Terdeteksi:</strong>
           <div id="scanned-content" class="mt-2 font-monospace small"></div>
           <div id="qr-role-info" class="mt-2"></div>
+          <div id="processing-status" class="mt-2"></div>
+        </div>
+
+        <!-- Success Result -->
+        <div id="success-result" class="alert alert-success" style="display:none;">
+          <i class="bi bi-check-circle-fill fs-4 text-success"></i>
+          <h5 class="mt-2">Absensi Berhasil!</h5>
+          <div id="success-details" class="small"></div>
         </div>
 
         <!-- Camera Permission Notice -->
@@ -271,26 +320,47 @@ $endText   = $window['end_ts']   ? date('d M Y H:i', $window['end_ts'])   : '-';
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-        <button type="button" class="btn btn-primary" id="useScannedCode" style="display:none;">
-          <i class="bi bi-check2-circle"></i> Gunakan Kode Ini
+        <button type="button" class="btn btn-success" id="continueScanning" style="display:none;">
+          <i class="bi bi-arrow-repeat"></i> Scan Lagi
         </button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Use Html5-QRCode library for better compatibility -->
+<!-- Scripts -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <?= $this->include('partials/footer') ?>
 
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 let html5QrCode = null;
 let isScanning = false;
+let isProcessing = false;
 let scannedResult = null;
 let cameras = [];
 let currentCameraIndex = 0;
+let scanSuccessful = false;
+
+// WIB Time Helper - Convert browser time to WIB display
+function getWIBTime() {
+  const now = new Date();
+  // Convert to WIB (UTC+7)
+  const wibTime = new Date(now.getTime() + (7 * 60 * 60 * 1000) - (now.getTimezoneOffset() * 60 * 1000));
+  return wibTime.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+// Update current WIB time display every second
+function updateWIBTimeDisplay() {
+  const wibTimeElement = document.getElementById('current-wib-time');
+  if (wibTimeElement) {
+    wibTimeElement.textContent = getWIBTime();
+  }
+}
+
+// Start WIB time updater
+setInterval(updateWIBTimeDisplay, 1000);
 
 // QR Code role detection for presenter validation
 function detectQRRole(qrData) {
@@ -324,7 +394,7 @@ async function initializeCameras() {
   try {
     cameras = await Html5Qrcode.getCameras();
     const debugDiv = document.getElementById('debug-content');
-    debugDiv.innerHTML = `Found ${cameras.length} camera(s)`;
+    debugDiv.innerHTML = `Found ${cameras.length} camera(s) - WIB: ${getWIBTime()}`;
     document.getElementById('debug-info').style.display = 'block';
     
     console.log('Available cameras:', cameras);
@@ -339,8 +409,7 @@ async function initializeCameras() {
 // Initialize QR scanner
 async function initQRScanner() {
   try {
-    // Clean up previous instance
-    if (html5QrCode) {
+    if (html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.SCANNING) {
       try {
         await html5QrCode.stop();
       } catch (e) {
@@ -350,7 +419,6 @@ async function initQRScanner() {
 
     html5QrCode = new Html5Qrcode("reader");
     
-    // Initialize cameras
     const hasCameras = await initializeCameras();
     if (!hasCameras) {
       showError('Tidak ada kamera yang tersedia pada perangkat ini');
@@ -379,7 +447,6 @@ async function startScanner() {
   messageDiv.innerHTML = '<span class="text-info"><i class="bi bi-camera-fill"></i> Memulai kamera...</span>';
 
   try {
-    // Get camera configuration
     const cameraConfig = cameras.length > 0 ? 
       cameras[currentCameraIndex].id : 
       { facingMode: "environment" };
@@ -398,15 +465,14 @@ async function startScanner() {
         onScanSuccess(decodedText);
       },
       (errorMessage) => {
-        // Scanning errors are normal when no QR code is detected
-        // Don't log these as they flood the console
+        // Normal scanning errors when no QR detected
       }
     );
 
     isScanning = true;
     startBtn.style.display = 'none';
     stopBtn.style.display = 'inline-block';
-    messageDiv.innerHTML = '<span class="text-success"><i class="bi bi-camera-video"></i> Scanner aktif - Arahkan ke QR Code</span>';
+    messageDiv.innerHTML = '<span class="text-success"><i class="bi bi-camera-video"></i> Scanner aktif - Arahkan ke QR Code Presenter</span>';
 
   } catch (error) {
     console.error('Failed to start scanner:', error);
@@ -442,7 +508,9 @@ async function stopScanner() {
   }
 
   try {
-    await html5QrCode.stop();
+    if (html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.SCANNING) {
+      await html5QrCode.stop();
+    }
     isScanning = false;
     
     startBtn.style.display = 'inline-block';
@@ -483,14 +551,19 @@ async function switchCamera() {
   }
 }
 
-// Handle successful scan
-function onScanSuccess(decodedText) {
+// Handle successful scan - Real-time processing with WIB timestamp
+async function onScanSuccess(decodedText) {
+  if (isProcessing || scanSuccessful) {
+    return; // Prevent multiple processing
+  }
+
   scannedResult = decodedText;
+  isProcessing = true;
   
   const scannedContentDiv = document.getElementById('scanned-content');
   const qrRoleInfoDiv = document.getElementById('qr-role-info');
   const resultDiv = document.getElementById('scan-result');
-  const useScannedBtn = document.getElementById('useScannedCode');
+  const processingDiv = document.getElementById('processing-status');
   const messageDiv = document.getElementById('scanner-message');
   
   scannedContentDiv.textContent = decodedText;
@@ -501,31 +574,116 @@ function onScanSuccess(decodedText) {
   
   resultDiv.style.display = 'block';
   
-  if (roleInfo.allowed) {
-    useScannedBtn.style.display = 'inline-block';
-    useScannedBtn.className = 'btn btn-success';
-    useScannedBtn.innerHTML = '<i class="bi bi-check2-circle"></i> Gunakan QR Code Ini';
-    useScannedBtn.disabled = false;
-    messageDiv.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> QR Code valid untuk Presenter!</span>';
-    
-    // Auto stop after successful scan
-    setTimeout(() => {
-      stopScanner();
-    }, 1000);
-  } else {
-    useScannedBtn.style.display = 'inline-block';
-    useScannedBtn.className = 'btn btn-danger';
-    useScannedBtn.innerHTML = '<i class="bi bi-x-circle"></i> QR Code Tidak Valid';
-    useScannedBtn.disabled = true;
+  if (!roleInfo.allowed) {
+    processingDiv.innerHTML = '<span class="badge bg-danger">QR Code Ditolak</span>';
     messageDiv.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> QR Code tidak dapat digunakan oleh Presenter</span>';
     
-    // Show role-specific error
+    // Stop scanner after invalid QR
+    setTimeout(async () => {
+      await stopScanner();
+      isProcessing = false;
+    }, 2000);
+    
     Swal.fire({
       icon: 'warning',
       title: 'QR Code Tidak Sesuai Role',
       html: `QR Code ini adalah <strong>${roleInfo.type.toUpperCase()}</strong> yang tidak dapat digunakan oleh Presenter.<br><br>Silakan gunakan QR Code <strong>Presenter</strong> atau <strong>Universal</strong>.`,
       confirmButtonText: 'Mengerti'
     });
+    return;
+  }
+
+  // Valid QR - Process immediately with WIB timestamp
+  const currentWIBTime = getWIBTime();
+  processingDiv.innerHTML = `<span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Memproses ke Database... (WIB: ${currentWIBTime})</span>`;
+  messageDiv.innerHTML = '<span class="text-info"><i class="bi bi-cloud-upload"></i> Menyimpan absensi dengan timestamp WIB...</span>';
+
+  // Stop scanner immediately
+  await stopScanner();
+
+  try {
+    // Send AJAX request to save to database (backend will handle WIB)
+    const response = await fetch('<?= site_url('presenter/absensi/scan') ?>', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: new URLSearchParams({
+        'event_id': '<?= (int)($event['id'] ?? 0) ?>',
+        'token': decodedText,
+        '<?= csrf_token() ?>': '<?= csrf_hash() ?>'
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      // Success - show success UI with WIB timestamp
+      scanSuccessful = true;
+      resultDiv.style.display = 'none';
+      
+      const successDiv = document.getElementById('success-result');
+      const successDetails = document.getElementById('success-details');
+      
+      // Display WIB timestamp from server response
+      const attendanceTimeWIB = result.data.attendance_datetime_wib || currentWIBTime;
+      
+      successDetails.innerHTML = `
+        <div class="row text-start">
+          <div class="col-6"><strong>Nama:</strong><br>${result.data.participant_name}</div>
+          <div class="col-6"><strong>Role:</strong><br><span class="badge bg-purple">${result.data.participant_role}</span></div>
+          <div class="col-6 mt-2"><strong>Event:</strong><br>${result.data.event_title}</div>
+          <div class="col-6 mt-2"><strong>Waktu WIB:</strong><br>${attendanceTimeWIB}</div>
+          <div class="col-12 mt-2"><small class="text-muted">Absensi disimpan dengan timezone WIB (+07:00)</small></div>
+        </div>
+      `;
+      
+      successDiv.style.display = 'block';
+      document.getElementById('continueScanning').style.display = 'inline-block';
+      
+      messageDiv.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Absensi berhasil disimpan dengan timestamp WIB!</span>';
+
+      // Show success notification
+      Swal.fire({
+        icon: 'success',
+        title: 'Absensi Berhasil!',
+        html: `Selamat datang <strong>${result.data.participant_name}</strong>!<br>Anda telah tercatat hadir sebagai <strong>Presenter</strong>.<br><small>Waktu: ${attendanceTimeWIB} WIB</small>`,
+        timer: 4000,
+        showConfirmButton: false
+      });
+
+      // Update page status after delay
+      setTimeout(() => {
+        location.reload(); // Refresh to show updated attendance status
+      }, 4000);
+
+    } else {
+      // Error - show error message
+      processingDiv.innerHTML = '<span class="badge bg-danger">Gagal Menyimpan</span>';
+      messageDiv.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> ${result.message}</span>`;
+      
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal Menyimpan Absensi',
+        text: result.message,
+        confirmButtonText: 'Coba Lagi'
+      });
+    }
+
+  } catch (error) {
+    console.error('Error processing attendance:', error);
+    processingDiv.innerHTML = '<span class="badge bg-danger">Error Koneksi</span>';
+    messageDiv.innerHTML = '<span class="text-danger"><i class="bi bi-wifi-off"></i> Gagal terhubung ke server</span>';
+    
+    Swal.fire({
+      icon: 'error',
+      title: 'Error Koneksi',
+      text: 'Gagal terhubung ke server. Periksa koneksi internet Anda.',
+      confirmButtonText: 'Mengerti'
+    });
+  } finally {
+    isProcessing = false;
   }
 }
 
@@ -540,50 +698,33 @@ function showError(message) {
   messageDiv.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> ${message}</span>`;
 }
 
-// Use scanned code
-function useScannedCode() {
-  if (scannedResult) {
-    const roleInfo = detectQRRole(scannedResult);
-    
-    if (!roleInfo.allowed) {
-      Swal.fire({
-        icon: 'error',
-        title: 'QR Code Tidak Valid',
-        text: 'QR Code ini tidak dapat digunakan oleh Presenter',
-        confirmButtonText: 'Mengerti'
-      });
-      return;
-    }
-    
-    // Close scanner modal
-    const scannerModal = bootstrap.Modal.getInstance(document.getElementById('qrScannerModal'));
-    scannerModal.hide();
-    
-    // Fill token in manual form
-    const tokenInput = document.querySelector('input[name="token"]');
-    if (tokenInput) {
-      tokenInput.value = scannedResult;
-    }
-    
-    // Show token modal
-    const tokenModal = new bootstrap.Modal(document.getElementById('tokenModal'));
-    tokenModal.show();
-    
-    Swal.fire({
-      icon: 'success',
-      title: 'QR Code Valid!',
-      html: `QR Code <strong>${roleInfo.type.toUpperCase()}</strong> berhasil discan dan siap digunakan.`,
-      timer: 2000,
-      showConfirmButton: false
-    });
-  }
+// Continue scanning after success
+function continueScanning() {
+  scanSuccessful = false;
+  isProcessing = false;
+  scannedResult = null;
+  
+  // Reset UI
+  document.getElementById('scan-result').style.display = 'none';
+  document.getElementById('success-result').style.display = 'none';
+  document.getElementById('continueScanning').style.display = 'none';
+  document.getElementById('scanner-message').innerHTML = 'Klik "Mulai Scan" untuk scan QR Code berikutnya';
+  
+  // Clear any errors
+  document.getElementById('scanner-error').style.display = 'none';
 }
 
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
+  // Start WIB time display update
+  updateWIBTimeDisplay();
+
   // Initialize when modal is shown
   document.getElementById('qrScannerModal').addEventListener('shown.bs.modal', async function() {
     await initQRScanner();
+    scanSuccessful = false;
+    isProcessing = false;
+    updateWIBTimeDisplay(); // Update time when modal opens
   });
 
   // Clean up when modal is hidden
@@ -592,34 +733,35 @@ document.addEventListener('DOMContentLoaded', function() {
       await stopScanner();
     }
     
-    // Reset UI
+    // Reset all UI elements
     document.getElementById('startScanBtn').style.display = 'inline-block';
     document.getElementById('stopScanBtn').style.display = 'none';
     document.getElementById('scan-result').style.display = 'none';
-    const useBtn = document.getElementById('useScannedCode');
-    useBtn.style.display = 'none';
-    useBtn.disabled = false;
-    useBtn.className = 'btn btn-primary';
+    document.getElementById('success-result').style.display = 'none';
+    document.getElementById('continueScanning').style.display = 'none';
     document.getElementById('camera-permission').style.display = 'none';
     document.getElementById('scanner-error').style.display = 'none';
     document.getElementById('debug-info').style.display = 'none';
     document.getElementById('scanner-message').innerHTML = 'Klik "Mulai Scan" untuk mengaktifkan kamera';
     
+    // Reset state
     scannedResult = null;
+    scanSuccessful = false;
+    isProcessing = false;
   });
 
   // Button event listeners
   document.getElementById('startScanBtn').addEventListener('click', startScanner);
   document.getElementById('stopScanBtn').addEventListener('click', stopScanner);
   document.getElementById('switchCameraBtn').addEventListener('click', switchCamera);
-  document.getElementById('useScannedCode').addEventListener('click', useScannedCode);
+  document.getElementById('continueScanning').addEventListener('click', continueScanning);
 
   // Token form confirmation
   document.getElementById('tokenForm')?.addEventListener('submit', function(e){
     e.preventDefault();
     Swal.fire({
       title: 'Konfirmasi Absensi Presenter',
-      text: 'Kirim token absensi untuk dicatat sebagai Presenter?',
+      html: `Kirim token absensi untuk dicatat sebagai Presenter?<br><small>Waktu: ${getWIBTime()} WIB</small>`,
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Ya, Kirim',
@@ -686,13 +828,14 @@ document.addEventListener('DOMContentLoaded', function() {
     word-break: break-all;
   }
 
-  /* Role-specific styling */
-  .alert-warning {
-    border-left: 4px solid #f59e0b;
+  /* Success animation */
+  #success-result {
+    animation: slideIn 0.5s ease-out;
   }
-  
-  .alert-info {
-    border-left: 4px solid #3b82f6;
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   /* Hide HTML5-QRCode default styling */
@@ -702,5 +845,11 @@ document.addEventListener('DOMContentLoaded', function() {
   
   #reader__header_message {
     display: none !important;
+  }
+
+  /* WIB Time highlight */
+  #current-wib-time {
+    font-weight: 600;
+    color: #059669;
   }
 </style>
