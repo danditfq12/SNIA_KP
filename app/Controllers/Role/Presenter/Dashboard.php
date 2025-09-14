@@ -14,7 +14,7 @@ class Dashboard extends BaseController
         $this->db = Database::connect();
     }
 
-    /* ========== Utils ========== */
+    /* ================= Utils ================= */
 
     private function uid(): int
     {
@@ -67,13 +67,6 @@ class Dashboard extends BaseController
         return isset($this->tableCols($table)[strtolower($col)]);
     }
 
-    /**
-     * Bangun COALESCE yang HANYA berisi kolom yang benar-benar ada pada tabel fisik.
-     * $tablePhys  = nama tabel fisik di DB (untuk cek kolom)
-     * $tableAlias = alias/nama yang dipakai di SELECT (bisa sama dengan fisik)
-     * $cands      = kandidat kolom (berurutan prioritas)
-     * $alias      = nama alias untuk hasil COALESCE
-     */
     private function buildCoalesceChecked(string $tablePhys, string $tableAlias, array $cands, string $alias): string
     {
         $ok = [];
@@ -92,7 +85,7 @@ class Dashboard extends BaseController
         return 'DATE(' . $this->db->protectIdentifiers("$tableAlias.$col") . ')';
     }
 
-    /* ========== Data Providers ========== */
+    /* ================= Data Providers ================= */
 
     private function getStats(int $uid): array
     {
@@ -118,9 +111,9 @@ class Dashboard extends BaseController
             $totalAbstrak = (int)$this->db->table('abstrak')->where('id_user', $uid)->countAllResults();
         }
 
+        // absensi hari ini
         $todayAbsensi = [];
         if ($this->tableExists('absensi')) {
-            // cari kolom tanggal yang ada
             $dateCol = null;
             foreach (['waktu_scan','scan_time','scanned_at','timestamp','created_at','created_on','waktu'] as $c) {
                 if ($this->colExists('absensi', $c)) { $dateCol = $c; break; }
@@ -151,18 +144,17 @@ class Dashboard extends BaseController
     {
         if (!$this->tableExists('events')) return [];
 
+        // event yang pernah ada activity
         $ids = [];
         if ($this->tableExists('abstrak')) {
-            $rows = $this->db->table('abstrak')
-                ->distinct()->select('event_id')
-                ->where('id_user',$uid)->get()->getResultArray();
-            foreach ($rows as $r) if (!empty($r['event_id'])) $ids[(int)$r['event_id']] = true;
+            foreach ($this->db->table('abstrak')->distinct()->select('event_id')->where('id_user',$uid)->get()->getResultArray() as $r) {
+                if (!empty($r['event_id'])) $ids[(int)$r['event_id']] = true;
+            }
         }
         if ($this->tableExists('pembayaran')) {
-            $rows = $this->db->table('pembayaran')
-                ->distinct()->select('event_id')
-                ->where('id_user',$uid)->get()->getResultArray();
-            foreach ($rows as $r) if (!empty($r['event_id'])) $ids[(int)$r['event_id']] = true;
+            foreach ($this->db->table('pembayaran')->distinct()->select('event_id')->where('id_user',$uid)->get()->getResultArray() as $r) {
+                if (!empty($r['event_id'])) $ids[(int)$r['event_id']] = true;
+            }
         }
         if (!$ids) return [];
 
@@ -186,18 +178,26 @@ class Dashboard extends BaseController
                     ->where('status','verified')->countAllResults() > 0;
             }
 
-            $status = $accepted && $verified ? 'Selesai' : ($accepted ? 'Abstrak Diterima' : 'Terdaftar');
+            // status berdasarkan kelengkapan berkas
+            $statusCode = ($accepted && $verified) ? 'complete' : ($accepted ? 'accepted' : 'registered');
+            $statusLabel= $statusCode === 'complete' ? 'Terverifikasi' : ($statusCode === 'accepted' ? 'Abstrak Diterima' : 'Terdaftar');
+            $badge      = $statusCode === 'complete' ? 'success' : ($statusCode === 'accepted' ? 'primary' : 'secondary');
 
             $out[] = [
                 'id'          => (int)$e['id'],
                 'title'       => (string)$e['title'],
                 'event_title' => (string)$e['title'],
-                'status'      => $status,
+                'event_date'  => $e['event_date'] ?? null,
+                'event_time'  => $e['event_time'] ?? null,
+                'status_code' => $statusCode,
+                'status'      => $statusLabel,
+                'badge'       => $badge,
             ];
         }
         return $out;
     }
 
+    /** Progress (hanya yang belum complete) */
     private function getProgressEvents(int $uid): array
     {
         if (!$this->tableExists('events')) return [];
@@ -222,44 +222,51 @@ class Dashboard extends BaseController
         foreach ($events as $e) {
             $eventId = (int)$e['id'];
 
-            $abs = null; $absAccepted = false; $hasAbs = false;
+            $absAccepted = false; $hasAbs=false; $absStatus=null;
             if ($this->tableExists('abstrak')) {
                 $abs = $this->db->table('abstrak')
                     ->select('status')->where('id_user',$uid)->where('event_id',$eventId)
                     ->orderBy('id_abstrak','DESC')->get()->getRowArray();
-                if ($abs) {
-                    $hasAbs      = true;
-                    $absAccepted = strtolower((string)$abs['status']) === 'diterima';
-                }
+                if ($abs){ $hasAbs=true; $absStatus=strtolower((string)$abs['status']); $absAccepted=($absStatus==='diterima'); }
             }
 
-            $pay = null; $hasPay = false; $payVerified = false;
+            $payVerified=false; $hasPay=false; $payStatus=null;
             if ($this->tableExists('pembayaran')) {
                 $pay = $this->db->table('pembayaran')
                     ->select('status')->where('id_user',$uid)->where('event_id',$eventId)
                     ->orderBy('id_pembayaran','DESC')->get()->getRowArray();
-                if ($pay) {
-                    $hasPay      = true;
-                    $payVerified = strtolower((string)$pay['status']) === 'verified';
-                }
+                if ($pay){ $hasPay=true; $payStatus=strtolower((string)$pay['status']); $payVerified=($payStatus==='verified'); }
             }
 
-            // Selesai? skip dari progress
-            if ($absAccepted && $payVerified) continue;
+            if ($absAccepted && $payVerified) continue; // sudah complete → tidak ditampilkan
+
+            $step_daftar_done = ($hasAbs || $hasPay);
+            $step_abs_done    = $absAccepted;
+            $step_bayar_done  = $hasPay;
+            $step_verif_done  = $payVerified;
+
+            $current = 'daftar';
+            if ($step_daftar_done && !$step_abs_done) $current = 'abstrak';
+            if ($step_abs_done && !$step_bayar_done)  $current = 'bayar';
+            if ($step_bayar_done && !$step_verif_done)$current = 'verifikasi';
 
             $out[] = [
-                'event_id' => $eventId,
-                'title'    => (string)$e['title'],
-                'steps'    => [
-                    'abstrak'    => $hasAbs,
-                    'review'     => $abs ? (strtolower((string)$abs['status']) !== 'menunggu' && strtolower((string)$abs['status']) !== 'sedang_direview') : false,
-                    'bayar'      => $hasPay,
-                    'verifikasi' => $payVerified,
+                'event_id'   => $eventId,
+                'title'      => (string)$e['title'],
+                'event_date' => $e['event_date'] ?? null,
+                'event_time' => $e['event_time'] ?? null,
+                'steps'      => [
+                    'daftar'     => $step_daftar_done ? 'done' : ($current==='daftar'?'current':'todo'),
+                    'abstrak'    => $step_abs_done    ? 'done' : ($current==='abstrak'?'current':'todo'),
+                    'bayar'      => $step_bayar_done  ? 'done' : ($current==='bayar'?'current':'todo'),
+                    'verifikasi' => $step_verif_done  ? 'done' : ($current==='verifikasi'?'current':'todo'),
                 ],
-                'hint'     => $absAccepted ? 'Lanjutkan pembayaran & verifikasi.' : 'Menunggu proses abstrak / pembayaran.',
+                'labels'     => [
+                    'abs_status' => $absStatus,
+                    'pay_status' => $payStatus,
+                ],
             ];
         }
-
         return $out;
     }
 
@@ -357,7 +364,7 @@ class Dashboard extends BaseController
             }
         }
 
-        // Terdaftar (saat pembayaran dibuat)
+        // Terdaftar (pakai waktu create pembayaran)
         if ($this->tableExists('pembayaran')) {
             $tsReg = $this->buildCoalesceChecked('pembayaran','p',
                 ['created_at','tanggal_bayar','updated_at','tanggal_transaksi'],
@@ -380,7 +387,7 @@ class Dashboard extends BaseController
             }
         }
 
-        // Event baru (14 hari terakhir)
+        // Event baru (2 minggu)
         if ($this->tableExists('events')) {
             $since = date('Y-m-d', strtotime('-14 days'));
             $tsEvt = $this->buildCoalesceChecked('events','events',
@@ -405,11 +412,10 @@ class Dashboard extends BaseController
 
         usort($items, fn($a,$b) => ($b['time'] <=> $a['time']));
         if ($limit > 0) $items = array_slice($items, 0, $limit);
-
         return $items;
     }
 
-    /* ========== Page ========== */
+    /* ================= Page ================= */
 
     public function dashboard()
     {
@@ -418,7 +424,7 @@ class Dashboard extends BaseController
 
         $stats          = $this->getStats($uid);
         $registrations  = $this->getRegistrations($uid);
-        $progressEvents = $this->getProgressEvents($uid);
+        $progressEvents = $this->getProgressEvents($uid); // hanya yang belum complete
         $todaySchedule  = $this->getTodaySchedule($uid);
         $activities     = $this->getActivities($uid);
 
