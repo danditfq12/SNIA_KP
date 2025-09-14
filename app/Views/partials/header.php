@@ -11,11 +11,9 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
   <style>
-    /* ==== SIZE OVERRIDES ONLY ==== */
     :root{
-      /* lebih tinggi & lebih lebar */
-      --topbar-h: 80px;           /* semula 64px */
-      --sidebar-w: 260px;         /* semula 220px */
+      --topbar-h: 80px;
+      --sidebar-w: 300px;
       --ring:#eef0f4;
     }
     html,body{ background:#f5f7fb; margin:0; }
@@ -24,19 +22,22 @@
       background:#fff; border-bottom:1px solid var(--ring);
       position:fixed; inset:0 0 auto 0; height:var(--topbar-h); z-index:1000;
       display:flex; align-items:center; justify-content:space-between;
-      padding:0 1.25rem;          /* sedikit lebih lebar */
+      padding:0 1.25rem;
     }
     .btn-ghost{ background:transparent; border:0; box-shadow:none; }
-    .avatar{ width:42px; height:42px; border-radius:50%; object-fit:cover; } /* semula 36px */
+    .avatar{ width:42px; height:42px; border-radius:50%; object-fit:cover; }
 
     #content{ padding-top:var(--topbar-h) !important; }
     #content main{ padding-top:0 !important; }
 
-    .dropdown-menu-prof { min-width:260px; } /* semula 240px */
-    .topbar .fw-semibold{ font-size:1.1rem; } /* judul sedikit lebih besar */
+    .dropdown-menu-prof { min-width:260px; }
+    .topbar .fw-semibold{ font-size:1.1rem; }
+
+    /* Matikan overlay lama jika masih ada di layout lain */
+    #overlay{ display:none !important; opacity:0 !important; pointer-events:none !important; }
 
     @media (max-width:576px){
-      :root{ --topbar-h: 70px; }  /* hp tetap proporsional */
+      :root{ --topbar-h: 70px; }
       .dropdown-menu-prof { min-width:200px; font-size:.95rem; }
       .nameblock{ display:none; }
       .avatar{ width:38px; height:38px; }
@@ -46,8 +47,9 @@
 <body>
   <header class="topbar">
     <div class="d-flex align-items-center gap-2">
-      <button class="btn btn-ghost d-lg-none" onclick="toggleSidebar && toggleSidebar()" aria-label="Menu">
-        <i class="bi bi-list fs-3"></i>  <!-- icon sedikit lebih besar -->
+      <!-- Pakai wrapper agar pasti ada fungsinya -->
+      <button class="btn btn-ghost d-lg-none" onclick="openSidebar()" aria-label="Menu">
+        <i class="bi bi-list fs-3"></i>
       </button>
       <div class="fw-semibold"><?= esc($title ?? 'SNIA') ?></div>
     </div>
@@ -92,3 +94,8 @@
       </div>
     </div>
   </header>
+
+  <script>
+    // Wrapper yang selalu ada — dipanggil dari tombol burger
+    function openSidebar(){ if (window.toggleSidebar) window.toggleSidebar(true); }
+  </script>
