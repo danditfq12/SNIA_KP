@@ -1,99 +1,169 @@
 <?php
-  // path helper & checker seperti di audience
+  // Helper path + isActive disamakan dengan contoh Audience
   $path = trim(service('uri')->getPath(), '/');
-  function isActiveR($patterns, $path){
+  function isActive($patterns, $path){
     foreach ((array)$patterns as $p){
       $p = trim($p, '/');
       if ($p === $path) return true;
-      if (substr($p, -2) === '/*'){
-        $prefix = rtrim($p, '/*');
-        if ($prefix==='' || strpos($path, $prefix)===0) return true;
-      } else {
-        if (strpos($path, $p)===0) return true;
-      }
+      if (substr($p, -2) === '/*') { $prefix = rtrim($p, '/*'); if ($prefix==='' || strpos($path, $prefix)===0) return true; }
+      else { if (strpos($path, $p)===0) return true; }
     }
     return false;
   }
 ?>
-<aside id="sidebar" class="sidebar p-3 shadow-sm">
-  <div class="d-flex align-items-center justify-content-between mb-4">
-    <div class="d-flex align-items-center gap-3">
-      <div class="rounded-3 p-2 bg-primary-subtle text-primary" style="font-size:1.25rem;">
-        <i class="bi bi-sliders"></i>
-      </div>
-      <span class="brand fw-bold" style="font-size:1.05rem;">SNIA Reviewer</span>
+<aside id="sidebar" class="admin-like-sidebar">
+  <div class="brand-wrap d-flex align-items-center gap-2">
+    <span class="ico-brand d-inline-grid place-items-center"><i class="bi bi-sliders"></i></span>
+    <div>
+      <div class="title">SNIA Reviewer</div>
+      <div class="sub">Panel</div>
     </div>
-    <button class="btn btn-sm d-lg-none" onclick="toggleSidebar()" aria-label="Tutup menu">
+    <button class="btn btn-sm ms-auto d-lg-none text-white-50" type="button"
+            aria-label="Tutup menu" onclick="window.toggleSidebar(false)">
       <i class="bi bi-x-lg"></i>
     </button>
   </div>
 
-  <nav class="nav flex-column">
-    <a class="nav-link py-3 px-3 rounded <?= isActiveR('reviewer/dashboard', $path) ? 'active' : '' ?>"
+  <nav class="nav flex-column px-2 py-2">
+    <a class="nav-link <?= isActive('reviewer/dashboard', $path) ? 'is-active':'' ?>"
        href="<?= site_url('reviewer/dashboard') ?>">
-       <i class="bi bi-speedometer2 me-2" style="font-size:1.15rem;"></i>Dashboard
+      <span class="ico"><i class="bi bi-speedometer2"></i></span><span>Dashboard</span>
     </a>
 
-    <a class="nav-link py-3 px-3 rounded <?= isActiveR(['reviewer/abstrak','reviewer/abstrak/*'], $path) ? 'active' : '' ?>"
+    <div class="menu-label">Penilaian</div>
+    <a class="nav-link <?= isActive(['reviewer/abstrak','reviewer/abstrak/*'], $path) ? 'is-active':'' ?>"
        href="<?= site_url('reviewer/abstrak') ?>">
-       <i class="bi bi-file-earmark-text me-2" style="font-size:1.15rem;"></i>Abstrak
+      <span class="ico"><i class="bi bi-file-earmark-text"></i></span><span>Abstrak</span>
     </a>
 
-    <a class="nav-link py-3 px-3 rounded <?= isActiveR('reviewer/riwayat', $path) ? 'active' : '' ?>"
+    <a class="nav-link <?= isActive('reviewer/riwayat', $path) ? 'is-active':'' ?>"
        href="<?= site_url('reviewer/riwayat') ?>">
-       <i class="bi bi-clock-history me-2" style="font-size:1.15rem;"></i>Riwayat
+      <span class="ico"><i class="bi bi-clock-history"></i></span><span>Riwayat</span>
     </a>
   </nav>
 </aside>
 
+<!-- Overlay (HP only, sama seperti Audience) -->
+<div id="sidebarOverlay" class="sb-overlay"></div>
+
 <style>
-  /* ==== SIZE OVERRIDES ONLY (selaras audience) ==== */
-  #sidebar{
-    position:fixed;
-    top:var(--topbar-h);          /* 80px dari header */
-    left:0;
-    width:var(--sidebar-w);       /* 260px dari header */
-    background:#fff !important;
-    border-right:1px solid var(--ring);
-    height:calc(100vh - var(--topbar-h));
-    overflow-y:auto;
-    transition:transform .3s ease-in-out;
-    z-index:1050 !important;
-    box-shadow:none !important;
+  :root{
+    --presenter-sidebar-w: 300px;   /* samakan lebar dengan Audience */
+    --topbar-h: 80px;
   }
 
-  .nav-link{
-    color:#444;
-    transition:all .22s ease;
-    font-size:1rem;               /* sedikit lebih besar */
+  /* ====== Gaya Sidebar disamakan dengan Audience ====== */
+  .admin-like-sidebar{
+    position:fixed; left:0; top:0; height:100vh; width:var(--presenter-sidebar-w);
+    background: linear-gradient(180deg,#2563eb 0%,#1e40af 100%);
+    box-shadow: 4px 0 22px rgba(0,0,0,.12), inset -1px 0 0 rgba(255,255,255,.10);
+    z-index:1030; overflow-y:auto; color:#fff;
+    transform: translateX(0); transition: transform .26s ease;
   }
-  .nav-link:hover{ background:#f1f5f9; padding-left:1.5rem; }
-  .nav-link.active{ background:#0d6efd; color:#fff !important; font-weight:600; }
+  .admin-like-sidebar::-webkit-scrollbar{ width:10px }
+  .admin-like-sidebar::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.25); border-radius:8px }
 
+  .admin-like-sidebar .brand-wrap{
+    position:relative; padding:14px 18px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .admin-like-sidebar .brand-wrap .title{ font-weight:700; }
+  .admin-like-sidebar .brand-wrap .sub{ color:rgba(255,255,255,.7); font-size:.85rem }
+  .admin-like-sidebar .brand-wrap::after{
+    content:""; position:absolute; left:0; right:0; bottom:0; height:1px;
+    background:linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.28), rgba(255,255,255,.06));
+  }
+  .ico-brand{
+    width:34px; height:34px; border-radius:10px;
+    background:rgba(255,255,255,.18); color:#fff; display:grid; place-items:center;
+    font-size:1.05rem;
+  }
+
+  .admin-like-sidebar .menu-label{
+    color:rgba(255,255,255,.6); font-size:.75rem; text-transform:uppercase;
+    letter-spacing:.06em; padding:10px 14px 6px; margin-top:8px
+  }
+
+  .admin-like-sidebar .nav-link{
+    display:flex; align-items:center; gap:12px;
+    color:rgba(255,255,255,.92); text-decoration:none;
+    padding:11px 14px; margin:4px 8px; border-radius:12px;
+    transition:.18s ease;
+  }
+  .admin-like-sidebar .nav-link .ico{
+    width:28px; height:28px; display:grid; place-items:center;
+    font-size:1.05rem; color:#fff; background:rgba(255,255,255,.14); border-radius:10px
+  }
+  .admin-like-sidebar .nav-link:hover{
+    background:rgba(255,255,255,.12); color:#fff; transform:translateX(4px)
+  }
+  .admin-like-sidebar .nav-link.is-active{
+    background:rgba(255,255,255,.22); color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.12) inset
+  }
+
+  /* Geser konten saat desktop */
   @media(min-width:992px){
-    #content{ margin-left:var(--sidebar-w); transition:margin-left .3s ease; }
+    #content{ margin-left: var(--presenter-sidebar-w); }
   }
-  @media(max-width:991px){
-    #sidebar{ top:0; height:100vh; transform:translateX(-100%); }
-    #sidebar.show{ transform:translateX(0); }
-    #content{ margin-left:0; }
+
+  /* HP: sidebar hidden by default */
+  @media(max-width:991.98px){
+    .admin-like-sidebar{ transform: translateX(-100%); top:0; height:100vh; }
+    .admin-like-sidebar.show{ transform: translateX(0); }
+  }
+
+  /* Overlay HP only */
+  .sb-overlay{
+    display:none; position:fixed; inset:0;
+    background: rgba(0,0,0,.10);
+    opacity:0; pointer-events:none;
+    z-index: 1020; transition: opacity .22s ease;
+  }
+  @media(max-width:991.98px){
+    .sb-overlay{ display:block; }
+    .sb-overlay.show{ opacity:1; pointer-events:auto; }
   }
 </style>
 
 <script>
-  // Tutup sidebar saat klik menu di HP (sinkron dengan overlay di footer)
-  (function(){
-    const mq = window.matchMedia('(max-width: 991px)');
-    document.querySelectorAll('#sidebar .nav-link').forEach(a=>{
-      a.addEventListener('click', function(){
-        if (mq.matches) {
-          const sb = document.getElementById('sidebar');
-          const ov = document.getElementById('overlay');
-          sb.classList.remove('show');
-          ov?.classList.remove('show','delayed','visible');
-          document.body.classList.remove('sb-open');
-        }
-      });
-    });
-  })();
+(function(){
+  const isMobile = () => window.matchMedia('(max-width: 991.98px)').matches;
+
+  // API disamakan dengan contoh Audience
+  window.toggleSidebar = function (show) {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebarOverlay');
+    if (!sb) return;
+    const willShow = (typeof show === 'boolean') ? show : !sb.classList.contains('show');
+
+    if (willShow) {
+      sb.classList.add('show');
+      if (isMobile()) {
+        ov && ov.classList.add('show');
+        document.body.style.overflow = 'hidden';
+      }
+    } else {
+      sb.classList.remove('show');
+      ov && ov.classList.remove('show');
+      document.body.style.overflow = '';
+    }
+  };
+
+  // klik overlay = tutup (HP)
+  document.getElementById('sidebarOverlay')?.addEventListener('click', ()=> window.toggleSidebar(false));
+
+  // Tutup saat klik menu (HP)
+  const mq = window.matchMedia('(max-width: 991.98px)');
+  document.querySelectorAll('#sidebar .nav-link').forEach(a=>{
+    a.addEventListener('click', function(){ if (mq.matches) window.toggleSidebar(false); });
+  });
+
+  // Bersihkan state saat resize ke desktop
+  window.addEventListener('resize', ()=>{
+    if (!mq.matches) {
+      document.getElementById('sidebarOverlay')?.classList.remove('show');
+      document.body.style.overflow = '';
+    }
+  });
+})();
 </script>

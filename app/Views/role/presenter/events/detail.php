@@ -35,12 +35,12 @@ $price   = (int)($price ?? 0);
               <h5 class="mb-0"><i class="bi bi-calendar-event me-2"></i>Informasi Event</h5>
             </div>
             <div class="card-body">
-              <div class="mb-2"><strong>Format:</strong> <?= strtoupper($event['format']) ?></div>
+              <div class="mb-2"><strong>Format Event:</strong> <?= strtoupper($event['format']) ?></div>
               <div class="mb-2"><strong>Lokasi:</strong> <?= esc($event['location'] ?: '-') ?></div>
               <?php if (!empty($event['zoom_link'])): ?>
                 <div class="mb-2"><strong>Zoom:</strong> <a href="<?= esc($event['zoom_link']) ?>" target="_blank">Link</a></div>
               <?php endif; ?>
-              <div class="mb-2"><strong>Harga Presenter:</strong> Rp <?= number_format($price,0,',','.') ?></div>
+              <div class="mb-2"><strong>Harga Pendaftaran:</strong> Rp <?= number_format($price,0,',','.') ?></div>
               <hr>
               <div class="mb-2 small text-muted">
                 Tutup Pendaftaran: <strong><?= $event['registration_deadline'] ? date('d M Y H:i', strtotime($event['registration_deadline'])) : '-' ?></strong><br>

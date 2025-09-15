@@ -71,26 +71,6 @@ if ($participationType === 'online') {
         </div>
       </div>
 
-      <!-- PARTICIPATION TYPE INFO ALERT -->
-      <div class="alert alert-info border-0 shadow-sm mb-4">
-        <div class="d-flex align-items-center gap-2">
-          <i class="bi bi-info-circle-fill fs-5"></i>
-          <div>
-            <strong>Informasi QR Code untuk Audience</strong>
-            <div class="small mt-1">
-              Anda terdaftar sebagai peserta <span class="badge <?= $participationBadgeClass ?> me-1"><?= $participationDisplay ?></span>
-              <br>QR Code yang dapat digunakan:
-              <?php if ($participationType === 'online'): ?>
-                <span class="badge bg-info me-1">Audience Online</span> atau <span class="badge bg-primary me-1">Universal QR</span>
-              <?php elseif ($participationType === 'offline'): ?>
-                <span class="badge bg-success me-1">Audience Offline</span> atau <span class="badge bg-primary me-1">Universal QR</span>
-              <?php else: ?>
-                <span class="badge bg-info me-1">Audience Online</span>, <span class="badge bg-success me-1">Audience Offline</span>, atau <span class="badge bg-primary me-1">Universal QR</span>
-              <?php endif; ?>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <!-- STATUS + AKSI -->
       <div class="card shadow-sm mb-4">
@@ -102,9 +82,9 @@ if ($participationType === 'online') {
               <?php if ($already): ?>
                 <div class="text-success"><i class="bi bi-check-circle"></i> Anda sudah tercatat hadir sebagai Audience <?= $participationDisplay ?>.</div>
               <?php elseif ($window['is_open']): ?>
-                <div class="text-primary"><i class="bi bi-door-open"></i> Window absensi sedang dibuka untuk Audience.</div>
+                <div class="text-primary"><i class="bi bi-door-open"></i> Silahkan Melakukan Absensi</div>
               <?php else: ?>
-                <div class="text-muted"><i class="bi bi-lock"></i> Window absensi tertutup <?= $window['reason'] ? '('.esc($window['reason']).')' : '' ?>.</div>
+                <div class="text-muted"><i class="bi bi-lock"></i> Absensi Belum Dibuka <?= $window['reason'] ? '('.esc($window['reason']).')' : '' ?>.</div>
               <?php endif; ?>
               <div class="small text-muted mt-1">
                 Lokasi: <?= esc($e['location'] ?? '-') ?>

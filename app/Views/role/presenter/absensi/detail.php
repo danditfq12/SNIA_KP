@@ -46,21 +46,6 @@ $currentWIBString = $currentWIB->format('Y-m-d H:i:s');
         </div>
       </div>
 
-      <!-- ROLE INFO ALERT -->
-      <div class="alert alert-info border-0 shadow-sm mb-4">
-        <div class="d-flex align-items-center gap-2">
-          <i class="bi bi-info-circle-fill fs-5"></i>
-          <div>
-            <strong>Informasi QR Code untuk Presenter</strong>
-            <div class="small mt-1">
-              Sebagai <strong>Presenter</strong>, Anda hanya dapat menggunakan:
-              <span class="badge bg-purple me-1">Presenter QR</span> atau 
-              <span class="badge bg-primary me-1">Universal QR</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- STATUS + AKSI -->
       <div class="card shadow-sm mb-4">
         <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">

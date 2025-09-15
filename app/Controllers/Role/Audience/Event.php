@@ -17,17 +17,28 @@ class Event extends BaseController
         $this->db = \Config\Database::connect();
     }
 
-    /** LIST EVENT + filter + status registrasi & pembayaran */
+    /**
+     * LIST EVENT:
+     * - Filter q (judul/lokasi) & format
+     * - Hitung reg_open per event
+     * - Pisah ke openEvents/closedEvents
+     * - Sertakan status registrasi/pembayaran user (myRegs)
+     */
     public function index()
     {
-        $q      = trim((string) $this->request->getGet('q'));
-        $format = trim((string) $this->request->getGet('format'));
+        $qRaw   = (string)$this->request->getGet('q');
+        $format = (string)$this->request->getGet('format');
 
+        $q = trim($qRaw);
+        $fmt = trim($format);
+        $isSearching = ($q !== '') || ($fmt !== '');
+
+        // ambil event aktif sesuai filter
         $eventM  = new EventModel();
         $builder = $eventM->where('is_active', true);
 
-        if (in_array($format, ['online','offline','both'], true)) {
-            $builder->where('format', $format);
+        if (in_array($fmt, ['online','offline','both'], true)) {
+            $builder->where('format', $fmt);
         }
         if ($q !== '') {
             $builder->groupStart()
@@ -36,9 +47,12 @@ class Event extends BaseController
                     ->groupEnd();
         }
 
-        $events = $builder->orderBy('event_date','ASC')->orderBy('event_time','ASC')->findAll();
+        $events = $builder
+            ->orderBy('event_date', 'ASC')
+            ->orderBy('event_time', 'ASC')
+            ->findAll();
 
-        // flag reg_open
+        // hitung reg_open (pendaftaran dibuka) per event
         $now = time();
         foreach ($events as &$e) {
             $regActive = !empty($e['registration_active']);
@@ -53,24 +67,32 @@ class Event extends BaseController
         }
         unset($e);
 
-        // status registrasi & pembayaran milik user
-        $userId = (int) (session()->get('id_user') ?? 0);
+        // pisah ke dua list
+        $openEvents   = [];
+        $closedEvents = [];
+        foreach ($events as $ev) {
+            if (!empty($ev['reg_open'])) $openEvents[] = $ev; else $closedEvents[] = $ev;
+        }
+
+        // status registrasi & pembayaran user (dipakai view untuk tombol/badge)
+        $userId = (int)(session()->get('id_user') ?? 0);
         $myRegs = [];
-        if ($userId && !empty($events)) {
-            $ids  = array_column($events, 'id');
+        if ($userId) {
+            $ids = array_column($events, 'id');
             if (!empty($ids)) {
                 $regM = new EventRegistrationModel();
                 $regs = $regM->select('id, id_event, status')
                              ->where('id_user', $userId)
-                             ->whereIn('id_event', $ids)->findAll();
+                             ->whereIn('id_event', $ids)
+                             ->findAll();
 
                 // pembayaran terbaru per event
                 $payRows = $this->db->table('pembayaran')
-                            ->select('id_pembayaran, event_id, status, tanggal_bayar')
-                            ->where('id_user', $userId)
-                            ->whereIn('event_id', $ids)
-                            ->orderBy('tanggal_bayar','DESC')
-                            ->get()->getResultArray();
+                    ->select('id_pembayaran, event_id, status, tanggal_bayar')
+                    ->where('id_user', $userId)
+                    ->whereIn('event_id', $ids)
+                    ->orderBy('tanggal_bayar', 'DESC')
+                    ->get()->getResultArray();
 
                 $latestPay = [];
                 foreach ($payRows as $p) {
@@ -86,7 +108,7 @@ class Event extends BaseController
                 foreach ($regs as $r) {
                     $eid = (int)$r['id_event'];
                     $myRegs[$eid] = [
-                        'reg_id'         => (int)$r['id'], // <<<<<< dipakai untuk /pembayaran/instruction/{regId}
+                        'reg_id'         => (int)$r['id'],     // untuk /pembayaran/instruction/{reg_id}
                         'status'         => $r['status'],
                         'payment_id'     => $latestPay[$eid]['payment_id']     ?? null,
                         'payment_status' => $latestPay[$eid]['payment_status'] ?? null,
@@ -96,10 +118,16 @@ class Event extends BaseController
         }
 
         return view('role/audience/events/index', [
-            'events' => $events,
-            'q'      => $q,
-            'format' => $format,
-            'myRegs' => $myRegs,
+            'title'         => 'Event Tersedia',
+            'q'             => $qRaw,
+            'format'        => $fmt,
+            'isSearching'   => $isSearching,
+            'openEvents'    => $openEvents,
+            'closedEvents'  => $closedEvents,
+            'myRegs'        => $myRegs,
+            'total_all'     => count($events),
+            'total_open'    => count($openEvents),
+            'total_closed'  => count($closedEvents),
         ]);
     }
 
@@ -112,7 +140,7 @@ class Event extends BaseController
             return redirect()->to('/audience/events')->with('error','Event tidak ditemukan atau tidak aktif.');
         }
 
-        $idUser  = (int) (session()->get('id_user') ?? 0);
+        $idUser  = (int)(session()->get('id_user') ?? 0);
         $regM    = new EventRegistrationModel();
         $myReg   = $regM->findUserReg($id, $idUser); // berisi id(reg_id), status, mode_kehadiran, dst.
         $options = $eventM->getParticipationOptions($id, 'audience');
@@ -140,7 +168,7 @@ class Event extends BaseController
             return redirect()->to('/audience/events/detail/'.$id)->with('error','Pendaftaran event telah ditutup.');
         }
 
-        $idUser   = (int) (session()->get('id_user') ?? 0);
+        $idUser   = (int)(session()->get('id_user') ?? 0);
         $regM     = new EventRegistrationModel();
         $existing = $regM->findUserReg($id, $idUser);
         if ($existing) {
@@ -165,7 +193,7 @@ class Event extends BaseController
     /** submit pilihan mode → buat registrasi → ke instruksi pembayaran */
     public function register(int $id)
     {
-        $idUser = (int) (session()->get('id_user') ?? 0);
+        $idUser = (int)(session()->get('id_user') ?? 0);
         if ($idUser <= 0) return redirect()->to('/auth/login')->with('error','Silakan login.');
 
         $eventM = new EventModel();
@@ -188,7 +216,7 @@ class Event extends BaseController
                              ->with('warning','Kamu sudah terdaftar pada event ini.');
         }
 
-        $mode  = (string) $this->request->getPost('mode_kehadiran');
+        $mode  = (string)$this->request->getPost('mode_kehadiran');
         $valid = $eventM->getParticipationOptions($id, 'audience');
         if (!in_array($mode, $valid, true)) {
             return redirect()->back()->withInput()->with('error','Mode kehadiran tidak valid.');
@@ -210,7 +238,7 @@ class Event extends BaseController
             $admins = (new UserModel())->select('id_user')->where('role','admin')->where('status','aktif')->findAll();
             foreach ($admins as $a) {
                 $notif->notify(
-                    (int)$a['id_user'], 'registration','Pendaftaran audience baru',
+                    (int)$a['id_user'], 'registration', 'Pendaftaran audience baru',
                     "Peserta baru mendaftar: {$ev['title']}.",
                     site_url('admin/event/detail/' . $id)
                 );

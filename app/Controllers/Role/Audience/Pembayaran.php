@@ -24,26 +24,38 @@ class Pembayaran extends BaseController
     private function uid(): int { return (int) (session('id_user') ?? 0); }
 
     public function index()
-    {
-        $uid = $this->uid(); if(!$uid) return redirect()->to('/auth/login');
+{
+    $uid = $this->uid(); if(!$uid) return redirect()->to('/auth/login');
 
-        $rows = $this->payM->select('id_pembayaran,event_id,jumlah,metode,status,tanggal_bayar,bukti_bayar')
-                ->where('id_user',$uid)->orderBy('tanggal_bayar','DESC')->findAll();
+    $rows = $this->payM->select('id_pembayaran,event_id,jumlah,metode,status,tanggal_bayar,bukti_bayar')
+            ->where('id_user',$uid)->orderBy('tanggal_bayar','DESC')->findAll();
 
-        // map event title
-        $eventMap = [];
-        if ($rows) {
-            $ids = array_unique(array_column($rows,'event_id'));
+    // map event title
+    $eventMap = [];
+    if ($rows) {
+        $ids = array_unique(array_column($rows,'event_id'));
+        if (!empty($ids)) {
             $evs = $this->eventM->select('id,title')->whereIn('id',$ids)->findAll();
             foreach ($evs as $e) $eventMap[(int)$e['id']] = $e['title'];
         }
-
-        return view('role/audience/pembayaran/index', [
-            'title'    => 'Pembayaran',
-            'payments' => $rows,
-            'eventMap' => $eventMap,
-        ]);
     }
+
+    // ===== pindahan kecil dari view: pisah aktif vs riwayat + badge map
+    $badgeMap = ['pending'=>'warning','verified'=>'success','rejected'=>'danger','canceled'=>'secondary'];
+
+    $aktif   = array_values(array_filter($rows, static fn($r)=> strtolower($r['status'] ?? '') === 'pending'));
+    $riwayat = array_values(array_filter($rows, static fn($r)=> strtolower($r['status'] ?? '') !== 'pending'));
+
+    return view('role/audience/pembayaran/index', [
+        'title'    => 'Pembayaran',
+        'payments' => $rows,
+        'eventMap' => $eventMap,
+        'badgeMap' => $badgeMap,
+        'aktif'    => $aktif,
+        'riwayat'  => $riwayat,
+    ]);
+}
+
 
     public function instruction(int $regId)
     {
