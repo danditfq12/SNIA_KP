@@ -1,166 +1,992 @@
 <?php
-/** Detail Absensi Event */
+/** Detail Absensi Event - Enhanced for Audience */
 $title = 'Detail Absensi Event';
 
-$e   = $event ?? [];
+$e = $event ?? [];
+$payment = $payment ?? [];
+$window = $window ?? ['is_open'=>false,'start_ts'=>null,'end_ts'=>null,'reason'=>'','current_time_wib'=>''];
+
+// Set timezone ke WIB untuk konsistensi
+date_default_timezone_set('Asia/Jakarta');
+
+// Helper function untuk konversi ke WIB
+function toWIBFormat($timestamp, $format = 'd M Y H:i') {
+    if (!$timestamp) return '-';
+    $dt = new DateTime();
+    $dt->setTimestamp($timestamp);
+    $dt->setTimezone(new DateTimeZone('Asia/Jakarta'));
+    return $dt->format($format);
+}
+
+// Format waktu dengan WIB
+$startText = toWIBFormat($window['start_ts']);
+$endText   = toWIBFormat($window['end_ts']);
+
+// Ambil waktu WIB saat ini untuk display
+$currentWIB = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
+$currentWIBString = $currentWIB->format('Y-m-d H:i:s');
+
 $tgl = !empty($e['event_date']) ? date('d M Y', strtotime($e['event_date'])) : '-';
 $jam = $e['event_time'] ?? '-';
 
 $can         = (bool)($e['can_scan'] ?? false);
 $badgeClass  = $e['badge_class']  ?? 'bg-secondary';
 $eventStatus = $e['event_status'] ?? '-';
+$participationType = $e['participation_type'] ?? 'all';
 
 $already      = (bool)($already_attend ?? false);
 $attendanceAt = $attendance_at ?? null;
 
 // Jika sudah absen, paksa nonaktifkan tombol
 if ($already) { $can = false; }
+
+// Determine participation type display
+$participationDisplay = ucfirst($participationType);
+$participationBadgeClass = 'bg-primary';
+if ($participationType === 'online') {
+    $participationBadgeClass = 'bg-info';
+} elseif ($participationType === 'offline') {
+    $participationBadgeClass = 'bg-success';
+}
 ?>
 
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_audience') ?>
+<?= $this->include('partials/alerts') ?>
 
 <div id="content">
   <main class="flex-fill" style="padding-top:70px;">
     <div class="container-fluid p-3 p-md-4">
 
-      <div class="d-flex align-items-center mb-3">
-        <a href="<?= site_url('audience/absensi') ?>" class="btn btn-light me-2"><i class="bi bi-arrow-left"></i></a>
+      <!-- HEADER -->
+      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h3 class="mb-0"><?= esc($e['title'] ?? 'Event') ?></h3>
-          <small class="text-muted">Kelola absensi event ini.</small>
+          <h2 class="welcome-text mb-1"><i class="bi bi-qr-code"></i> Detail Absensi Audience</h2>
+          <div class="text-white-50">Event: <?= esc($e['title'] ?? '-') ?></div>
+          <div class="text-white-50 small">Waktu Sekarang (WIB): <?= $currentWIBString ?></div>
+        </div>
+        <div class="text-end d-none d-md-block">
+          <small class="text-white-50 d-block">Window Absensi (WIB)</small>
+          <strong class="text-white"><?= $startText ?> - <?= $endText ?></strong>
         </div>
       </div>
 
+      <!-- PARTICIPATION TYPE INFO ALERT -->
+      <div class="alert alert-info border-0 shadow-sm mb-4">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-info-circle-fill fs-5"></i>
+          <div>
+            <strong>Informasi QR Code untuk Audience</strong>
+            <div class="small mt-1">
+              Anda terdaftar sebagai peserta <span class="badge <?= $participationBadgeClass ?> me-1"><?= $participationDisplay ?></span>
+              <br>QR Code yang dapat digunakan:
+              <?php if ($participationType === 'online'): ?>
+                <span class="badge bg-info me-1">Audience Online</span> atau <span class="badge bg-primary me-1">Universal QR</span>
+              <?php elseif ($participationType === 'offline'): ?>
+                <span class="badge bg-success me-1">Audience Offline</span> atau <span class="badge bg-primary me-1">Universal QR</span>
+              <?php else: ?>
+                <span class="badge bg-info me-1">Audience Online</span>, <span class="badge bg-success me-1">Audience Offline</span>, atau <span class="badge bg-primary me-1">Universal QR</span>
+              <?php endif; ?>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATUS + AKSI -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="status-dot <?= $already ? 'bg-success' : ($window['is_open'] ? 'bg-primary' : 'bg-secondary') ?>"></div>
+            <div>
+              <div class="fw-semibold mb-1">Status</div>
+              <?php if ($already): ?>
+                <div class="text-success"><i class="bi bi-check-circle"></i> Anda sudah tercatat hadir sebagai Audience <?= $participationDisplay ?>.</div>
+              <?php elseif ($window['is_open']): ?>
+                <div class="text-primary"><i class="bi bi-door-open"></i> Window absensi sedang dibuka untuk Audience.</div>
+              <?php else: ?>
+                <div class="text-muted"><i class="bi bi-lock"></i> Window absensi tertutup <?= $window['reason'] ? '('.esc($window['reason']).')' : '' ?>.</div>
+              <?php endif; ?>
+              <div class="small text-muted mt-1">
+                Lokasi: <?= esc($e['location'] ?? '-') ?>
+                <?php if (!empty($e['format'])): ?> · Format: <?= strtoupper(esc($e['format'])) ?><?php endif; ?>
+                · Role: <span class="badge bg-warning">Audience</span>
+                · Tipe: <span class="badge <?= $participationBadgeClass ?>"><?= $participationDisplay ?></span>
+                <?php if (isset($window['current_time_wib'])): ?>
+                · Waktu WIB: <?= $window['current_time_wib'] ?>
+                <?php endif; ?>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <?php if (!$already && $window['is_open']): ?>
+              <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#tokenModal">
+                <i class="bi bi-input-cursor-text"></i> Masukkan Token & Absen
+              </button>
+              <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#qrScannerModal">
+                <i class="bi bi-qr-code-scan"></i> Scan QR Code Real-time
+              </button>
+            <?php else: ?>
+              <button class="btn btn-outline-secondary" disabled>
+                <i class="bi bi-input-cursor-text"></i> Masukkan Token
+              </button>
+              <button class="btn btn-outline-secondary" disabled>
+                <i class="bi bi-qr-code-scan"></i> Scan QR Code
+              </button>
+            <?php endif; ?>
+          </div>
+        </div>
+      </div>
+
+      <!-- INFO EVENT & PAYMENT -->
       <div class="row g-3">
         <div class="col-12 col-lg-8">
-          <div class="card shadow-sm border-0">
+          <div class="card shadow-sm h-100">
+            <div class="card-header bg-light"><strong><i class="bi bi-info-circle"></i> Informasi Event</strong></div>
             <div class="card-body">
-
-              <!-- HERO -->
-              <div class="abs-hero mb-3">
-                <div class="d-flex flex-column flex-md-row align-items-md-start justify-content-between gap-2">
-                  <div>
-                    <div class="abs-title mb-1"><?= esc($e['title'] ?? 'Event') ?></div>
-                    <div class="abs-tags">
-                      <span class="abs-tag"><i class="bi bi-calendar-event"></i> <?= esc($tgl) ?></span>
-                      <span class="abs-tag"><i class="bi bi-clock"></i> <?= esc($jam) ?></span>
-                      <?php if (!empty($e['participation_type'])): ?>
-                        <span class="abs-tag"><i class="bi bi-broadcast"></i> <?= esc(strtoupper($e['participation_type'])) ?></span>
-                      <?php endif; ?>
+              <h5 class="mb-2"><?= esc($e['title'] ?? '-') ?></h5>
+              <div class="text-muted small mb-3"><?= nl2br(esc($e['description'] ?? '-')) ?></div>
+              <div class="row gy-2">
+                <div class="col-12 col-md-6">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-calendar-event text-primary"></i>
+                    <div>
+                      <div class="small text-muted">Tanggal & Waktu (WIB)</div>
+                      <div class="fw-semibold">
+                        <?php if ($e['event_date']): ?>
+                          <?php 
+                          $eventDateTime = $e['event_date'] . ' ' . ($e['event_time'] ?? '00:00:00');
+                          $eventDt = new DateTime($eventDateTime, new DateTimeZone('Asia/Jakarta'));
+                          ?>
+                          <?= $eventDt->format('d M Y') ?> · <?= $eventDt->format('H:i') ?> WIB
+                        <?php else: ?>
+                          -
+                        <?php endif; ?>
+                      </div>
                     </div>
                   </div>
-                  <div class="text-md-end">
-                    <div class="small opacity-75">Status</div>
-                    <span class="badge <?= esc($badgeClass) ?> text-uppercase"><?= esc($eventStatus) ?></span>
+                </div>
+                <div class="col-12 col-md-6">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-geo-alt text-primary"></i>
+                    <div>
+                      <div class="small text-muted">Lokasi</div>
+                      <div class="fw-semibold"><?= esc($e['location'] ?? '-') ?></div>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              <?php if (session('error')): ?>
-                <div class="alert alert-danger"><?= esc(session('error')) ?></div>
-              <?php endif; ?>
-              <?php if (session('success')): ?>
-                <div class="alert alert-success"><?= esc(session('success')) ?></div>
-              <?php endif; ?>
-
-              <?php if ($already): ?>
-                <div class="alert alert-success d-flex align-items-center">
-                  <i class="bi bi-check2-circle me-2"></i>
-                  <div>
-                    Anda sudah absen<?= $attendanceAt ? ' pada ' . esc(date('d M Y H:i', strtotime($attendanceAt))) : '' ?>.
+                <?php if (!empty($e['zoom_link']) && ($participationType === 'online' || $participationType === 'all')): ?>
+                <div class="col-12">
+                  <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-camera-video text-primary"></i>
+                    <div>
+                      <div class="small text-muted">Link Online Meeting</div>
+                      <a href="<?= esc($e['zoom_link']) ?>" target="_blank" class="fw-semibold">Buka Tautan</a>
+                    </div>
                   </div>
                 </div>
-              <?php elseif (!$can): ?>
-                <div class="alert alert-warning d-flex align-items-center">
-                  <i class="bi bi-exclamation-triangle me-2"></i>
-                  <div>
-                    <?= $eventStatus === 'Dihentikan'
-                      ? 'Absensi telah dihentikan oleh panitia.'
-                      : ($eventStatus === 'Belum Dimulai'
-                          ? 'Absensi belum dibuka. Coba lagi setelah event dimulai.'
-                          : 'Absensi tidak tersedia saat ini.') ?>
-                  </div>
-                </div>
-              <?php endif; ?>
-
-              <!-- CTA -->
-              <div class="d-flex flex-wrap gap-2">
-                <a class="btn btn-primary <?= $can ? '' : 'disabled' ?>"
-                   href="<?= $can ? site_url('qr') : 'javascript:void(0)' ?>"
-                   <?= $can ? '' : 'tabindex="-1" aria-disabled="true"' ?>>
-                  <i class="bi bi-qr-code-scan me-1"></i>
-                  <?= $already ? 'Sudah Absen' : 'Scan QR' ?>
-                </a>
-
-                <button class="btn btn-outline-secondary <?= $can ? '' : 'disabled' ?>"
-                        type="button"
-                        <?= $can ? 'data-bs-toggle="collapse" data-bs-target="#tokenForm" aria-expanded="false" aria-controls="tokenForm"' : 'tabindex="-1" aria-disabled="true"' ?>>
-                  <i class="bi bi-key me-1"></i> Input Token
-                </button>
+                <?php endif; ?>
               </div>
-
-              <!-- Form Token -->
-              <div class="collapse mt-3" id="tokenForm">
-                <form action="<?= site_url('audience/absensi/scan') ?>" method="post" class="row g-2">
-                  <?= csrf_field() ?>
-                  <input type="hidden" name="event_id" value="<?= (int)($e['id'] ?? 0) ?>">
-                  <div class="col-12 col-md-8">
-                    <input type="text" name="token" class="form-control"
-                           placeholder="Tempel token dari panitia di sini..." required <?= $can ? '' : 'disabled' ?>>
-                  </div>
-                  <div class="col-12 col-md-auto">
-                    <button type="submit" class="btn btn-secondary" <?= $can ? '' : 'disabled' ?>>
-                      <i class="bi bi-box-arrow-in-right me-1"></i> Submit Token
-                    </button>
-                  </div>
-                </form>
-                <div class="form-text">Token hanya bisa digunakan saat absensi dibuka.</div>
-              </div>
-
-              <div class="mt-3 small text-muted">
-                Absen dibuka sejak jam mulai hingga ±4 jam setelahnya (atau sesuai kebijakan panitia).
-              </div>
-
             </div>
           </div>
         </div>
 
+        <!-- INFO BAYAR -->
         <div class="col-12 col-lg-4">
-          <div class="card shadow-sm border-0">
+          <div class="card shadow-sm h-100">
+            <div class="card-header bg-light"><strong><i class="bi bi-receipt"></i> Status Pembayaran</strong></div>
             <div class="card-body">
-              <div class="fw-semibold mb-2">Tips Absen</div>
-              <ul class="small mb-0">
-                <li>Pastikan kamera aktif & terfokus saat scan QR.</li>
-                <li>Jika koneksi lemah, gunakan mode <em>Input Token</em>.</li>
-                <li>Datang tepat waktu agar tidak melewati batas absensi.</li>
-              </ul>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-success">Verified</span>
+                <div class="small text-muted">Anda berhak melakukan absensi sebagai Audience.</div>
+              </div>
+              <div class="small text-muted">Metode</div>
+              <div class="fw-semibold mb-2"><?= esc($payment['metode'] ?? '-') ?></div>
+              <div class="small text-muted">Jumlah</div>
+              <div class="fw-semibold mb-2">Rp <?= number_format((int)($payment['jumlah'] ?? 0), 0, ',', '.') ?></div>
+              <div class="small text-muted">Tipe Partisipasi</div>
+              <div class="fw-semibold">
+                <span class="badge <?= $participationBadgeClass ?>"><?= $participationDisplay ?></span>
+              </div>
             </div>
           </div>
         </div>
-
       </div>
 
     </div>
   </main>
 </div>
 
+<!-- MODAL TOKEN MANUAL -->
+<div class="modal fade" id="tokenModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="<?= site_url('audience/absensi/scan') ?>" method="POST" id="tokenForm">
+        <?= csrf_field() ?>
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-input-cursor-text me-2"></i> Masukkan Token</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="event_id" value="<?= (int)($e['id'] ?? 0) ?>">
+          
+          <div class="alert alert-warning small mb-3">
+            <i class="bi bi-shield-exclamation me-2"></i>
+            <strong>Khusus Audience <?= $participationDisplay ?>:</strong> 
+            <?php if ($participationType === 'online'): ?>
+              Pastikan QR Code yang Anda scan adalah QR Code <strong>Audience Online</strong> atau <strong>Universal</strong>. QR Code audience offline tidak dapat digunakan.
+            <?php elseif ($participationType === 'offline'): ?>
+              Pastikan QR Code yang Anda scan adalah QR Code <strong>Audience Offline</strong> atau <strong>Universal</strong>. QR Code audience online tidak dapat digunakan.
+            <?php else: ?>
+              Pastikan QR Code yang Anda scan adalah QR Code <strong>Audience (Online/Offline)</strong> atau <strong>Universal</strong>.
+            <?php endif; ?>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">Token Kehadiran <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="token" required placeholder="Masukkan token atau URL QR Code">
+            <div class="form-text">Diberikan panitia saat sesi berlangsung. Dapat berupa token atau URL lengkap.</div>
+          </div>
+          
+          <div class="alert alert-info small mb-0">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <strong>Window absensi (WIB):</strong><br>
+                <?= $startText ?> - <?= $endText ?><br>
+                <small class="text-muted">Waktu sekarang: <?= $currentWIBString ?> WIB</small>
+              </div>
+              <div class="text-end">
+                <span class="badge bg-warning">Audience</span><br>
+                <span class="badge <?= $participationBadgeClass ?>"><?= $participationDisplay ?></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+          <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i> Konfirmasi & Absen</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL QR SCANNER - Real-time Database Integration -->
+<div class="modal fade" id="qrScannerModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-qr-code-scan me-2"></i> Scan QR Code - Real-time Audience</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" id="closeScannerBtn"></button>
+      </div>
+      <div class="modal-body text-center">
+        <!-- Real-time Status Alert -->
+        <div class="alert alert-success mb-3" id="realtime-status">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-wifi fs-5"></i>
+            <div class="text-start">
+              <strong>Mode Real-time Aktif (WIB)</strong>
+              <div class="small mt-1">
+                QR Code yang valid akan langsung disimpan ke database dengan timestamp WIB tanpa konfirmasi tambahan.
+                <br><strong>Waktu sekarang:</strong> <span id="current-wib-time"><?= $currentWIBString ?></span> WIB
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Participation type restriction notice -->
+        <div class="alert alert-warning mb-3">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-shield-exclamation fs-5"></i>
+            <div class="text-start">
+              <strong>Validasi Tipe Partisipasi Audience</strong>
+              <div class="small mt-1">
+                Anda terdaftar sebagai: <span class="badge <?= $participationBadgeClass ?>"><?= $participationDisplay ?></span>
+                <br>Scanner akan memvalidasi QR Code sesuai tipe partisipasi Anda.
+                <?php if ($participationType === 'online'): ?>
+                Hanya QR Code <span class="badge bg-info">Audience Online</span> atau <span class="badge bg-primary">Universal</span> yang dapat digunakan.
+                <?php elseif ($participationType === 'offline'): ?>
+                Hanya QR Code <span class="badge bg-success">Audience Offline</span> atau <span class="badge bg-primary">Universal</span> yang dapat digunakan.
+                <?php else: ?>
+                QR Code <span class="badge bg-info">Audience Online</span>, <span class="badge bg-success">Audience Offline</span>, atau <span class="badge bg-primary">Universal</span> dapat digunakan.
+                <?php endif; ?>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scanner Container -->
+        <div id="scanner-container" class="mb-3 position-relative">
+          <div id="reader" style="width: 100%; max-width: 500px; margin: 0 auto;"></div>
+        </div>
+        
+        <!-- Status & Controls -->
+        <div id="scanner-status" class="mb-3">
+          <div class="d-flex justify-content-center gap-2 mb-2">
+            <button id="startScanBtn" class="btn btn-success btn-sm">
+              <i class="bi bi-play-circle"></i> Mulai Scan
+            </button>
+            <button id="stopScanBtn" class="btn btn-danger btn-sm" style="display:none;">
+              <i class="bi bi-stop-circle"></i> Stop Scan
+            </button>
+            <button id="switchCameraBtn" class="btn btn-info btn-sm">
+              <i class="bi bi-arrow-repeat"></i> Ganti Kamera
+            </button>
+          </div>
+          <div id="scanner-message" class="text-muted small">
+            Klik "Mulai Scan" untuk mengaktifkan kamera
+          </div>
+        </div>
+
+        <!-- Scanner Results -->
+        <div id="scan-result" class="alert alert-info" style="display:none;">
+          <strong>QR Code Terdeteksi:</strong>
+          <div id="scanned-content" class="mt-2 font-monospace small"></div>
+          <div id="qr-role-info" class="mt-2"></div>
+          <div id="processing-status" class="mt-2"></div>
+        </div>
+
+        <!-- Success Result -->
+        <div id="success-result" class="alert alert-success" style="display:none;">
+          <i class="bi bi-check-circle-fill fs-4 text-success"></i>
+          <h5 class="mt-2">Absensi Berhasil!</h5>
+          <div id="success-details" class="small"></div>
+        </div>
+
+        <!-- Camera Permission Notice -->
+        <div id="camera-permission" class="alert alert-warning" style="display:none;">
+          <i class="bi bi-camera-fill me-2"></i>
+          <strong>Izin Kamera Diperlukan</strong><br>
+          <small>Harap izinkan akses kamera untuk menggunakan QR scanner</small>
+        </div>
+
+        <!-- Error Notice -->
+        <div id="scanner-error" class="alert alert-danger" style="display:none;">
+          <i class="bi bi-exclamation-triangle me-2"></i>
+          <strong id="error-message">Terjadi kesalahan</strong>
+        </div>
+
+        <!-- Debug Info -->
+        <div id="debug-info" class="alert alert-light small" style="display:none;">
+          <strong>Debug Info:</strong>
+          <div id="debug-content"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+        <button type="button" class="btn btn-success" id="continueScanning" style="display:none;">
+          <i class="bi bi-arrow-repeat"></i> Scan Lagi
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <?= $this->include('partials/footer') ?>
 
+<script>
+let html5QrCode = null;
+let isScanning = false;
+let isProcessing = false;
+let scannedResult = null;
+let cameras = [];
+let currentCameraIndex = 0;
+let scanSuccessful = false;
+
+// User participation type from backend
+const userParticipationType = '<?= $participationType ?>';
+
+// WIB Time Helper - Convert browser time to WIB display
+function getWIBTime() {
+  const now = new Date();
+  // Convert to WIB (UTC+7)
+  const wibTime = new Date(now.getTime() + (7 * 60 * 60 * 1000) - (now.getTimezoneOffset() * 60 * 1000));
+  return wibTime.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+// Update current WIB time display every second
+function updateWIBTimeDisplay() {
+  const wibTimeElement = document.getElementById('current-wib-time');
+  if (wibTimeElement) {
+    wibTimeElement.textContent = getWIBTime();
+  }
+}
+
+// Start WIB time updater
+setInterval(updateWIBTimeDisplay, 1000);
+
+// QR Code role and participation type detection for audience validation
+function detectQRRole(qrData) {
+  const patterns = {
+    audienceOnline: /EVENT_\d+_audience_online_/i,
+    audienceOffline: /EVENT_\d+_audience_offline_/i,
+    universal: /EVENT_\d+_all_/i,
+    presenter: /EVENT_\d+_presenter_/i,
+    reviewer: /EVENT_\d+_reviewer_/i,
+    simple: /EVENT_\d+_\d{8}$/i,
+    numeric: /^\d+$/,
+    admin: /^(ADMIN|MANUAL|BULK)_\d+/i
+  };
+
+  // Detect QR type
+  let qrType = 'unknown';
+  let qrParticipationType = 'all';
+  
+  if (patterns.audienceOnline.test(qrData)) {
+    qrType = 'audience';
+    qrParticipationType = 'online';
+  } else if (patterns.audienceOffline.test(qrData)) {
+    qrType = 'audience';
+    qrParticipationType = 'offline';
+  } else if (patterns.universal.test(qrData)) {
+    qrType = 'universal';
+    qrParticipationType = 'all';
+  } else if (patterns.presenter.test(qrData)) {
+    qrType = 'presenter';
+    qrParticipationType = 'offline';
+  } else if (patterns.reviewer.test(qrData)) {
+    qrType = 'reviewer';
+    qrParticipationType = 'all';
+  } else if (patterns.simple.test(qrData) || patterns.numeric.test(qrData) || patterns.admin.test(qrData)) {
+    qrType = 'universal';
+    qrParticipationType = 'all';
+  }
+
+  // Validate for audience
+  let allowed = false;
+  let message = '';
+  let badge = 'bg-secondary';
+
+  if (qrType === 'universal') {
+    allowed = true;
+    badge = 'bg-primary';
+    message = 'Universal QR - Valid untuk semua role dan tipe';
+  } else if (qrType === 'audience') {
+    // Check participation type match
+    if (userParticipationType === 'all' || qrParticipationType === userParticipationType) {
+      allowed = true;
+      badge = qrParticipationType === 'online' ? 'bg-info' : 'bg-success';
+      message = `Audience ${qrParticipationType.charAt(0).toUpperCase() + qrParticipationType.slice(1)} QR - Valid untuk Anda`;
+    } else {
+      allowed = false;
+      badge = 'bg-warning';
+      const qrTypeName = qrParticipationType.charAt(0).toUpperCase() + qrParticipationType.slice(1);
+      const userTypeName = userParticipationType.charAt(0).toUpperCase() + userParticipationType.slice(1);
+      message = `Audience ${qrTypeName} QR - Tidak cocok dengan tipe Anda (${userTypeName})`;
+    }
+  } else if (qrType === 'presenter') {
+    allowed = false;
+    badge = 'bg-purple';
+    message = 'Presenter QR - Tidak dapat digunakan Audience';
+  } else if (qrType === 'reviewer') {
+    allowed = false;
+    badge = 'bg-info';
+    message = 'Reviewer QR - Tidak dapat digunakan Audience';
+  } else {
+    allowed = false;
+    badge = 'bg-secondary';
+    message = 'Format QR tidak dikenali';
+  }
+
+  return {
+    type: qrType,
+    participation_type: qrParticipationType,
+    allowed: allowed,
+    badge: badge,
+    text: message
+  };
+}
+
+// Initialize cameras
+async function initializeCameras() {
+  try {
+    cameras = await Html5Qrcode.getCameras();
+    const debugDiv = document.getElementById('debug-content');
+    debugDiv.innerHTML = `Found ${cameras.length} camera(s) - WIB: ${getWIBTime()}`;
+    document.getElementById('debug-info').style.display = 'block';
+    
+    console.log('Available cameras:', cameras);
+    return cameras.length > 0;
+  } catch (error) {
+    console.error('Error getting cameras:', error);
+    showError('Tidak dapat mengakses daftar kamera: ' + error.message);
+    return false;
+  }
+}
+
+// Initialize QR scanner
+async function initQRScanner() {
+  try {
+    if (html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.SCANNING) {
+      try {
+        await html5QrCode.stop();
+      } catch (e) {
+        console.log('Previous scanner already stopped');
+      }
+    }
+
+    html5QrCode = new Html5Qrcode("reader");
+    
+    const hasCameras = await initializeCameras();
+    if (!hasCameras) {
+      showError('Tidak ada kamera yang tersedia pada perangkat ini');
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Failed to initialize scanner:', error);
+    showError('Gagal menginisialisasi scanner: ' + error.message);
+    return false;
+  }
+}
+
+// Start scanner
+async function startScanner() {
+  const startBtn = document.getElementById('startScanBtn');
+  const stopBtn = document.getElementById('stopScanBtn');
+  const messageDiv = document.getElementById('scanner-message');
+
+  if (isScanning) {
+    console.log('Scanner already running');
+    return;
+  }
+
+  messageDiv.innerHTML = '<span class="text-info"><i class="bi bi-camera-fill"></i> Memulai kamera...</span>';
+
+  try {
+    const cameraConfig = cameras.length > 0 ? 
+      cameras[currentCameraIndex].id : 
+      { facingMode: "environment" };
+
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+      aspectRatio: 1.0
+    };
+
+    await html5QrCode.start(
+      cameraConfig,
+      config,
+      (decodedText, decodedResult) => {
+        console.log('QR Code detected:', decodedText);
+        onScanSuccess(decodedText);
+      },
+      (errorMessage) => {
+        // Normal scanning errors when no QR detected
+      }
+    );
+
+    isScanning = true;
+    startBtn.style.display = 'none';
+    stopBtn.style.display = 'inline-block';
+    
+    const participationText = userParticipationType === 'all' ? 'Audience (Online/Offline)' : `Audience ${userParticipationType.charAt(0).toUpperCase() + userParticipationType.slice(1)}`;
+    messageDiv.innerHTML = `<span class="text-success"><i class="bi bi-camera-video"></i> Scanner aktif - Arahkan ke QR Code ${participationText}</span>`;
+
+  } catch (error) {
+    console.error('Failed to start scanner:', error);
+    isScanning = false;
+    
+    let errorText = 'Gagal memulai scanner';
+    
+    if (error.toString().includes('Permission')) {
+      document.getElementById('camera-permission').style.display = 'block';
+      errorText = 'Akses kamera ditolak. Harap izinkan akses kamera di browser.';
+    } else if (error.toString().includes('NotFound')) {
+      errorText = 'Kamera tidak ditemukan. Pastikan perangkat memiliki kamera.';
+    } else if (error.toString().includes('NotReadable')) {
+      errorText = 'Kamera sedang digunakan aplikasi lain. Tutup aplikasi lain yang menggunakan kamera.';
+    } else {
+      errorText = 'Gagal memulai scanner: ' + error.message;
+    }
+    
+    showError(errorText);
+    startBtn.style.display = 'inline-block';
+    stopBtn.style.display = 'none';
+  }
+}
+
+// Stop scanner
+async function stopScanner() {
+  const startBtn = document.getElementById('startScanBtn');
+  const stopBtn = document.getElementById('stopScanBtn');
+  const messageDiv = document.getElementById('scanner-message');
+
+  if (!isScanning) {
+    return;
+  }
+
+  try {
+    if (html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.SCANNING) {
+      await html5QrCode.stop();
+    }
+    isScanning = false;
+    
+    startBtn.style.display = 'inline-block';
+    stopBtn.style.display = 'none';
+    messageDiv.innerHTML = '<span class="text-muted"><i class="bi bi-pause-circle"></i> Scanner dihentikan</span>';
+  } catch (error) {
+    console.error('Error stopping scanner:', error);
+  }
+}
+
+// Switch camera
+async function switchCamera() {
+  if (cameras.length <= 1) {
+    Swal.fire({
+      icon: 'info',
+      title: 'Tidak dapat mengganti kamera',
+      text: 'Hanya ada satu kamera tersedia'
+    });
+    return;
+  }
+
+  const wasScanning = isScanning;
+  
+  if (wasScanning) {
+    await stopScanner();
+  }
+  
+  currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
+  
+  const messageDiv = document.getElementById('scanner-message');
+  const cameraName = cameras[currentCameraIndex].label || `Camera ${currentCameraIndex + 1}`;
+  messageDiv.innerHTML = `<span class="text-info">Beralih ke: ${cameraName}</span>`;
+  
+  if (wasScanning) {
+    setTimeout(() => {
+      startScanner();
+    }, 1000);
+  }
+}
+
+// Handle successful scan - Real-time processing with WIB timestamp and participation validation
+async function onScanSuccess(decodedText) {
+  if (isProcessing || scanSuccessful) {
+    return; // Prevent multiple processing
+  }
+
+  scannedResult = decodedText;
+  isProcessing = true;
+  
+  const scannedContentDiv = document.getElementById('scanned-content');
+  const qrRoleInfoDiv = document.getElementById('qr-role-info');
+  const resultDiv = document.getElementById('scan-result');
+  const processingDiv = document.getElementById('processing-status');
+  const messageDiv = document.getElementById('scanner-message');
+  
+  scannedContentDiv.textContent = decodedText;
+  
+  // Detect and validate QR role for audience with participation type checking
+  const roleInfo = detectQRRole(decodedText);
+  qrRoleInfoDiv.innerHTML = `<span class="badge ${roleInfo.badge}">${roleInfo.text}</span>`;
+  
+  resultDiv.style.display = 'block';
+  
+  if (!roleInfo.allowed) {
+    processingDiv.innerHTML = '<span class="badge bg-danger">QR Code Ditolak</span>';
+    messageDiv.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> QR Code tidak dapat digunakan untuk tipe partisipasi Anda</span>';
+    
+    // Stop scanner after invalid QR
+    setTimeout(async () => {
+      await stopScanner();
+      isProcessing = false;
+    }, 2000);
+    
+    let errorTitle = 'QR Code Tidak Sesuai';
+    let errorMessage = roleInfo.text;
+    
+    if (roleInfo.type === 'audience' && userParticipationType !== 'all') {
+      const userTypeName = userParticipationType.charAt(0).toUpperCase() + userParticipationType.slice(1);
+      const qrTypeName = roleInfo.participation_type.charAt(0).toUpperCase() + roleInfo.participation_type.slice(1);
+      errorTitle = 'Tipe Partisipasi Tidak Cocok';
+      errorMessage = `QR Code ini untuk peserta <strong>${qrTypeName}</strong>, sedangkan Anda terdaftar sebagai peserta <strong>${userTypeName}</strong>.<br><br>Silakan gunakan QR Code yang sesuai dengan tipe partisipasi Anda atau QR Code Universal.`;
+    } else if (roleInfo.type === 'presenter') {
+      errorMessage = 'QR Code ini khusus untuk <strong>Presenter</strong>. Sebagai Audience, Anda tidak dapat menggunakan QR Code ini.';
+    } else if (roleInfo.type === 'reviewer') {
+      errorMessage = 'QR Code ini khusus untuk <strong>Reviewer</strong>. Sebagai Audience, Anda tidak dapat menggunakan QR Code ini.';
+    }
+    
+    Swal.fire({
+      icon: 'warning',
+      title: errorTitle,
+      html: errorMessage,
+      confirmButtonText: 'Mengerti'
+    });
+    return;
+  }
+
+  // Valid QR - Process immediately with WIB timestamp
+  const currentWIBTime = getWIBTime();
+  processingDiv.innerHTML = `<span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Memproses ke Database... (WIB: ${currentWIBTime})</span>`;
+  messageDiv.innerHTML = '<span class="text-info"><i class="bi bi-cloud-upload"></i> Menyimpan absensi dengan timestamp WIB...</span>';
+
+  // Stop scanner immediately
+  await stopScanner();
+
+  try {
+    // Send AJAX request to save to database (backend will handle WIB)
+    const response = await fetch('<?= site_url('audience/absensi/scan') ?>', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: new URLSearchParams({
+        'event_id': '<?= (int)($e['id'] ?? 0) ?>',
+        'token': decodedText,
+        '<?= csrf_token() ?>': '<?= csrf_hash() ?>'
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      // Success - show success UI with WIB timestamp
+      scanSuccessful = true;
+      resultDiv.style.display = 'none';
+      
+      const successDiv = document.getElementById('success-result');
+      const successDetails = document.getElementById('success-details');
+      
+      // Display WIB timestamp from server response
+      const attendanceTimeWIB = result.data.attendance_datetime_wib || currentWIBTime;
+      const userParticipationDisplay = result.data.user_participation_type ? 
+        result.data.user_participation_type.charAt(0).toUpperCase() + result.data.user_participation_type.slice(1) : 'Unknown';
+      
+      successDetails.innerHTML = `
+        <div class="row text-start">
+          <div class="col-6"><strong>Nama:</strong><br>${result.data.participant_name}</div>
+          <div class="col-6"><strong>Role:</strong><br><span class="badge bg-warning">${result.data.participant_role}</span></div>
+          <div class="col-6 mt-2"><strong>Event:</strong><br>${result.data.event_title}</div>
+          <div class="col-6 mt-2"><strong>Tipe:</strong><br><span class="badge ${userParticipationType === 'online' ? 'bg-info' : 'bg-success'}">${userParticipationDisplay}</span></div>
+          <div class="col-12 mt-2"><strong>Waktu WIB:</strong><br>${attendanceTimeWIB}</div>
+          <div class="col-12 mt-2"><small class="text-muted">Absensi disimpan dengan timezone WIB (+07:00)</small></div>
+        </div>
+      `;
+      
+      successDiv.style.display = 'block';
+      document.getElementById('continueScanning').style.display = 'inline-block';
+      
+      messageDiv.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> Absensi berhasil disimpan dengan timestamp WIB!</span>';
+
+      // Show success notification
+      Swal.fire({
+        icon: 'success',
+        title: 'Absensi Berhasil!',
+        html: `Selamat datang <strong>${result.data.participant_name}</strong>!<br>Anda telah tercatat hadir sebagai <strong>Audience ${userParticipationDisplay}</strong>.<br><small>Waktu: ${attendanceTimeWIB} WIB</small>`,
+        timer: 4000,
+        showConfirmButton: false
+      });
+
+      // Update page status after delay
+      setTimeout(() => {
+        location.reload(); // Refresh to show updated attendance status
+      }, 4000);
+
+    } else {
+      // Error - show error message
+      processingDiv.innerHTML = '<span class="badge bg-danger">Gagal Menyimpan</span>';
+      messageDiv.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> ${result.message}</span>`;
+      
+      Swal.fire({
+        icon: 'error',
+        title: 'Gagal Menyimpan Absensi',
+        text: result.message,
+        confirmButtonText: 'Coba Lagi'
+      });
+    }
+
+  } catch (error) {
+    console.error('Error processing attendance:', error);
+    processingDiv.innerHTML = '<span class="badge bg-danger">Error Koneksi</span>';
+    messageDiv.innerHTML = '<span class="text-danger"><i class="bi bi-wifi-off"></i> Gagal terhubung ke server</span>';
+    
+    Swal.fire({
+      icon: 'error',
+      title: 'Error Koneksi',
+      text: 'Gagal terhubung ke server. Periksa koneksi internet Anda.',
+      confirmButtonText: 'Mengerti'
+    });
+  } finally {
+    isProcessing = false;
+  }
+}
+
+// Show error message
+function showError(message) {
+  const errorDiv = document.getElementById('scanner-error');
+  const errorMessage = document.getElementById('error-message');
+  const messageDiv = document.getElementById('scanner-message');
+  
+  errorMessage.textContent = message;
+  errorDiv.style.display = 'block';
+  messageDiv.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> ${message}</span>`;
+}
+
+// Continue scanning after success
+function continueScanning() {
+  scanSuccessful = false;
+  isProcessing = false;
+  scannedResult = null;
+  
+  // Reset UI
+  document.getElementById('scan-result').style.display = 'none';
+  document.getElementById('success-result').style.display = 'none';
+  document.getElementById('continueScanning').style.display = 'none';
+  document.getElementById('scanner-message').innerHTML = 'Klik "Mulai Scan" untuk scan QR Code berikutnya';
+  
+  // Clear any errors
+  document.getElementById('scanner-error').style.display = 'none';
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+  // Start WIB time display update
+  updateWIBTimeDisplay();
+
+  // Initialize when modal is shown
+  document.getElementById('qrScannerModal').addEventListener('shown.bs.modal', async function() {
+    await initQRScanner();
+    scanSuccessful = false;
+    isProcessing = false;
+    updateWIBTimeDisplay(); // Update time when modal opens
+  });
+
+  // Clean up when modal is hidden
+  document.getElementById('qrScannerModal').addEventListener('hidden.bs.modal', async function() {
+    if (isScanning) {
+      await stopScanner();
+    }
+    
+    // Reset all UI elements
+    document.getElementById('startScanBtn').style.display = 'inline-block';
+    document.getElementById('stopScanBtn').style.display = 'none';
+    document.getElementById('scan-result').style.display = 'none';
+    document.getElementById('success-result').style.display = 'none';
+    document.getElementById('continueScanning').style.display = 'none';
+    document.getElementById('camera-permission').style.display = 'none';
+    document.getElementById('scanner-error').style.display = 'none';
+    document.getElementById('debug-info').style.display = 'none';
+    document.getElementById('scanner-message').innerHTML = 'Klik "Mulai Scan" untuk mengaktifkan kamera';
+    
+    // Reset state
+    scannedResult = null;
+    scanSuccessful = false;
+    isProcessing = false;
+  });
+
+  // Button event listeners
+  document.getElementById('startScanBtn').addEventListener('click', startScanner);
+  document.getElementById('stopScanBtn').addEventListener('click', stopScanner);
+  document.getElementById('switchCameraBtn').addEventListener('click', switchCamera);
+  document.getElementById('continueScanning').addEventListener('click', continueScanning);
+
+  // Token form confirmation
+  document.getElementById('tokenForm')?.addEventListener('submit', function(e){
+    e.preventDefault();
+    const participationText = userParticipationType === 'all' ? 'Audience (Online/Offline)' : `Audience ${userParticipationType.charAt(0).toUpperCase() + userParticipationType.slice(1)}`;
+    Swal.fire({
+      title: `Konfirmasi Absensi ${participationText}`,
+      html: `Kirim token absensi untuk dicatat sebagai ${participationText}?<br><small>Waktu: ${getWIBTime()} WIB</small>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Ya, Kirim',
+      cancelButtonText: 'Batal'
+    }).then(r => { 
+      if (r.isConfirmed) this.submit(); 
+    });
+  });
+});
+
+// Flash messages
+<?php if (session('success')): ?>
+  Swal.fire({ icon:'success', title:'Berhasil', text:'<?= esc(session('success')) ?>', timer:3000, showConfirmButton:false });
+<?php endif; ?>
+<?php if (session('error')): ?>
+  Swal.fire({ icon:'error', title:'Gagal', text:'<?= esc(session('error')) ?>' });
+<?php endif; ?>
+<?php if (session('info')): ?>
+  Swal.fire({ icon:'info', title:'Info', text:'<?= esc(session('info')) ?>' });
+<?php endif; ?>
+</script>
+
 <style>
-  .abs-hero{
-    background: linear-gradient(90deg,#2563eb,#60a5fa);
-    border-radius:16px; color:#fff; padding:14px 16px;
-    box-shadow: 0 6px 20px rgba(37,99,235,.18);
+  :root{
+    --primary-color:#2563eb; 
+    --info-color:#06b6d4; 
+    --success-color:#10b981; 
+    --secondary:#64748b;
+    --purple-color:#8b5cf6;
+    --warning-color:#f59e0b;
   }
-  .abs-title{ font-weight:800; line-height:1.2; font-size: clamp(18px,4.2vw,24px); }
-  .abs-tags{ display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.25rem; }
-  .abs-tag{
-    background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.22);
-    color:#fff; border-radius:999px; padding:.28rem .6rem; font-size:.85rem;
-    display:inline-flex; align-items:center; gap:.45rem;
+  body{ background:#f8fafc; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+  .header-section.header-blue{
+    background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
+    color:#fff; padding:22px; border-radius:14px; box-shadow:0 8px 28px rgba(0,0,0,.12);
   }
-  @media (min-width:576px){
-    .abs-hero{ padding:18px 20px; border-radius:18px; }
+  .welcome-text{ font-size:1.35rem; font-weight:500; }
+
+  .status-dot{ width:12px; height:12px; border-radius:50%; }
+  .status-dot.bg-success{ background:#16a34a; }
+  .status-dot.bg-primary{ background:#2563eb; }
+  .status-dot.bg-secondary{ background:#94a3b8; }
+
+  .card { border-radius:14px; }
+  .btn { border-radius:10px; }
+  .badge{ border-radius:8px; }
+  .bg-purple{ background-color: var(--purple-color) !important; }
+
+  /* QR Scanner Styles */
+  #reader {
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
   }
+  
+  #scanner-container {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  .font-monospace {
+    font-family: 'Courier New', monospace;
+    word-break: break-all;
+  }
+
+  /* Success animation */
+  #success-result {
+    animation: slideIn 0.5s ease-out;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Hide HTML5-QRCode default styling */
+  #reader__dashboard_section {
+    display: none !important;
+  }
+  
+  #reader__header_message {
+    display: none !important;
+  }
+
+  /* WIB Time highlight */
+  #current-wib-time {
+    font-weight: 600;
+    color: #059669;
+  }
+
+  /* Participation type badges */
+  .badge.bg-info { background-color: var(--info-color) !important; }
+  .badge.bg-warning { background-color: var(--warning-color) !important; }
 </style>

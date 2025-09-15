@@ -30,7 +30,7 @@ class Dokumen extends BaseController
         $idUser = $this->uid();
         if (!$idUser) return redirect()->to(site_url('auth/login'));
 
-        // Ambil semua sertifikat user
+        // Ambil semua sertifikat user (hanya sertifikat, tidak ada LOA)
         $certs = $this->dm
             ->where('id_user', $idUser)
             ->whereIn('tipe', ['Sertifikat','sertifikat','CERTIFICATE','Certificate'])
@@ -125,7 +125,7 @@ class Dokumen extends BaseController
 
         $pk = $this->dm->primaryKey ?: 'id_dokumen';
 
-        // Base query: milik user + tipe sertifikat
+        // Base query: milik user + tipe sertifikat (hanya sertifikat untuk audience)
         $qb = $this->dm->where('id_user', $idUser)
                        ->whereIn('tipe', ['Sertifikat','sertifikat','CERTIFICATE','Certificate']);
 
@@ -157,7 +157,8 @@ class Dokumen extends BaseController
             } elseif (is_file($fp)) {
                 $abs = $fp; // path langsung
             } else {
-                $abs = rtrim(WRITEPATH, '/\\').'/uploads/dokumen/'.$fp; // default lokal
+                // Default path untuk sertifikat
+                $abs = rtrim(WRITEPATH, '/\\').'/uploads/sertifikat/'.$fp;
             }
         }
 
@@ -204,5 +205,171 @@ class Dokumen extends BaseController
 
         // Default: download
         return $this->response->download($abs, null)->setFileName(basename($abs));
+    }
+
+    /**
+     * Index dokumen - menampilkan semua dokumen milik user
+     */
+    public function index()
+    {
+        $idUser = $this->uid();
+        if (!$idUser) return redirect()->to(site_url('auth/login'));
+
+        // Ambil semua dokumen user (sertifikat saja)
+        $documents = $this->dm
+            ->select('dokumen.*, events.title as event_title')
+            ->join('events', 'events.id = dokumen.event_id', 'left')
+            ->where('dokumen.id_user', $idUser)
+            ->whereIn('dokumen.tipe', ['Sertifikat','sertifikat','CERTIFICATE','Certificate'])
+            ->orderBy('dokumen.uploaded_at', 'DESC')
+            ->findAll();
+
+        // Statistik dokumen user
+        $stats = [
+            'total_documents' => count($documents),
+            'sertifikat_count' => count($documents), // semua adalah sertifikat
+            'recent_uploads' => count(array_filter($documents, function($doc) {
+                return strtotime($doc['uploaded_at']) > strtotime('-1 week');
+            }))
+        ];
+
+        return view('role/audience/dokumen/index', [
+            'title' => 'Dokumen Saya',
+            'documents' => $documents,
+            'stats' => $stats,
+            'pk' => $this->dm->primaryKey ?: 'id_dokumen',
+        ]);
+    }
+
+    /**
+     * Download dokumen berdasarkan ID
+     */
+    public function download($idDokumen)
+    {
+        $idUser = $this->uid();
+        if (!$idUser) return redirect()->to(site_url('auth/login'));
+
+        $pk = $this->dm->primaryKey ?: 'id_dokumen';
+        
+        // Ambil dokumen milik user
+        $document = $this->dm
+            ->select('dokumen.*, events.title as event_title')
+            ->join('events', 'events.id = dokumen.event_id', 'left')
+            ->where('dokumen.'.$pk, $idDokumen)
+            ->where('dokumen.id_user', $idUser)
+            ->whereIn('dokumen.tipe', ['Sertifikat','sertifikat','CERTIFICATE','Certificate'])
+            ->first();
+
+        if (!$document) {
+            return redirect()->back()->with('error', 'Dokumen tidak ditemukan atau bukan milik Anda.');
+        }
+
+        // Tentukan path file berdasarkan tipe dokumen
+        $basePath = WRITEPATH . 'uploads/sertifikat/';
+        $filePath = $basePath . $document['file_path'];
+
+        if (!file_exists($filePath)) {
+            // Coba path alternatif
+            $altPath = WRITEPATH . 'uploads/dokumen/' . $document['file_path'];
+            if (file_exists($altPath)) {
+                $filePath = $altPath;
+            } else {
+                return redirect()->back()->with('error', 'File tidak ditemukan di server.');
+            }
+        }
+
+        // Generate nama download yang lebih descriptive
+        $eventTitle = $document['event_title'] ? preg_replace('/[^A-Za-z0-9_-]/', '_', $document['event_title']) : 'Event';
+        $extension = pathinfo($document['file_path'], PATHINFO_EXTENSION);
+        
+        $downloadName = 'SERTIFIKAT_' . $eventTitle . '_' . date('Y-m-d', strtotime($document['uploaded_at'])) . '.' . $extension;
+
+        return $this->response->download($filePath, null)->setFileName($downloadName);
+    }
+
+    /**
+     * Preview dokumen (untuk PDF dan gambar)
+     */
+    public function preview($idDokumen)
+    {
+        $idUser = $this->uid();
+        if (!$idUser) return redirect()->to(site_url('auth/login'));
+
+        $pk = $this->dm->primaryKey ?: 'id_dokumen';
+        
+        // Ambil dokumen milik user
+        $document = $this->dm
+            ->where($pk, $idDokumen)
+            ->where('id_user', $idUser)
+            ->whereIn('tipe', ['Sertifikat','sertifikat','CERTIFICATE','Certificate'])
+            ->first();
+
+        if (!$document) {
+            return redirect()->back()->with('error', 'Dokumen tidak ditemukan atau bukan milik Anda.');
+        }
+
+        // Path file
+        $basePath = WRITEPATH . 'uploads/sertifikat/';
+        $filePath = $basePath . $document['file_path'];
+
+        if (!file_exists($filePath)) {
+            // Coba path alternatif
+            $altPath = WRITEPATH . 'uploads/dokumen/' . $document['file_path'];
+            if (file_exists($altPath)) {
+                $filePath = $altPath;
+            } else {
+                return redirect()->back()->with('error', 'File tidak ditemukan di server.');
+            }
+        }
+
+        // Tentukan MIME type
+        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $mime = match ($ext) {
+            'pdf' => 'application/pdf',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            default => 'application/octet-stream',
+        };
+
+        // Hanya izinkan preview untuk PDF dan gambar
+        if (!in_array($mime, ['application/pdf', 'image/jpeg', 'image/png', 'image/gif'])) {
+            return redirect()->back()->with('error', 'File ini tidak dapat di-preview. Silakan download untuk melihat.');
+        }
+
+        // Set headers untuk preview inline
+        $this->response->setHeader('Content-Type', $mime);
+        $this->response->setHeader('Content-Disposition', 'inline; filename="'.basename($filePath).'"');
+        $this->response->setHeader('X-Content-Type-Options', 'nosniff');
+        $this->response->setHeader('Cache-Control', 'private, max-age=3600');
+
+        return $this->response->setBody(file_get_contents($filePath));
+    }
+
+    /**
+     * Get document statistics for dashboard widget
+     */
+    public function getStats()
+    {
+        $idUser = $this->uid();
+        if (!$idUser) {
+            return $this->response->setJSON(['error' => 'Unauthorized'])->setStatusCode(401);
+        }
+
+        $totalDocs = $this->dm
+            ->where('id_user', $idUser)
+            ->whereIn('tipe', ['Sertifikat','sertifikat','CERTIFICATE','Certificate'])
+            ->countAllResults();
+
+        $recentDocs = $this->dm
+            ->where('id_user', $idUser)
+            ->whereIn('tipe', ['Sertifikat','sertifikat','CERTIFICATE','Certificate'])
+            ->where('uploaded_at >=', date('Y-m-d H:i:s', strtotime('-1 month')))
+            ->countAllResults();
+
+        return $this->response->setJSON([
+            'total_sertifikat' => $totalDocs,
+            'recent_uploads' => $recentDocs
+        ]);
     }
 }
