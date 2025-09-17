@@ -27,21 +27,19 @@ class Event extends BaseController
         helper(['date', 'text']);
     }
 
-    /** INDEX: daftar event (tersedia & ditutup), status singkat per-event */
+    /** INDEX: daftar event (tersedia & ditutup), status singkat per-event + UI (chip+CTA) */
     public function index()
     {
-        $userId   = (int) session()->get('id_user');
-        $q        = trim($this->request->getGet('q') ?? '');
+        $userId = (int) session()->get('id_user');
+        $q      = trim($this->request->getGet('q') ?? '');
 
-        // Event aktif (untuk box "tersedia")
+        // Event aktif (untuk box "Tersedia")
         $available = $this->eventModel->getEventsWithOpenRegistration();
 
-        // Semua event (untuk pisahin yg ditutup)
-        $all = $this->eventModel
-            ->orderBy('event_date', 'DESC')
-            ->findAll();
+        // Semua event (untuk pisahkan yg ditutup)
+        $all = $this->eventModel->orderBy('event_date', 'DESC')->findAll();
 
-        // Filter by search (optional)
+        // Filter pencarian (opsional)
         if ($q !== '') {
             $filterBy = function(array $rows) use ($q) {
                 return array_values(array_filter($rows, function($e) use ($q) {
@@ -53,35 +51,37 @@ class Event extends BaseController
             $all       = $filterBy($all);
         }
 
-        // Registrasi user map-by-event
-        $userRegs = [];
-        foreach ($this->regModel->listByUser($userId) as $r) {
-            $userRegs[(int)$r['id_event']] = $r;
-        }
+        // Daftar id event yang masih buka
+        $availableIds = array_column($available, 'id');
 
-        // Buat status singkat untuk index
+        // Status flow + UI per event
         $statusIndex = [];
         foreach ($all as $ev) {
-            $statusIndex[(int)$ev['id']] = $this->computeFlowStatus($ev['id'], $userId);
+            $flow   = $this->computeFlowStatus((int)$ev['id'], $userId);
+            $pay    = $this->getLatestPayment((int)$ev['id'], $userId);
+            $payId  = $pay['id_pembayaran'] ?? null;
+            $isOpen = in_array($ev['id'], $availableIds, true);
+
+            $statusIndex[(int)$ev['id']] = $flow + [
+                'ui' => $this->buildIndexUi((int)$ev['id'], $flow, $payId, $isOpen),
+            ];
         }
 
-        // Event ditutup = all - available - (masih terdaftar meskipun pendaftaran tutup tetap muncul di "ditutup")
-        $availableIds = array_column($available, 'id');
+        // Event ditutup = all - available
         $closed = array_values(array_filter($all, function($e) use ($availableIds){
-            return !in_array($e['id'], $availableIds);
+            return !in_array($e['id'], $availableIds, true);
         }));
 
         return view('role/presenter/events/index', [
             'title'       => 'Event',
             'available'   => $available,
             'closed'      => $closed,
-            'userRegs'    => $userRegs,
             'statusIndex' => $statusIndex,
             'q'           => $q,
         ]);
     }
 
-    /** DETAIL: informasi lengkap + CTA sesuai state */
+    /** DETAIL: informasi lengkap + CTA sesuai state (tidak diubah) */
     public function detail($id)
     {
         $userId = (int) session()->get('id_user');
@@ -92,14 +92,12 @@ class Event extends BaseController
 
         $reg = $this->regModel->findUserReg($event['id'], $userId);
 
-        // abstrak terbaru user di event ini (yang bukan ditolak final)
         $abstrak = $this->abstrakModel
             ->where('id_user', $userId)
             ->where('event_id', $event['id'])
             ->orderBy('id_abstrak','DESC')
             ->first();
 
-        // pembayaran terakhir di event ini
         $payment = $this->pembayaranModel
             ->where('id_user', $userId)
             ->where('event_id', $event['id'])
@@ -120,12 +118,11 @@ class Event extends BaseController
         ]);
     }
 
-    /** REGISTER: langsung tercatat (role presenter → offline) */
+    /** REGISTER */
     public function register($id)
     {
         $userId = (int) session()->get('id_user');
 
-        // Safety: pendaftaran masih dibuka?
         if (!$this->eventModel->isRegistrationOpen((int)$id)) {
             return redirect()->to('/presenter/events/detail/'.$id)
                 ->with('error', 'Pendaftaran untuk event ini sudah ditutup.');
@@ -149,7 +146,6 @@ class Event extends BaseController
             return redirect()->to('/presenter/events/detail/'.$id)->with('error','Pendaftaran tidak ditemukan.');
         }
 
-        // Sudah ada abstrak? larang batal
         $hasAbstract = $this->abstrakModel
             ->where('id_user', $userId)
             ->where('event_id', (int)$id)
@@ -164,33 +160,41 @@ class Event extends BaseController
         return redirect()->to('/presenter/events')->with('success','Pendaftaran dibatalkan.');
     }
 
-    /** Menyusun status flow untuk index & detail */
+    /** ===== Helpers ===== */
+
+    private function getLatestAbstract(int $eventId, int $userId): ?array
+    {
+        return $this->abstrakModel
+            ->where('id_user', $userId)
+            ->where('event_id', $eventId)
+            ->orderBy('id_abstrak','DESC')
+            ->first();
+    }
+
+    private function getLatestPayment(int $eventId, int $userId): ?array
+    {
+        return $this->pembayaranModel
+            ->where('id_user', $userId)
+            ->where('event_id', $eventId)
+            ->orderBy('id_pembayaran','DESC')
+            ->first();
+    }
+
+    /** Menyusun status flow untuk index & detail (cover canceled/expired) */
     private function computeFlowStatus(int $eventId, int $userId): array
     {
         $reg = $this->regModel->findUserReg($eventId, $userId);
 
-        // default
+        // default (belum daftar)
         $state = 'belum_daftar';
         $label = 'Belum terdaftar';
         $hint  = 'Klik Daftar untuk mulai';
         $can   = ['register' => true];
 
         if ($reg) {
-            // cek abstrak
-            $ab = $this->abstrakModel
-                ->where('id_user', $userId)
-                ->where('event_id', $eventId)
-                ->orderBy('id_abstrak','DESC')
-                ->first();
+            $ab   = $this->getLatestAbstract($eventId, $userId);
+            $pay  = $this->getLatestPayment($eventId, $userId);
 
-            // cek payment
-            $pay = $this->pembayaranModel
-                ->where('id_user', $userId)
-                ->where('event_id', $eventId)
-                ->orderBy('id_pembayaran','DESC')
-                ->first();
-
-            // cek absensi (sudah hadir?)
             $hadir = $this->absensiModel
                 ->where('id_user', $userId)
                 ->where('event_id', $eventId)
@@ -203,7 +207,7 @@ class Event extends BaseController
                 $hint  = 'Wajib sebelum pembayaran';
                 $can   = ['upload' => true, 'cancel' => true];
             } else {
-                switch ($ab['status']) {
+                switch (strtolower($ab['status'])) {
                     case 'menunggu':
                     case 'sedang_direview':
                         $state = 'menunggu_abstrak';
@@ -211,48 +215,80 @@ class Event extends BaseController
                         $hint  = 'Tunggu ACC/revisi/ditolak';
                         $can   = ['view_abstrak' => true];
                         break;
+
                     case 'revisi':
                         $state = 'revisi_abstrak';
                         $label = 'Revisi abstrak';
                         $hint  = 'Silakan unggah ulang dokumen revisi';
                         $can   = ['reupload' => true];
                         break;
+
                     case 'ditolak':
                         $state = 'abstrak_ditolak';
                         $label = 'Abstrak ditolak';
                         $hint  = 'Anda dapat kirim ulang abstrak baru';
                         $can   = ['upload' => true];
                         break;
+
                     case 'diterima':
-                        // cek payment
                         if (!$pay) {
                             $state = 'bayar';
                             $label = 'Silakan lakukan pembayaran';
-                            $hint  = 'Unggah bukti pembayaran';
+                            $hint  = 'Pembayaran digital via Midtrans';
                             $can   = ['pay' => true];
                         } else {
-                            if ($pay['status'] === 'pending') {
-                                $state = 'pembayaran_pending';
-                                $label = 'Menunggu verifikasi pembayaran';
-                                $hint  = 'Admin akan memverifikasi';
-                                $can   = ['pay_detail' => true];
-                            } elseif ($pay['status'] === 'rejected') {
-                                $state = 'pembayaran_ditolak';
-                                $label = 'Pembayaran ditolak';
-                                $hint  = 'Periksa catatan & unggah ulang';
-                                $can   = ['pay_reupload' => true];
-                            } elseif ($pay['status'] === 'verified') {
-                                if ($hadir) {
-                                    $state = 'sudah_absen';
-                                    $label = 'Sudah absen';
-                                    $hint  = 'Terima kasih telah hadir';
-                                    $can   = ['absen_detail' => true];
-                                } else {
-                                    $state = 'siap_absen';
-                                    $label = 'Silakan absen saat event';
-                                    $hint  = 'Tersedia saat event berlangsung';
-                                    $can   = ['absen' => true];
-                                }
+                            $pstat = strtolower($pay['status'] ?? '');
+                            switch ($pstat) {
+                                case 'pending':
+                                    $state = 'pembayaran_pending';
+                                    $label = 'Pembayaran pending';
+                                    $hint  = 'Sedang diproses / menunggu verifikasi';
+                                    $can   = ['pay_detail' => true];
+                                    break;
+
+                                case 'rejected':
+                                case 'ditolak':
+                                    $state = 'pembayaran_ditolak';
+                                    $label = 'Pembayaran ditolak';
+                                    $hint  = 'Periksa catatan & lakukan ulang pembayaran';
+                                    $can   = ['pay_reupload' => true];
+                                    break;
+
+                                case 'canceled':
+                                    $state = 'pembayaran_dibatalkan';
+                                    $label = 'Pembayaran dibatalkan';
+                                    // sesuai permintaan: keterangannya jadi "Lakukan pembayaran lagi"
+                                    $hint  = 'Lakukan pembayaran lagi';
+                                    $can   = ['pay' => true];
+                                    break;
+
+                                case 'expired':
+                                    $state = 'pembayaran_kedaluwarsa';
+                                    $label = 'Pembayaran kedaluwarsa';
+                                    $hint  = 'Lakukan pembayaran lagi';
+                                    $can   = ['pay' => true];
+                                    break;
+
+                                case 'verified':
+                                    if ($hadir) {
+                                        $state = 'sudah_absen';
+                                        $label = 'Sudah absen';
+                                        $hint  = 'Terima kasih telah hadir';
+                                        $can   = ['absen_detail' => true];
+                                    } else {
+                                        $state = 'siap_absen';
+                                        $label = 'Pembayaran diterima';
+                                        $hint  = 'Anda sudah benar-benar terdaftar';
+                                        $can   = ['absen' => true, 'documents' => true];
+                                    }
+                                    break;
+
+                                default:
+                                    $state = 'pembayaran_pending';
+                                    $label = 'Pembayaran diproses';
+                                    $hint  = 'Status akan diperbarui';
+                                    $can   = ['pay_detail' => true];
+                                    break;
                             }
                         }
                         break;
@@ -266,6 +302,113 @@ class Event extends BaseController
             'hint'  => $hint,
             'can'   => $can,
             'reg'   => $reg,
+        ];
+    }
+
+    /** Build UI (chip + CTA) untuk index card per event */
+    private function buildIndexUi(int $eventId, array $flow, ?int $latestPaymentId, bool $isOpen): array
+    {
+        $state = $flow['state'] ?? 'belum_daftar';
+        $label = $flow['label'] ?? '';
+        $hint  = $flow['hint']  ?? '';
+
+        // chip class mapping
+        $chipClass = match ($state) {
+            'upload_abstrak', 'bayar'                  => 'bg-primary-subtle text-primary',
+            'menunggu_abstrak', 'pembayaran_pending'   => 'bg-warning-subtle text-warning',
+            'revisi_abstrak'                           => 'bg-info-subtle text-info',
+            'abstrak_ditolak', 'pembayaran_ditolak'    => 'bg-danger-subtle text-danger',
+            'pembayaran_dibatalkan', 'pembayaran_kedaluwarsa'
+                                                      => 'bg-secondary-subtle text-secondary',
+            'siap_absen', 'sudah_absen'                => 'bg-success-subtle text-success',
+            default                                    => 'bg-secondary-subtle text-secondary',
+        };
+
+        // default: sembunyikan chip kalau belum daftar
+        $showChip = $state !== 'belum_daftar';
+
+        // CTA mapping
+        $cta = [
+            'visible'  => false,
+            'label'    => 'Detail Event',
+            'url'      => site_url('presenter/events/detail/'.$eventId),
+            'class'    => 'btn-outline-primary',
+            'disabled' => false,
+        ];
+
+        $setCta = function(string $label, string $url, string $class = 'btn-primary', bool $disabled = false) use (&$cta) {
+            $cta['visible']  = true;
+            $cta['label']    = $label;
+            $cta['url']      = $url;
+            $cta['class']    = $class;
+            $cta['disabled'] = $disabled;
+        };
+
+        switch ($state) {
+            case 'belum_daftar':
+                if ($isOpen) {
+                    $setCta('Daftar', site_url('presenter/events/register/'.$eventId), 'btn-primary');
+                } else {
+                    // pendaftaran tutup → jangan tampilkan CTA kedua (hanya tombol Detail)
+                    $cta['visible'] = false;
+                }
+                break;
+
+            case 'upload_abstrak':
+                $setCta('Upload Abstrak', site_url('presenter/abstrak/create/'.$eventId), 'btn-primary');
+                break;
+
+            case 'menunggu_abstrak':
+                $setCta('Lihat Abstrak', site_url('presenter/abstrak'), 'btn-outline-primary');
+                break;
+
+            case 'revisi_abstrak':
+                $setCta('Re-upload Abstrak', site_url('presenter/abstrak/create/'.$eventId), 'btn-warning');
+                break;
+
+            case 'abstrak_ditolak':
+                $setCta('Upload Abstrak Baru', site_url('presenter/abstrak/create/'.$eventId), 'btn-danger');
+                break;
+
+            case 'bayar':
+                $setCta('Lakukan Pembayaran', site_url('presenter/pembayaran/instruction/'.$eventId), 'btn-primary');
+                break;
+
+            case 'pembayaran_pending':
+                $detailUrl = $latestPaymentId ? site_url('presenter/pembayaran/detail/'.$latestPaymentId) : site_url('presenter/pembayaran');
+                $setCta('Cek Status Pembayaran', $detailUrl, 'btn-warning');
+                break;
+
+            case 'pembayaran_ditolak':
+                $setCta('Bayar Ulang', site_url('presenter/pembayaran/instruction/'.$eventId), 'btn-danger');
+                break;
+
+            case 'pembayaran_dibatalkan':
+                // permintaan khusus: wording "Lakukan Pembayaran Lagi"
+                $setCta('Lakukan Pembayaran Lagi', site_url('presenter/pembayaran/instruction/'.$eventId), 'btn-secondary');
+                break;
+
+            case 'pembayaran_kedaluwarsa':
+                $setCta('Lakukan Pembayaran Lagi', site_url('presenter/pembayaran/instruction/'.$eventId), 'btn-secondary');
+                break;
+
+            case 'siap_absen':
+            case 'sudah_absen':
+                $setCta('Lihat Event', site_url('presenter/events/detail/'.$eventId), 'btn-success');
+                break;
+
+            default:
+                // fallback
+                $cta['visible'] = false;
+                break;
+        }
+
+        return [
+            'show_chip'  => $showChip,
+            'chip_label' => $label,
+            'chip_hint'  => $hint,
+            'chip_class' => $chipClass,
+            'cta'        => $cta,
         ];
     }
 }

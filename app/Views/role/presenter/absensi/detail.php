@@ -44,7 +44,7 @@ $currentWIBString = $currentWIB->format('Y-m-d H:i:s');
           <small class="text-white-50 d-block">Window Absensi (WIB)</small>
           <strong class="text-white"><?= $startText ?> - <?= $endText ?></strong>
         </div>
-      </div>
+      </div> 
 
       <!-- STATUS + AKSI -->
       <div class="card shadow-sm mb-4">

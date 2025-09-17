@@ -44,6 +44,23 @@ $q     = $q ?? '';
         </div>
       </div>
 
+      <?php
+      // helper kecil untuk warna badge berdasarkan state flow
+      $stateBadge = function (string $state): string {
+        return match ($state) {
+          'upload_abstrak'        => 'primary',
+          'menunggu_abstrak'      => 'info',
+          'revisi_abstrak'        => 'warning',
+          'abstrak_ditolak'       => 'danger',
+          'bayar'                 => 'warning',
+          'pembayaran_pending'    => 'secondary',
+          'pembayaran_dibatalkan' => 'danger',
+          'siap_absen', 'sudah_absen' => 'success',
+          default                 => 'secondary',
+        };
+      };
+      ?>
+
       <!-- Event Tersedia -->
       <div class="card shadow-sm mb-4 border-0 overflow-hidden">
         <div class="card-header bg-gradient-primary text-white">
@@ -55,9 +72,15 @@ $q     = $q ?? '';
           <?php else: ?>
             <div class="row g-3">
               <?php foreach ($available as $e):
-                $st = $statusIndex[(int)$e['id']] ?? null;
-                $label = $st['label'] ?? 'Belum terdaftar';
+                $st    = $statusIndex[(int)$e['id']] ?? [];
+                $state = $st['state'] ?? 'belum_daftar';
+                $label = $st['label'] ?? '';
                 $hint  = $st['hint']  ?? '';
+
+                // override hint khusus bila pembayaran dibatalkan → minta bayar lagi (sesuai permintaan)
+                if ($state === 'pembayaran_dibatalkan') {
+                  $hint = 'Lakukan pembayaran lagi.';
+                }
               ?>
               <div class="col-12 col-md-6 col-xl-4">
                 <div class="event-card h-100 shadow-sm">
@@ -65,28 +88,95 @@ $q     = $q ?? '';
                     <h5 class="mb-0"><?= esc($e['title']) ?></h5>
                     <span class="badge bg-success">Tersedia</span>
                   </div>
+
                   <div class="small text-muted mb-2">
                     Mulai: <strong><?= date('d M Y', strtotime($e['event_date'])) ?> <?= esc($e['event_time']) ?></strong><br>
                     Tutup Daftar: <strong><?= $e['registration_deadline'] ? date('d M Y H:i', strtotime($e['registration_deadline'])) : '-' ?></strong><br>
                     Batas Abstrak: <strong><?= $e['abstract_deadline'] ? date('d M Y H:i', strtotime($e['abstract_deadline'])) : '-' ?></strong>
                   </div>
-                  <div class="mb-2">
-                    <span class="badge rounded-pill bg-primary-subtle text-primary fw-normal"><?= esc($label) ?></span>
-                    <?php if ($hint): ?><div class="text-muted small mt-1"><?= esc($hint) ?></div><?php endif; ?>
-                  </div>
+
+                  <!-- Status chip + hint: Sembunyikan kalau masih belum daftar -->
+                  <?php if ($state !== 'belum_daftar'): ?>
+                    <div class="mb-2">
+                      <span class="badge rounded-pill bg-<?= $stateBadge($state) ?>-subtle text-<?= $stateBadge($state) ?> fw-normal">
+                        <?= esc($label) ?>
+                      </span>
+                      <?php if ($hint): ?>
+                        <div class="text-muted small mt-1"><?= esc($hint) ?></div>
+                      <?php endif; ?>
+                    </div>
+                  <?php endif; ?>
+
                   <div class="d-flex gap-2">
-                    <a class="btn btn-outline-primary flex-fill" href="/presenter/events/detail/<?= $e['id'] ?>">
+                    <a class="btn btn-outline-primary flex-fill" href="/presenter/events/detail/<?= (int)$e['id'] ?>">
                       <i class="bi bi-eye"></i> Detail
                     </a>
-                    <?php if (($st['state'] ?? '') === 'belum_daftar'): ?>
-                      <button class="btn btn-primary flex-fill" onclick="confirmRegister(<?= (int)$e['id'] ?>)">
-                        <i class="bi bi-box-arrow-in-right"></i> Daftar
-                      </button>
-                    <?php else: ?>
-                      <a class="btn btn-success flex-fill" href="/presenter/events/detail/<?= $e['id'] ?>">
-                        <i class="bi bi-check2-circle"></i> Sudah Terdaftar
-                      </a>
-                    <?php endif; ?>
+
+                    <?php
+                      // CTA utama per state
+                      switch ($state):
+                        case 'belum_daftar': ?>
+                          <button class="btn btn-primary flex-fill" onclick="confirmRegister(<?= (int)$e['id'] ?>)">
+                            <i class="bi bi-box-arrow-in-right"></i> Daftar
+                          </button>
+                          <?php break;
+
+                        case 'upload_abstrak': ?>
+                          <a class="btn btn-primary flex-fill" href="/presenter/abstrak/create/<?= (int)$e['id'] ?>">
+                            <i class="bi bi-upload"></i> Upload Abstrak
+                          </a>
+                          <?php break;
+
+                        case 'revisi_abstrak': ?>
+                          <a class="btn btn-warning flex-fill" href="/presenter/abstrak/create/<?= (int)$e['id'] ?>">
+                            <i class="bi bi-arrow-repeat"></i> Upload Ulang
+                          </a>
+                          <?php break;
+
+                        case 'abstrak_ditolak': ?>
+                          <a class="btn btn-outline-danger flex-fill" href="/presenter/abstrak/create/<?= (int)$e['id'] ?>">
+                            <i class="bi bi-file-earmark-plus"></i> Kirim Baru
+                          </a>
+                          <?php break;
+
+                        case 'menunggu_abstrak': ?>
+                          <a class="btn btn-outline-secondary flex-fill" href="/presenter/abstrak">
+                            <i class="bi bi-hourglass-split"></i> Lihat Abstrak
+                          </a>
+                          <?php break;
+
+                        case 'bayar': ?>
+                          <a class="btn btn-warning flex-fill" href="/presenter/pembayaran/instruction/<?= (int)$e['id'] ?>">
+                            <i class="bi bi-credit-card"></i> Bayar Sekarang
+                          </a>
+                          <?php break;
+
+                        case 'pembayaran_pending': ?>
+                          <a class="btn btn-outline-secondary flex-fill" href="/presenter/pembayaran">
+                            <i class="bi bi-clock-history"></i> Cek Status
+                          </a>
+                          <?php break;
+
+                        case 'pembayaran_dibatalkan': ?>
+                          <a class="btn btn-danger flex-fill" href="/presenter/pembayaran/instruction/<?= (int)$e['id'] ?>">
+                            <i class="bi bi-arrow-repeat"></i> Bayar Ulang
+                          </a>
+                          <?php break;
+
+                        case 'siap_absen':
+                        case 'sudah_absen': ?>
+                          <a class="btn btn-success flex-fill" href="/presenter/events/detail/<?= (int)$e['id'] ?>">
+                            <i class="bi bi-calendar-check"></i> Lihat Event
+                          </a>
+                          <?php break;
+
+                        default: ?>
+                          <a class="btn btn-outline-secondary flex-fill" href="/presenter/events/detail/<?= (int)$e['id'] ?>">
+                            <i class="bi bi-info-circle"></i> Detail
+                          </a>
+                          <?php break;
+                      endswitch;
+                    ?>
                   </div>
                 </div>
               </div>
@@ -107,9 +197,14 @@ $q     = $q ?? '';
           <?php else: ?>
             <div class="row g-3">
               <?php foreach ($closed as $e):
-                $st = $statusIndex[(int)$e['id']] ?? null;
-                $label = $st['label'] ?? '—';
+                $st    = $statusIndex[(int)$e['id']] ?? [];
+                $state = $st['state'] ?? 'belum_daftar';
+                $label = $st['label'] ?? '';
                 $hint  = $st['hint']  ?? '';
+
+                if ($state === 'pembayaran_dibatalkan') {
+                  $hint = 'Lakukan pembayaran lagi.';
+                }
               ?>
               <div class="col-12 col-md-6 col-xl-4">
                 <div class="event-card h-100 shadow-sm opacity-90">
@@ -122,13 +217,67 @@ $q     = $q ?? '';
                     Tutup Daftar: <strong><?= $e['registration_deadline'] ? date('d M Y H:i', strtotime($e['registration_deadline'])) : '-' ?></strong><br>
                     Batas Abstrak: <strong><?= $e['abstract_deadline'] ? date('d M Y H:i', strtotime($e['abstract_deadline'])) : '-' ?></strong>
                   </div>
-                  <div class="mb-2">
-                    <span class="badge rounded-pill bg-secondary-subtle text-secondary fw-normal"><?= esc($label) ?></span>
-                    <?php if ($hint): ?><div class="text-muted small mt-1"><?= esc($hint) ?></div><?php endif; ?>
+
+                  <?php if ($state !== 'belum_daftar'): ?>
+                    <div class="mb-2">
+                      <span class="badge rounded-pill bg-<?= $stateBadge($state) ?>-subtle text-<?= $stateBadge($state) ?> fw-normal">
+                        <?= esc($label) ?>
+                      </span>
+                      <?php if ($hint): ?>
+                        <div class="text-muted small mt-1"><?= esc($hint) ?></div>
+                      <?php endif; ?>
+                    </div>
+                  <?php endif; ?>
+
+                  <div class="d-flex gap-2">
+                    <a class="btn btn-outline-secondary flex-fill" href="/presenter/events/detail/<?= (int)$e['id'] ?>">
+                      <i class="bi bi-eye"></i> Detail
+                    </a>
+
+                    <?php
+                      // Pendaftaran ditutup → tidak ada tombol daftar / bayar baru dari sini
+                      // Tampilkan CTA sesuai state yang masih relevan
+                      switch ($state):
+                        case 'upload_abstrak':
+                        case 'revisi_abstrak':
+                        case 'abstrak_ditolak': ?>
+                          <a class="btn btn-outline-secondary flex-fill" href="/presenter/abstrak">
+                            <i class="bi bi-file-earmark-text"></i> Lihat Abstrak
+                          </a>
+                          <?php break;
+
+                        case 'menunggu_abstrak': ?>
+                          <a class="btn btn-outline-secondary flex-fill" href="/presenter/abstrak">
+                            <i class="bi bi-hourglass-split"></i> Lihat Abstrak
+                          </a>
+                          <?php break;
+
+                        case 'pembayaran_pending': ?>
+                          <a class="btn btn-outline-secondary flex-fill" href="/presenter/pembayaran">
+                            <i class="bi bi-clock-history"></i> Cek Status
+                          </a>
+                          <?php break;
+
+                        case 'siap_absen':
+                        case 'sudah_absen': ?>
+                          <a class="btn btn-outline-success flex-fill" href="/presenter/events/detail/<?= (int)$e['id'] ?>">
+                            <i class="bi bi-calendar-check"></i> Lihat Event
+                          </a>
+                          <?php break;
+
+                        case 'pembayaran_dibatalkan': ?>
+                          <!-- Pendaftaran tutup: bayar ulang biasanya tidak bisa, jadi cukup arahkan ke detail -->
+                          <a class="btn btn-outline-danger flex-fill" href="/presenter/events/detail/<?= (int)$e['id'] ?>">
+                            <i class="bi bi-info-circle"></i> Lihat Detail
+                          </a>
+                          <?php break;
+
+                        default: ?>
+                          <!-- tidak ada CTA tambahan -->
+                          <?php break;
+                      endswitch;
+                    ?>
                   </div>
-                  <a class="btn btn-outline-secondary w-100" href="/presenter/events/detail/<?= $e['id'] ?>">
-                    <i class="bi bi-eye"></i> Detail
-                  </a>
                 </div>
               </div>
               <?php endforeach; ?>
@@ -171,6 +320,20 @@ $q     = $q ?? '';
     .search-compact .form-control,
     .search-compact .btn{ height: 40px; font-size: .92rem; }
   }
+
+  /* bootstrap utility -subtle fallback (kalau tema belum punya) */
+  .bg-primary-subtle{ background:#e7f0ff !important; color:#2563eb !important;}
+  .bg-info-subtle{ background:#e6f9fc !important; color:#06b6d4 !important;}
+  .bg-warning-subtle{ background:#fff7e6 !important; color:#d97706 !important;}
+  .bg-danger-subtle{ background:#ffe9e9 !important; color:#ef4444 !important;}
+  .bg-secondary-subtle{ background:#f1f5f9 !important; color:#475569 !important;}
+  .bg-success-subtle{ background:#eafaf3 !important; color:#0f766e !important;}
+  .text-primary{ color:#2563eb !important;}
+  .text-info{ color:#06b6d4 !important;}
+  .text-warning{ color:#d97706 !important;}
+  .text-danger{ color:#ef4444 !important;}
+  .text-secondary{ color:#475569 !important;}
+  .text-success{ color:#0f766e !important;}
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>

@@ -23,27 +23,46 @@ class Abstrak extends BaseController
         $this->kategoriModel = new KategoriAbstrakModel();
     }
 
+    /** Map status -> badge class & label & hint ringkas */
+    private function mapStatusMeta(?string $status): array
+    {
+        $s = strtolower((string)$status);
+        return match ($s) {
+            'menunggu'         => ['badge' => 'warning',  'label' => 'Menunggu',         'hint' => 'Menunggu review abstrak'],
+            'sedang_direview'  => ['badge' => 'info',     'label' => 'Sedang Direview',  'hint' => 'Reviewer sedang menilai'],
+            'diterima'         => ['badge' => 'success',  'label' => 'Diterima (ACC)',   'hint' => 'Abstrak diterima'],
+            'ditolak'          => ['badge' => 'danger',   'label' => 'Ditolak',          'hint' => 'Abstrak ditolak'],
+            'revisi'           => ['badge' => 'primary',  'label' => 'Revisi',           'hint' => 'Diminta revisi - upload ulang'],
+            default            => ['badge' => 'secondary','label' => 'Belum Upload',     'hint' => 'Belum ada abstrak'],
+        };
+    }
+
     /** INDEX */
     public function index()
     {
         $userId = (int) session()->get('id_user');
 
+        // Registrasi event user
         $regs = $this->regModel->listByUser($userId);
+
+        // Inisialisasi container event
         $eventsById = [];
         foreach ($regs as $r) {
-            $eventsById[(int)$r['id_event']] = [
+            $eventId = (int) $r['id_event'];
+            $eventsById[$eventId] = [
                 'reg'        => $r,
-                'event'      => $this->eventModel->find((int)$r['id_event']),
-                'abstract'   => null,
-                'can_upload' => false,
-                'is_open'    => false,
+                'event'      => $this->eventModel->find($eventId),
+                'abstract'   => null,   // last abstract (per event)
+                'is_open'    => false,  // abstract submission open?
+                'can_upload' => false,  // boleh upload (belum pernah / status revisi)
             ];
         }
 
+        // Ambil semua abstrak user (dengan relasi)
         $allAbs = $this->abstrakModel->getByUserWithDetails($userId);
-        $latestPerEvent = [];
-        $history = [];
 
+        // Tentukan abstrak terbaru per event
+        $latestPerEvent = [];
         foreach ($allAbs as $a) {
             $eid = (int) $a['event_id'];
             if (!isset($latestPerEvent[$eid]) || strtotime($a['tanggal_upload']) > strtotime($latestPerEvent[$eid]['tanggal_upload'])) {
@@ -51,29 +70,75 @@ class Abstrak extends BaseController
             }
         }
 
-        foreach ($eventsById as $eid => &$row) {
-            $row['abstract'] = $latestPerEvent[$eid] ?? null;
-            $row['is_open']  = $this->eventModel->isAbstractSubmissionOpen($eid);
+        // Siapkan list “perlu upload” dan “riwayat”
+        $needsUpload = []; // event yang butuh upload (belum pernah / revisi)
+        $history     = []; // ringkasan semua abstrak terbaru per event (apapun statusnya) + info event
 
-            $last = $row['abstract'];
-            if ($row['is_open']) {
+        foreach ($eventsById as $eid => $row) {
+            $event = $row['event'] ?? null;
+            if (!$event) {
+                continue;
+            }
+
+            $isOpen = $this->eventModel->isAbstractSubmissionOpen($eid);
+            $last   = $latestPerEvent[$eid] ?? null;
+
+            // Tentukan boleh upload
+            $canUpload = false;
+            if ($isOpen) {
                 if (!$last) {
-                    $row['can_upload'] = true;
+                    $canUpload = true; // belum pernah kirim
                 } else {
-                    $row['can_upload'] = in_array($last['status'], ['revisi'], true);
+                    $canUpload = in_array(strtolower($last['status']), ['revisi'], true); // boleh upload saat revisi
                 }
             }
 
-            if ($last && in_array($last['status'], ['diterima','ditolak'], true)) {
-                $history[] = $last;
+            // Paket data untuk daftar "perlu upload" (atas)
+            if ($canUpload) {
+                $meta = $this->mapStatusMeta($last['status'] ?? null);
+                $needsUpload[] = [
+                    'event_id'          => $eid,
+                    'title'             => $event['title'] ?? '-',
+                    'event_date'        => $event['event_date'] ?? null,
+                    'abstract_deadline' => $event['abstract_deadline'] ?? null,
+                    'format'            => strtolower($event['format'] ?? ''),
+                    'status_badge'      => $meta['badge'],         // warna badge di pojok
+                    'status_label'      => $meta['label'],         // label badge
+                    'hint'              => $meta['hint'],          // hint kecil
+                    'can_upload'        => true,
+                    'last_abs_id'       => $last['id_abstrak'] ?? null,
+                ];
+            }
+
+            // Paket data untuk "riwayat": tampilkan kalau SUDAH PERNAH KIRIM (apapun statusnya)
+            if ($last) {
+                $meta = $this->mapStatusMeta($last['status'] ?? null);
+                $history[] = [
+                    'id_abstrak'     => (int) $last['id_abstrak'],
+                    'judul'          => $last['judul'] ?? '-',
+                    'nama_kategori'  => $last['nama_kategori'] ?? '-',
+                    'status'         => strtolower($last['status'] ?? ''),
+                    'status_badge'   => $meta['badge'],
+                    'status_label'   => $meta['label'],
+                    'status_hint'    => $meta['hint'],
+                    'tanggal_upload' => $last['tanggal_upload'] ?? null,
+                    // Info event
+                    'event_id'       => $eid,
+                    'event_title'    => $event['title'] ?? '-',
+                    'event_date'     => $event['event_date'] ?? null,
+                ];
             }
         }
-        unset($row);
+
+        // Urutkan riwayat terbaru di atas (optional)
+        usort($history, function ($a, $b) {
+            return strtotime($b['tanggal_upload'] ?? '1970-01-01') <=> strtotime($a['tanggal_upload'] ?? '1970-01-01');
+        });
 
         return view('role/presenter/abstrak/index', [
-            'title'      => 'Abstrak',
-            'events'     => $eventsById,
-            'history'    => $history,
+            'title'        => 'Abstrak',
+            'uploadEvents' => $needsUpload, // hanya yang perlu upload/revisi
+            'history'      => $history,     // semua yang sudah submit (apapun statusnya)
         ]);
     }
 

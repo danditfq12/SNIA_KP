@@ -104,8 +104,12 @@ class AddMissingPaymentColumns extends Migration
 
         // Add columns if any need to be added
         if (!empty($columnsToAdd)) {
-            $this->forge->addColumn('pembayaran', $columnsToAdd);
-            echo "Added " . count($columnsToAdd) . " columns to pembayaran table.\n";
+            try {
+                $this->forge->addColumn('pembayaran', $columnsToAdd);
+                echo "Added " . count($columnsToAdd) . " columns to pembayaran table.\n";
+            } catch (\Exception $e) {
+                echo "Some columns may already exist: " . $e->getMessage() . "\n";
+            }
         } else {
             echo "All required columns already exist in pembayaran table.\n";
         }
@@ -125,9 +129,13 @@ class AddMissingPaymentColumns extends Migration
         $db = \Config\Database::connect();
         
         // Drop indexes
-        $db->query('DROP INDEX IF EXISTS idx_pembayaran_midtrans_order');
-        $db->query('DROP INDEX IF EXISTS idx_pembayaran_reference');
-        $db->query('DROP INDEX IF EXISTS idx_pembayaran_auto_verified');
+        try {
+            $db->query('DROP INDEX IF EXISTS idx_pembayaran_midtrans_order');
+            $db->query('DROP INDEX IF EXISTS idx_pembayaran_reference');
+            $db->query('DROP INDEX IF EXISTS idx_pembayaran_auto_verified');
+        } catch (\Exception $e) {
+            // Continue if indexes don't exist
+        }
         
         // Drop columns (in reverse order)
         $columnsToRemove = [
@@ -154,7 +162,11 @@ class AddMissingPaymentColumns extends Migration
         }
         
         if (!empty($existingColumns)) {
-            $this->forge->dropColumn('pembayaran', $existingColumns);
+            try {
+                $this->forge->dropColumn('pembayaran', $existingColumns);
+            } catch (\Exception $e) {
+                echo "Error dropping columns: " . $e->getMessage() . "\n";
+            }
         }
     }
 }

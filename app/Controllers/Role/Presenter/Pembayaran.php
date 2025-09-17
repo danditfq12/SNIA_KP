@@ -41,6 +41,11 @@ class Pembayaran extends BaseController
         return max(0, (int)($event['presenter_fee_offline'] ?? 0));
     }
 
+    private function formatRupiah(int $n): string
+    {
+        return 'Rp ' . number_format($n, 0, ',', '.');
+    }
+
     private function applyVoucherDiscount(int $basePrice, ?array $voucher): int
     {
         if (!$voucher) return $basePrice;
@@ -52,7 +57,6 @@ class Pembayaran extends BaseController
             $discount = min(100, $nilai);
             return max(0, $basePrice - (int)floor($basePrice * $discount / 100));
         }
-        
         return max(0, $basePrice - $nilai);
     }
 
@@ -68,14 +72,14 @@ class Pembayaran extends BaseController
 
         if (!$voucher) return null;
 
-        // Check expiry
+        // expiry
         $exp = $voucher['masa_berlaku'] ?? null;
         if (!empty($exp)) {
             $endTs = strtotime(date('Y-m-d 23:59:59', strtotime($exp)));
             if ($endTs && $endTs < time()) return null;
         }
 
-        // Check quota
+        // quota
         $kuota = (int)($voucher['kuota'] ?? 0);
         if ($kuota > 0) {
             $used = $this->payModel
@@ -85,7 +89,7 @@ class Pembayaran extends BaseController
             if ($used >= $kuota) return null;
         }
 
-        // Check if user already used this voucher for this event
+        // already used by this user for this event?
         $existing = $this->payModel
             ->where('id_user', $userId)
             ->where('event_id', $eventId)
@@ -106,18 +110,16 @@ class Pembayaran extends BaseController
                               ->countAllResults() > 0;
     }
 
-    /**
-     * INDEX: Show payment list with event context and flow status
-     */
+    /** INDEX: tampilkan Tagihan (abstrak diterima & belum punya payment), Pending, dan Riwayat */
     public function index()
     {
         $userId = $this->uid();
         if (!$userId) return redirect()->to('/auth/login');
 
-        // Sync pending payments first
+        // Sinkronkan payment pending dari Midtrans
         $this->syncPendingPayments($userId);
 
-        // Get all payments with event info
+        // Ambil semua payment user (untuk Pending & Riwayat)
         $payments = $this->payModel
             ->select('pembayaran.*, e.title as event_title, e.event_date, e.event_time, e.format')
             ->join('events e', 'e.id = pembayaran.event_id', 'left')
@@ -125,11 +127,10 @@ class Pembayaran extends BaseController
             ->orderBy('pembayaran.id_pembayaran', 'DESC')
             ->findAll();
 
-        // Get events with payments for flow status
+        // Flow status per event (opsional, kalau mau dipakai di view)
         $eventIds = array_unique(array_column($payments, 'event_id'));
         $events = [];
         $flowStatuses = [];
-        
         if (!empty($eventIds)) {
             $eventRows = $this->eventModel->whereIn('id', $eventIds)->findAll();
             foreach ($eventRows as $event) {
@@ -138,83 +139,120 @@ class Pembayaran extends BaseController
             }
         }
 
-        // Enhanced payment data with flow context
+        // Lengkapi payment row
         $enhancedPayments = [];
         foreach ($payments as $payment) {
             $eventId = (int)$payment['event_id'];
             $payment['event'] = $events[$eventId] ?? null;
             $payment['flow'] = $flowStatuses[$eventId] ?? null;
             $payment['next_action'] = $this->getNextAction($payment, $flowStatuses[$eventId] ?? null);
+
+            // formatting ringan untuk view (tanpa bawa logic bisnis)
+            $payment['jumlah_formatted'] = $this->formatRupiah((int)$payment['jumlah']);
+            $payment['tanggal_date'] = !empty($payment['tanggal_bayar']) ? date('d M Y', strtotime($payment['tanggal_bayar'])) : '-';
+            $payment['tanggal_time'] = !empty($payment['tanggal_bayar']) ? date('H:i', strtotime($payment['tanggal_bayar'])) : '-';
+
+            // mapping UI kecil
+            $payment['status_badge'] = match (strtolower($payment['status'] ?? 'pending')) {
+                'verified' => 'bg-success',
+                'canceled' => 'bg-danger',
+                'expired'  => 'bg-dark',
+                default    => 'bg-warning text-dark',
+            };
+
+            $method = strtolower($payment['metode'] ?? 'midtrans');
+            $payment['method_label'] = $method === 'midtrans' ? 'Midtrans' : ucfirst($method);
+            $payment['method_icon']  = $method === 'midtrans' ? 'bi bi-lightning-charge' : 'bi bi-credit-card';
+            $payment['method_badge'] = $method === 'midtrans' ? 'bg-primary' : 'bg-secondary';
+
+            $payment['participation'] = $payment['participation_type'] ?? '';
             $enhancedPayments[] = $payment;
         }
 
-        $badgeMap = [
-            'pending' => 'warning',
-            'verified' => 'success',
-            'canceled' => 'danger',
-            'expired' => 'dark'
+        // Pisah Pending & Riwayat
+        $aktif   = array_values(array_filter($enhancedPayments, fn($r) => strtolower($r['status'] ?? '') === 'pending'));
+        $riwayat = array_values(array_filter($enhancedPayments, fn($r) => strtolower($r['status'] ?? '') !== 'pending'));
+
+        // === Bagian TAGIHAN ===
+        // Event yang abstraknya DITERIMA tapi belum ada pembayaran pending/verified
+        $dueList = $this->getEventsNeedingPayment($userId); // sudah terformat
+        // ringkasan total tagihan
+        $dueTotal = array_sum(array_map(fn($r) => (int)$r['amount'], $dueList));
+        $dueStats = [
+            'count'              => count($dueList),
+            'total'              => $dueTotal,
+            'total_formatted'    => $this->formatRupiah($dueTotal),
         ];
 
-        // Separate active (pending) and completed payments
-        $aktif = array_values(array_filter($enhancedPayments, 
-            static fn($r) => strtolower($r['status'] ?? '') === 'pending'));
-        $riwayat = array_values(array_filter($enhancedPayments, 
-            static fn($r) => strtolower($r['status'] ?? '') !== 'pending'));
-
-        // Get presenter's events that need payment but don't have it yet
-        $eventsNeedingPayment = $this->getEventsNeedingPayment($userId);
+        $badgeMap = [
+            'pending'  => 'warning',
+            'verified' => 'success',
+            'canceled' => 'danger',
+            'expired'  => 'dark',
+        ];
 
         return view('role/presenter/pembayaran/index', [
-            'title' => 'Pembayaran',
-            'payments' => $enhancedPayments,
-            'badgeMap' => $badgeMap,
-            'aktif' => $aktif,
-            'riwayat' => $riwayat,
-            'eventsNeedingPayment' => $eventsNeedingPayment,
-            'flowStatuses' => $flowStatuses,
+            'title'                => 'Pembayaran',
+            'badgeMap'             => $badgeMap,
+            'aktif'                => $aktif,
+            'riwayat'              => $riwayat,
+            'eventsNeedingPayment' => $dueList,     // TAGIHAN
+            'allPayments'          => $enhancedPayments, 
+            'dueStats'             => $dueStats,    // RINGKASAN TAGIHAN
+            'flowStatuses'         => $flowStatuses,
         ]);
+        
     }
 
     /**
-     * Get events that have accepted abstracts but no payment yet
+     * Ambil event yang abstraknya sudah diterima tapi belum ada payment pending/verified.
+     * Mengembalikan array yang SUDAH DIFORMAT untuk view.
      */
     private function getEventsNeedingPayment(int $userId): array
     {
         $acceptedAbstracts = $this->absModel
-            ->select('abstrak.event_id, e.title, e.event_date, e.presenter_fee_offline')
+            ->select('abstrak.event_id, abstrak.id_abstrak, e.title, e.event_date, e.event_time, e.presenter_fee_offline')
             ->join('events e', 'e.id = abstrak.event_id', 'left')
             ->where('abstrak.id_user', $userId)
             ->where('abstrak.status', 'diterima')
+            ->orderBy('abstrak.id_abstrak', 'DESC')
             ->findAll();
 
-        $eventsNeedingPayment = [];
-        
+        $rows = [];
         foreach ($acceptedAbstracts as $abstract) {
             $eventId = (int)$abstract['event_id'];
-            
-            // Check if payment already exists
+
+            // Sudah ada pembayaran pending/verified?
             $existingPayment = $this->payModel
                 ->where('id_user', $userId)
                 ->where('event_id', $eventId)
                 ->whereIn('status', ['pending', 'verified'])
                 ->first();
 
-            if (!$existingPayment) {
-                $eventsNeedingPayment[] = [
-                    'event_id' => $eventId,
-                    'title' => $abstract['title'],
-                    'event_date' => $abstract['event_date'],
-                    'amount' => (int)($abstract['presenter_fee_offline'] ?? 0),
-                    'flow' => $this->computeFlowStatus($eventId, $userId)
-                ];
-            }
+            if ($existingPayment) continue;
+
+            $amount = (int)($abstract['presenter_fee_offline'] ?? 0);
+            $rows[] = [
+                'event_id'          => $eventId,
+                'title'             => (string)($abstract['title'] ?? '-'),
+                'event_date'        => $abstract['event_date'] ?? null,
+                'event_date_fmt'    => !empty($abstract['event_date']) ? date('d M Y', strtotime($abstract['event_date'])) : '-',
+                'amount'            => $amount,
+                'amount_formatted'  => $this->formatRupiah($amount),
+                'pay_url'           => site_url('presenter/pembayaran/instruction/'.$eventId),
+            ];
         }
 
-        return $eventsNeedingPayment;
+        // urutkan tagihan terdekat dulu
+        usort($rows, function($a,$b){
+            return strtotime($a['event_date'] ?? '2100-01-01') <=> strtotime($b['event_date'] ?? '2100-01-01');
+        });
+
+        return $rows;
     }
 
     /**
-     * Compute flow status (matches Event controller logic)
+     * Compute flow status (sama seperti sebelumnya)
      */
     private function computeFlowStatus(int $eventId, int $userId): array
     {
@@ -222,70 +260,73 @@ class Pembayaran extends BaseController
 
         $state = 'belum_daftar';
         $label = 'Belum terdaftar';
-        $hint = 'Klik Daftar untuk mulai';
-        $can = ['register' => true];
+        $hint  = 'Klik Daftar untuk mulai';
+        $can   = ['register' => true];
 
         if ($reg) {
             $ab = $this->absModel
                 ->where('id_user', $userId)
                 ->where('event_id', $eventId)
-                ->orderBy('id_abstrak', 'DESC')
+                ->orderBy('id_abstrak','DESC')
                 ->first();
 
             $pay = $this->payModel
                 ->where('id_user', $userId)
                 ->where('event_id', $eventId)
-                ->orderBy('id_pembayaran', 'DESC')
+                ->orderBy('id_pembayaran','DESC')
                 ->first();
 
             if (!$ab) {
                 $state = 'upload_abstrak';
                 $label = 'Silakan upload abstrak';
-                $hint = 'Wajib sebelum pembayaran';
-                $can = ['upload' => true, 'cancel' => true];
+                $hint  = 'Wajib sebelum pembayaran';
+                $can   = ['upload' => true, 'cancel' => true];
             } else {
                 switch ($ab['status']) {
                     case 'menunggu':
                     case 'sedang_direview':
                         $state = 'menunggu_abstrak';
                         $label = 'Menunggu hasil abstrak';
-                        $hint = 'Tunggu ACC/revisi/ditolak';
-                        $can = ['view_abstrak' => true];
+                        $hint  = 'Tunggu ACC/revisi/ditolak';
+                        $can   = ['view_abstrak' => true];
                         break;
+
                     case 'revisi':
                         $state = 'revisi_abstrak';
                         $label = 'Revisi abstrak';
-                        $hint = 'Silakan unggah ulang dokumen revisi';
-                        $can = ['reupload' => true];
+                        $hint  = 'Silakan unggah ulang dokumen revisi';
+                        $can   = ['reupload' => true];
                         break;
+
                     case 'ditolak':
                         $state = 'abstrak_ditolak';
                         $label = 'Abstrak ditolak';
-                        $hint = 'Anda dapat kirim ulang abstrak baru';
-                        $can = ['upload' => true];
+                        $hint  = 'Anda dapat kirim ulang abstrak baru';
+                        $can   = ['upload' => true];
                         break;
+
                     case 'diterima':
                         if (!$pay) {
                             $state = 'bayar';
                             $label = 'Silakan lakukan pembayaran';
-                            $hint = 'Pembayaran digital via Midtrans';
-                            $can = ['pay' => true];
+                            $hint  = 'Pembayaran digital via Midtrans';
+                            $can   = ['pay' => true];
                         } else {
                             if ($pay['status'] === 'pending') {
                                 $state = 'pembayaran_pending';
                                 $label = 'Menunggu verifikasi pembayaran';
-                                $hint = 'Pembayaran sedang diproses';
-                                $can = ['pay_detail' => true];
+                                $hint  = 'Pembayaran sedang diproses';
+                                $can   = ['pay_detail' => true];
                             } elseif ($pay['status'] === 'canceled') {
                                 $state = 'pembayaran_dibatalkan';
                                 $label = 'Pembayaran dibatalkan';
-                                $hint = 'Silakan lakukan pembayaran ulang';
-                                $can = ['pay' => true];
+                                $hint  = 'Silakan lakukan pembayaran ulang';
+                                $can   = ['pay' => true];
                             } elseif ($pay['status'] === 'verified') {
                                 $state = 'siap_absen';
                                 $label = 'Siap untuk event';
-                                $hint = 'Pembayaran terverifikasi, siap absen';
-                                $can = ['absen' => true, 'documents' => true];
+                                $hint  = 'Pembayaran terverifikasi, siap absen';
+                                $can   = ['absen' => true, 'documents' => true];
                             }
                         }
                         break;
@@ -296,15 +337,14 @@ class Pembayaran extends BaseController
         return [
             'state' => $state,
             'label' => $label,
-            'hint' => $hint,
-            'can' => $can,
-            'reg' => $reg,
+            'hint'  => $hint,
+            'can'   => $can,
+            'reg'   => $reg,
         ];
     }
 
-    /**
-     * Get next recommended action for payment
-     */
+    /*** ===== Bagian lain (process, detail, cancel, mapMidtransStatus, sync, instruction, validateVoucher) tetap SAMA seperti punyamu ===== ***/
+
     private function getNextAction(array $payment, ?array $flow): array
     {
         $status = strtolower($payment['status'] ?? 'pending');
@@ -314,54 +354,50 @@ class Pembayaran extends BaseController
             case 'pending':
                 return [
                     'label' => 'Cek Status',
-                    'url' => site_url('presenter/pembayaran/detail/' . $payment['id_pembayaran']),
+                    'url'   => site_url('presenter/pembayaran/detail/' . $payment['id_pembayaran']),
                     'class' => 'btn-warning',
-                    'icon' => 'bi-clock'
+                    'icon'  => 'bi-clock'
                 ];
-                
             case 'verified':
                 if ($flowState === 'siap_absen') {
                     return [
                         'label' => 'Lihat Event',
-                        'url' => site_url('presenter/events/detail/' . $payment['event_id']),
+                        'url'   => site_url('presenter/events/detail/' . $payment['event_id']),
                         'class' => 'btn-success',
-                        'icon' => 'bi-calendar-check'
+                        'icon'  => 'bi-calendar-check'
                     ];
                 }
                 return [
                     'label' => 'Detail',
-                    'url' => site_url('presenter/pembayaran/detail/' . $payment['id_pembayaran']),
+                    'url'   => site_url('presenter/pembayaran/detail/' . $payment['id_pembayaran']),
                     'class' => 'btn-outline-success',
-                    'icon' => 'bi-check-circle'
+                    'icon'  => 'bi-check-circle'
                 ];
-                
             case 'canceled':
             case 'expired':
                 if ($flowState === 'bayar') {
                     return [
                         'label' => 'Bayar Ulang',
-                        'url' => site_url('presenter/pembayaran/instruction/' . $payment['event_id']),
+                        'url'   => site_url('presenter/pembayaran/instruction/' . $payment['event_id']),
                         'class' => 'btn-primary',
-                        'icon' => 'bi-arrow-repeat'
+                        'icon'  => 'bi-arrow-repeat'
                     ];
                 }
                 return [
                     'label' => 'Detail',
-                    'url' => site_url('presenter/pembayaran/detail/' . $payment['id_pembayaran']),
+                    'url'   => site_url('presenter/pembayaran/detail/' . $payment['id_pembayaran']),
                     'class' => 'btn-outline-danger',
-                    'icon' => 'bi-x-circle'
+                    'icon'  => 'bi-x-circle'
                 ];
-                
             default:
                 return [
                     'label' => 'Detail',
-                    'url' => site_url('presenter/pembayaran/detail/' . $payment['id_pembayaran']),
+                    'url'   => site_url('presenter/pembayaran/detail/' . $payment['id_pembayaran']),
                     'class' => 'btn-outline-secondary',
-                    'icon' => 'bi-eye'
+                    'icon'  => 'bi-eye'
                 ];
         }
     }
-
     private function syncPendingPayments($userId)
     {
         try {

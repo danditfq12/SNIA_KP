@@ -1,7 +1,14 @@
 <?php
-$title   = $title ?? 'Abstrak';
-$events  = $events ?? [];
-$history = $history ?? [];
+$title        = $title        ?? 'Abstrak';
+$uploadEvents = $uploadEvents ?? []; // hanya event yang perlu upload (belum pernah / revisi)
+$history      = $history      ?? []; // semua abstrak terbaru per event (apapun statusnya), lengkap dgn info event
+
+$fmtDate = function($s){ return $s ? date('d M Y', strtotime($s)) : '-'; };
+$fmtDT   = function($s){ return $s ? date('d M Y H:i', strtotime($s)) : '-'; };
+$formatLabel = function($f){
+  $f = strtolower((string)$f);
+  return $f === 'both' ? 'Hybrid' : ucfirst($f ?: '-');
+};
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -24,83 +31,44 @@ $history = $history ?? [];
         </div>
       </div>
 
-      <!-- Daftar Abstrak Per Event -->
+      <!-- Abstrak perlu upload -->
       <div class="card shadow-sm mb-4 border-0 overflow-hidden">
         <div class="card-header bg-gradient-primary text-white">
-          <h5 class="mb-0"><i class="bi bi-lightning-charge me-2"></i>Event Terdaftar</h5>
+          <h5 class="mb-0"><i class="bi bi-upload me-2"></i>Abstrak perlu upload</h5>
         </div>
         <div class="card-body">
-          <?php if (empty($events)): ?>
-            <div class="text-muted">Anda belum terdaftar di event mana pun.</div>
+          <?php if (empty($uploadEvents)): ?>
+            <div class="text-muted">Tidak ada event yang membutuhkan upload abstrak saat ini.</div>
           <?php else: ?>
             <div class="row g-3">
-              <?php foreach ($events as $eid => $row):
-                $abs        = $row['abstract'] ?? null;
-                $absStatus  = strtolower($abs['status'] ?? '');
-                $payStatus  = strtolower($row['payment_status'] ?? ''); // OPTIONAL: kirim dari controller kalau ada
-                // Badge di pojok
-                $badgeClass = [
-                  'menunggu'        => 'warning',
-                  'sedang_direview' => 'info',
-                  'diterima'        => 'success',
-                  'ditolak'         => 'danger',
-                  'revisi'          => 'primary',
-                ][$absStatus] ?? 'secondary';
-                $badgeLabel = $abs ? ucfirst($absStatus) : 'Belum Upload';
-
-                // Hint/keterangan di bawah
-                if (!$abs) {
-                  $hint = 'Menunggu abstrak';
-                } elseif (in_array($absStatus, ['menunggu','sedang_direview'])) {
-                  $hint = 'Menunggu review abstrak';
-                } elseif ($absStatus === 'revisi') {
-                  $hint = 'Diminta revisi';
-                } elseif ($absStatus === 'diterima') {
-                  if ($payStatus === 'verified')      $hint = 'Terdaftar';
-                  elseif ($payStatus === 'pending')    $hint = 'Pembayaran pending';
-                  elseif ($payStatus === 'rejected')   $hint = 'Pembayaran ditolak';
-                  else                                  $hint = 'Silakan lakukan pembayaran';
-                } elseif ($absStatus === 'ditolak') {
-                  $hint = 'Abstrak ditolak';
-                } else {
-                  $hint = '';
-                }
-              ?>
+              <?php foreach ($uploadEvents as $row): ?>
               <div class="col-12 col-md-6 col-xl-4">
                 <div class="event-card h-100 shadow-sm">
                   <div class="d-flex align-items-start justify-content-between mb-2">
-                    <h5 class="mb-0"><?= esc($row['event']['title'] ?? '-') ?></h5>
-                    <span class="badge bg-<?= $badgeClass ?>"><?= esc($badgeLabel) ?></span>
+                    <h5 class="mb-0"><?= esc($row['title'] ?? '-') ?></h5>
+                    <span class="badge bg-<?= esc($row['status_badge']) ?>">
+                      <?= esc($row['status_label']) ?>
+                    </span>
                   </div>
                   <div class="small text-muted mb-2">
                     Tanggal Event:
-                    <strong><?= isset($row['event']['event_date']) ? date('d M Y', strtotime($row['event']['event_date'])) : '-' ?></strong><br>
+                    <strong><?= esc($fmtDate($row['event_date'] ?? null)) ?></strong><br>
                     Deadline Abstrak:
-                    <strong><?= !empty($row['event']['abstract_deadline']) ? date('d M Y H:i', strtotime($row['event']['abstract_deadline'])) : '-' ?></strong><br>
+                    <strong><?= esc($fmtDT($row['abstract_deadline'] ?? null)) ?></strong><br>
                     Format:
-                    <strong>
-                      <?php
-                        $format = strtolower($row['event']['format'] ?? '');
-                        echo $format === 'both' ? 'Hybrid' : ucfirst($format ?: '-');
-                      ?>
-                    </strong>
+                    <strong><?= esc($formatLabel($row['format'] ?? '')) ?></strong>
                   </div>
-                  <?php if ($hint): ?>
-                    <div class="text-muted small mb-2"><?= esc($hint) ?></div>
+                  <?php if (!empty($row['hint'])): ?>
+                    <div class="text-muted small mb-2"><?= esc($row['hint']) ?></div>
                   <?php endif; ?>
                   <div class="d-flex gap-2">
-                    <?php if ($row['can_upload']): ?>
-                      <a class="btn btn-primary flex-fill" href="/presenter/abstrak/create/<?= (int)$eid ?>">
-                        <i class="bi bi-upload"></i> Upload Abstrak
+                    <a class="btn btn-primary flex-fill" href="/presenter/abstrak/create/<?= (int)$row['event_id'] ?>">
+                      <i class="bi bi-upload"></i> Upload Abstrak
+                    </a>
+                    <?php if (!empty($row['last_abs_id'])): ?>
+                      <a class="btn btn-outline-secondary flex-fill" href="/presenter/abstrak/detail/<?= (int)$row['last_abs_id'] ?>">
+                        <i class="bi bi-eye"></i> Lihat Terakhir
                       </a>
-                    <?php elseif ($abs): ?>
-                      <a class="btn btn-primary flex-fill" href="/presenter/abstrak/detail/<?= (int)$abs['id_abstrak'] ?>">
-                        <i class="bi bi-list"></i> Daftar
-                      </a>
-                    <?php else: ?>
-                      <button class="btn btn-secondary flex-fill" disabled>
-                        <i class="bi bi-ban"></i> Tidak Bisa Upload
-                      </button>
                     <?php endif; ?>
                   </div>
                 </div>
@@ -118,21 +86,38 @@ $history = $history ?? [];
         </div>
         <div class="card-body">
           <?php if (empty($history)): ?>
-            <div class="text-muted">Belum ada riwayat abstrak diterima/ditolak.</div>
+            <div class="text-muted">Belum ada riwayat abstrak.</div>
           <?php else: ?>
             <div class="row g-3">
-              <?php foreach ($history as $h):
-                $badgeClass = $h['status'] === 'diterima' ? 'success' : 'danger';
-              ?>
+              <?php foreach ($history as $h): ?>
               <div class="col-12 col-md-6 col-xl-4">
                 <div class="event-card h-100 shadow-sm">
-                  <h6 class="mb-1"><?= esc($h['judul']) ?></h6>
-                  <div class="small text-muted mb-2"><?= esc($h['nama_kategori'] ?? '-') ?></div>
-                  <span class="badge bg-<?= $badgeClass ?>"><?= ucfirst($h['status']) ?></span>
-                  <div class="small text-muted mt-2">
-                    <?= !empty($h['tanggal_upload']) ? date('d M Y H:i', strtotime($h['tanggal_upload'])) : '-' ?>
+                  <div class="d-flex align-items-start justify-content-between mb-1">
+                    <h6 class="mb-0"><?= esc($h['judul']) ?></h6>
+                    <span class="badge bg-<?= esc($h['status_badge']) ?>">
+                      <?= esc($h['status_label']) ?>
+                    </span>
                   </div>
-                  <a class="btn btn-outline-primary btn-sm mt-2" href="/presenter/abstrak/detail/<?= (int)$h['id_abstrak'] ?>">
+                  <div class="small text-muted mb-2"><?= esc($h['nama_kategori'] ?? '-') ?></div>
+
+                  <!-- Info event -->
+                  <div class="small text-muted mb-2">
+                    Event: <strong><?= esc($h['event_title'] ?? '-') ?></strong><br>
+                    Tanggal Event: <strong><?= esc($fmtDate($h['event_date'] ?? null)) ?></strong>
+                  </div>
+
+                  <!-- Keterangan status -->
+                  <?php if (!empty($h['status_hint'])): ?>
+                    <div class="small mb-2 <?= $h['status'] === 'revisi' ? 'text-primary' : 'text-muted' ?>">
+                      <?= esc($h['status_hint']) ?>
+                    </div>
+                  <?php endif; ?>
+
+                  <div class="small text-muted">
+                    Dikirim: <?= esc($fmtDT($h['tanggal_upload'] ?? null)) ?>
+                  </div>
+
+                  <a class="btn btn-outline-primary btn-sm mt-2 w-100" href="/presenter/abstrak/detail/<?= (int)$h['id_abstrak'] ?>">
                     <i class="bi bi-eye"></i> Detail
                   </a>
                 </div>
@@ -151,7 +136,8 @@ $history = $history ?? [];
 
 <style>
   :root{
-    --primary-color:#2563eb; --info-color:#06b6d4; --success-color:#10b981; --secondary:#475569;
+    --primary-color:#2563eb; --info-color:#06b6d4; --success-color:#10b981; 
+    --warning-color:#f59e0b; --danger-color:#ef4444; --secondary:#475569;
   }
   .header-section.header-blue{
     background:linear-gradient(135deg,var(--primary-color),#1e40af);
@@ -159,12 +145,17 @@ $history = $history ?? [];
   }
   .welcome-text{ font-weight:700; }
   .bg-gradient-primary{ background:linear-gradient(135deg,var(--primary-color),var(--info-color))!important; }
+
   .event-card{
-    background:#f3f4f6; /* lebih gelap */
+    background:#f8fafc; /* sedikit lebih terang */
     border-radius:14px;
     padding:16px;
     border:1px solid #e5e7eb;
   }
+
+  /* toning warna teks pada status tertentu */
+  .text-primary{ color:#2563eb !important; }
+
   @media (max-width: 767.98px){
     .event-card{ padding:14px; }
     .header-section.header-blue{ padding:18px; }

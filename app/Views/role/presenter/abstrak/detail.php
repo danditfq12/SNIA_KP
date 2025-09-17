@@ -1,8 +1,9 @@
 <?php
-$title = $title ?? 'Detail Abstrak';
-$abs   = $abs ?? [];
-$event = $event ?? [];
+$title  = $title ?? 'Detail Abstrak';
+$abs    = $abs ?? [];
+$event  = $event ?? [];
 $status = $abs['status'] ?? 'menunggu';
+
 $badge = [
   'menunggu'        => 'warning',
   'sedang_direview' => 'info',
@@ -64,12 +65,12 @@ $badge = [
                   </a>
                 <?php endif; ?>
 
-                <?php if ($status === 'diterima'): ?>
-                  <!-- ARAHKAN KE INSTRUCTION -->
+                <?php /* HAPUS tombol lanjut pembayaran saat status diterima */ ?>
+                <?php /* if ($status === 'diterima'): ?>
                   <a class="btn btn-success" href="/presenter/pembayaran/instruction/<?= (int)$abs['event_id'] ?>">
                     <i class="bi bi-credit-card"></i> Lanjut Pembayaran
                   </a>
-                <?php endif; ?>
+                <?php endif; */ ?>
               </div>
             </div>
           </div>
@@ -105,7 +106,9 @@ $badge = [
               <?php elseif ($status === 'revisi'): ?>
                 <div class="alert alert-warning">Revisi diminta. Silakan unggah revisi pada tombol di kiri.</div>
               <?php elseif ($status === 'diterima'): ?>
-                <div class="alert alert-success">Abstrak diterima. Lanjutkan ke pembayaran agar terdaftar penuh.</div>
+                <div class="alert alert-success">
+                  Abstrak diterima. Silakan lanjutkan pembayaran melalui menu <strong>Pembayaran</strong> atau halaman <strong>Event</strong>.
+                </div>
               <?php elseif ($status === 'ditolak'): ?>
                 <div class="alert alert-danger">Abstrak ditolak. Anda dapat berkonsultasi dengan panitia atau mencoba event lain.</div>
               <?php endif; ?>
