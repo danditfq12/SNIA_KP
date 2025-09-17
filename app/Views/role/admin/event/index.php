@@ -98,7 +98,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
                     <li><a class="dropdown-item" href="#" onclick="toggleStatus(<?= $id ?>)"><i class="bi bi-power me-2"></i><?= $isOn?'Nonaktifkan':'Aktifkan' ?></a></li>
                     <li><a class="dropdown-item" href="#" onclick="toggleRegistration(<?= $id ?>)"><i class="bi bi-person-plus me-2"></i>Reg: <?= $reg?'Tutup':'Buka' ?></a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item text-danger" href="#" onclick="deleteEvent(<?= $id ?>)"><i class="bi bi-trash me-2"></i>Hapus</a></li>
+                    <li><a class="dropdown-item text-danger" href="#" onclick="forceDeleteEvent(<?= $id ?>)"><i class="bi bi-trash me-2"></i>Hapus Paksa</a></li>
                   </ul>
                 </div>
               </div>
@@ -188,7 +188,6 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
         <div class="row">
           <div class="col-md-6 mb-3">
             <label class="form-label">Tanggal Event <span class="text-danger">*</span></label>
-            <!-- PATCH: min besok -->
             <input type="date" class="form-control" name="event_date" required min="<?= esc($minEventDate) ?>">
           </div>
           <div class="col-md-6 mb-3">
@@ -329,26 +328,40 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
   #content main>.container-fluid{ margin-top:.25rem; }
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '<?= csrf_hash() ?>';
 
-/* ===== Helper: fetch JSON guard ===== */
+// ===== Helper: fetch JSON guard =====
 async function fetchJSON(url, options = {}) {
-  const res = await fetch(url, options);
-  const ct = res.headers.get('content-type') || '';
-  if (!ct.includes('application/json')) {
-    const text = await res.text();
-    throw new Error('Server mengirim respons non-JSON. Cek sesi/CSRF.');
+  console.log('Fetching:', url, options);
+  try {
+    const res = await fetch(url, options);
+    console.log('Response status:', res.status);
+    
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      const text = await res.text();
+      console.error('Non-JSON response:', text);
+      throw new Error('Server mengirim respons non-JSON. Response: ' + text.substring(0, 200));
+    }
+    
+    const data = await res.json();
+    console.log('Response data:', data);
+    return data;
+  } catch (error) {
+    console.error('Fetch error:', error);
+    throw error;
   }
-  return res.json();
 }
 
-/* ===== Rupiah formatting while typing ===== */
+// ===== Rupiah formatting while typing =====
 function formatNumberID(raw){
   const digits = (raw||'').toString().replace(/\D/g,'');
   if(!digits) return '';
   return new Intl.NumberFormat('id-ID').format(parseInt(digits,10));
 }
+
 function attachCurrency(el){
   el.value = formatNumberID(el.value || '0');
   el.addEventListener('input', () => {
@@ -359,105 +372,123 @@ function attachCurrency(el){
   });
   el.addEventListener('blur', () => el.value = el.value ? formatNumberID(el.value) : '0');
 }
+
 function initCurrencyInputs(root=document){
   root.querySelectorAll('input.currency').forEach(attachCurrency);
 }
+
 function normalizeCurrencyFields(fd){
   ['presenter_fee_offline','audience_fee_online','audience_fee_offline'].forEach(name=>{
     if(fd.has(name)) fd.set(name, (fd.get(name)||'').toString().replace(/\D/g,'') || '0');
   });
 }
 
-/* ===== UI handlers ===== */
+// ===== UI handlers =====
 document.addEventListener('DOMContentLoaded', function(){
+  console.log('DOM loaded, initializing...');
   initCurrencyInputs(document);
   setupFormHandlers();
   handleFormatChange();
-  // PATCH: pastikan min tanggal terpasang saat DOM siap / form dinamis
   setMinEventDateInputs();
 });
 
 function setupFormHandlers(){
-  document.getElementById('addEventForm').addEventListener('submit', function(e){
-    e.preventDefault();
-    submitForm(this, '<?= base_url("admin/event/store") ?>');
-  });
+  const addForm = document.getElementById('addEventForm');
+  const editForm = document.getElementById('editEventForm');
+  const formatSelect = document.getElementById('eventFormat');
 
-  document.getElementById('editEventForm').addEventListener('submit', function(e){
-    e.preventDefault();
-    const id = this.dataset.eventId;
-    submitForm(this, `<?= base_url("admin/event/update") ?>/${id}`);
-  });
+  if (addForm) {
+    addForm.addEventListener('submit', function(e){
+      e.preventDefault();
+      submitForm(this, '<?= base_url("admin/event/store") ?>');
+    });
+  }
 
-  document.getElementById('eventFormat').addEventListener('change', handleFormatChange);
+  if (editForm) {
+    editForm.addEventListener('submit', function(e){
+      e.preventDefault();
+      const id = this.dataset.eventId;
+      submitForm(this, `<?= base_url("admin/event/update") ?>/${id}`);
+    });
+  }
+
+  if (formatSelect) {
+    formatSelect.addEventListener('change', handleFormatChange);
+  }
 }
 
 function handleFormatChange(){
-  const format = document.getElementById('eventFormat').value;
+  const formatSelect = document.getElementById('eventFormat');
+  if (!formatSelect) return;
+  
+  const format = formatSelect.value;
+  console.log('Format changed to:', format);
 
   const locationRow = document.getElementById('locationRow');
-  const zoomRow     = document.getElementById('zoomRow');
-  const locInput    = document.getElementById('locationInput');
-  const zoomInput   = document.getElementById('zoomInput');
-  const locStar     = document.getElementById('locationRequired');
-  const zoomStar    = document.getElementById('zoomRequired');
+  const zoomRow = document.getElementById('zoomRow');
+  const locInput = document.getElementById('locationInput');
+  const zoomInput = document.getElementById('zoomInput');
+  const locStar = document.getElementById('locationRequired');
+  const zoomStar = document.getElementById('zoomRequired');
 
-  const onlineWrap   = document.getElementById('audienceOnlinePrice');
-  const offlineWrap  = document.getElementById('audienceOfflinePrice');
-  const onlineInput  = onlineWrap.querySelector('input[name="audience_fee_online"]');
-  const offlineInput = offlineWrap.querySelector('input[name="audience_fee_offline"]');
+  const onlineWrap = document.getElementById('audienceOnlinePrice');
+  const offlineWrap = document.getElementById('audienceOfflinePrice');
+  const onlineInput = onlineWrap?.querySelector('input[name="audience_fee_online"]');
+  const offlineInput = offlineWrap?.querySelector('input[name="audience_fee_offline"]');
   const onlineReqStar = document.getElementById('onlineReqStar');
-  const offlineReqStar= document.getElementById('offlineReqStar');
+  const offlineReqStar = document.getElementById('offlineReqStar');
 
-  [locationRow, zoomRow].forEach(s=> s.classList.remove('show'));
-  [locInput, zoomInput].forEach(i=> i.removeAttribute('required'));
-  [locStar, zoomStar].forEach(s=> s.style.display='none');
+  // Reset all
+  [locationRow, zoomRow].forEach(s=> s?.classList.remove('show'));
+  [locInput, zoomInput].forEach(i=> i?.removeAttribute('required'));
+  [locStar, zoomStar].forEach(s=> { if(s) s.style.display='none'; });
 
-  [onlineWrap, offlineWrap].forEach(w=> w.classList.remove('d-none','disabled-field'));
-  [onlineInput, offlineInput].forEach(i=> i.removeAttribute('required'));
-  onlineReqStar.style.display='none';
-  offlineReqStar.style.display='none';
+  [onlineWrap, offlineWrap].forEach(w=> w?.classList.remove('d-none','disabled-field'));
+  [onlineInput, offlineInput].forEach(i=> i?.removeAttribute('required'));
+  if(onlineReqStar) onlineReqStar.style.display='none';
+  if(offlineReqStar) offlineReqStar.style.display='none';
 
   if (format === 'offline'){
-    locationRow.classList.add('show');
-    locInput.setAttribute('required','required');
-    locStar.style.display='inline';
+    locationRow?.classList.add('show');
+    locInput?.setAttribute('required','required');
+    if(locStar) locStar.style.display='inline';
 
-    onlineWrap.classList.add('d-none');
-    onlineInput.value = '0';
+    onlineWrap?.classList.add('d-none');
+    if(onlineInput) onlineInput.value = '0';
 
-    offlineInput.setAttribute('required','required');
-    offlineReqStar.style.display='inline';
+    offlineInput?.setAttribute('required','required');
+    if(offlineReqStar) offlineReqStar.style.display='inline';
   } else if (format === 'online'){
-    zoomRow.classList.add('show');
-    zoomInput.setAttribute('required','required');
-    zoomStar.style.display='inline';
+    zoomRow?.classList.add('show');
+    zoomInput?.setAttribute('required','required');
+    if(zoomStar) zoomStar.style.display='inline';
 
-    offlineWrap.classList.add('d-none');
-    offlineInput.value = '0';
+    offlineWrap?.classList.add('d-none');
+    if(offlineInput) offlineInput.value = '0';
 
-    onlineInput.setAttribute('required','required');
-    onlineReqStar.style.display='inline';
+    onlineInput?.setAttribute('required','required');
+    if(onlineReqStar) onlineReqStar.style.display='inline';
   } else { // both
-    locationRow.classList.add('show');
-    zoomRow.classList.add('show');
-    locInput.setAttribute('required','required');
-    zoomInput.setAttribute('required','required');
-    locStar.style.display='inline';
-    zoomStar.style.display='inline';
+    locationRow?.classList.add('show');
+    zoomRow?.classList.add('show');
+    locInput?.setAttribute('required','required');
+    zoomInput?.setAttribute('required','required');
+    if(locStar) locStar.style.display='inline';
+    if(zoomStar) zoomStar.style.display='inline';
 
-    onlineInput.setAttribute('required','required');
-    offlineInput.setAttribute('required','required');
-    onlineReqStar.style.display='inline';
-    offlineReqStar.style.display='inline';
+    onlineInput?.setAttribute('required','required');
+    offlineInput?.setAttribute('required','required');
+    if(onlineReqStar) onlineReqStar.style.display='inline';
+    if(offlineReqStar) offlineReqStar.style.display='inline';
   }
 }
 
 function submitForm(form, url){
+  console.log('Submitting form to:', url);
   const fd = new FormData(form);
   const format = fd.get('format');
 
-  if (format==='online')  fd.set('audience_fee_offline','0');
+  if (format==='online') fd.set('audience_fee_offline','0');
   if (format==='offline') fd.set('audience_fee_online','0');
 
   normalizeCurrencyFields(fd);
@@ -481,11 +512,18 @@ function submitForm(form, url){
       throw new Error(msg);
     }
   })
-  .catch(err=> Swal.fire({icon:'error',title:'Error!',text:err.message}))
-  .finally(()=>{ btn.innerHTML = old; btn.disabled = false; });
+  .catch(err=> {
+    console.error('Submit error:', err);
+    Swal.fire({icon:'error',title:'Error!',text:err.message});
+  })
+  .finally(()=>{
+    btn.innerHTML = old; 
+    btn.disabled = false;
+  });
 }
 
 function editEvent(eventId){
+  console.log('Editing event:', eventId);
   fetchJSON(`<?= base_url("admin/event/edit") ?>/${eventId}`, {
     headers: { 'X-Requested-With':'XMLHttpRequest' }
   })
@@ -495,10 +533,14 @@ function editEvent(eventId){
     document.getElementById('editEventForm').dataset.eventId = eventId;
     new bootstrap.Modal(document.getElementById('editEventModal')).show();
   })
-  .catch(err=> Swal.fire('Error!', err.message, 'error'));
+  .catch(err=> {
+    console.error('Edit error:', err);
+    Swal.fire('Error!', err.message, 'error');
+  });
 }
 
 function populateEditForm(event){
+  console.log('Populating edit form with:', event);
   const fmt = v => formatNumberID(String(v ?? 0));
 
   const audienceOnlineDiv = event.format!=='offline' ? `
@@ -506,7 +548,7 @@ function populateEditForm(event){
       <label class="form-label">Audience (Online) *</label>
       <div class="input-group">
         <span class="input-group-text">Rp</span>
-        <input type="text" class="form-control currency" name="audience_fee_online" value="\${fmt(event.audience_fee_online)}" required>
+        <input type="text" class="form-control currency" name="audience_fee_online" value="${fmt(event.audience_fee_online)}" required>
       </div>
     </div>` : '';
 
@@ -515,7 +557,7 @@ function populateEditForm(event){
       <label class="form-label">Audience (Offline) *</label>
       <div class="input-group">
         <span class="input-group-text">Rp</span>
-        <input type="text" class="form-control currency" name="audience_fee_offline" value="\${fmt(event.audience_fee_offline)}" required>
+        <input type="text" class="form-control currency" name="audience_fee_offline" value="${fmt(event.audience_fee_offline)}" required>
       </div>
     </div>` : '';
 
@@ -553,7 +595,6 @@ function populateEditForm(event){
     <div class="row">
       <div class="col-md-6 mb-3">
         <label class="form-label">Tanggal Event *</label>
-        <!-- PATCH: min besok utk edit -->
         <input type="date" class="form-control" name="event_date" value="${event.event_date}" required
                min="${new Date(Date.now()+86400000).toISOString().slice(0,10)}">
       </div>
@@ -607,15 +648,17 @@ function populateEditForm(event){
         <label class="form-check-label">Submit Abstrak Aktif</label>
       </div></div>
     </div>
-    ${event.format==='online'  ? '<input type="hidden" name="audience_fee_offline" value="0">' : ''}
-    ${event.format==='offline' ? '<input type="hidden" name="audience_fee_online"  value="0">' : ''}
+    ${event.format==='online' ? '<input type="hidden" name="audience_fee_offline" value="0">' : ''}
+    ${event.format==='offline' ? '<input type="hidden" name="audience_fee_online" value="0">' : ''}
   `;
+  
   const container = document.getElementById('editFormContent');
   container.innerHTML = html;
   initCurrencyInputs(container);
 }
 
 function makeRequest(url, action){
+  console.log('Making request to:', url);
   fetchJSON(url, {
     method:'POST',
     headers:{ 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With':'XMLHttpRequest' }
@@ -628,20 +671,127 @@ function makeRequest(url, action){
       throw new Error(data.message || `Gagal ${action}`);
     }
   })
-  .catch(err=> Swal.fire('Error!', err.message, 'error'));
+  .catch(err=> {
+    console.error('Request error:', err);
+    Swal.fire('Error!', err.message, 'error');
+  });
 }
 
-function toggleStatus(id){ makeRequest(`<?= base_url("admin/event/toggle-status") ?>/${id}`, 'toggle status event'); }
-function toggleRegistration(id){ makeRequest(`<?= base_url("admin/event/toggle-registration") ?>/${id}`, 'toggle pendaftaran'); }
-function deleteEvent(id){
+function toggleStatus(id){ 
+  console.log('Toggle status for event:', id);
+  makeRequest(`<?= base_url("admin/event/toggle-status") ?>/${id}`, 'toggle status event'); 
+}
+
+function toggleRegistration(id){ 
+  console.log('Toggle registration for event:', id);
+  makeRequest(`<?= base_url("admin/event/toggle-registration") ?>/${id}`, 'toggle pendaftaran'); 
+}
+
+// FORCE DELETE FUNCTION - Hapus paksa tanpa cek dependencies
+function forceDeleteEvent(id){
+  console.log('Force delete event:', id);
+  
   Swal.fire({
-    title:'Hapus Event?', text:'Event yang dihapus tidak dapat dikembalikan!',
-    icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', cancelButtonColor:'#3085d6',
-    confirmButtonText:'Ya, Hapus!', cancelButtonText:'Batal'
-  }).then(r=>{ if(r.isConfirmed) makeRequest(`<?= base_url("admin/event/delete") ?>/${id}`, 'hapus event'); });
+    title:'Hapus Event Paksa?', 
+    html:`
+      <div class="text-start">
+        <p><strong>PERINGATAN:</strong> Ini akan menghapus secara permanen:</p>
+        <ul class="text-danger">
+          <li>Event dan semua data terkait</li>
+          <li>Semua pendaftaran & pembayaran</li>
+          <li>Semua abstrak & review</li>
+          <li>Semua data absensi</li>
+          <li>Semua dokumen (LOA, sertifikat)</li>
+          <li>File-file yang sudah diupload</li>
+        </ul>
+        <p class="text-danger fw-bold">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          Tindakan ini TIDAK BISA dibatalkan!
+        </p>
+      </div>
+    `,
+    icon:'warning', 
+    showCancelButton:true, 
+    confirmButtonColor:'#dc3545', 
+    cancelButtonColor:'#6c757d',
+    confirmButtonText:'<i class="bi bi-trash"></i> Ya, Hapus Paksa!', 
+    cancelButtonText:'<i class="bi bi-x"></i> Batal',
+    width: '600px',
+    customClass: {
+      popup: 'text-start',
+      confirmButton: 'btn-danger'
+    },
+    buttonsStyling: false
+  }).then(result => {
+    if(result.isConfirmed) {
+      console.log('User confirmed delete for event:', id);
+      
+      // Show loading
+      Swal.fire({
+        title: 'Menghapus Event...',
+        html: `
+          <div class="d-flex flex-column align-items-center">
+            <div class="spinner-border text-primary mb-3" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Sedang menghapus event dan semua data terkait.</p>
+            <p class="text-muted small">Proses ini mungkin memerlukan waktu beberapa saat...</p>
+          </div>
+        `,
+        icon: null,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        showCancelButton: false
+      });
+
+      // Execute force delete
+      fetchJSON(`<?= base_url("admin/event/delete") ?>/${id}`, {
+        method:'POST',
+        headers:{ 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With':'XMLHttpRequest' }
+      })
+      .then(data=>{
+        console.log('Delete response:', data);
+        if(data.success){
+          Swal.fire({
+            icon:'success',
+            title:'Event Berhasil Dihapus!',
+            html: `
+              <div class="text-center">
+                <p class="text-success">${data.message}</p>
+                <p class="text-muted small">Halaman akan dimuat ulang secara otomatis...</p>
+              </div>
+            `,
+            timer:3000,
+            showConfirmButton: true,
+            confirmButtonText: 'OK'
+          }).then(()=>{
+            console.log('Reloading page...');
+            location.reload();
+          });
+        } else {
+          throw new Error(data.message || 'Gagal menghapus event');
+        }
+      })
+      .catch(err=> {
+        console.error('Delete error:', err);
+        Swal.fire({
+          icon:'error',
+          title:'Gagal Menghapus Event!',
+          html: `
+            <div class="text-center">
+              <p class="text-danger">${err.message}</p>
+              <p class="text-muted small">Silakan coba lagi atau hubungi administrator.</p>
+            </div>
+          `,
+          confirmButtonText:'OK',
+          confirmButtonColor:'#dc3545'
+        });
+      });
+    }
+  });
 }
 
-/* PATCH: enforce min besok utk semua input tanggal (add & edit dinamis) */
 function setMinEventDateInputs(){
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0,10);
 
@@ -659,4 +809,16 @@ function setMinEventDateInputs(){
     mo.observe(editContainer, { childList: true, subtree: true });
   }
 }
+
+// Debug helper
+window.debugEvent = {
+  csrfToken,
+  fetchJSON,
+  forceDeleteEvent,
+  editEvent,
+  toggleStatus,
+  toggleRegistration
+};
+
+console.log('Event management script loaded. Debug object available as window.debugEvent');
 </script>

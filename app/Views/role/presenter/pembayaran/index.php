@@ -49,7 +49,7 @@ $approved = array_values(array_filter($history, fn($r) => strtolower($r['status'
                     <strong><?= !empty($r['tanggal_bayar']) ? date('d M Y H:i', strtotime($r['tanggal_bayar'])) : '-' ?></strong><br>
                     Harga:
                     <strong>Rp <?= number_format((int)($r['jumlah'] ?? 0),0,',','.') ?></strong><br>
-                    Format Event:
+                    Format Audience:
                     <strong><?= esc($r['formatLabel'] ?? '-') ?></strong>
                   </div>
                   <?php if (!empty($r['hint'])): ?>
@@ -94,7 +94,7 @@ $approved = array_values(array_filter($history, fn($r) => strtolower($r['status'
                     <strong><?= !empty($r['tanggal_bayar']) ? date('d M Y H:i', strtotime($r['tanggal_bayar'])) : '-' ?></strong><br>
                     Harga:
                     <strong>Rp <?= number_format((int)($r['jumlah'] ?? 0),0,',','.') ?></strong><br>
-                    Format Event:
+                    Format Audience:
                     <strong><?= esc($r['formatLabel'] ?? '-') ?></strong>
                   </div>
                   <div class="text-success small mb-2">Pembayaran terverifikasi. Anda resmi terdaftar.</div>

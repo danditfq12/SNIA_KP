@@ -47,6 +47,44 @@ $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], static function 
 });
 
 // ---------------------------------------------------
+// CRITICAL: Webhooks MUST come before authenticated routes
+// NO authentication required for webhooks!
+// ---------------------------------------------------
+$routes->group('webhook', ['namespace' => 'App\Controllers\Webhook'], static function ($routes) {
+    
+    // Main webhook endpoints - Path EXACT yang digunakan di dashboard Midtrans
+    $routes->post('midtrans/handle', 'Midtrans::handle');
+    $routes->get('midtrans/handle', 'Midtrans::handle'); // Untuk connectivity test
+    $routes->post('midtrans', 'Midtrans::handle'); // Alternative endpoint
+    
+    // TAMBAHKAN INI - Route untuk menangani path tambahan dari Midtrans
+    $routes->post('midtrans/handle/(:any)', 'Midtrans::handle');
+    $routes->post('midtrans/handle/v1.0/debit/notify', 'Midtrans::handle');
+    
+    // Testing dan debugging endpoints
+    $routes->get('midtrans/test', 'Midtrans::test');
+    $routes->post('midtrans/check/(:segment)', 'Midtrans::checkStatus/$1');
+    $routes->get('midtrans/check/(:segment)', 'Midtrans::checkStatus/$1');
+    $routes->get('manual-check/(:any)', 'Webhook\Midtrans::checkStatus/$1');
+    
+    // Development only endpoints (hanya untuk testing)
+    if (ENVIRONMENT === 'development') {
+        $routes->get('midtrans/logs', 'Midtrans::logs');
+        $routes->post('midtrans/simulate', 'Midtrans::simulate');
+        $routes->get('midtrans/debug/(:segment)', 'Midtrans::debug/$1');
+    }
+});
+
+    
+    // Development/testing endpoints
+    if (ENVIRONMENT === 'development') {
+        $routes->get('midtrans/test',     'Midtrans::test');
+        $routes->get('midtrans/logs',     'Midtrans::logs');
+        $routes->get('midtrans/sync/(:segment)', 'Midtrans::syncPayment/$1');
+    }
+
+
+// ---------------------------------------------------
 // Notifikasi (butuh login)
 // ---------------------------------------------------
 $routes->group('notif', ['filter' => 'auth'], static function ($routes) {
@@ -77,6 +115,10 @@ if (ENVIRONMENT === 'development') {
 
         // Event debugging
         $routes->get('event/status/(:num)', 'Role\Admin\Event::refreshEventStatus/$1', ['filter' => 'role:admin']);
+        
+        // Payment debugging
+        $routes->get('payment/sync/(:segment)', 'Role\Admin\Pembayaran::syncMidtransStatus/$1', ['filter' => 'role:admin']);
+        $routes->get('payment/webhook-test', 'DebugHelper::testWebhook', ['filter' => 'role:admin']);
     });
 }
 
@@ -122,12 +164,12 @@ $routes->group('admin', [
     $routes->get ('reviewer/export',          'Reviewer::export');
     $routes->get ('reviewer/statistics',      'Reviewer::getStatistics');
 
-    // Event
+// Event - ENHANCED WITH FORCE DELETE
     $routes->get ('event',                  'Event::index');
     $routes->post('event/store',            'Event::store');
     $routes->get ('event/edit/(:num)',      'Event::edit/$1');
     $routes->post('event/update/(:num)',    'Event::update/$1');
-    $routes->post('event/delete/(:num)',    'Event::delete/$1');
+    $routes->post('event/delete/(:num)',    'Event::delete/$1'); // FORCE DELETE - HAPUS PAKSA
     $routes->get ('event/detail/(:num)',    'Event::detail/$1');
     $routes->post('event/toggle-registration/(:num)',       'Event::toggleRegistration/$1');
     $routes->post('event/toggle-abstract-submission/(:num)','Event::toggleAbstractSubmission/$1');
@@ -135,7 +177,8 @@ $routes->group('admin', [
     $routes->get ('event/export',           'Event::export');
     $routes->get ('event/statistics',       'Event::statistics');
 
-    // Pembayaran
+
+    // ENHANCED: Pembayaran with better Midtrans support
     $routes->get ('pembayaran',                       'Pembayaran::index');
     $routes->post('pembayaran/verifikasi/(:num)',     'Pembayaran::verifikasi/$1');
     $routes->get ('pembayaran/detail/(:num)',         'Pembayaran::detail/$1');
@@ -145,6 +188,18 @@ $routes->group('admin', [
     $routes->get ('pembayaran/export',                'Pembayaran::export');
     $routes->get ('pembayaran/statistik',             'Pembayaran::statistik');
     $routes->post('pembayaran/delete/(:num)',         'Pembayaran::delete/$1');
+    
+    // ENHANCED: Midtrans specific admin functions
+    $routes->get ('pembayaran/midtrans',              'Pembayaran::midtransPayments');
+    $routes->post('pembayaran/sync-midtrans/(:num)',  'Pembayaran::syncMidtransStatus/$1');
+    $routes->get ('pembayaran/midtrans-stats',        'Pembayaran::midtransStatistics');
+    $routes->post('pembayaran/force-verify/(:num)',   'Pembayaran::forceVerifyPayment/$1');
+    
+    // Debug routes for payment files
+    if (ENVIRONMENT === 'development') {
+        $routes->get('pembayaran/debug-bukti/(:num)', 'Pembayaran::debugBukti/$1');
+        $routes->get('pembayaran/check-bukti/(:num)', 'Pembayaran::checkBukti/$1');
+    }
 
     // Absensi (admin)
     $routes->get ('absensi',                    'Absensi::index');
@@ -169,7 +224,7 @@ $routes->group('admin', [
     $routes->get ('dokumen/getVerifiedPresenters/(:num)','Dokumen::getVerifiedPresenters/$1');
     $routes->get ('dokumen/getAttendees/(:num)',        'Dokumen::getAttendees/$1');
 
-    // Voucher
+    // ENHANCED: Voucher with better validation
     $routes->get ('voucher',                   'Voucher::index');
     $routes->post('voucher/store',             'Voucher::store');
     $routes->get ('voucher/edit/(:num)',       'Voucher::edit/$1');
@@ -180,6 +235,9 @@ $routes->group('admin', [
     $routes->get ('voucher/detail/(:num)',     'Voucher::detail/$1');
     $routes->post('voucher/validate',          'Voucher::validateVoucher');
     $routes->get ('voucher/export',            'Voucher::export');
+    $routes->get ('voucher/statistics',        'Voucher::statistics');
+    $routes->get ('voucher/usage/(:num)',      'Voucher::usageHistory/$1');
+    $routes->post('voucher/generate-bulk',     'Voucher::generateBulk');
 
     // Laporan
     $routes->get('laporan',         'Laporan::index');
@@ -195,7 +253,7 @@ $routes->group('admin', [
 });
 
 // ---------------------------------------------------
-// Presenter Routes (FIXED)
+// Presenter Routes (Enhanced with Midtrans)
 // ---------------------------------------------------
 $routes->group('presenter', [
     'filter'    => 'role:presenter',
@@ -216,15 +274,16 @@ $routes->group('presenter', [
     $routes->get ('abstrak/detail/(:num)',            'Abstrak::detail/$1');
     $routes->get ('abstrak/download/(:segment)',      'Abstrak::download/$1');
 
-    // Pembayaran: INDEX → INSTRUCTION → CREATE → DETAIL
+    // ENHANCED: Pembayaran with Midtrans Only (No Manual Transfer)
     $routes->get ('pembayaran',                       'Pembayaran::index');
     $routes->get ('pembayaran/instruction/(:num)',    'Pembayaran::instruction/$1');
     $routes->get ('pembayaran/create/(:num)',         'Pembayaran::create/$1');
-    $routes->post('pembayaran/store',                 'Pembayaran::store');
+    $routes->get ('pembayaran/event/(:num)',          'Pembayaran::eventHistory/$1');
+    $routes->post('pembayaran/process-payment',       'Pembayaran::processPayment');
+    $routes->get ('pembayaran/finish',                'Pembayaran::finish');
     $routes->get ('pembayaran/detail/(:num)',         'Pembayaran::detail/$1');
-    $routes->get ('pembayaran/download-bukti/(:num)', 'Pembayaran::downloadBukti/$1');
-    $routes->post('pembayaran/reupload/(:num)',       'Pembayaran::reupload/$1');
-    $routes->get ('pembayaran/cancel/(:num)',         'Pembayaran::cancel/$1');
+    $routes->get ('pembayaran/check-status/(:num)',   'Pembayaran::checkStatus/$1');
+    $routes->post('pembayaran/cancel/(:num)',         'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher',      'Pembayaran::validateVoucher');
 
     // Absensi (tambahkan detail per event)
@@ -232,19 +291,16 @@ $routes->group('presenter', [
     $routes->get ('absensi/event/(:num)', 'Absensi::show/$1');
     $routes->post('absensi/scan',         'Absensi::scan');
 
-    // Dokumen — tambah index gabungan LOA + Sertifikat
+    // Dokumen
     $routes->get ('dokumen',                                'Dokumen::index');
-    // Link lama masih didukung → redirect ke index + anchor
     $routes->get ('dokumen/loa',                            'Dokumen::loa');
     $routes->get ('dokumen/sertifikat',                     'Dokumen::sertifikat');
-
-    // Download
     $routes->get ('dokumen/loa/download/(:segment)',        'Dokumen::downloadLoa/$1');
     $routes->get ('dokumen/sertifikat/download/(:segment)', 'Dokumen::downloadSertifikat/$1');
 });
 
 // ---------------------------------------------------
-// Audience Routes
+// ENHANCED: Audience Routes with Better Payment Handling
 // ---------------------------------------------------
 $routes->group('audience', [
     'filter'    => 'role:audience',
@@ -258,23 +314,30 @@ $routes->group('audience', [
     $routes->get ('events/register/(:num)',      'Event::showRegistrationForm/$1');
     $routes->post('events/register/(:num)',      'Event::register/$1');
 
-    // Pembayaran
+    // ENHANCED: Pembayaran with Comprehensive Midtrans Integration
     $routes->get ('pembayaran',                       'Pembayaran::index');
     $routes->get ('pembayaran/instruction/(:num)',    'Pembayaran::instruction/$1');
     $routes->get ('pembayaran/create/(:num)',         'Pembayaran::create/$1');
+    $routes->get ('pembayaran/upload/(:num)',         'Pembayaran::upload/$1');
     $routes->post('pembayaran/store',                 'Pembayaran::store');
+    $routes->post('pembayaran/process-payment',       'Pembayaran::processPayment');
+    $routes->get ('pembayaran/finish',                'Pembayaran::finish');
     $routes->get ('pembayaran/detail/(:num)',         'Pembayaran::detail/$1');
     $routes->get ('pembayaran/download-bukti/(:num)', 'Pembayaran::downloadBukti/$1');
     $routes->post('pembayaran/reupload/(:num)',       'Pembayaran::reupload/$1');
     $routes->get ('pembayaran/cancel/(:num)',         'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher',      'Pembayaran::validateVoucher');
+    
+    // ENHANCED: Additional payment endpoints
+    $routes->get ('pembayaran/status/(:segment)',     'Pembayaran::checkStatus/$1');
+    $routes->post('pembayaran/retry/(:num)',          'Pembayaran::retryPayment/$1');
 
     // Absensi
     $routes->get ('absensi',              'Absensi::index');
     $routes->get ('absensi/event/(:num)', 'Absensi::show/$1');
     $routes->get ('absensi/token',        'Absensi::token');
     $routes->post('absensi/scan',         'Absensi::scan');
-    $routes->post('absensi/scan-ajax',        'Absensi::scanAjax');    
+    $routes->post('absensi/scan-ajax',    'Absensi::scanAjax');    
 
     // Dokumen
     $routes->get ('dokumen/sertifikat',                    'Dokumen::sertifikat');
@@ -304,9 +367,8 @@ $routes->group('reviewer', [
     $routes->get('riwayat', 'Riwayat::index');
 });
 
-
 // ---------------------------------------------------
-// Public API
+// ENHANCED: Public API with Payment Support
 // ---------------------------------------------------
 $routes->group('api/v1', static function ($routes) {
     $routes->get ('events/active',           'Api\Event::getActiveEvents');
@@ -319,6 +381,15 @@ $routes->group('api/v1', static function ($routes) {
     $routes->get ('qr/validate/(:segment)',  'Api\QR::validateQRCode/$1');
     $routes->post('qr/scan',                 'Api\QR::processScan');
     $routes->get ('events/(:num)/qr-codes',  'Api\Event::getQRCodes/$1', ['filter' => 'role:admin']);
+
+    // ENHANCED: Payment status and validation
+    $routes->get ('payments/(:segment)/status', 'Api\Payment::getStatus/$1');
+    $routes->post('payments/validate',           'Api\Payment::validatePayment');
+    $routes->get ('payments/(:segment)/details', 'Api\Payment::getDetails/$1', ['filter' => 'auth']);
+    
+    // Voucher API
+    $routes->post('voucher/validate',            'Api\Voucher::validate');
+    $routes->get ('voucher/(:segment)/info',     'Api\Voucher::getInfo/$1', ['filter' => 'auth']);
 });
 
 // ---------------------------------------------------
@@ -332,6 +403,19 @@ $routes->group('profile', ['filter' => 'auth'], static function ($routes) {
 });
 
 // ---------------------------------------------------
+// ENHANCED: Payment Processing Routes
+// ---------------------------------------------------
+$routes->group('payment', ['filter' => 'auth'], static function ($routes) {
+    $routes->get ('success',      'Payment::success');
+    $routes->get ('pending',      'Payment::pending');
+    $routes->get ('error',        'Payment::error');
+    $routes->get ('finish',       'Payment::finish');
+    $routes->post('notification', 'Payment::notification'); // For external callbacks
+    $routes->get ('status/(:segment)', 'Payment::checkStatus/$1');
+    $routes->post('retry/(:num)', 'Payment::retry/$1');
+});
+
+// ---------------------------------------------------
 // Middleware
 // ---------------------------------------------------
 $routes->group('middleware', ['filter' => 'auth'], static function ($routes) {
@@ -340,7 +424,7 @@ $routes->group('middleware', ['filter' => 'auth'], static function ($routes) {
 });
 
 // ---------------------------------------------------
-// Mobile API (opsional)
+// Mobile API (opsional, enhanced with payment)
 // ---------------------------------------------------
 $routes->group('mobile/api/v1', ['namespace' => 'App\Controllers\Mobile'], static function ($routes) {
     $routes->post('auth/login',  'Auth::login');
@@ -355,16 +439,32 @@ $routes->group('mobile/api/v1', ['namespace' => 'App\Controllers\Mobile'], stati
 
     $routes->get ('attendance/history',      'Attendance::getHistory', ['filter' => 'auth']);
     $routes->get ('attendance/event/(:num)', 'Attendance::getEventAttendance/$1', ['filter' => 'auth']);
+
+    // Mobile payment endpoints
+    $routes->post('payments/create',         'Payment::create', ['filter' => 'auth']);
+    $routes->get ('payments/(:num)/status',  'Payment::getStatus/$1', ['filter' => 'auth']);
+    $routes->get ('payments/history',        'Payment::getHistory', ['filter' => 'auth']);
 });
 
 // ---------------------------------------------------
-// Webhooks
+// CRITICAL: Admin Payment Management (Enhanced)
 // ---------------------------------------------------
-$routes->group('webhook', ['namespace' => 'App\Controllers\Webhook'], static function ($routes) {
-    $routes->post('midtrans',    'Midtrans::handle');
-    $routes->post('xendit',      'Xendit::handle');
-    $routes->post('gopay',       'Gopay::handle');
-    $routes->post('qr-analytics','QRAnalytics::track');
+$routes->group('admin/payments', [
+    'filter'    => 'role:admin',
+    'namespace' => 'App\Controllers\Role\Admin',
+], static function ($routes) {
+    $routes->get ('/',                           'Payment::index');
+    $routes->get ('pending',                     'Payment::pending');
+    $routes->get ('verified',                    'Payment::verified');
+    $routes->get ('rejected',                    'Payment::rejected');
+    $routes->get ('midtrans',                    'Payment::midtransPayments');
+    $routes->get ('manual',                      'Payment::manualPayments');
+    $routes->post('bulk-action',                 'Payment::bulkAction');
+    $routes->get ('analytics',                   'Payment::analytics');
+    $routes->get ('reconciliation',              'Payment::reconciliation');
+    $routes->post('sync-midtrans/(:segment)',    'Payment::syncWithMidtrans/$1');
+    $routes->get ('webhook-logs',                'Payment::webhookLogs');
+    $routes->post('resend-webhook/(:segment)',   'Payment::resendWebhook/$1');
 });
 
 // ---------------------------------------------------
@@ -373,6 +473,19 @@ $routes->group('webhook', ['namespace' => 'App\Controllers\Webhook'], static fun
 $routes->set404Override(static function () {
     return view('errors/404');
 });
+
+// ---------------------------------------------------
+// ENHANCED: Health Check and System Status
+// ---------------------------------------------------
+if (ENVIRONMENT === 'development') {
+    $routes->group('system', static function ($routes) {
+        $routes->get('health',           'System::health');
+        $routes->get('payment-config',   'System::paymentConfig');
+        $routes->get('webhook-test',     'System::webhookTest');
+        $routes->get('database-check',   'System::databaseCheck');
+        $routes->get('file-permissions', 'System::filePermissions');
+    });
+}
 
 // ---------------------------------------------------
 // Maintenance (aktifkan bila perlu)

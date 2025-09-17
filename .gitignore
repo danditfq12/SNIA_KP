@@ -15,3 +15,7 @@ writable/sessions/
 *.idea/
 .DS_Store
 Thumbs.db
+
+# Ignore Midtrans service file
+app/Services/MidtransService.php
+

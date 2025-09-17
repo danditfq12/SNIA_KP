@@ -15,7 +15,7 @@ class Security extends BaseConfig
      *
      * @var string 'cookie' or 'session'
      */
-    public string $csrfProtection = 'cookie';
+    public string $csrfProtection = 'session'; // Changed to session for better reliability
 
     /**
      * --------------------------------------------------------------------------
@@ -24,7 +24,7 @@ class Security extends BaseConfig
      *
      * Randomize the CSRF Token for added security.
      */
-    public bool $tokenRandomize = false;
+    public bool $tokenRandomize = true; // Changed to true for better security
 
     /**
      * --------------------------------------------------------------------------
@@ -33,7 +33,7 @@ class Security extends BaseConfig
      *
      * Token name for Cross Site Request Forgery protection.
      */
-    public string $tokenName = 'csrf_test_name';
+    public string $tokenName = 'csrf_token_name';
 
     /**
      * --------------------------------------------------------------------------
@@ -62,7 +62,7 @@ class Security extends BaseConfig
      *
      * Defaults to two hours (in seconds).
      */
-    public int $expires = 7200;
+    public int $expires = 14400; // Increased to 4 hours for longer forms
 
     /**
      * --------------------------------------------------------------------------
@@ -71,7 +71,7 @@ class Security extends BaseConfig
      *
      * Regenerate CSRF Token on every submission.
      */
-    public bool $regenerate = true;
+    public bool $regenerate = false; // Changed to false to prevent token mismatch on forms
 
     /**
      * --------------------------------------------------------------------------
@@ -82,5 +82,78 @@ class Security extends BaseConfig
      *
      * @see https://codeigniter4.github.io/userguide/libraries/security.html#redirection-on-failure
      */
-    public bool $redirect = (ENVIRONMENT === 'production');
+    public bool $redirect = false; // Set to false to prevent automatic redirects on CSRF failure
+
+    /**
+     * --------------------------------------------------------------------------
+     * CSRF Excluded URIs
+     * --------------------------------------------------------------------------
+     *
+     * List of URIs to exclude from CSRF protection.
+     * Useful for webhook endpoints and API routes.
+     */
+    public array $excludeURIs = [
+        // Webhook endpoints
+        'webhook/*',
+        'webhook/midtrans/*',
+        'webhook/midtrans/handle',
+        'webhook/midtrans/test',
+        'webhook/midtrans/simulate',
+        
+        // API endpoints
+        'api/*',
+        
+        // Other external endpoints
+        'cron/*',
+        'cli/*',
+    ];
+
+    /**
+     * --------------------------------------------------------------------------
+     * Content Security Policy
+     * --------------------------------------------------------------------------
+     *
+     * Enables the Response's Content Security Policy to restrict the sources of
+     * content that are allowed to be loaded on your site. For security reasons
+     * you should enable this for any production environment.
+     */
+    public ?array $csp = null;
+
+    /**
+     * --------------------------------------------------------------------------
+     * CSP Report Only
+     * --------------------------------------------------------------------------
+     *
+     * Specifies that the CSP should report violations but not enforce them.
+     * Useful for testing CSP policies before enforcing them.
+     */
+    public bool $cspReportOnly = false;
+
+    /**
+     * --------------------------------------------------------------------------
+     * CSP Auto Nonce
+     * --------------------------------------------------------------------------
+     *
+     * When enabled, nonces will be automatically generated for inline styles
+     * and scripts. You can retrieve the nonce value using the csp_nonce() function.
+     */
+    public bool $cspAutoNonce = true;
+
+    /**
+     * --------------------------------------------------------------------------
+     * CSP Script Nonce
+     * --------------------------------------------------------------------------
+     *
+     * When enabled, nonces will be automatically generated for inline scripts.
+     */
+    public bool $cspScriptNonce = true;
+
+    /**
+     * --------------------------------------------------------------------------
+     * CSP Style Nonce
+     * --------------------------------------------------------------------------
+     *
+     * When enabled, nonces will be automatically generated for inline styles.
+     */
+    public bool $cspStyleNonce = true;
 }

@@ -47,6 +47,7 @@ class Dokumen extends BaseController
         $stats = $this->getDocumentStatistics();
 
         $data = [
+            'title' => 'Manajemen Dokumen',
             'documents' => $documents,
             'events' => $events,
             'current_event' => $eventId,
@@ -137,7 +138,8 @@ class Dokumen extends BaseController
             }
 
             // Log activity
-            $this->logActivity(session('id_user'), "Uploaded LOA for {$user['nama_lengkap']} in event: {$event['title']}");
+            $eventTitle = $event['title'] ?? 'Unknown Event';
+            $this->logActivity(session('id_user'), "Uploaded LOA for {$user['nama_lengkap']} in event: {$eventTitle}");
 
             $this->db->transComplete();
 
@@ -240,7 +242,8 @@ class Dokumen extends BaseController
             }
 
             // Log activity
-            $this->logActivity(session('id_user'), "Uploaded Certificate for {$user['nama_lengkap']} in event: {$event['title']}");
+            $eventTitle = $event['title'] ?? 'Unknown Event';
+            $this->logActivity(session('id_user'), "Uploaded Certificate for {$user['nama_lengkap']} in event: {$eventTitle}");
 
             $this->db->transComplete();
 
@@ -281,13 +284,15 @@ class Dokumen extends BaseController
 
         // Generate download filename
         $eventTitle = $document['event_title'] ? preg_replace('/[^A-Za-z0-9_-]/', '_', $document['event_title']) : 'Event';
-        $userName = preg_replace('/[^A-Za-z0-9_-]/', '_', $document['nama_lengkap']);
+        $userName = preg_replace('/[^A-Za-z0-9_-]/', '_', $document['nama_lengkap'] ?? 'Unknown');
         $extension = pathinfo($document['file_path'], PATHINFO_EXTENSION);
         
         $downloadName = strtoupper($document['tipe']) . '_' . $eventTitle . '_' . $userName . '.' . $extension;
         
         // Log download activity
-        $this->logActivity(session('id_user'), "Downloaded {$document['tipe']} for {$document['nama_lengkap']} from event: {$document['event_title']}");
+        $eventTitleForLog = $document['event_title'] ?? 'Unknown Event';
+        $userNameForLog = $document['nama_lengkap'] ?? 'Unknown User';
+        $this->logActivity(session('id_user'), "Downloaded {$document['tipe']} for {$userNameForLog} from event: {$eventTitleForLog}");
 
         return $this->response->download($filePath, null)->setFileName($downloadName);
     }
@@ -320,7 +325,7 @@ class Dokumen extends BaseController
 
             // Log activity
             $userName = $user ? $user['nama_lengkap'] : 'Unknown User';
-            $eventTitle = $event ? $event['title'] : 'Unknown Event';
+            $eventTitle = $event ? ($event['title'] ?? 'Unknown Event') : 'Unknown Event';
             $this->logActivity(session('id_user'), "Deleted {$document['tipe']} for {$userName} from event: {$eventTitle}");
 
             $this->db->transComplete();
@@ -391,7 +396,8 @@ class Dokumen extends BaseController
             }
 
             // Log activity
-            $this->logActivity(session('id_user'), "Generated {$successCount} LOA documents for event: {$event['title']}");
+            $eventTitle = $event['title'] ?? 'Unknown Event';
+            $this->logActivity(session('id_user'), "Generated {$successCount} LOA documents for event: {$eventTitle}");
 
             $this->db->transComplete();
 
@@ -461,7 +467,8 @@ class Dokumen extends BaseController
             }
 
             // Log activity
-            $this->logActivity(session('id_user'), "Generated {$successCount} certificates for event: {$event['title']}");
+            $eventTitle = $event['title'] ?? 'Unknown Event';
+            $this->logActivity(session('id_user'), "Generated {$successCount} certificates for event: {$eventTitle}");
 
             $this->db->transComplete();
 
@@ -574,22 +581,30 @@ class Dokumen extends BaseController
     private function generateCertificatePDF($user, $event, $uploadPath)
     {
         try {
-            // Initialize mPDF with landscape orientation for certificate
+            // Initialize mPDF with zero margins to prevent cutting
             $mpdf = new Mpdf([
                 'mode' => 'utf-8',
-                'format' => 'A4',
-                'orientation' => 'L', // Landscape
-                'margin_left' => 10,
-                'margin_right' => 10,
-                'margin_top' => 10,
-                'margin_bottom' => 10,
+                'format' => 'A4-L', // A4 Landscape format
+                'orientation' => 'L',
+                'margin_left' => 0,
+                'margin_right' => 0, 
+                'margin_top' => 0,
+                'margin_bottom' => 0,
+                'margin_header' => 0,
+                'margin_footer' => 0,
+                'default_font_size' => 12,
+                'default_font' => 'dejavusans',
             ]);
 
             // Set document properties
             $mpdf->SetTitle('Certificate of Participation - ' . $user['nama_lengkap']);
             $mpdf->SetAuthor('SNIA Organization');
+            $mpdf->SetSubject('Certificate of Participation');
 
-            // Generate HTML content
+            // Critical: Disable auto page break to prevent content splitting
+            $mpdf->SetAutoPageBreak(false);
+
+            // Generate HTML content with fixed CSS
             $html = $this->getCertificateHTML($user, $event);
             
             // Write HTML to PDF
@@ -612,8 +627,12 @@ class Dokumen extends BaseController
 
     private function getLOAHTML($presenter, $event)
     {
-        $eventDate = date('d F Y', strtotime($event['event_date']));
+        $eventDate = date('d F Y', strtotime($event['event_date'] ?? ''));
         $currentDate = date('d F Y');
+        $eventTitle = $event['title'] ?? 'Event Title';
+        $eventTime = $event['event_time'] ?? 'TBA';
+        $eventFormat = $event['format'] ?? 'offline';
+        $presenterName = $presenter['nama_lengkap'] ?? 'Presenter Name';
         
         return '
         <style>
@@ -632,7 +651,7 @@ class Dokumen extends BaseController
         
         <div class="header">
             <h1>LETTER OF ACCEPTANCE</h1>
-            <h2>' . htmlspecialchars($event['title']) . '</h2>
+            <h2>' . htmlspecialchars($eventTitle) . '</h2>
         </div>
         
         <div class="date">
@@ -640,17 +659,17 @@ class Dokumen extends BaseController
         </div>
         
         <div class="content">
-            <p>Dear <strong>' . htmlspecialchars($presenter['nama_lengkap']) . '</strong>,</p>
+            <p>Dear <strong>' . htmlspecialchars($presenterName) . '</strong>,</p>
             
-            <p>We are pleased to inform you that your participation as a presenter in <strong>' . htmlspecialchars($event['title']) . '</strong> has been accepted.</p>
+            <p>We are pleased to inform you that your participation as a presenter in <strong>' . htmlspecialchars($eventTitle) . '</strong> has been accepted.</p>
             
             <div class="details">
                 <p><strong>Event Details:</strong></p>
                 <ul>
-                    <li><strong>Event:</strong> ' . htmlspecialchars($event['title']) . '</li>
+                    <li><strong>Event:</strong> ' . htmlspecialchars($eventTitle) . '</li>
                     <li><strong>Date:</strong> ' . $eventDate . '</li>
-                    <li><strong>Time:</strong> ' . htmlspecialchars($event['event_time']) . '</li>
-                    <li><strong>Format:</strong> ' . ucfirst(htmlspecialchars($event['format'])) . '</li>
+                    <li><strong>Time:</strong> ' . htmlspecialchars($eventTime) . '</li>
+                    <li><strong>Format:</strong> ' . ucfirst(htmlspecialchars($eventFormat)) . '</li>
                 </ul>
             </div>
             
@@ -669,87 +688,212 @@ class Dokumen extends BaseController
 
     private function getCertificateHTML($user, $event)
     {
-        $eventDate = date('d F Y', strtotime($event['event_date']));
+        $eventDate = date('d F Y', strtotime($event['event_date'] ?? ''));
+        $eventTitle = $event['title'] ?? 'Event Title';
+        $userName = $user['nama_lengkap'] ?? 'Participant Name';
         
         return '
         <style>
-            body { font-family: "Times New Roman", serif; margin: 0; padding: 20px; }
+            @page { 
+                size: A4 landscape; 
+                margin: 0;
+            }
+            
+            body { 
+                font-family: "Times New Roman", serif; 
+                margin: 0; 
+                padding: 0;
+                width: 297mm;  /* A4 landscape width */
+                height: 210mm; /* A4 landscape height */
+                overflow: hidden;
+            }
+            
             .certificate { 
-                border: 15px solid #2563eb; 
-                padding: 50px; 
+                width: 100%;
+                height: 100%;
+                border: 12mm solid #2563eb; 
+                padding: 0;
                 text-align: center; 
                 background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-                min-height: 500px;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
                 position: relative;
             }
+            
+            .content-wrapper {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                padding: 20mm;
+                box-sizing: border-box;
+            }
+            
             .title { 
-                font-size: 48px; 
+                font-size: 42px; 
                 color: #2563eb; 
-                margin-bottom: 20px; 
+                margin-bottom: 8px; 
                 font-weight: bold; 
                 text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+                letter-spacing: 8px;
             }
+            
             .subtitle { 
-                font-size: 24px; 
-                margin-bottom: 40px; 
+                font-size: 22px; 
+                margin-bottom: 25px; 
                 color: #1e40af;
-                letter-spacing: 2px;
+                letter-spacing: 4px;
+                font-weight: 600;
             }
+            
+            .decorative-line {
+                width: 180px;
+                height: 3px;
+                background: linear-gradient(to right, #2563eb, #1e40af);
+                margin: 15px auto;
+            }
+            
+            .certify-text {
+                font-size: 18px; 
+                margin: 20px 0; 
+                color: #374151;
+                font-style: italic;
+            }
+            
             .recipient { 
-                font-size: 36px; 
+                font-size: 32px; 
                 color: #1e40af; 
-                margin: 40px 0; 
+                margin: 25px 0; 
                 font-weight: bold;
                 text-decoration: underline;
                 text-decoration-color: #2563eb;
+                text-decoration-thickness: 2px;
+                max-width: 80%;
+                word-wrap: break-word;
             }
+            
+            .participation-text {
+                font-size: 18px; 
+                margin: 20px 0;
+                color: #374151;
+                font-style: italic;
+            }
+            
             .event-title { 
-                font-size: 28px; 
-                margin: 30px 0; 
+                font-size: 24px; 
+                margin: 20px 0; 
                 font-style: italic;
                 color: #374151;
-                line-height: 1.4;
+                line-height: 1.3;
+                font-weight: 600;
+                max-width: 85%;
+                word-wrap: break-word;
             }
+            
             .date { 
-                font-size: 20px; 
-                margin-top: 40px;
+                font-size: 16px; 
+                margin-top: 25px;
                 color: #6b7280;
+                font-weight: 500;
             }
+            
             .signature { 
-                margin-top: 60px; 
-                font-size: 18px;
+                margin-top: 30px; 
+                font-size: 16px;
                 color: #374151;
+                position: absolute;
+                bottom: 30mm;
+                right: 40mm;
+                text-align: center;
             }
-            .signature p { margin: 5px 0; }
-            .decorative-line {
-                width: 200px;
-                height: 3px;
-                background: linear-gradient(to right, #2563eb, #1e40af);
-                margin: 20px auto;
+            
+            .signature p { 
+                margin: 3px 0; 
+                line-height: 1.2;
+            }
+            
+            .org-logo {
+                position: absolute;
+                top: 15mm;
+                right: 15mm;
+                font-size: 12px;
+                color: #6b7280;
+                font-style: italic;
+            }
+            
+            /* Decorative elements */
+            .corner-decoration {
+                position: absolute;
+                width: 30px;
+                height: 30px;
+                border: 2px solid #2563eb;
+            }
+            
+            .corner-decoration.top-left {
+                top: 20mm;
+                left: 20mm;
+                border-right: none;
+                border-bottom: none;
+            }
+            
+            .corner-decoration.top-right {
+                top: 20mm;
+                right: 20mm;
+                border-left: none;
+                border-bottom: none;
+            }
+            
+            .corner-decoration.bottom-left {
+                bottom: 20mm;
+                left: 20mm;
+                border-right: none;
+                border-top: none;
+            }
+            
+            .corner-decoration.bottom-right {
+                bottom: 20mm;
+                right: 20mm;
+                border-left: none;
+                border-top: none;
             }
         </style>
         
         <div class="certificate">
-            <div class="title">CERTIFICATE</div>
-            <div class="subtitle">OF PARTICIPATION</div>
+            <div class="corner-decoration top-left"></div>
+            <div class="corner-decoration top-right"></div>
+            <div class="corner-decoration bottom-left"></div>
+            <div class="corner-decoration bottom-right"></div>
             
-            <div class="decorative-line"></div>
+            <div class="org-logo">SNIA-2025</div>
             
-            <p style="font-size: 20px; margin: 30px 0;">This is to certify that</p>
-            
-            <div class="recipient">' . htmlspecialchars($user['nama_lengkap']) . '</div>
-            
-            <p style="font-size: 20px; margin: 30px 0;">has successfully participated in</p>
-            
-            <div class="event-title">' . htmlspecialchars($event['title']) . '</div>
-            
-            <div class="decorative-line"></div>
-            
-            <div class="date">Held on ' . $eventDate . '</div>
+            <div class="content-wrapper">
+                <div class="title">CERTIFICATE</div>
+                <div class="subtitle">OF PARTICIPATION</div>
+                
+                <div class="decorative-line"></div>
+                
+                <div class="certify-text">This is to certify that</div>
+                
+                <div class="recipient">' . htmlspecialchars($userName) . '</div>
+                
+                <div class="participation-text">has successfully participated in</div>
+                
+                <div class="event-title">' . htmlspecialchars($eventTitle) . '</div>
+                
+                <div class="decorative-line"></div>
+                
+                <div class="date">Held on ' . $eventDate . '</div>
+            </div>
             
             <div class="signature">
                 <p><strong>SNIA Organization</strong></p>
                 <p>Event Committee</p>
+                <p style="font-size: 12px; margin-top: 8px;">Authorized Signature</p>
             </div>
         </div>';
     }

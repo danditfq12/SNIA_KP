@@ -8,6 +8,8 @@ use App\Models\UserModel;
 use App\Models\AbstrakModel;
 use App\Models\PembayaranModel;
 use App\Models\AbsensiModel;
+use App\Models\EventRegistrationModel;
+use App\Models\DokumenModel;
 
 class Event extends BaseController
 {
@@ -16,16 +18,20 @@ class Event extends BaseController
     protected $abstrakModel;
     protected $pembayaranModel;
     protected $absensiModel;
+    protected $registrationModel;
+    protected $dokumenModel;
     protected $db;
 
     public function __construct()
     {
-        $this->eventModel      = new EventModel();
-        $this->userModel       = new UserModel();
-        $this->abstrakModel    = new AbstrakModel();
-        $this->pembayaranModel = new PembayaranModel();
-        $this->absensiModel    = new AbsensiModel();
-        $this->db              = \Config\Database::connect();
+        $this->eventModel        = new EventModel();
+        $this->userModel         = new UserModel();
+        $this->abstrakModel      = new AbstrakModel();
+        $this->pembayaranModel   = new PembayaranModel();
+        $this->absensiModel      = new AbsensiModel();
+        $this->registrationModel = new EventRegistrationModel();
+        $this->dokumenModel      = new DokumenModel();
+        $this->db                = \Config\Database::connect();
     }
 
     public function index()
@@ -165,7 +171,7 @@ class Event extends BaseController
 
             if (!$this->eventModel->save($data)) {
                 $err = $this->eventModel->errors();
-                if (!$err) { // fallback error DB
+                if (!$err) {
                     $dbErr = $this->db->error();
                     $msg   = $dbErr['message'] ?? 'Unknown DB error';
                 } else {
@@ -245,11 +251,6 @@ class Event extends BaseController
             return $this->handleValidationError($validation->getErrors());
         }
 
-        $deps = $this->checkEventDependencies($id);
-        if ($deps['has_dependencies'] && $event['format'] !== $format) {
-            return $this->handleError('Tidak dapat mengubah format event yang sudah memiliki pendaftaran.');
-        }
-
         $this->db->transStart();
         try {
             $data = $this->prepareEventData();
@@ -277,36 +278,116 @@ class Event extends BaseController
         }
     }
 
+    /**
+     * FORCE DELETE EVENT - Hapus paksa dengan semua dependencies
+     */
     public function delete($id)
     {
         $event = $this->eventModel->find($id);
-        if (!$event) return $this->handleError('Event tidak ditemukan.');
-
-        if ($this->parseBoolean($event['is_active'])) {
-            return $this->handleError('Nonaktifkan event terlebih dahulu sebelum menghapus.');
-        }
-
-        $deps = $this->checkEventDependencies($id);
-        if ($deps['has_dependencies']) {
-            $list = [];
-            if ($deps['registrations'] > 0) $list[] = "{$deps['registrations']} pendaftaran";
-            if ($deps['abstracts'] > 0)     $list[] = "{$deps['abstracts']} abstrak";
-            if ($deps['attendance'] > 0)    $list[] = "{$deps['attendance']} data absensi";
-            return $this->handleError('Event memiliki ' . implode(', ', $list) . '. Hapus data terkait atau biarkan event nonaktif.');
+        if (!$event) {
+            return $this->handleError('Event tidak ditemukan.');
         }
 
         $this->db->transStart();
         try {
-            if (!$this->eventModel->delete($id)) throw new \Exception('Failed to delete event');
-            $this->logActivity(session('id_user'), "Deleted inactive event: {$event['title']} (ID: {$id})");
-            $this->db->transComplete();
-            if ($this->db->transStatus() === false) throw new \Exception('Transaction failed');
+            log_message('info', "Starting force delete for event ID: {$id} - {$event['title']}");
 
-            return $this->response->setJSON(['success' => true, 'message' => 'Event berhasil dihapus!']);
+            // 1. Delete semua documents terkait event
+            $documents = $this->dokumenModel->where('event_id', $id)->findAll();
+            foreach ($documents as $doc) {
+                // Hapus file fisik jika ada
+                if (!empty($doc['file_path'])) {
+                    $filePath = WRITEPATH . 'uploads/' . $doc['file_path'];
+                    if (file_exists($filePath)) {
+                        unlink($filePath);
+                        log_message('info', "Deleted file: {$filePath}");
+                    }
+                }
+            }
+            $this->dokumenModel->where('event_id', $id)->delete();
+            log_message('info', "Deleted " . count($documents) . " documents for event {$id}");
+
+            // 2. Delete absensi
+            $absensiCount = $this->absensiModel->where('event_id', $id)->countAllResults();
+            $this->absensiModel->where('event_id', $id)->delete();
+            log_message('info', "Deleted {$absensiCount} attendance records for event {$id}");
+
+            // 3. Delete pembayaran dan files
+            $payments = $this->pembayaranModel->where('event_id', $id)->findAll();
+            foreach ($payments as $payment) {
+                // Hapus bukti bayar jika ada
+                if (!empty($payment['bukti_bayar']) && $payment['bukti_bayar'] !== 'no_file.txt') {
+                    $buktiPath = WRITEPATH . 'uploads/pembayaran/' . $payment['bukti_bayar'];
+                    if (file_exists($buktiPath)) {
+                        unlink($buktiPath);
+                        log_message('info', "Deleted payment proof: {$buktiPath}");
+                    }
+                }
+            }
+            $this->pembayaranModel->where('event_id', $id)->delete();
+            log_message('info', "Deleted " . count($payments) . " payments for event {$id}");
+
+            // 4. Delete event registrations
+            $registrationsCount = $this->registrationModel->where('id_event', $id)->countAllResults();
+            $this->registrationModel->where('id_event', $id)->delete();
+            log_message('info', "Deleted {$registrationsCount} registrations for event {$id}");
+
+            // 5. Delete abstraks dan files
+            $abstraks = $this->abstrakModel->where('event_id', $id)->findAll();
+            foreach ($abstraks as $abstrak) {
+                // Hapus file abstrak
+                if (!empty($abstrak['file_abstrak'])) {
+                    $abstrakPath = WRITEPATH . 'uploads/abstraks/' . $abstrak['file_abstrak'];
+                    if (file_exists($abstrakPath)) {
+                        unlink($abstrakPath);
+                        log_message('info', "Deleted abstract file: {$abstrakPath}");
+                    }
+                }
+
+                // Delete reviews untuk abstrak ini
+                $this->db->table('review')->where('id_abstrak', $abstrak['id_abstrak'])->delete();
+            }
+            $this->abstrakModel->where('event_id', $id)->delete();
+            log_message('info', "Deleted " . count($abstraks) . " abstracts for event {$id}");
+
+            // 6. Delete notifications terkait event ini
+            $this->db->table('notifikasi')
+                     ->like('message', $event['title'])
+                     ->orLike('link', 'event/' . $id)
+                     ->delete();
+
+            // 7. Delete log aktivitas terkait event
+            $this->db->table('log_aktivitas')
+                     ->like('aktivitas', "event: {$event['title']}")
+                     ->orLike('aktivitas', "Event: {$event['title']}")
+                     ->orLike('aktivitas', "event (ID: {$id})")
+                     ->delete();
+
+            // 8. Akhirnya hapus event itu sendiri
+            if (!$this->eventModel->delete($id)) {
+                throw new \Exception('Failed to delete event from database');
+            }
+
+            $this->logActivity(session('id_user'), "FORCE DELETED event with all dependencies: {$event['title']} (ID: {$id})");
+            
+            $this->db->transComplete();
+            if ($this->db->transStatus() === false) {
+                throw new \Exception('Transaction failed during force delete');
+            }
+
+            log_message('info', "Successfully force deleted event {$id} with all dependencies");
+
+            return $this->response->setJSON([
+                'success' => true, 
+                'message' => 'Event dan semua data terkait berhasil dihapus secara permanen!'
+            ]);
+
         } catch (\Throwable $e) {
             $this->db->transRollback();
-            log_message('error', 'Event deletion error: ' . $e->getMessage());
-            return $this->handleError('Error menghapus event: ' . $e->getMessage());
+            log_message('error', "Force delete event {$id} failed: " . $e->getMessage());
+            log_message('error', "Stack trace: " . $e->getTraceAsString());
+            
+            return $this->handleError('Gagal menghapus event: ' . $e->getMessage());
         }
     }
 
@@ -431,92 +512,81 @@ class Event extends BaseController
     }
 
     private function prepareEventData()
-{
-    $format = $this->request->getPost('format');
+    {
+        $format = $this->request->getPost('format');
 
-    // angka harga dibersihkan dari titik/koma
-    $audOnline  = $this->sanitizeCurrency($this->request->getPost('audience_fee_online'));
-    $audOffline = $this->sanitizeCurrency($this->request->getPost('audience_fee_offline'));
+        // angka harga dibersihkan dari titik/koma
+        $audOnline  = $this->sanitizeCurrency($this->request->getPost('audience_fee_online'));
+        $audOffline = $this->sanitizeCurrency($this->request->getPost('audience_fee_offline'));
 
-    // set nol untuk channel yang tidak dipakai
-    if ($format === 'online')  $audOffline = 0;
-    if ($format === 'offline') $audOnline  = 0;
+        // set nol untuk channel yang tidak dipakai
+        if ($format === 'online')  $audOffline = 0;
+        if ($format === 'offline') $audOnline  = 0;
 
-    return [
-        'title'        => (string) $this->request->getPost('title'),
-        'description'  => (string) $this->request->getPost('description'),
-        'event_date'   => $this->request->getPost('event_date'),
-        'event_time'   => $this->request->getPost('event_time'),
-        'format'       => $format,
-        'location'     => $this->request->getPost('location'),
-        'zoom_link'    => $this->request->getPost('zoom_link'),
+        return [
+            'title'        => (string) $this->request->getPost('title'),
+            'description'  => (string) $this->request->getPost('description'),
+            'event_date'   => $this->request->getPost('event_date'),
+            'event_time'   => $this->request->getPost('event_time'),
+            'format'       => $format,
+            'location'     => $this->request->getPost('location'),
+            'zoom_link'    => $this->request->getPost('zoom_link'),
 
-        'presenter_fee_offline' => $this->sanitizeCurrency($this->request->getPost('presenter_fee_offline')),
-        'audience_fee_online'   => $audOnline,
-        'audience_fee_offline'  => $audOffline,
+            'presenter_fee_offline' => $this->sanitizeCurrency($this->request->getPost('presenter_fee_offline')),
+            'audience_fee_online'   => $audOnline,
+            'audience_fee_offline'  => $audOffline,
 
-        'max_participants'      => ($this->request->getPost('max_participants') === '' ? null
-                                    : (int) $this->request->getPost('max_participants')),
-        // normalize input datetime-local -> 'Y-m-d H:i:s'
-        'registration_deadline' => $this->normalizeDateTime($this->request->getPost('registration_deadline')),
-        'abstract_deadline'     => $this->normalizeDateTime($this->request->getPost('abstract_deadline')),
+            'max_participants'      => ($this->request->getPost('max_participants') === '' ? null
+                                        : (int) $this->request->getPost('max_participants')),
+            'registration_deadline' => $this->normalizeDateTime($this->request->getPost('registration_deadline')),
+            'abstract_deadline'     => $this->normalizeDateTime($this->request->getPost('abstract_deadline')),
 
-        // === boolean: kirim true/false, BUKAN 1/0 ===
-        'registration_active'        => (bool) $this->request->getPost('registration_active'),
-        'abstract_submission_active' => (bool) $this->request->getPost('abstract_submission_active'),
-        'is_active'                  => (bool) $this->request->getPost('is_active'),
-    ];
-}
-
+            'registration_active'        => (bool) $this->request->getPost('registration_active'),
+            'abstract_submission_active' => (bool) $this->request->getPost('abstract_submission_active'),
+            'is_active'                  => (bool) $this->request->getPost('is_active'),
+        ];
+    }
 
     private function validateEventDates()
-{
-    // Pastikan semua perbandingan tanggal pakai zona waktu Jakarta
-    $tz        = new \DateTimeZone('Asia/Jakarta');
+    {
+        $tz        = new \DateTimeZone('Asia/Jakarta');
+        $eventDate = (string) $this->request->getPost('event_date');
+        $regDL     = $this->request->getPost('registration_deadline');
+        $absDL     = $this->request->getPost('abstract_deadline');
 
-    $eventDate = (string) $this->request->getPost('event_date');
-    $regDL     = $this->request->getPost('registration_deadline');
-    $absDL     = $this->request->getPost('abstract_deadline');
-
-    // Normalisasi: event_date hanya bertipe 'Y-m-d'
-    $eventDT = \DateTime::createFromFormat('Y-m-d', $eventDate, $tz);
-    if (!$eventDT) {
-        return ['valid' => false, 'message' => 'Format tanggal event tidak valid.'];
-    }
-
-    // "Hari ini" di Jakarta (jam 00:00) — kita larang event untuk tanggal ini
-    $today = new \DateTime('today', $tz);
-
-    // Larang hari ini & masa lalu
-    if ($eventDT <= $today) {
-        return ['valid' => false, 'message' => 'Tanggal event tidak boleh hari ini atau di masa lalu.'];
-    }
-
-    // Jika ada deadline pendaftaran/abstrak, pastikan sebelum tanggal event
-    // Catatan: input bertipe datetime-local, jadi kita parse fleksibel dengan strtotime
-    if (!empty($regDL)) {
-        $regTS = strtotime($regDL);
-        if ($regTS === false) {
-            return ['valid' => false, 'message' => 'Format batas pendaftaran tidak valid.'];
+        $eventDT = \DateTime::createFromFormat('Y-m-d', $eventDate, $tz);
+        if (!$eventDT) {
+            return ['valid' => false, 'message' => 'Format tanggal event tidak valid.'];
         }
-        if ($regTS >= $eventDT->getTimestamp()) {
-            return ['valid' => false, 'message' => 'Batas pendaftaran harus sebelum tanggal event.'];
+
+        $today = new \DateTime('today', $tz);
+
+        if ($eventDT <= $today) {
+            return ['valid' => false, 'message' => 'Tanggal event tidak boleh hari ini atau di masa lalu.'];
         }
+
+        if (!empty($regDL)) {
+            $regTS = strtotime($regDL);
+            if ($regTS === false) {
+                return ['valid' => false, 'message' => 'Format batas pendaftaran tidak valid.'];
+            }
+            if ($regTS >= $eventDT->getTimestamp()) {
+                return ['valid' => false, 'message' => 'Batas pendaftaran harus sebelum tanggal event.'];
+            }
+        }
+
+        if (!empty($absDL)) {
+            $absTS = strtotime($absDL);
+            if ($absTS === false) {
+                return ['valid' => false, 'message' => 'Format batas submit abstrak tidak valid.'];
+            }
+            if ($absTS >= $eventDT->getTimestamp()) {
+                return ['valid' => false, 'message' => 'Batas submit abstrak harus sebelum tanggal event.'];
+            }
+        }
+
+        return ['valid' => true];
     }
-
-    if (!empty($absDL)) {
-        $absTS = strtotime($absDL);
-        if ($absTS === false) {
-            return ['valid' => false, 'message' => 'Format batas submit abstrak tidak valid.'];
-        }
-        if ($absTS >= $eventDT->getTimestamp()) {
-            return ['valid' => false, 'message' => 'Batas submit abstrak harus sebelum tanggal event.'];
-        }
-    }
-
-    return ['valid' => true];
-}
-
 
     private function checkEventDependencies($eventId)
     {
@@ -560,10 +630,11 @@ class Event extends BaseController
             log_message('error', 'Failed to log activity: ' . $e->getMessage());
         }
     }
+
     private function normalizeDateTime(?string $val): ?string
     {
-    if (!$val) return null;
-    $ts = strtotime($val);
-    return $ts ? date('Y-m-d H:i:s', $ts) : null;
+        if (!$val) return null;
+        $ts = strtotime($val);
+        return $ts ? date('Y-m-d H:i:s', $ts) : null;
     }
 }

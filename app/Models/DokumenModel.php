@@ -15,7 +15,7 @@ class DokumenModel extends Model
     ];
 
     /**
-     * Dipakai di Admin: ambil dokumen + info user + event
+     * FIXED: Get dokumen dengan user info dan event info (untuk admin)
      */
     public function getDokumenWithUser(?string $tipe = null, ?int $eventId = null): array
     {
@@ -38,13 +38,13 @@ class DokumenModel extends Model
             $builder->where('dokumen.event_id', $eventId);
         }
 
-        return $builder->orderBy('uploaded_at', 'DESC')
-                       ->orderBy('id_dokumen', 'DESC')
+        return $builder->orderBy('dokumen.uploaded_at', 'DESC')
+                       ->orderBy('dokumen.id_dokumen', 'DESC')
                        ->findAll();
     }
 
     /**
-     * Ambil dokumen milik satu user (opsional filter tipe dan event)
+     * Get dokumen milik satu user dengan info event
      */
     public function getUserDocs(int $userId, ?string $tipe = null, ?int $eventId = null): array
     {
@@ -65,13 +65,13 @@ class DokumenModel extends Model
             $builder->where('dokumen.event_id', $eventId);
         }
 
-        return $builder->orderBy('uploaded_at', 'DESC')
-                       ->orderBy('id_dokumen', 'DESC')
+        return $builder->orderBy('dokumen.uploaded_at', 'DESC')
+                       ->orderBy('dokumen.id_dokumen', 'DESC')
                        ->findAll();
     }
 
     /**
-     * Ambil satu dokumen + info user dan event
+     * Get satu dokumen dengan detail lengkap
      */
     public function getOneWithDetails(int $idDokumen): ?array
     {
@@ -109,8 +109,8 @@ class DokumenModel extends Model
             $builder->where('dokumen.event_id', $eventId);
         }
 
-        return $builder->orderBy('uploaded_at', 'DESC')
-                       ->orderBy('id_dokumen', 'DESC')
+        return $builder->orderBy('dokumen.uploaded_at', 'DESC')
+                       ->orderBy('dokumen.id_dokumen', 'DESC')
                        ->findAll();
     }
 
@@ -133,8 +133,8 @@ class DokumenModel extends Model
             $builder->where('dokumen.event_id', $eventId);
         }
 
-        return $builder->orderBy('uploaded_at', 'DESC')
-                       ->orderBy('id_dokumen', 'DESC')
+        return $builder->orderBy('dokumen.uploaded_at', 'DESC')
+                       ->orderBy('dokumen.id_dokumen', 'DESC')
                        ->findAll();
     }
 
@@ -175,7 +175,7 @@ class DokumenModel extends Model
     }
 
     /**
-     * Get users eligible for LOA (presenters with verified payment)
+     * FIXED: Get users eligible for LOA (presenters with verified payment)
      */
     public function getEligiblePresentersForLOA(int $eventId): array
     {
@@ -186,8 +186,10 @@ class DokumenModel extends Model
                 u.id_user,
                 u.nama_lengkap,
                 u.email,
+                u.role,
                 p.tanggal_bayar,
-                p.verified_at
+                p.verified_at,
+                p.participation_type
             FROM users u
             JOIN pembayaran p ON p.id_user = u.id_user
             WHERE p.event_id = ?
@@ -204,7 +206,7 @@ class DokumenModel extends Model
     }
 
     /**
-     * Get users eligible for Certificate (attendees)
+     * FIXED: Get users eligible for Certificate (all attendees: presenter, audience online, audience offline)
      */
     public function getEligibleUsersForCertificate(int $eventId): array
     {
@@ -216,9 +218,11 @@ class DokumenModel extends Model
                 u.nama_lengkap,
                 u.email,
                 u.role,
-                a.waktu_scan
+                a.waktu_scan,
+                p.participation_type
             FROM users u
             JOIN absensi a ON a.id_user = u.id_user
+            LEFT JOIN pembayaran p ON p.id_user = u.id_user AND p.event_id = a.event_id
             WHERE a.event_id = ?
             AND a.status = 'hadir'
             AND NOT EXISTS (
@@ -227,7 +231,7 @@ class DokumenModel extends Model
                 AND d.event_id = ? 
                 AND d.tipe = 'sertifikat'
             )
-            ORDER BY u.nama_lengkap
+            ORDER BY u.role, u.nama_lengkap
         ", [$eventId, $eventId])->getResultArray();
     }
 
@@ -316,5 +320,97 @@ class DokumenModel extends Model
         }
         
         return $cleanedFiles;
+    }
+
+    /**
+     * ADDED: Get document file path for download
+     */
+    public function getDocumentFilePath(int $idDokumen): ?string
+    {
+        $document = $this->find($idDokumen);
+        
+        if (!$document) {
+            return null;
+        }
+
+        $basePath = WRITEPATH . 'uploads/' . $document['tipe'] . '/';
+        $filePath = $basePath . $document['file_path'];
+
+        return file_exists($filePath) ? $filePath : null;
+    }
+
+    /**
+     * ADDED: Get document statistics for dashboard
+     */
+    public function getDocumentStatistics(): array
+    {
+        $total = $this->countAll();
+        $loa = $this->where('tipe', 'loa')->countAllResults();
+        $sertifikat = $this->where('tipe', 'sertifikat')->countAllResults();
+        
+        // Recent uploads (this week)
+        $weekAgo = date('Y-m-d H:i:s', strtotime('-1 week'));
+        $recent = $this->where('uploaded_at >=', $weekAgo)->countAllResults();
+
+        return [
+            'total_documents' => $total,
+            'loa_count' => $loa,
+            'sertifikat_count' => $sertifikat,
+            'recent_uploads' => $recent
+        ];
+    }
+
+    /**
+     * ADDED: Get documents by date range
+     */
+    public function getDocumentsByDateRange(string $startDate, string $endDate, ?string $tipe = null): array
+    {
+        $builder = $this->select('
+            dokumen.*, 
+            users.nama_lengkap, 
+            users.email, 
+            events.title as event_title
+        ')
+        ->join('users', 'users.id_user = dokumen.id_user', 'left')
+        ->join('events', 'events.id = dokumen.event_id', 'left')
+        ->where('DATE(dokumen.uploaded_at) >=', $startDate)
+        ->where('DATE(dokumen.uploaded_at) <=', $endDate);
+
+        if ($tipe) {
+            $builder->where('dokumen.tipe', $tipe);
+        }
+
+        return $builder->orderBy('dokumen.uploaded_at', 'DESC')->findAll();
+    }
+
+    /**
+     * ADDED: Search documents
+     */
+    public function searchDocuments(string $keyword, ?string $tipe = null, ?int $eventId = null): array
+    {
+        $builder = $this->select('
+            dokumen.*, 
+            users.nama_lengkap, 
+            users.email, 
+            events.title as event_title
+        ')
+        ->join('users', 'users.id_user = dokumen.id_user', 'left')
+        ->join('events', 'events.id = dokumen.event_id', 'left')
+        ->groupStart()
+            ->like('users.nama_lengkap', $keyword)
+            ->orLike('users.email', $keyword)
+            ->orLike('events.title', $keyword)
+            ->orLike('dokumen.file_path', $keyword)
+        ->groupEnd();
+
+        if ($tipe) {
+            $builder->where('dokumen.tipe', $tipe);
+        }
+
+        if ($eventId) {
+            $builder->where('dokumen.event_id', $eventId);
+        }
+
+        return $builder->orderBy('dokumen.uploaded_at', 'DESC')->findAll();
     }
 }
