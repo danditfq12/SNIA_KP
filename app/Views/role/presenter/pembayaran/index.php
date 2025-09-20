@@ -1,8 +1,16 @@
 <?php
-$title   = $title ?? 'Pembayaran';
-$eventsNeedingPayment = $eventsNeedingPayment ?? []; // TAGIHAN
-$dueStats = $dueStats ?? ['count'=>0,'total'=>0,'total_formatted'=>'Rp 0'];
-$allPayments = $allPayments ?? []; // RIWAYAT (SEMUA STATUS)
+$title               = $title ?? 'Pembayaran';
+$eventsNeedingPayment= $eventsNeedingPayment ?? []; // TAGIHAN
+$dueStats            = $dueStats ?? ['count'=>0,'total'=>0,'total_formatted'=>'Rp 0'];
+$allPayments         = $allPayments ?? []; // RIWAYAT (SEMUA STATUS)
+
+// helper kecil untuk label partisipasi
+function participation_badge(?string $type): string {
+    $t = strtolower((string)$type);
+    if ($t === 'offline') return '<span class="badge bg-primary-subtle text-primary">Offline</span>';
+    if ($t === 'online')  return '<span class="badge bg-info-subtle text-dark">Online</span>';
+    return '';
+}
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -21,19 +29,19 @@ $allPayments = $allPayments ?? []; // RIWAYAT (SEMUA STATUS)
         </div>
       </div>
 
-      <!-- ===================== TAGIHAN (SELALU ADA BAGIAN INI) ===================== -->
+      <!-- ===================== TAGIHAN ===================== -->
       <div class="card shadow-sm mb-3 border-0">
         <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-2">
           <div class="d-flex align-items-center gap-3">
             <div class="stat-icon stat-due"><i class="bi bi-receipt"></i></div>
             <div>
               <div class="text-muted small">Total Tagihan</div>
-              <div class="stat-number"><?= esc($dueStats['total_formatted']) ?></div>
+              <div class="stat-number"><?= esc($dueStats['total_formatted'] ?? 'Rp 0') ?></div>
             </div>
           </div>
           <div class="text-muted">
             <span class="badge bg-primary-subtle text-primary">
-              <?= (int)$dueStats['count'] ?> tagihan
+              <?= (int)($dueStats['count'] ?? 0) ?> tagihan
             </span>
           </div>
         </div>
@@ -59,9 +67,9 @@ $allPayments = $allPayments ?? []; // RIWAYAT (SEMUA STATUS)
                 <div class="bill-card">
                   <div class="d-flex align-items-start justify-content-between">
                     <div class="me-2">
-                      <h6 class="mb-1"><?= esc($bill['title']) ?></h6>
+                      <h6 class="mb-1"><?= esc($bill['title'] ?? '-') ?></h6>
                       <div class="small text-muted">
-                        Tanggal Event: <strong><?= esc($bill['event_date_fmt']) ?></strong>
+                        Tanggal Event: <strong><?= esc($bill['event_date_fmt'] ?? '-') ?></strong>
                       </div>
                     </div>
                     <span class="badge bg-info">Abstrak Diterima</span>
@@ -69,10 +77,10 @@ $allPayments = $allPayments ?? []; // RIWAYAT (SEMUA STATUS)
 
                   <div class="d-flex justify-content-between align-items-center mt-3">
                     <div class="text-muted small">Jumlah</div>
-                    <div class="fw-bold fs-6"><?= esc($bill['amount_formatted']) ?></div>
+                    <div class="fw-bold fs-6"><?= esc($bill['amount_formatted'] ?? 'Rp 0') ?></div>
                   </div>
 
-                  <a href="<?= esc($bill['pay_url']) ?>" class="btn btn-success w-100 mt-3">
+                  <a href="<?= esc($bill['pay_url'] ?? '#') ?>" class="btn btn-success w-100 mt-3">
                     <i class="bi bi-credit-card me-1"></i> Bayar
                   </a>
                 </div>
@@ -83,7 +91,7 @@ $allPayments = $allPayments ?? []; // RIWAYAT (SEMUA STATUS)
         </div>
       </div>
 
-      <!-- ===================== RIWAYAT PEMBAYARAN (SELALU ADA BAGIAN INI) ===================== -->
+      <!-- ===================== RIWAYAT PEMBAYARAN ===================== -->
       <div class="card shadow-sm border-0">
         <div class="card-header bg-gradient-secondary text-white">
           <div class="d-flex align-items-center justify-content-between">
@@ -106,39 +114,51 @@ $allPayments = $allPayments ?? []; // RIWAYAT (SEMUA STATUS)
                     <tr>
                       <th style="width:50px">#</th>
                       <th>Event</th>
-                      <th style="width:140px">Metode</th>
-                      <th style="width:120px">Jumlah</th>
-                      <th style="width:140px">Tanggal</th>
+                      <th style="width:160px">Metode</th>
+                      <th style="width:140px">Jumlah</th>
+                      <th style="width:160px">Tanggal</th>
                       <th style="width:110px">Status</th>
                       <th style="width:100px"></th>
                     </tr>
                   </thead>
                   <tbody>
                     <?php foreach ($allPayments as $i => $row): ?>
+                    <?php
+                      $eventTitle   = $row['event_title'] ?? ($row['event']['title'] ?? '-');
+                      $methodLabel  = $row['method_label'] ?? strtoupper($row['metode'] ?? '-');
+                      $methodIcon   = $row['method_icon']  ?? 'bi bi-wallet2';
+                      $methodBadge  = $row['method_badge'] ?? 'bg-secondary';
+                      $amountFmt    = $row['jumlah_formatted'] ?? ('Rp ' . number_format((int)($row['jumlah'] ?? 0), 0, ',', '.'));
+                      $dateStr      = $row['tanggal_date'] ?? '-';
+                      $timeStr      = $row['tanggal_time'] ?? '';
+                      $statusText   = ucfirst((string)($row['status'] ?? ''));
+                      $statusBadge  = $row['status_badge'] ?? 'bg-secondary';
+                      $participType = $row['participation_type'] ?? null;
+                    ?>
                     <tr>
-                      <td><?= $i+1 ?></td>
+                      <td><?= (int)$i + 1 ?></td>
                       <td>
-                        <div class="fw-semibold text-truncate" style="max-width:320px;">
-                          <?= esc($row['event_title']) ?>
+                        <div class="fw-semibold text-truncate" style="max-width:340px;">
+                          <?= esc($eventTitle) ?>
                         </div>
-                        <?php if (!empty($row['participation'])): ?>
-                          <small class="text-muted"><?= esc($row['participation']) ?></small>
-                        <?php endif; ?>
+                        <div class="mt-1">
+                          <?= participation_badge($participType) ?>
+                        </div>
                       </td>
                       <td>
-                        <span class="badge <?= esc($row['method_badge']) ?>">
-                          <i class="<?= esc($row['method_icon']) ?>"></i> <?= esc($row['method_label']) ?>
+                        <span class="badge <?= esc($methodBadge) ?>">
+                          <i class="<?= esc($methodIcon) ?>"></i> <?= esc($methodLabel) ?>
                         </span>
                       </td>
-                      <td class="fw-semibold"><?= esc($row['jumlah_formatted']) ?></td>
+                      <td class="fw-semibold"><?= esc($amountFmt) ?></td>
                       <td>
-                        <div><?= esc($row['tanggal_date']) ?></div>
-                        <small class="text-muted"><?= esc($row['tanggal_time']) ?></small>
+                        <div><?= esc($dateStr) ?></div>
+                        <?php if ($timeStr): ?><small class="text-muted"><?= esc($timeStr) ?></small><?php endif; ?>
                       </td>
-                      <td><span class="badge <?= esc($row['status_badge']) ?>"><?= ucfirst(esc($row['status'])) ?></span></td>
+                      <td><span class="badge <?= esc($statusBadge) ?>"><?= esc($statusText) ?></span></td>
                       <td>
                         <a class="btn btn-sm btn-outline-primary"
-                           href="<?= site_url('presenter/pembayaran/detail/'.(int)$row['id_pembayaran']) ?>">
+                           href="<?= site_url('presenter/pembayaran/detail/'.(int)($row['id_pembayaran'] ?? 0)) ?>">
                            Detail
                         </a>
                       </td>
@@ -154,9 +174,20 @@ $allPayments = $allPayments ?? []; // RIWAYAT (SEMUA STATUS)
               <div class="row g-3">
                 <?php foreach ($allPayments as $row): ?>
                 <?php
+                  $eventTitle   = $row['event_title'] ?? ($row['event']['title'] ?? '-');
+                  $methodLabel  = $row['method_label'] ?? strtoupper($row['metode'] ?? '-');
+                  $methodIcon   = $row['method_icon']  ?? 'bi bi-wallet2';
+                  $methodBadge  = $row['method_badge'] ?? 'bg-secondary';
+                  $amountFmt    = $row['jumlah_formatted'] ?? ('Rp ' . number_format((int)($row['jumlah'] ?? 0), 0, ',', '.'));
+                  $dateStr      = $row['tanggal_date'] ?? '-';
+                  $timeStr      = $row['tanggal_time'] ?? '';
+                  $statusText   = ucfirst((string)($row['status'] ?? ''));
+                  $statusBadge  = $row['status_badge'] ?? 'bg-secondary';
+                  $participType = $row['participation_type'] ?? null;
+
                   $statusClass = 'payment-other';
-                  $st = strtolower($row['status'] ?? '');
-                  if ($st === 'verified') $statusClass = 'payment-verified';
+                  $st = strtolower((string)($row['status'] ?? ''));
+                  if ($st === 'verified')  $statusClass = 'payment-verified';
                   elseif ($st === 'canceled') $statusClass = 'payment-canceled';
                   elseif ($st === 'pending')  $statusClass = 'payment-pending';
                 ?>
@@ -165,29 +196,27 @@ $allPayments = $allPayments ?? []; // RIWAYAT (SEMUA STATUS)
                     <div class="payment-card-header">
                       <div class="d-flex align-items-start justify-content-between">
                         <div class="flex-grow-1 me-2">
-                          <h6 class="payment-event-title mb-1"><?= esc($row['event_title']) ?></h6>
+                          <h6 class="payment-event-title mb-1"><?= esc($eventTitle) ?></h6>
                           <div class="payment-meta">
-                            <span class="badge <?= esc($row['method_badge']) ?> me-2">
-                              <i class="<?= esc($row['method_icon']) ?> me-1"></i><?= esc($row['method_label']) ?>
+                            <span class="badge <?= esc($methodBadge) ?> me-2">
+                              <i class="<?= esc($methodIcon) ?> me-1"></i><?= esc($methodLabel) ?>
                             </span>
-                            <?php if (!empty($row['participation'])): ?>
-                            <span class="badge bg-light text-dark"><?= esc($row['participation']) ?></span>
-                            <?php endif; ?>
+                            <?= participation_badge($participType) ?>
                           </div>
                         </div>
-                        <span class="badge <?= esc($row['status_badge']) ?>"><?= ucfirst(esc($row['status'])) ?></span>
+                        <span class="badge <?= esc($statusBadge) ?>"><?= esc($statusText) ?></span>
                       </div>
                     </div>
                     <div class="payment-card-body">
                       <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="text-muted small">Jumlah</span>
-                        <span class="fw-bold"><?= esc($row['jumlah_formatted']) ?></span>
+                        <span class="fw-bold"><?= esc($amountFmt) ?></span>
                       </div>
                       <div class="d-flex justify-content-between align-items-center mb-3">
                         <span class="text-muted small">Tanggal</span>
-                        <span class="small"><?= esc($row['tanggal_date']) ?>, <?= esc($row['tanggal_time']) ?></span>
+                        <span class="small"><?= esc($dateStr) ?><?= $timeStr ? ', '.esc($timeStr) : '' ?></span>
                       </div>
-                      <a href="<?= site_url('presenter/pembayaran/detail/'.(int)$row['id_pembayaran']) ?>"
+                      <a href="<?= site_url('presenter/pembayaran/detail/'.(int)($row['id_pembayaran'] ?? 0)) ?>"
                          class="btn btn-outline-primary btn-sm w-100">
                         <i class="bi bi-eye me-1"></i>Lihat Detail
                       </a>

@@ -110,99 +110,113 @@ class Pembayaran extends BaseController
                               ->countAllResults() > 0;
     }
 
-    /** INDEX: tampilkan Tagihan (abstrak diterima & belum punya payment), Pending, dan Riwayat */
     public function index()
-    {
-        $userId = $this->uid();
-        if (!$userId) return redirect()->to('/auth/login');
-
-        // Sinkronkan payment pending dari Midtrans
-        $this->syncPendingPayments($userId);
-
-        // Ambil semua payment user (untuk Pending & Riwayat)
-        $payments = $this->payModel
-            ->select('pembayaran.*, e.title as event_title, e.event_date, e.event_time, e.format')
-            ->join('events e', 'e.id = pembayaran.event_id', 'left')
-            ->where('pembayaran.id_user', $userId)
-            ->orderBy('pembayaran.id_pembayaran', 'DESC')
-            ->findAll();
-
-        // Flow status per event (opsional, kalau mau dipakai di view)
-        $eventIds = array_unique(array_column($payments, 'event_id'));
-        $events = [];
-        $flowStatuses = [];
-        if (!empty($eventIds)) {
-            $eventRows = $this->eventModel->whereIn('id', $eventIds)->findAll();
-            foreach ($eventRows as $event) {
-                $events[$event['id']] = $event;
-                $flowStatuses[$event['id']] = $this->computeFlowStatus($event['id'], $userId);
-            }
-        }
-
-        // Lengkapi payment row
-        $enhancedPayments = [];
-        foreach ($payments as $payment) {
-            $eventId = (int)$payment['event_id'];
-            $payment['event'] = $events[$eventId] ?? null;
-            $payment['flow'] = $flowStatuses[$eventId] ?? null;
-            $payment['next_action'] = $this->getNextAction($payment, $flowStatuses[$eventId] ?? null);
-
-            // formatting ringan untuk view (tanpa bawa logic bisnis)
-            $payment['jumlah_formatted'] = $this->formatRupiah((int)$payment['jumlah']);
-            $payment['tanggal_date'] = !empty($payment['tanggal_bayar']) ? date('d M Y', strtotime($payment['tanggal_bayar'])) : '-';
-            $payment['tanggal_time'] = !empty($payment['tanggal_bayar']) ? date('H:i', strtotime($payment['tanggal_bayar'])) : '-';
-
-            // mapping UI kecil
-            $payment['status_badge'] = match (strtolower($payment['status'] ?? 'pending')) {
-                'verified' => 'bg-success',
-                'canceled' => 'bg-danger',
-                'expired'  => 'bg-dark',
-                default    => 'bg-warning text-dark',
-            };
-
-            $method = strtolower($payment['metode'] ?? 'midtrans');
-            $payment['method_label'] = $method === 'midtrans' ? 'Midtrans' : ucfirst($method);
-            $payment['method_icon']  = $method === 'midtrans' ? 'bi bi-lightning-charge' : 'bi bi-credit-card';
-            $payment['method_badge'] = $method === 'midtrans' ? 'bg-primary' : 'bg-secondary';
-
-            $payment['participation'] = $payment['participation_type'] ?? '';
-            $enhancedPayments[] = $payment;
-        }
-
-        // Pisah Pending & Riwayat
-        $aktif   = array_values(array_filter($enhancedPayments, fn($r) => strtolower($r['status'] ?? '') === 'pending'));
-        $riwayat = array_values(array_filter($enhancedPayments, fn($r) => strtolower($r['status'] ?? '') !== 'pending'));
-
-        // === Bagian TAGIHAN ===
-        // Event yang abstraknya DITERIMA tapi belum ada pembayaran pending/verified
-        $dueList = $this->getEventsNeedingPayment($userId); // sudah terformat
-        // ringkasan total tagihan
-        $dueTotal = array_sum(array_map(fn($r) => (int)$r['amount'], $dueList));
-        $dueStats = [
-            'count'              => count($dueList),
-            'total'              => $dueTotal,
-            'total_formatted'    => $this->formatRupiah($dueTotal),
-        ];
-
-        $badgeMap = [
-            'pending'  => 'warning',
-            'verified' => 'success',
-            'canceled' => 'danger',
-            'expired'  => 'dark',
-        ];
-
-        return view('role/presenter/pembayaran/index', [
-            'title'                => 'Pembayaran',
-            'badgeMap'             => $badgeMap,
-            'aktif'                => $aktif,
-            'riwayat'              => $riwayat,
-            'eventsNeedingPayment' => $dueList,     // TAGIHAN
-            'allPayments'          => $enhancedPayments, 
-            'dueStats'             => $dueStats,    // RINGKASAN TAGIHAN
-            'flowStatuses'         => $flowStatuses,
-        ]);
-        
+{
+    // --- Ambil user id yang valid ---
+    $userId = (int) (session('id_user') ?? session('id') ?? 0);
+    if (!$userId) {
+        return redirect()->to('/auth/login');
     }
+
+    // --- Ambil semua pembayaran user + info event (tanpa filter status) ---
+    // Pastikan kolom yang dipakai view terisi: method_label/icon/badge, jumlah_formatted, tanggal_date/time, status_badge, participation_type
+    $qb = $this->payModel
+        ->select("
+            pembayaran.*,
+            e.title AS event_title,
+            e.event_date,
+            e.event_time,
+            e.format
+        ")
+        ->join('events e', 'e.id = pembayaran.event_id', 'left')
+        ->where('pembayaran.id_user', $userId)
+        ->orderBy('pembayaran.id_pembayaran', 'DESC');
+
+    $payments = $qb->findAll();
+
+    // --- Jika masih kosong, tidak usah ngeblank: tampilkan kosong saja (biar UI tetap kebuka) ---
+    // (Tidak ada fallback lain—ini sengaja biar jelas kalau memang belum pernah bayar)
+
+    // --- Susun event map & flow (optional, tidak mempengaruhi riwayat) ---
+    $eventIds = array_unique(array_map('intval', array_filter(array_column($payments, 'event_id'))));
+    $events = [];
+    $flowStatuses = [];
+    if (!empty($eventIds)) {
+        $eventRows = $this->eventModel->whereIn('id', $eventIds)->findAll();
+        foreach ($eventRows as $ev) {
+            $events[$ev['id']] = $ev;
+            $flowStatuses[$ev['id']] = $this->computeFlowStatus($ev['id'], $userId);
+        }
+    }
+
+    // --- Normalisasi field untuk view ---
+    $enhancedPayments = [];
+    foreach ($payments as $p) {
+        $eventId = (int)($p['event_id'] ?? 0);
+
+        // attach event & flow (optional)
+        $p['event'] = $events[$eventId] ?? null;
+        $p['flow']  = $flowStatuses[$eventId] ?? null;
+
+        // metode
+        $method = strtolower((string)($p['metode'] ?? ''));
+        $p['method_label'] = $method ? strtoupper($method) : 'MIDTRANS';
+        $p['method_icon']  = $method === 'midtrans' ? 'bi bi-credit-card-2-front' : 'bi bi-wallet2';
+        $p['method_badge'] = $method === 'midtrans' ? 'bg-primary' : 'bg-secondary';
+
+        // jumlah
+        $amount = (int)($p['jumlah'] ?? 0);
+        $p['jumlah_formatted'] = 'Rp ' . number_format($amount, 0, ',', '.');
+
+        // tanggal
+        $tanggal = $p['tanggal_bayar'] ?? $p['created_at'] ?? $p['updated_at'] ?? null;
+        $p['tanggal_date'] = $tanggal ? date('d M Y', strtotime($tanggal)) : '-';
+        $p['tanggal_time'] = $tanggal ? date('H:i', strtotime($tanggal)) : '';
+
+        // status badge
+        $status = strtolower((string)($p['status'] ?? ''));
+        $p['status_badge'] = match ($status) {
+            'verified' => 'bg-success',
+            'pending'  => 'bg-warning',
+            'canceled' => 'bg-danger',
+            'expired'  => 'bg-dark',
+            default    => 'bg-secondary',
+        };
+
+        // partisipasi (dipakai view)
+        // pastikan key 'participation_type' selalu ada
+        $p['participation_type'] = $p['participation_type'] ?? ($p['participation'] ?? null);
+        $p['participation']      = $p['participation']      ?? $p['participation_type'];
+
+        // judul event fallback
+        if (empty($p['event_title']) && !empty($p['event']['title'])) {
+            $p['event_title'] = $p['event']['title'];
+        }
+
+        $enhancedPayments[] = $p;
+    }
+
+    // --- Hitung tagihan yang harus dibayar (pakai logika existing) ---
+    $eventsNeedingPayment = $this->getEventsNeedingPayment($userId);
+
+    $dueTotal = 0;
+    foreach ($eventsNeedingPayment as $bill) {
+        $dueTotal += (int)($bill['amount'] ?? 0);
+    }
+    $dueStats = [
+        'count' => count($eventsNeedingPayment),
+        'total' => $dueTotal,
+        'total_formatted' => 'Rp ' . number_format($dueTotal, 0, ',', '.'),
+    ];
+
+    return view('role/presenter/pembayaran/index', [
+        'title' => 'Pembayaran',
+        'eventsNeedingPayment' => $eventsNeedingPayment, // tagihan
+        'allPayments' => $enhancedPayments,              // riwayat
+        'dueStats' => $dueStats,
+    ]);
+}
+
 
     /**
      * Ambil event yang abstraknya sudah diterima tapi belum ada payment pending/verified.
