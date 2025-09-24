@@ -3,6 +3,8 @@
 $uri  = service('uri');
 $seg1 = strtolower($uri->getSegment(1) ?? '');
 $seg2 = strtolower($uri->getSegment(2) ?? '');
+
+// helper aktif: seg1 harus 'admin', seg2 harus sama dengan slug (atau dashboard khusus)
 $active = function (string $slug) use ($seg1, $seg2): bool {
     if ($slug === 'dashboard') return ($seg1 === 'admin' && ($seg2 === '' || $seg2 === 'dashboard'));
     return $seg1 === 'admin' && $seg2 === strtolower($slug);
@@ -72,6 +74,12 @@ $active = function (string $slug) use ($seg1, $seg2): bool {
     <a class="nav-link <?= $active('abstrak') ? 'is-active':'' ?>" href="<?= site_url('admin/abstrak') ?>">
       <span class="ico"><i class="bi bi-file-earmark-text"></i></span><span>Manajemen Abstrak</span>
     </a>
+
+    <!-- ✅ Full Paper -->
+    <a class="nav-link <?= $active('fullpaper') ? 'is-active':'' ?>" href="<?= site_url('admin/fullpaper') ?>">
+      <span class="ico"><i class="bi bi-journal-richtext"></i></span><span>Manajemen Full Paper</span>
+    </a>
+
     <a class="nav-link <?= $active('kategori') ? 'is-active':'' ?>" href="<?= site_url('admin/kategori') ?>">
       <span class="ico"><i class="bi bi-tags-fill"></i></span><span>Kategori Abstrak</span>
     </a>

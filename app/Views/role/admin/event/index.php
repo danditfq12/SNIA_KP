@@ -2,13 +2,10 @@
 use CodeIgniter\I18n\Time;
 
 $title  = $title ?? 'Kelola Event';
-$stats  = $stats ?? [
-  'total_events'=>0,'active_events'=>0,'verified_registrations'=>0,'total_revenue'=>0,
-];
+$stats  = $stats ?? ['total_events'=>0,'active_events'=>0,'verified_registrations'=>0,'total_revenue'=>0];
 $events = $events ?? [];
 helper(['number','csrf']);
 
-// min tanggal event = besok (Asia/Jakarta)
 $tz           = 'Asia/Jakarta';
 $minEventDate = Time::now($tz)->addDays(1)->toDateString();
 ?>
@@ -21,6 +18,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
 <div id="content">
   <main class="flex-fill" style="padding-top:70px;">
     <div class="container-fluid p-3 p-md-4">
+
       <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3">
         <div>
           <h3 class="welcome-text mb-1"><i class="bi bi-calendar3 me-2"></i>Kelola Event</h3>
@@ -83,6 +81,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
         <?php if (!empty($events)): foreach ($events as $event):
           $id=(int)$event['id']; $fmt=strtolower($event['format'] ?? 'both');
           $isOn=!empty($event['is_active']); $reg=!empty($event['registration_active']);
+          $fullOn = !empty($event['full_paper_submission_active']);
         ?>
         <div class="col-lg-6 mb-3">
           <div class="event-card shadow-sm">
@@ -109,6 +108,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
                 </span>
                 <span class="badge <?= $isOn?'bg-success':'bg-secondary' ?>"><?= $isOn?'Aktif':'Nonaktif' ?></span>
                 <span class="badge <?= $reg?'bg-primary':'bg-secondary' ?>"><?= $reg?'Registrasi Buka':'Registrasi Tutup' ?></span>
+                <span class="badge <?= $fullOn?'bg-info':'bg-secondary' ?>"><?= $fullOn?'Full Paper ON':'Full Paper OFF' ?></span>
               </div>
 
               <div class="text-muted small">
@@ -151,6 +151,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
           </div>
         <?php endif; ?>
       </div>
+
     </div>
   </main>
 </div>
@@ -218,7 +219,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
             <label class="form-label">Presenter (Offline) <span class="text-danger">*</span></label>
             <div class="input-group">
               <span class="input-group-text">Rp</span>
-              <input type="text" class="form-control currency" name="presenter_fee_offline" value="0" required>
+              <input type="number" class="form-control" name="presenter_fee_offline" value="0" min="0" step="1" required>
             </div>
             <small class="text-muted">Presenter hanya bisa offline</small>
           </div>
@@ -226,14 +227,14 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
             <label class="form-label">Audience (Online) <span class="text-danger" id="onlineReqStar">*</span></label>
             <div class="input-group">
               <span class="input-group-text">Rp</span>
-              <input type="text" class="form-control currency" name="audience_fee_online" value="0" required>
+              <input type="number" class="form-control" name="audience_fee_online" value="0" min="0" step="1" required>
             </div>
           </div>
           <div class="col-md-4 mb-3" id="audienceOfflinePrice">
             <label class="form-label">Audience (Offline) <span class="text-danger" id="offlineReqStar">*</span></label>
             <div class="input-group">
               <span class="input-group-text">Rp</span>
-              <input type="text" class="form-control currency" name="audience_fee_offline" value="0" required>
+              <input type="number" class="form-control" name="audience_fee_offline" value="0" min="0" step="1" required>
             </div>
           </div>
         </div>
@@ -241,39 +242,51 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
         <!-- Additional -->
         <h6 class="border-bottom pb-2 mb-3">Pengaturan Tambahan</h6>
         <div class="row">
-          <div class="col-md-4 mb-3">
+          <div class="col-md-3 mb-3">
             <label class="form-label">Maksimal Peserta</label>
-            <input type="number" class="form-control" name="max_participants" value="0">
+            <input type="number" class="form-control" name="max_participants" value="0" min="0">
           </div>
-          <div class="col-md-4 mb-3">
+          <div class="col-md-3 mb-3">
             <label class="form-label">Batas Pendaftaran</label>
-            <input type="datetime-local" class="form-control" name="registration_deadline">
+            <input type="datetime-local" class="form-control deadline-now dl-reg" name="registration_deadline">
           </div>
-          <div class="col-md-4 mb-3">
+          <div class="col-md-3 mb-3">
             <label class="form-label">Batas Submit Abstrak</label>
-            <input type="datetime-local" class="form-control" name="abstract_deadline">
+            <input type="datetime-local" class="form-control deadline-now dl-abs" name="abstract_deadline">
+          </div>
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Batas Submit Full Paper</label>
+            <input type="datetime-local" class="form-control deadline-now dl-fp" name="full_paper_deadline">
           </div>
         </div>
 
         <!-- Toggles -->
         <h6 class="border-bottom pb-2 mb-3">Status Event</h6>
-        <div class="row">
-          <div class="col-md-4">
+        <div class="row g-3">
+          <div class="col-md-3">
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" name="is_active" checked>
               <label class="form-check-label">Event Aktif</label>
             </div>
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" name="registration_active" checked>
               <label class="form-check-label">Pendaftaran Aktif</label>
             </div>
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" name="abstract_submission_active" checked>
               <label class="form-check-label">Submit Abstrak Aktif</label>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="form-check form-switch">
+              <!-- default ON → kirim 0/1 -->
+              <input type="hidden" name="full_paper_submission_active" value="0">
+              <input class="form-check-input" type="checkbox" name="full_paper_submission_active" value="1" checked>
+              <label class="form-check-label">Submit Full Paper Aktif</label>
             </div>
           </div>
         </div>
@@ -312,8 +325,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
   body{ background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%); }
   .header-section.header-blue{ background:linear-gradient(135deg,var(--primary-color) 0%,#1e40af 100%); color:#fff; padding:28px 24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12); }
   .header-section.header-blue .welcome-text{ color:#fff; font-weight:800; font-size:2rem; }
-  .header-section.header-blue .text-muted, .header-section.header-blue strong{ color:rgba(255,255,255,.95)!important; }
-  .stat-card{ background:#fff; border-radius:14px; padding:20px; box-shadow:0 8px 28px rgba(0,0,0,.08); border-left:4px solid #e9ecef; position:relative; overflow:hidden; }
+  .stat-card{ background:#fff; border-radius:14px; padding:20px; box-shadow:0 8px 28px rgba(0,0,0,.08); position:relative; overflow:hidden; }
   .stat-card:before{ content:''; position:absolute; left:0; top:0; height:4px; width:100%; background:linear-gradient(90deg,var(--primary-color),var(--info-color)); }
   .stat-icon{ width:56px; height:56px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:22px; }
   .stat-number{ font-size:2rem; font-weight:800; color:#1e293b; line-height:1; }
@@ -332,65 +344,68 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '<?= csrf_hash() ?>';
 
-// ===== Helper: fetch JSON guard =====
+// ===== Helper JSON guard =====
 async function fetchJSON(url, options = {}) {
-  console.log('Fetching:', url, options);
-  try {
-    const res = await fetch(url, options);
-    console.log('Response status:', res.status);
-    
-    const ct = res.headers.get('content-type') || '';
-    if (!ct.includes('application/json')) {
-      const text = await res.text();
-      console.error('Non-JSON response:', text);
-      throw new Error('Server mengirim respons non-JSON. Response: ' + text.substring(0, 200));
-    }
-    
-    const data = await res.json();
-    console.log('Response data:', data);
-    return data;
-  } catch (error) {
-    console.error('Fetch error:', error);
-    throw error;
+  const res = await fetch(url, options);
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    const text = await res.text();
+    throw new Error('Server mengirim respons non-JSON. Response: ' + text.substring(0, 220));
   }
+  return res.json();
 }
 
-// ===== Rupiah formatting while typing =====
-function formatNumberID(raw){
-  const digits = (raw||'').toString().replace(/\D/g,'');
-  if(!digits) return '';
-  return new Intl.NumberFormat('id-ID').format(parseInt(digits,10));
+// ===== Deadline bounds =====
+function pad(n){ return String(n).padStart(2,'0'); }
+function nowLocalString(){
+  const d = new Date();
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
 }
+// max = H-1 23:59
+function computeMaxDeadline(eventDate, eventTime){
+  if(!eventDate) return null;
+  const d = new Date(eventDate+'T'+(eventTime||'00:00'));
+  d.setDate(d.getDate()-1);
+  d.setHours(23,59,0,0);
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+}
+function updateDeadlineBounds(root, eventDateInput, eventTimeInput){
+  const minNow = nowLocalString();
+  const ed = eventDateInput?.value || '';
+  const et = (eventTimeInput?.value || '').substring(0,5); // pastikan HH:MM
+  const maxStr = computeMaxDeadline(ed, et);
 
-function attachCurrency(el){
-  el.value = formatNumberID(el.value || '0');
-  el.addEventListener('input', () => {
-    const start = el.selectionStart, oldLen = el.value.length;
-    el.value = formatNumberID(el.value);
-    const diff = el.value.length - oldLen;
-    requestAnimationFrame(()=> el.setSelectionRange(start+diff, start+diff));
+  root.querySelectorAll('input.deadline-now[type="datetime-local"]').forEach(inp=>{
+    inp.min = minNow;
+    if (maxStr){ inp.max = maxStr; }
   });
-  el.addEventListener('blur', () => el.value = el.value ? formatNumberID(el.value) : '0');
 }
 
-function initCurrencyInputs(root=document){
-  root.querySelectorAll('input.currency').forEach(attachCurrency);
-}
-
-function normalizeCurrencyFields(fd){
-  ['presenter_fee_offline','audience_fee_online','audience_fee_offline'].forEach(name=>{
-    if(fd.has(name)) fd.set(name, (fd.get(name)||'').toString().replace(/\D/g,'') || '0');
-  });
-}
-
-// ===== UI handlers =====
 document.addEventListener('DOMContentLoaded', function(){
-  console.log('DOM loaded, initializing...');
-  initCurrencyInputs(document);
   setupFormHandlers();
   handleFormatChange();
   setMinEventDateInputs();
+  setMinNowForDeadlines();
+
+  // set max deadline untuk ADD form, dan listen perubahan
+  const addForm = document.getElementById('addEventForm');
+  updateDeadlineBounds(addForm, addForm?.querySelector('input[name="event_date"]'), addForm?.querySelector('input[name="event_time"]'));
+  ['event_date','event_time'].forEach(n=>{
+    addForm?.querySelector(`input[name="${n}"]`)?.addEventListener('change', () =>
+      updateDeadlineBounds(addForm, addForm.querySelector('input[name="event_date"]'), addForm.querySelector('input[name="event_time"]'))
+    );
+  });
 });
+
+function setMinEventDateInputs(){
+  document.querySelectorAll('input[type="date"][name="event_date"]').forEach(inp=>{
+    if (!inp.min) inp.min = '<?= esc($minEventDate) ?>';
+  });
+}
+function setMinNowForDeadlines(){
+  const m = nowLocalString();
+  document.querySelectorAll('input.deadline-now[type="datetime-local"]').forEach(inp => inp.min = m);
+}
 
 function setupFormHandlers(){
   const addForm = document.getElementById('addEventForm');
@@ -420,9 +435,8 @@ function setupFormHandlers(){
 function handleFormatChange(){
   const formatSelect = document.getElementById('eventFormat');
   if (!formatSelect) return;
-  
+
   const format = formatSelect.value;
-  console.log('Format changed to:', format);
 
   const locationRow = document.getElementById('locationRow');
   const zoomRow = document.getElementById('zoomRow');
@@ -438,7 +452,6 @@ function handleFormatChange(){
   const onlineReqStar = document.getElementById('onlineReqStar');
   const offlineReqStar = document.getElementById('offlineReqStar');
 
-  // Reset all
   [locationRow, zoomRow].forEach(s=> s?.classList.remove('show'));
   [locInput, zoomInput].forEach(i=> i?.removeAttribute('required'));
   [locStar, zoomStar].forEach(s=> { if(s) s.style.display='none'; });
@@ -484,14 +497,12 @@ function handleFormatChange(){
 }
 
 function submitForm(form, url){
-  console.log('Submitting form to:', url);
   const fd = new FormData(form);
   const format = fd.get('format');
 
+  // nol-kan field yang tidak dipakai
   if (format==='online') fd.set('audience_fee_offline','0');
   if (format==='offline') fd.set('audience_fee_online','0');
-
-  normalizeCurrencyFields(fd);
 
   const btn = form.querySelector('button[type="submit"]');
   const old = btn.innerHTML;
@@ -512,43 +523,32 @@ function submitForm(form, url){
       throw new Error(msg);
     }
   })
-  .catch(err=> {
-    console.error('Submit error:', err);
-    Swal.fire({icon:'error',title:'Error!',text:err.message});
-  })
-  .finally(()=>{
-    btn.innerHTML = old; 
-    btn.disabled = false;
-  });
+  .catch(err=> Swal.fire({icon:'error',title:'Error!',text:err.message}))
+  .finally(()=>{ btn.innerHTML = old; btn.disabled = false; });
 }
 
 function editEvent(eventId){
-  console.log('Editing event:', eventId);
-  fetchJSON(`<?= base_url("admin/event/edit") ?>/${eventId}`, {
-    headers: { 'X-Requested-With':'XMLHttpRequest' }
-  })
+  fetchJSON(`<?= base_url("admin/event/edit") ?>/${eventId}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } })
   .then(data=>{
     if(!data.success) throw new Error(data.message || 'Gagal memuat data event');
     populateEditForm(data.event);
     document.getElementById('editEventForm').dataset.eventId = eventId;
-    new bootstrap.Modal(document.getElementById('editEventModal')).show();
+    const modal = new bootstrap.Modal(document.getElementById('editEventModal'));
+    modal.show();
   })
-  .catch(err=> {
-    console.error('Edit error:', err);
-    Swal.fire('Error!', err.message, 'error');
-  });
+  .catch(err=> Swal.fire('Error!', err.message, 'error'));
 }
 
 function populateEditForm(event){
-  console.log('Populating edit form with:', event);
-  const fmt = v => formatNumberID(String(v ?? 0));
+  const minEventDate = '<?= esc($minEventDate) ?>';
+  const timeHHMM = (event.event_time || '').substring(0,5); // pastikan HH:MM
 
   const audienceOnlineDiv = event.format!=='offline' ? `
     <div class="col-md-4 mb-3">
       <label class="form-label">Audience (Online) *</label>
       <div class="input-group">
         <span class="input-group-text">Rp</span>
-        <input type="text" class="form-control currency" name="audience_fee_online" value="${fmt(event.audience_fee_online)}" required>
+        <input type="number" class="form-control" name="audience_fee_online" value="${event.audience_fee_online ?? 0}" min="0" step="1" required>
       </div>
     </div>` : '';
 
@@ -557,7 +557,7 @@ function populateEditForm(event){
       <label class="form-label">Audience (Offline) *</label>
       <div class="input-group">
         <span class="input-group-text">Rp</span>
-        <input type="text" class="form-control currency" name="audience_fee_offline" value="${fmt(event.audience_fee_offline)}" required>
+        <input type="number" class="form-control" name="audience_fee_offline" value="${event.audience_fee_offline ?? 0}" min="0" step="1" required>
       </div>
     </div>` : '';
 
@@ -595,12 +595,11 @@ function populateEditForm(event){
     <div class="row">
       <div class="col-md-6 mb-3">
         <label class="form-label">Tanggal Event *</label>
-        <input type="date" class="form-control" name="event_date" value="${event.event_date}" required
-               min="${new Date(Date.now()+86400000).toISOString().slice(0,10)}">
+        <input type="date" class="form-control" name="event_date" value="${event.event_date}" required min="${minEventDate}">
       </div>
       <div class="col-md-6 mb-3">
         <label class="form-label">Waktu Event *</label>
-        <input type="time" class="form-control" name="event_time" value="${event.event_time}" required>
+        <input type="time" class="form-control" name="event_time" value="${timeHHMM}" required>
       </div>
     </div>
     ${locationDiv}
@@ -611,7 +610,7 @@ function populateEditForm(event){
         <label class="form-label">Presenter (Offline) *</label>
         <div class="input-group">
           <span class="input-group-text">Rp</span>
-          <input type="text" class="form-control currency" name="presenter_fee_offline" value="${fmt(event.presenter_fee_offline)}" required>
+          <input type="number" class="form-control" name="presenter_fee_offline" value="${event.presenter_fee_offline ?? 0}" min="0" step="1" required>
         </div>
         <small class="text-muted">Presenter hanya bisa offline</small>
       </div>
@@ -620,205 +619,108 @@ function populateEditForm(event){
     </div>
     <h6 class="border-bottom pb-2 mb-3">Pengaturan Tambahan</h6>
     <div class="row">
-      <div class="col-md-4 mb-3">
+      <div class="col-md-3 mb-3">
         <label class="form-label">Maksimal Peserta</label>
-        <input type="number" class="form-control" name="max_participants" value="${event.max_participants || ''}">
+        <input type="number" class="form-control" name="max_participants" value="${event.max_participants || ''}" min="0">
       </div>
-      <div class="col-md-4 mb-3">
+      <div class="col-md-3 mb-3">
         <label class="form-label">Batas Pendaftaran</label>
-        <input type="datetime-local" class="form-control" name="registration_deadline" value="${event.registration_deadline ? event.registration_deadline.slice(0,16) : ''}">
+        <input type="datetime-local" class="form-control deadline-now dl-reg" name="registration_deadline" value="${event.registration_deadline ? event.registration_deadline.slice(0,16) : ''}">
       </div>
-      <div class="col-md-4 mb-3">
+      <div class="col-md-3 mb-3">
         <label class="form-label">Batas Submit Abstrak</label>
-        <input type="datetime-local" class="form-control" name="abstract_deadline" value="${event.abstract_deadline ? event.abstract_deadline.slice(0,16) : ''}">
+        <input type="datetime-local" class="form-control deadline-now dl-abs" name="abstract_deadline" value="${event.abstract_deadline ? event.abstract_deadline.slice(0,16) : ''}">
+      </div>
+      <div class="col-md-3 mb-3">
+        <label class="form-label">Batas Submit Full Paper</label>
+        <input type="datetime-local" class="form-control deadline-now dl-fp" name="full_paper_deadline" value="${event.full_paper_deadline ? event.full_paper_deadline.slice(0,16) : ''}">
       </div>
     </div>
     <h6 class="border-bottom pb-2 mb-3">Status Event</h6>
-    <div class="row">
-      <div class="col-md-4"><div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" name="is_active" ${event.is_active?'checked':''}>
-        <label class="form-check-label">Event Aktif</label>
-      </div></div>
-      <div class="col-md-4"><div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" name="registration_active" ${event.registration_active?'checked':''}>
-        <label class="form-check-label">Pendaftaran Aktif</label>
-      </div></div>
-      <div class="col-md-4"><div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" name="abstract_submission_active" ${event.abstract_submission_active?'checked':''}>
-        <label class="form-check-label">Submit Abstrak Aktif</label>
-      </div></div>
-    </div>
-    ${event.format==='online' ? '<input type="hidden" name="audience_fee_offline" value="0">' : ''}
-    ${event.format==='offline' ? '<input type="hidden" name="audience_fee_online" value="0">' : ''}
-  `;
-  
-  const container = document.getElementById('editFormContent');
-  container.innerHTML = html;
-  initCurrencyInputs(container);
-}
-
-function makeRequest(url, action){
-  console.log('Making request to:', url);
-  fetchJSON(url, {
-    method:'POST',
-    headers:{ 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With':'XMLHttpRequest' }
-  })
-  .then(data=>{
-    if(data.success){
-      Swal.fire({icon:'success',title:'Berhasil!',text:data.message,timer:1500,showConfirmButton:false})
-        .then(()=>location.reload());
-    } else {
-      throw new Error(data.message || `Gagal ${action}`);
-    }
-  })
-  .catch(err=> {
-    console.error('Request error:', err);
-    Swal.fire('Error!', err.message, 'error');
-  });
-}
-
-function toggleStatus(id){ 
-  console.log('Toggle status for event:', id);
-  makeRequest(`<?= base_url("admin/event/toggle-status") ?>/${id}`, 'toggle status event'); 
-}
-
-function toggleRegistration(id){ 
-  console.log('Toggle registration for event:', id);
-  makeRequest(`<?= base_url("admin/event/toggle-registration") ?>/${id}`, 'toggle pendaftaran'); 
-}
-
-// FORCE DELETE FUNCTION - Hapus paksa tanpa cek dependencies
-function forceDeleteEvent(id){
-  console.log('Force delete event:', id);
-  
-  Swal.fire({
-    title:'Hapus Event Paksa?', 
-    html:`
-      <div class="text-start">
-        <p><strong>PERINGATAN:</strong> Ini akan menghapus secara permanen:</p>
-        <ul class="text-danger">
-          <li>Event dan semua data terkait</li>
-          <li>Semua pendaftaran & pembayaran</li>
-          <li>Semua abstrak & review</li>
-          <li>Semua data absensi</li>
-          <li>Semua dokumen (LOA, sertifikat)</li>
-          <li>File-file yang sudah diupload</li>
-        </ul>
-        <p class="text-danger fw-bold">
-          <i class="bi bi-exclamation-triangle-fill me-1"></i>
-          Tindakan ini TIDAK BISA dibatalkan!
-        </p>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" name="is_active" ${event.is_active?'checked':''}>
+          <label class="form-check-label">Event Aktif</label>
+        </div>
       </div>
-    `,
-    icon:'warning', 
-    showCancelButton:true, 
-    confirmButtonColor:'#dc3545', 
-    cancelButtonColor:'#6c757d',
-    confirmButtonText:'<i class="bi bi-trash"></i> Ya, Hapus Paksa!', 
-    cancelButtonText:'<i class="bi bi-x"></i> Batal',
-    width: '600px',
-    customClass: {
-      popup: 'text-start',
-      confirmButton: 'btn-danger'
-    },
-    buttonsStyling: false
-  }).then(result => {
-    if(result.isConfirmed) {
-      console.log('User confirmed delete for event:', id);
-      
-      // Show loading
-      Swal.fire({
-        title: 'Menghapus Event...',
-        html: `
-          <div class="d-flex flex-column align-items-center">
-            <div class="spinner-border text-primary mb-3" role="status">
-              <span class="visually-hidden">Loading...</span>
-            </div>
-            <p>Sedang menghapus event dan semua data terkait.</p>
-            <p class="text-muted small">Proses ini mungkin memerlukan waktu beberapa saat...</p>
-          </div>
-        `,
-        icon: null,
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        showConfirmButton: false,
-        showCancelButton: false
-      });
+      <div class="col-md-3">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" name="registration_active" ${event.registration_active?'checked':''}>
+          <label class="form-check-label">Pendaftaran Aktif</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" name="abstract_submission_active" ${event.abstract_submission_active?'checked':''}>
+          <label class="form-check-label">Submit Abstrak Aktif</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check form-switch">
+          <!-- kirim 0/1 -->
+          <input type="hidden" name="full_paper_submission_active" value="0">
+          <input class="form-check-input" type="checkbox" name="full_paper_submission_active" value="1" ${event.full_paper_submission_active?'checked':''}>
+          <label class="form-check-label">Submit Full Paper Aktif</label>
+        </div>
+      </div>
+    </div>
+  `;
 
-      // Execute force delete
-      fetchJSON(`<?= base_url("admin/event/delete") ?>/${id}`, {
-        method:'POST',
-        headers:{ 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With':'XMLHttpRequest' }
-      })
-      .then(data=>{
-        console.log('Delete response:', data);
-        if(data.success){
-          Swal.fire({
-            icon:'success',
-            title:'Event Berhasil Dihapus!',
-            html: `
-              <div class="text-center">
-                <p class="text-success">${data.message}</p>
-                <p class="text-muted small">Halaman akan dimuat ulang secara otomatis...</p>
-              </div>
-            `,
-            timer:3000,
-            showConfirmButton: true,
-            confirmButtonText: 'OK'
-          }).then(()=>{
-            console.log('Reloading page...');
-            location.reload();
-          });
-        } else {
-          throw new Error(data.message || 'Gagal menghapus event');
-        }
-      })
-      .catch(err=> {
-        console.error('Delete error:', err);
-        Swal.fire({
-          icon:'error',
-          title:'Gagal Menghapus Event!',
-          html: `
-            <div class="text-center">
-              <p class="text-danger">${err.message}</p>
-              <p class="text-muted small">Silakan coba lagi atau hubungi administrator.</p>
-            </div>
-          `,
-          confirmButtonText:'OK',
-          confirmButtonColor:'#dc3545'
-        });
-      });
-    }
+  const wrap = document.getElementById('editFormContent');
+  wrap.innerHTML = html;
+
+  // set min/max deadline di EDIT form juga
+  const editForm = document.getElementById('editEventForm');
+  updateDeadlineBounds(editForm, editForm?.querySelector('input[name="event_date"]'), editForm?.querySelector('input[name="event_time"]'));
+  ['event_date','event_time'].forEach(n=>{
+    editForm?.querySelector(`input[name="${n}"]`)?.addEventListener('change', () =>
+      updateDeadlineBounds(editForm, editForm.querySelector('input[name="event_date"]'), editForm.querySelector('input[name="event_time"]'))
+    );
   });
 }
 
-function setMinEventDateInputs(){
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0,10);
-
-  // form tambah
-  const addDate = document.querySelector('#addEventForm input[name="event_date"]');
-  if (addDate) addDate.setAttribute('min', tomorrow);
-
-  // form edit (dinamis)
-  const editContainer = document.getElementById('editFormContent');
-  if (editContainer) {
-    const mo = new MutationObserver(() => {
-      const editDate = document.querySelector('#editEventForm input[name="event_date"]');
-      if (editDate) editDate.setAttribute('min', tomorrow);
-    });
-    mo.observe(editContainer, { childList: true, subtree: true });
-  }
+// ===== Actions =====
+function toggleStatus(id){
+  fetchJSON(`<?= base_url("admin/event/toggle-status") ?>/${id}`, {
+    method:'GET',
+    headers:{ 'X-Requested-With':'XMLHttpRequest' }
+  })
+  .then(d=>{
+    if(!d.success) throw new Error(d.message || 'Gagal mengubah status');
+    Swal.fire({icon:'success',title:'Sukses',text:d.message,timer:1200,showConfirmButton:false})
+      .then(()=>location.reload());
+  })
+  .catch(err=> Swal.fire('Error!', err.message, 'error'));
 }
-
-// Debug helper
-window.debugEvent = {
-  csrfToken,
-  fetchJSON,
-  forceDeleteEvent,
-  editEvent,
-  toggleStatus,
-  toggleRegistration
-};
-
-console.log('Event management script loaded. Debug object available as window.debugEvent');
+function toggleRegistration(id){
+  fetchJSON(`<?= base_url("admin/event/toggle-registration") ?>/${id}`, {
+    method:'GET',
+    headers:{ 'X-Requested-With':'XMLHttpRequest' }
+  })
+  .then(d=>{
+    if(!d.success) throw new Error(d.message || 'Gagal mengubah status registrasi');
+    Swal.fire({icon:'success',title:'Sukses',text:d.message,timer:1200,showConfirmButton:false})
+      .then(()=>location.reload());
+  })
+  .catch(err=> Swal.fire('Error!', err.message, 'error'));
+}
+function forceDeleteEvent(id){
+  Swal.fire({
+    icon:'warning', title:'Hapus Permanen?', text:'Semua data terkait event akan dihapus!', showCancelButton:true,
+    confirmButtonText:'Ya, hapus!', confirmButtonColor:'#dc3545'
+  }).then(res=>{
+    if(!res.isConfirmed) return;
+    fetchJSON(`<?= base_url("admin/event/delete") ?>/${id}`, {
+      method:'POST',
+      headers:{ 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With':'XMLHttpRequest' }
+    })
+    .then(d=>{
+      if(!d.success) throw new Error(d.message || 'Gagal menghapus event');
+      Swal.fire({icon:'success',title:'Terhapus',text:d.message,timer:1300,showConfirmButton:false})
+        .then(()=>location.reload());
+    })
+    .catch(err=> Swal.fire('Error!', err.message, 'error'));
+  });
+}
 </script>

@@ -1,7 +1,7 @@
 <?php
 $title        = $title        ?? 'Abstrak';
-$uploadEvents = $uploadEvents ?? []; // hanya event yang perlu upload (belum pernah / revisi)
-$history      = $history      ?? []; // semua abstrak terbaru per event (apapun statusnya), lengkap dgn info event
+$uploadEvents = $uploadEvents ?? [];
+$history      = $history      ?? [];
 
 $fmtDate = function($s){ return $s ? date('d M Y', strtotime($s)) : '-'; };
 $fmtDT   = function($s){ return $s ? date('d M Y H:i', strtotime($s)) : '-'; };
@@ -19,7 +19,6 @@ $formatLabel = function($f){
   <main class="flex-fill" style="padding-top:70px;">
     <div class="container-fluid p-3 p-md-4">
 
-      <!-- Header Biru -->
       <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3">
         <div>
           <h3 class="welcome-text mb-1"><i class="bi bi-journal-text me-2"></i>Abstrak</h3>
@@ -100,15 +99,13 @@ $formatLabel = function($f){
                   </div>
                   <div class="small text-muted mb-2"><?= esc($h['nama_kategori'] ?? '-') ?></div>
 
-                  <!-- Info event -->
                   <div class="small text-muted mb-2">
                     Event: <strong><?= esc($h['event_title'] ?? '-') ?></strong><br>
                     Tanggal Event: <strong><?= esc($fmtDate($h['event_date'] ?? null)) ?></strong>
                   </div>
 
-                  <!-- Keterangan status -->
                   <?php if (!empty($h['status_hint'])): ?>
-                    <div class="small mb-2 <?= $h['status'] === 'revisi' ? 'text-primary' : 'text-muted' ?>">
+                    <div class="small mb-2 <?= $h['status'] === 'diterima' ? 'text-success' : ($h['status'] === 'ditolak' ? 'text-danger' : 'text-muted') ?>">
                       <?= esc($h['status_hint']) ?>
                     </div>
                   <?php endif; ?>
@@ -117,9 +114,21 @@ $formatLabel = function($f){
                     Dikirim: <?= esc($fmtDT($h['tanggal_upload'] ?? null)) ?>
                   </div>
 
-                  <a class="btn btn-outline-primary btn-sm mt-2 w-100" href="/presenter/abstrak/detail/<?= (int)$h['id_abstrak'] ?>">
-                    <i class="bi bi-eye"></i> Detail
-                  </a>
+                  <div class="mt-2 d-grid gap-2">
+                    <a class="btn btn-outline-primary btn-sm" href="/presenter/abstrak/detail/<?= (int)$h['id_abstrak'] ?>">
+                      <i class="bi bi-eye"></i> Detail
+                    </a>
+                    <?php if (($h['status'] ?? '') === 'ditolak'): ?>
+                      <a class="btn btn-danger btn-sm" href="/presenter/abstrak/create/<?= (int)$h['event_id'] ?>">
+                        <i class="bi bi-upload"></i> Upload Ulang Abstrak
+                      </a>
+                    <?php endif; ?>
+
+                    <!-- NEW: selalu boleh lanjut full paper -->
+                    <a class="btn btn-success btn-sm" href="/presenter/fullpaper/create/<?= (int)$h['event_id'] ?>">
+                      <i class="bi bi-file-earmark-text"></i> Lanjut Full Paper
+                    </a>
+                  </div>
                 </div>
               </div>
               <?php endforeach; ?>
@@ -145,17 +154,9 @@ $formatLabel = function($f){
   }
   .welcome-text{ font-weight:700; }
   .bg-gradient-primary{ background:linear-gradient(135deg,var(--primary-color),var(--info-color))!important; }
-
   .event-card{
-    background:#f8fafc; /* sedikit lebih terang */
-    border-radius:14px;
-    padding:16px;
-    border:1px solid #e5e7eb;
+    background:#f8fafc; border-radius:14px; padding:16px; border:1px solid #e5e7eb;
   }
-
-  /* toning warna teks pada status tertentu */
-  .text-primary{ color:#2563eb !important; }
-
   @media (max-width: 767.98px){
     .event-card{ padding:14px; }
     .header-section.header-blue{ padding:18px; }

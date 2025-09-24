@@ -27,6 +27,11 @@ class EventModel extends Model
         'max_participants',
         'registration_deadline',
         'abstract_deadline',
+
+        // ✅ wajib ditambah:
+        'full_paper_deadline',
+        'full_paper_submission_active',
+
         'registration_active',
         'abstract_submission_active',
         'is_active',
@@ -56,6 +61,10 @@ class EventModel extends Model
         'max_participants'      => 'permit_empty|integer|greater_than[0]',
         'registration_deadline' => 'permit_empty|valid_date',
         'abstract_deadline'     => 'permit_empty|valid_date',
+
+        // ✅ tambahkan rule untuk field full paper:
+        'full_paper_deadline'          => 'permit_empty|valid_date',
+        'full_paper_submission_active' => 'permit_empty|in_list[0,1,true,false,on,off]',
     ];
     protected $validationMessages   = [];
     protected $skipValidation       = false;
@@ -384,10 +393,8 @@ class EventModel extends Model
         ", [$year])->getResultArray();
     }
 
-    /* ===== Baru: dipakai Presenter.index untuk daftar event yang masih bisa submit abstrak ===== */
     public function getAvailableEventsForUser(int $userId): array
     {
-        // TRUE aman di MySQL (TRUE==1) & Postgres (boolean)
         return $this->db->query("
             SELECT e.*
             FROM events e

@@ -38,6 +38,11 @@
        href="<?= site_url('presenter/abstrak') ?>">
       <span class="ico"><i class="bi bi-file-earmark-text"></i></span><span>Abstrak</span>
     </a>
+    <!-- ✅ Full Paper (baru) -->
+    <a class="nav-link <?= isActive(['presenter/fullpaper','presenter/fullpaper/*'], $path) ? 'is-active':'' ?>"
+      href="<?= site_url('presenter/fullpaper') ?>">
+      <span class="ico"><i class="bi bi-file-earmark-richtext"></i></span><span>Full Paper</span>
+    </a>
     <a class="nav-link <?= isActive(['presenter/pembayaran','presenter/pembayaran/*'], $path) ? 'is-active':'' ?>"
        href="<?= site_url('presenter/pembayaran') ?>">
       <span class="ico"><i class="bi bi-wallet2"></i></span><span>Pembayaran</span>

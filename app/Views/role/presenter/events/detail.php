@@ -1,12 +1,91 @@
 <?php
-$event   = $event ?? [];
-$reg     = $reg ?? null;
-$abstrak = $abstrak ?? null;
-$payment = $payment ?? null;
-$flow    = $flow ?? ['state'=>'belum_daftar','label'=>'Belum terdaftar','hint'=>''];
-$price   = (int)($price ?? 0);
-?>
+$event     = $event ?? [];
+$reg       = $reg ?? null;
+$abstrak   = $abstrak ?? null;
+$payment   = $payment ?? null;
+$fullpaper = $fullpaper ?? null;
 
+// Normalisasi status
+$abStatus  = strtolower($abstrak['status'] ?? '');
+$fpStatus  = strtolower($fullpaper['status'] ?? '');
+$payStatus = strtolower($payment['status'] ?? '');
+
+// Helper label
+$nice = function($v) {
+  if (!$v) return 'Belum';
+  $v = strtolower($v);
+  return match($v){
+    'diterima' => 'Diterima',
+    'ditolak'  => 'Ditolak',
+    'revisi'   => 'Revisi',
+    'menunggu','sedang_direview' => 'Menunggu',
+    'pending'  => 'Pending',
+    'verified' => 'Terverifikasi',
+    'rejected' => 'Ditolak',
+    'canceled' => 'Dibatalkan',
+    'expired'  => 'Kedaluwarsa',
+    default    => ucfirst($v)
+  };
+};
+
+// Tentukan tombol utama (1 tombol) + kasus khusus awal 2 tombol
+$primaryBtn = null;   // ['label'=>..., 'url'=>..., 'class'=>...]
+$secondaryBtn = null; // hanya dipakai untuk "Batalkan pendaftaran" pada kasus awal
+
+$isReg = (bool)$reg;
+
+// Kontributor selesai?
+$kontributorDone = false;
+if ($reg) {
+  foreach (['contributor_done','kontributor_done','profile_completed','is_profile_completed'] as $f) {
+    if (array_key_exists($f,$reg)) { $kontributorDone = (bool)$reg[$f]; break; }
+  }
+}
+
+// Aturan tombol (flow tidak diubah)
+if (!$isReg) {
+  $primaryBtn = ['label'=>'Daftar', 'url'=>'/presenter/events/register/'.(int)$event['id'], 'class'=>'btn-primary'];
+} else {
+  if (!$kontributorDone) {
+    $primaryBtn   = ['label'=>'Daftar Lanjutan (Kontributor)', 'url'=>'/presenter/kontributor/start/'.(int)$event['id'], 'class'=>'btn-primary'];
+    $secondaryBtn = ['label'=>'Batalkan Pendaftaran', 'url'=>'/presenter/events/cancel/'.(int)$event['id'], 'class'=>'btn-outline-danger'];
+  } else {
+    // Sudah selesai kontributor
+    if (!$abStatus) {
+      $primaryBtn = ['label'=>'Upload Abstrak', 'url'=>'/presenter/abstrak/create/'.(int)$event['id'], 'class'=>'btn-primary'];
+    } else {
+      if ($abStatus === 'ditolak') {
+        $primaryBtn = ['label'=>'Upload Ulang Abstrak', 'url'=>'/presenter/abstrak/create/'.(int)$event['id'], 'class'=>'btn-warning'];
+      } elseif ($abStatus === 'diterima') {
+        // Cek Full Paper
+        if (!$fpStatus) {
+          $primaryBtn = ['label'=>'Upload Full Paper', 'url'=>'/presenter/fullpaper/create/'.(int)$event['id'], 'class'=>'btn-primary'];
+        } elseif ($fpStatus === 'revisi' || $fpStatus === 'ditolak') {
+          $primaryBtn = ['label'=>'Upload Ulang Full Paper', 'url'=>'/presenter/fullpaper/create/'.(int)$event['id'], 'class'=>'btn-warning'];
+        } elseif ($fpStatus === 'diterima') {
+          // Keduanya ACC → pembayaran
+          if (!$payStatus) {
+            $primaryBtn = ['label'=>'Lanjutkan Pembayaran', 'url'=>'/presenter/pembayaran/instruction/'.(int)$event['id'], 'class'=>'btn-success'];
+          } elseif ($payStatus === 'pending') {
+            $primaryBtn = ['label'=>'Cek Status Pembayaran', 'url'=>'/presenter/pembayaran', 'class'=>'btn-outline-success'];
+          } elseif (in_array($payStatus, ['rejected','ditolak','canceled','expired'])) {
+            $primaryBtn = ['label'=>'Bayar Ulang', 'url'=>'/presenter/pembayaran/instruction/'.(int)$event['id'], 'class'=>'btn-danger'];
+          } elseif ($payStatus === 'verified') {
+            $primaryBtn = ['label'=>'Buka Halaman Absensi', 'url'=>'/presenter/absensi', 'class'=>'btn-info'];
+          }
+        } else {
+          // fullpaper menunggu → tidak tampilkan tombol aksi khusus
+          $primaryBtn = null;
+        }
+      } else {
+        // Abstrak menunggu → tidak ada tombol
+        $primaryBtn = null;
+      }
+    }
+  }
+}
+
+?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
 <?= $this->include('partials/alerts') ?>
@@ -28,7 +107,7 @@ $price   = (int)($price ?? 0);
       </div>
 
       <div class="row g-3">
-        <!-- Kiri: Info Event -->
+        <!-- Info Event -->
         <div class="col-12 col-lg-7">
           <div class="card shadow-sm border-0 mb-3">
             <div class="card-header bg-gradient-primary text-white">
@@ -38,91 +117,67 @@ $price   = (int)($price ?? 0);
               <div class="mb-2"><strong>Format Event:</strong> <?= strtoupper($event['format']) ?></div>
               <div class="mb-2"><strong>Lokasi:</strong> <?= esc($event['location'] ?: '-') ?></div>
               <?php if (!empty($event['zoom_link'])): ?>
-                <div class="mb-2"><strong>Zoom:</strong> <a href="<?= esc($event['zoom_link']) ?>" target="_blank">Link</a></div>
+                <div class="mb-2"><strong>Zoom:</strong> <a href="<?= esc($event['zoom_link']) ?>" target="_blank" rel="noopener">Link</a></div>
               <?php endif; ?>
-              <div class="mb-2"><strong>Harga Pendaftaran:</strong> Rp <?= number_format($price,0,',','.') ?></div>
               <hr>
               <div class="mb-2 small text-muted">
                 Tutup Pendaftaran: <strong><?= $event['registration_deadline'] ? date('d M Y H:i', strtotime($event['registration_deadline'])) : '-' ?></strong><br>
-                Batas Abstrak: <strong><?= $event['abstract_deadline'] ? date('d M Y H:i', strtotime($event['abstract_deadline'])) : '-' ?></strong>
+                Batas Abstrak: <strong><?= $event['abstract_deadline'] ? date('d M Y H:i', strtotime($event['abstract_deadline'])) : '-' ?></strong><br>
+                <?php if (!empty($event['full_paper_deadline'])): ?>
+                  Batas Full Paper: <strong><?= date('d M Y H:i', strtotime($event['full_paper_deadline'])) ?></strong>
+                <?php endif; ?>
               </div>
               <p class="mb-0"><?= esc($event['description'] ?? '') ?></p>
             </div>
           </div>
         </div>
 
-        <!-- Kanan: Status & Aksi -->
+        <!-- Status & Aksi -->
         <div class="col-12 col-lg-5">
           <div class="card shadow-sm border-0 mb-3">
             <div class="card-header bg-gradient-primary text-white">
-              <h5 class="mb-0"><i class="bi bi-flag me-2"></i>Status</h5>
+              <h5 class="mb-0"><i class="bi bi-flag me-2"></i>Progress Pendaftaran</h5>
             </div>
             <div class="card-body">
-              <div class="mb-2">
-                <span class="badge rounded-pill bg-primary-subtle text-primary fw-normal"><?= esc($flow['label']) ?></span>
-                <?php if (!empty($flow['hint'])): ?>
-                  <div class="small text-muted mt-1"><?= esc($flow['hint']) ?></div>
-                <?php endif; ?>
-              </div>
 
+              <!-- Info 4 langkah -->
               <ul class="list-group list-group-flush mb-3">
-                <li class="list-group-item d-flex justify-content-between">
+                <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Pendaftaran</span>
-                  <strong><?= $reg ? 'Terdaftar' : 'Belum' ?></strong>
+                  <strong><?= $isReg ? 'Terdaftar'.(!$kontributorDone ? ' (butuh daftar lanjutan)' : '') : 'Belum' ?></strong>
                 </li>
-                <li class="list-group-item d-flex justify-content-between">
+                <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Abstrak</span>
-                  <strong><?= $abstrak['status'] ?? 'Belum' ?></strong>
+                  <strong><?= $nice($abStatus) ?></strong>
                 </li>
-                <li class="list-group-item d-flex justify-content-between">
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  <span>Full Paper</span>
+                  <strong><?= $nice($fpStatus) ?></strong>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Pembayaran</span>
-                  <strong><?= $payment['status'] ?? 'Belum' ?></strong>
+                  <strong><?= $nice($payStatus) ?></strong>
                 </li>
               </ul>
 
+              <!-- Tombol Aksi (1 tombol, kecuali kasus awal 2 tombol) -->
               <div class="d-grid gap-2">
-                <?php if (!$reg): ?>
-                  <button class="btn btn-primary" onclick="confirmRegister(<?= (int)$event['id'] ?>)">
-                    <i class="bi bi-box-arrow-in-right"></i> Daftar
-                  </button>
-                <?php endif; ?>
-
-                <?php if ($reg && ($flow['can']['cancel'] ?? false)): ?>
-                  <button class="btn btn-outline-danger" onclick="confirmCancel(<?= (int)$event['id'] ?>)">
-                    <i class="bi bi-x-circle"></i> Batalkan Pendaftaran
-                  </button>
-                <?php endif; ?>
-
-                <?php if ($reg && ($flow['can']['upload'] ?? false)): ?>
-                  <a class="btn btn-primary" href="/presenter/abstrak?event=<?= (int)$event['id'] ?>">
-                    <i class="bi bi-upload"></i> Upload Abstrak
+                <?php if ($primaryBtn): ?>
+                  <a class="btn <?= esc($primaryBtn['class']) ?>" href="<?= esc($primaryBtn['url']) ?>">
+                    <?= esc($primaryBtn['label']) ?>
                   </a>
                 <?php endif; ?>
 
-                <?php if ($reg && ($flow['can']['reupload'] ?? false)): ?>
-                  <a class="btn btn-warning" href="/presenter/abstrak?event=<?= (int)$event['id'] ?>">
-                    <i class="bi bi-arrow-repeat"></i> Unggah Ulang Revisi
-                  </a>
-                <?php endif; ?>
-
-                <?php if ($reg && ($flow['can']['pay'] ?? false)): ?>
-                  <a class="btn btn-success" href="/presenter/pembayaran/create/<?= (int)$event['id'] ?>">
-                    <i class="bi bi-cash-coin"></i> Lanjut Bayar
-                  </a>
-                <?php endif; ?>
-
-                <?php if ($reg && (($flow['can']['pay_detail'] ?? false) || ($flow['can']['pay_reupload'] ?? false))): ?>
-                  <a class="btn btn-outline-success" href="/presenter/pembayaran/detail/<?= (int)($payment['id_pembayaran'] ?? 0) ?>">
-                    <i class="bi bi-receipt"></i> Lihat Pembayaran
-                  </a>
-                <?php endif; ?>
-
-                <?php if ($reg && ($flow['can']['absen'] ?? false)): ?>
-                  <a class="btn btn-info" href="/presenter/absensi">
-                    <i class="bi bi-qr-code-scan"></i> Buka Halaman Absensi
+                <?php if ($secondaryBtn): ?>
+                  <a class="btn <?= esc($secondaryBtn['class']) ?>" href="<?= esc($secondaryBtn['url']) ?>">
+                    <?= esc($secondaryBtn['label']) ?>
                   </a>
                 <?php endif; ?>
               </div>
+
+              <?php if (!$primaryBtn && !$secondaryBtn): ?>
+                <div class="text-muted small mt-2">Tidak ada aksi yang perlu dilakukan saat ini.</div>
+              <?php endif; ?>
 
             </div>
           </div>
@@ -136,33 +191,10 @@ $price   = (int)($price ?? 0);
 <?= $this->include('partials/footer') ?>
 
 <style>
-  :root{
-    --primary-color:#2563eb; --info-color:#06b6d4;
-  }
+  :root{ --primary-color:#2563eb; --info-color:#06b6d4; }
   .header-section.header-blue{
     background:linear-gradient(135deg,var(--primary-color),#1e40af);
     color:#fff; padding:24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
   }
   .bg-gradient-primary{ background:linear-gradient(135deg,var(--primary-color),var(--info-color))!important; }
 </style>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-function confirmRegister(id){
-  Swal.fire({
-    title:'Daftar event?',
-    text:'Anda akan tercatat sebagai presenter event ini.',
-    icon:'question', showCancelButton:true,
-    confirmButtonText:'Ya, daftar', cancelButtonText:'Batal'
-  }).then(r=>{ if(r.isConfirmed){ location.href='/presenter/events/register/'+id; }});
-}
-function confirmCancel(id){
-  Swal.fire({
-    title:'Batalkan pendaftaran?',
-    text:'Pendaftaran akan dihapus. Tindakan ini tidak bisa dibatalkan.',
-    icon:'warning', showCancelButton:true,
-    confirmButtonText:'Ya, batalkan', cancelButtonText:'Tidak'
-  }).then(r=>{ if(r.isConfirmed){ location.href='/presenter/events/cancel/'+id; }});
-}
-</script>

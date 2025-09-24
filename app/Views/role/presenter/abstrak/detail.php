@@ -2,14 +2,13 @@
 $title  = $title ?? 'Detail Abstrak';
 $abs    = $abs ?? [];
 $event  = $event ?? [];
-$status = $abs['status'] ?? 'menunggu';
+$status = strtolower($abs['status'] ?? 'menunggu');
 
 $badge = [
   'menunggu'        => 'warning',
   'sedang_direview' => 'info',
   'diterima'        => 'success',
   'ditolak'         => 'danger',
-  'revisi'          => 'primary',
 ][$status] ?? 'secondary';
 ?>
 
@@ -59,18 +58,16 @@ $badge = [
                   <i class="bi bi-download"></i> Unduh File
                 </a>
 
-                <?php if ($status === 'revisi'): ?>
-                  <a class="btn btn-primary" href="/presenter/abstrak/create/<?= (int)$abs['event_id'] ?>">
-                    <i class="bi bi-upload"></i> Unggah Revisi
+                <?php if ($status === 'ditolak'): ?>
+                  <a class="btn btn-danger" href="/presenter/abstrak/create/<?= (int)$abs['event_id'] ?>">
+                    <i class="bi bi-upload"></i> Upload Ulang Abstrak
                   </a>
                 <?php endif; ?>
 
-                <?php /* HAPUS tombol lanjut pembayaran saat status diterima */ ?>
-                <?php /* if ($status === 'diterima'): ?>
-                  <a class="btn btn-success" href="/presenter/pembayaran/instruction/<?= (int)$abs['event_id'] ?>">
-                    <i class="bi bi-credit-card"></i> Lanjut Pembayaran
-                  </a>
-                <?php endif; */ ?>
+                <!-- NEW: selalu ada -->
+                <a class="btn btn-success" href="/presenter/fullpaper/create/<?= (int)$abs['event_id'] ?>">
+                  <i class="bi bi-file-earmark-text"></i> Lanjut Full Paper
+                </a>
               </div>
             </div>
           </div>
@@ -102,15 +99,11 @@ $badge = [
             </div>
             <div class="card-body">
               <?php if ($status === 'menunggu' || $status === 'sedang_direview'): ?>
-                <div class="alert alert-info">Abstrak Anda sedang diproses. Silakan pantau halaman ini untuk hasil review.</div>
-              <?php elseif ($status === 'revisi'): ?>
-                <div class="alert alert-warning">Revisi diminta. Silakan unggah revisi pada tombol di kiri.</div>
-              <?php elseif ($status === 'diterima'): ?>
-                <div class="alert alert-success">
-                  Abstrak diterima. Silakan lanjutkan pembayaran melalui menu <strong>Pembayaran</strong> atau halaman <strong>Event</strong>.
-                </div>
+                <div class="alert alert-info">Abstrak Anda sedang diproses. Anda boleh lanjut unggah Full Paper sekarang.</div>
               <?php elseif ($status === 'ditolak'): ?>
-                <div class="alert alert-danger">Abstrak ditolak. Anda dapat berkonsultasi dengan panitia atau mencoba event lain.</div>
+                <div class="alert alert-danger">Abstrak ditolak. Silakan upload ulang abstrak. Full Paper (jika sudah diunggah) dapat ditahan sampai abstrak diterima.</div>
+              <?php elseif ($status === 'diterima'): ?>
+                <div class="alert alert-success">Abstrak diterima. Langkah selanjutnya: <strong>Upload Full Paper</strong>. Pembayaran dilakukan setelah Full Paper di-ACC.</div>
               <?php endif; ?>
             </div>
           </div>

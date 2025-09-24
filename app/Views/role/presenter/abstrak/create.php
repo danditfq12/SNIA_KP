@@ -1,10 +1,16 @@
 <?php
-$title = $title ?? 'Kirim Abstrak';
-$event = $event ?? [];
+$title        = $title        ?? 'Kirim Abstrak';
+$event        = $event        ?? [];
+$eventId      = isset($eventId) ? (int)$eventId : (int)($event['id'] ?? 0);
+$kategoriList = $kategoriList ?? [];
+
+$oldKategori = old('id_kategori');
+$oldJudul    = old('judul');
 ?>
 
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
+<?= $this->include('partials/alerts') ?>
 
 <div id="content">
   <main class="flex-fill" style="padding-top:70px;">
@@ -17,8 +23,6 @@ $event = $event ?? [];
         </div>
       </div>
 
-      <?= $this->include('partials/alerts') ?>
-
       <div class="row g-3">
         <div class="col-12 col-lg-4">
           <div class="card shadow-sm h-100">
@@ -27,9 +31,14 @@ $event = $event ?? [];
             </div>
             <div class="card-body">
               <div class="mb-1 small text-muted">Tanggal Event</div>
-              <div class="fw-semibold mb-2"><?= isset($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-' ?></div>
+              <div class="fw-semibold mb-2">
+                <?= isset($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-' ?>
+                <?= !empty($event['event_time']) ? ' • '.esc($event['event_time']) : '' ?>
+              </div>
               <div class="mb-1 small text-muted">Deadline Abstrak</div>
-              <div class="fw-semibold"><?= !empty($event['abstract_deadline']) ? date('d M Y H:i', strtotime($event['abstract_deadline'])) : '-' ?></div>
+              <div class="fw-semibold">
+                <?= !empty($event['abstract_deadline']) ? date('d M Y H:i', strtotime($event['abstract_deadline'])) : '-' ?>
+              </div>
             </div>
           </div>
         </div>
@@ -40,7 +49,7 @@ $event = $event ?? [];
               <h6 class="mb-0"><i class="bi bi-upload me-2"></i>Form Abstrak</h6>
             </div>
             <div class="card-body">
-              <form action="/presenter/abstrak/store" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+              <form action="<?= site_url('/presenter/abstrak/store') ?>" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="event_id" value="<?= (int)$eventId ?>">
 
@@ -48,8 +57,10 @@ $event = $event ?? [];
                   <label class="form-label">Kategori <span class="text-danger">*</span></label>
                   <select name="id_kategori" class="form-select" required>
                     <option value="">-- Pilih Kategori --</option>
-                    <?php foreach (($kategoriList ?? []) as $k): ?>
-                      <option value="<?= (int)$k['id_kategori'] ?>"><?= esc($k['nama_kategori']) ?></option>
+                    <?php foreach ($kategoriList as $k): ?>
+                      <option value="<?= (int)$k['id_kategori'] ?>" <?= (string)$oldKategori === (string)$k['id_kategori'] ? 'selected' : '' ?>>
+                        <?= esc($k['nama_kategori']) ?>
+                      </option>
                     <?php endforeach; ?>
                   </select>
                   <div class="invalid-feedback">Kategori wajib dipilih.</div>
@@ -57,7 +68,7 @@ $event = $event ?? [];
 
                 <div class="mb-3">
                   <label class="form-label">Judul Abstrak <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" name="judul" placeholder="Tulis judul abstrak" required>
+                  <input type="text" class="form-control" name="judul" value="<?= esc($oldJudul) ?>" placeholder="Tulis judul abstrak" required>
                   <div class="invalid-feedback">Judul wajib diisi.</div>
                 </div>
 
@@ -68,12 +79,16 @@ $event = $event ?? [];
                   <div class="invalid-feedback">File PDF wajib diunggah.</div>
                 </div>
 
-                <div class="d-flex gap-2">
-                  <a href="/presenter/abstrak" class="btn btn-light border">
+                <div class="d-flex flex-wrap gap-2">
+                  <a href="<?= site_url('/presenter/abstrak') ?>" class="btn btn-light border">
                     <i class="bi bi-arrow-left"></i> Kembali
                   </a>
                   <button type="submit" class="btn btn-success">
                     <i class="bi bi-send me-1"></i>Kirim Abstrak
+                  </button>
+                  <!-- NEW: submit & lanjut full paper -->
+                  <button type="submit" name="goto" value="to_fullpaper" class="btn btn-primary">
+                    <i class="bi bi-file-earmark-text me-1"></i>Kirim & Lanjut Full Paper
                   </button>
                 </div>
               </form>
