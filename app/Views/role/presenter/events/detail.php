@@ -5,36 +5,39 @@ $abstrak   = $abstrak ?? null;
 $payment   = $payment ?? null;
 $fullpaper = $fullpaper ?? null;
 
-// Normalisasi status
+/* ================= Normalisasi status ================= */
 $abStatus  = strtolower($abstrak['status'] ?? '');
-$fpStatus  = strtolower($fullpaper['status'] ?? '');
+$fpStatus  = strtolower($fullpaper['status'] ?? ''); // bisa: '', pending, revisi, ditolak, diterima, uploaded, sedang_direview, dll
 $payStatus = strtolower($payment['status'] ?? '');
 
-// Helper label
+/* Ada full paper atau belum (rekamannya ada / atau jejak di abstrak) */
+$hasFullpaper = !empty($fullpaper)
+             || !empty($abstrak['full_paper_path'] ?? null)
+             || !empty($abstrak['full_paper_status'] ?? null);
+
+/* helper label */
 $nice = function($v) {
   if (!$v) return 'Belum';
   $v = strtolower($v);
   return match($v){
-    'diterima' => 'Diterima',
-    'ditolak'  => 'Ditolak',
-    'revisi'   => 'Revisi',
-    'menunggu','sedang_direview' => 'Menunggu',
-    'pending'  => 'Pending',
-    'verified' => 'Terverifikasi',
-    'rejected' => 'Ditolak',
-    'canceled' => 'Dibatalkan',
-    'expired'  => 'Kedaluwarsa',
-    default    => ucfirst($v)
+    'diterima','accepted','acc','approved'   => 'Diterima',
+    'ditolak','rejected'                     => 'Ditolak',
+    'revisi','revision'                      => 'Revisi',
+    'menunggu','sedang_direview','uploaded','pending' => 'Menunggu',
+    'verified'                               => 'Terverifikasi',
+    'canceled'                               => 'Dibatalkan',
+    'expired'                                => 'Kedaluwarsa',
+    default                                  => ucfirst($v)
   };
 };
 
-// Tentukan tombol utama (1 tombol) + kasus khusus awal 2 tombol
-$primaryBtn = null;   // ['label'=>..., 'url'=>..., 'class'=>...]
-$secondaryBtn = null; // hanya dipakai untuk "Batalkan pendaftaran" pada kasus awal
+/* ================= Tentukan tombol (maks 1 utama + 1 sekunder khusus) ================= */
+$primaryBtn   = null;   // ['label'=>..., 'url'=>..., 'class'=>...]
+$secondaryBtn = null;
 
 $isReg = (bool)$reg;
 
-// Kontributor selesai?
+/* Kontributor selesai? */
 $kontributorDone = false;
 if ($reg) {
   foreach (['contributor_done','kontributor_done','profile_completed','is_profile_completed'] as $f) {
@@ -42,41 +45,58 @@ if ($reg) {
   }
 }
 
-// Aturan tombol (flow tidak diubah)
+/* ================= Aturan tombol ================= */
 if (!$isReg) {
-  $primaryBtn = ['label'=>'Daftar', 'url'=>'/presenter/events/register/'.(int)$event['id'], 'class'=>'btn-primary'];
+  $primaryBtn = ['label'=>'Daftar', 'url'=>site_url('/presenter/events/register/'.(int)$event['id']), 'class'=>'btn-primary'];
 } else {
   if (!$kontributorDone) {
-    $primaryBtn   = ['label'=>'Daftar Lanjutan (Kontributor)', 'url'=>'/presenter/kontributor/start/'.(int)$event['id'], 'class'=>'btn-primary'];
-    $secondaryBtn = ['label'=>'Batalkan Pendaftaran', 'url'=>'/presenter/events/cancel/'.(int)$event['id'], 'class'=>'btn-outline-danger'];
+    $primaryBtn   = ['label'=>'Daftar Lanjutan (Kontributor)', 'url'=>site_url('/presenter/kontributor/start/'.(int)$event['id']), 'class'=>'btn-primary'];
+    $secondaryBtn = ['label'=>'Batalkan Pendaftaran', 'url'=>site_url('/presenter/events/cancel/'.(int)$event['id']), 'class'=>'btn-outline-danger'];
   } else {
     // Sudah selesai kontributor
     if (!$abStatus) {
-      $primaryBtn = ['label'=>'Upload Abstrak', 'url'=>'/presenter/abstrak/create/'.(int)$event['id'], 'class'=>'btn-primary'];
+      $primaryBtn = ['label'=>'Upload Abstrak', 'url'=>site_url('/presenter/abstrak/create/'.(int)$event['id']), 'class'=>'btn-primary'];
     } else {
       if ($abStatus === 'ditolak') {
-        $primaryBtn = ['label'=>'Upload Ulang Abstrak', 'url'=>'/presenter/abstrak/create/'.(int)$event['id'], 'class'=>'btn-warning'];
+        $primaryBtn = ['label'=>'Upload Ulang Abstrak', 'url'=>site_url('/presenter/abstrak/create/'.(int)$event['id']), 'class'=>'btn-warning'];
       } elseif ($abStatus === 'diterima') {
-        // Cek Full Paper
-        if (!$fpStatus) {
-          $primaryBtn = ['label'=>'Upload Full Paper', 'url'=>'/presenter/fullpaper/create/'.(int)$event['id'], 'class'=>'btn-primary'];
-        } elseif ($fpStatus === 'revisi' || $fpStatus === 'ditolak') {
-          $primaryBtn = ['label'=>'Upload Ulang Full Paper', 'url'=>'/presenter/fullpaper/create/'.(int)$event['id'], 'class'=>'btn-warning'];
-        } elseif ($fpStatus === 'diterima') {
-          // Keduanya ACC → pembayaran
-          if (!$payStatus) {
-            $primaryBtn = ['label'=>'Lanjutkan Pembayaran', 'url'=>'/presenter/pembayaran/instruction/'.(int)$event['id'], 'class'=>'btn-success'];
-          } elseif ($payStatus === 'pending') {
-            $primaryBtn = ['label'=>'Cek Status Pembayaran', 'url'=>'/presenter/pembayaran', 'class'=>'btn-outline-success'];
-          } elseif (in_array($payStatus, ['rejected','ditolak','canceled','expired'])) {
-            $primaryBtn = ['label'=>'Bayar Ulang', 'url'=>'/presenter/pembayaran/instruction/'.(int)$event['id'], 'class'=>'btn-danger'];
-          } elseif ($payStatus === 'verified') {
-            $primaryBtn = ['label'=>'Buka Halaman Absensi', 'url'=>'/presenter/absensi', 'class'=>'btn-info'];
-          }
+
+        // ======== FIX: Logika Full Paper ========
+        // 1) Jika BELUM PERNAH upload full paper → tampilkan "Upload Full Paper"
+        if (!$hasFullpaper) {
+          $primaryBtn = ['label'=>'Upload Full Paper', 'url'=>site_url('/presenter/fullpaper/create/'.(int)$event['id']), 'class'=>'btn-primary'];
+
         } else {
-          // fullpaper menunggu → tidak tampilkan tombol aksi khusus
-          $primaryBtn = null;
+          // 2) Jika SUDAH ADA full paper:
+          //    - Revisi / Ditolak  → tampilkan "Upload Ulang Full Paper"
+          //    - Diterima          → lanjut alur pembayaran
+          //    - Pending/Menunggu  → JANGAN tampilkan tombol upload apa pun
+          $isRevision = in_array($fpStatus, ['revisi','revision','ditolak','rejected'], true);
+          $isAccepted = in_array($fpStatus, ['diterima','accepted','acc','approved'], true);
+          $isWaiting  = !$isRevision && !$isAccepted; // mencakup pending/menunggu/sedang_direview/uploaded
+
+          if ($isRevision) {
+            $primaryBtn = ['label'=>'Upload Ulang Full Paper', 'url'=>site_url('/presenter/fullpaper/create/'.(int)$event['id']), 'class'=>'btn-warning'];
+
+          } elseif ($isAccepted) {
+            // Keduanya ACC → pembayaran
+            if (!$payStatus) {
+              $primaryBtn = ['label'=>'Lanjutkan Pembayaran', 'url'=>site_url('/presenter/pembayaran/instruction/'.(int)$event['id']), 'class'=>'btn-success'];
+            } elseif ($payStatus === 'pending') {
+              $primaryBtn = ['label'=>'Cek Status Pembayaran', 'url'=>site_url('/presenter/pembayaran'), 'class'=>'btn-outline-success'];
+            } elseif (in_array($payStatus, ['rejected','ditolak','canceled','expired'], true)) {
+              $primaryBtn = ['label'=>'Bayar Ulang', 'url'=>site_url('/presenter/pembayaran/instruction/'.(int)$event['id']), 'class'=>'btn-danger'];
+            } elseif ($payStatus === 'verified') {
+              $primaryBtn = ['label'=>'Buka Halaman Absensi', 'url'=>site_url('/presenter/absensi'), 'class'=>'btn-info'];
+            }
+
+          } elseif ($isWaiting) {
+            // menunggu review full paper → tidak ada tombol upload (INI YANG DIMINTA)
+            $primaryBtn = null;
+          }
         }
+        // ======== END FIX ========
+
       } else {
         // Abstrak menunggu → tidak ada tombol
         $primaryBtn = null;
@@ -84,7 +104,6 @@ if (!$isReg) {
     }
   }
 }
-
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
@@ -140,7 +159,6 @@ if (!$isReg) {
             </div>
             <div class="card-body">
 
-              <!-- Info 4 langkah -->
               <ul class="list-group list-group-flush mb-3">
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Pendaftaran</span>
@@ -152,7 +170,7 @@ if (!$isReg) {
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Full Paper</span>
-                  <strong><?= $nice($fpStatus) ?></strong>
+                  <strong><?= $nice($fpStatus ?: ($hasFullpaper ? 'uploaded' : '')) ?></strong>
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Pembayaran</span>
@@ -160,7 +178,6 @@ if (!$isReg) {
                 </li>
               </ul>
 
-              <!-- Tombol Aksi (1 tombol, kecuali kasus awal 2 tombol) -->
               <div class="d-grid gap-2">
                 <?php if ($primaryBtn): ?>
                   <a class="btn <?= esc($primaryBtn['class']) ?>" href="<?= esc($primaryBtn['url']) ?>">

@@ -2,7 +2,7 @@
 $title   = $title   ?? 'Upload Full Paper';
 $event   = $event   ?? [];
 $eventId = $eventId ?? 0;
-$abs     = $abs     ?? null; // abstrak terbaru (boleh null)
+$abs     = $abs     ?? null; // abstrak terbaru (harus ACC sebelum bisa ke halaman ini)
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -48,8 +48,7 @@ $abs     = $abs     ?? null; // abstrak terbaru (boleh null)
                   <?= $abs ? ucfirst(strtolower($abs['status'] ?? 'Belum')) : 'Belum upload abstrak' ?>
                 </div>
                 <div class="text-muted mt-1">
-                  * Anda boleh upload Full Paper tanpa menunggu abstrak ACC.
-                  Jika abstrak ditolak, panitia dapat memutuskan kelanjutan FP.
+                  * Upload Full Paper hanya tersedia setelah abstrak <strong>DITERIMA</strong>.
                 </div>
               </div>
             </div>
@@ -74,7 +73,7 @@ $abs     = $abs     ?? null; // abstrak terbaru (boleh null)
                 </div>
 
                 <div class="d-flex gap-2">
-                  <a href="<?= site_url('presenter/fullpaper') ?>" class="btn btn-light border">
+                  <a href="<?= site_url('presenter/fullpaper/detail/'.$eventId) ?>" class="btn btn-light border">
                     <i class="bi bi-arrow-left"></i> Kembali
                   </a>
                   <button type="submit" class="btn btn-success">

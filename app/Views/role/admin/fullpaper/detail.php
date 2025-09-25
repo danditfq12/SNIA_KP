@@ -28,7 +28,6 @@ $badge      = $badgeMap[$status] ?? 'secondary';
 $uploadedAt = !empty($submission['full_paper_uploaded_at']) ? date('d M Y H:i', strtotime($submission['full_paper_uploaded_at'])) : '—';
 $revisiKe   = isset($submission['revisi_ke']) ? (int)$submission['revisi_ke'] : 0;
 
-// Fallback nama & email (jaga-jaga)
 if (empty($author['name'])) {
   foreach (['penulis_nama','nama_lengkap','presenter_name','author_name','nama'] as $k) {
     if (!empty($submission[$k])) { $author['name'] = $submission[$k]; break; }
@@ -61,10 +60,8 @@ if (empty($author['email'])) {
       </div>
 
       <div class="row g-3">
-        <!-- Kolom kiri -->
         <div class="col-12 col-lg-8">
 
-          <!-- Informasi -->
           <div class="card shadow-sm mb-3">
             <div class="card-header bg-light">
               <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Informasi Full Paper</h6>
@@ -134,9 +131,10 @@ if (empty($author['email'])) {
             </div>
             <div class="card-body" style="height:72vh;">
               <iframe
-                src="<?= site_url('admin/fullpaper/view/'.(int)$submission['id']) ?>"
+                src="<?= site_url('admin/fullpaper/view/'.(int)$submission['id']) ?>#toolbar=1&navpanes=0"
                 title="Preview Full Paper"
                 style="width:100%;height:100%;border:1px solid #e5e7eb;border-radius:8px;"
+                allow="fullscreen"
               ></iframe>
             </div>
           </div>
@@ -246,7 +244,6 @@ if (empty($author['email'])) {
 
         </div>
 
-        <!-- Kolom kanan: keputusan -->
         <div class="col-12 col-lg-4">
           <div class="card shadow-sm">
             <div class="card-header bg-light">

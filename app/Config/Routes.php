@@ -282,11 +282,13 @@ $routes->group('presenter', [
 
     // ==== FULL PAPER (PRESENTER) ====
     $routes->group('fullpaper', static function ($routes) {
-        $routes->get ('',                       'FullPaper::index');
-        $routes->get ('create/(:num)',          'FullPaper::create/$1'); // eventId
-        $routes->post('store',                  'FullPaper::store');
-        $routes->get ('download/(:segment)',    'FullPaper::download/$1'); // pakai (:segment) utk nama file
-        $routes->post('delete/(:num)',          'FullPaper::delete/$1');   // opsional
+    // Pakai nama controller yang benar: Fullpaper (sesuai class)
+    $routes->get ('',                 'Fullpaper::index');        // /presenter/fullpaper
+    $routes->get ('detail/(:num)',    'Fullpaper::detail/$1');    // /presenter/fullpaper/detail/14
+    $routes->get ('create/(:num)',    'Fullpaper::create/$1');    // /presenter/fullpaper/create/{eventId}
+    $routes->post('store',            'Fullpaper::store');        // /presenter/fullpaper/store
+    $routes->get ('download/(:segment)','Fullpaper::download/$1');// /presenter/fullpaper/download/{filename}
+    $routes->post('delete/(:num)',    'Fullpaper::delete/$1');
     });
 
     // ==== KONTRIBUTOR (PRESENTER) ====

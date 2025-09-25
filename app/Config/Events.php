@@ -7,23 +7,13 @@ use CodeIgniter\Exceptions\FrameworkException;
 use CodeIgniter\HotReloader\HotReloader;
 
 /*
- * --------------------------------------------------------------------
- * Application Events
- * --------------------------------------------------------------------
- * Events allow you to tap into the execution of the program without
- * modifying or extending core files. This file provides a central
- * location to define your events, though they can always be added
- * at run-time, also, if needed.
- *
- * You create code that can execute by subscribing to events with
- * the 'on()' method. This accepts any form of callable, including
- * Closures, that will be executed when the event is triggered.
- *
- * Example:
- *      Events::on('create', [$myInstance, 'myMethod']);
+ | --------------------------------------------------------------------
+ | Application Events
+ | --------------------------------------------------------------------
  */
 
 Events::on('pre_system', static function (): void {
+    // Standar buffer & zlib guard dari CI4
     if (ENVIRONMENT !== 'testing') {
         if (ini_get('zlib.output_compression')) {
             throw FrameworkException::forEnabledZlibOutputCompression();
@@ -36,16 +26,11 @@ Events::on('pre_system', static function (): void {
         ob_start(static fn ($buffer) => $buffer);
     }
 
-    /*
-     * --------------------------------------------------------------------
-     * Debug Toolbar Listeners.
-     * --------------------------------------------------------------------
-     * If you delete, they will no longer be collected.
-     */
+    // Daftarkan kolektor DB untuk Toolbar saat debug (bukan CLI)
     if (CI_DEBUG && ! is_cli()) {
         Events::on('DBQuery', 'CodeIgniter\Debug\Toolbar\Collectors\Database::collect');
-        service('toolbar')->respond();
-        // Hot Reload route - for framework use on the hot reloader.
+
+        // Hot Reload (dev only)
         if (ENVIRONMENT === 'development') {
             service('routes')->get('__hot-reload', static function (): void {
                 (new HotReloader())->run();
@@ -53,3 +38,9 @@ Events::on('pre_system', static function (): void {
         }
     }
 });
+
+/**
+ * JANGAN panggil $toolbar->respond() di sini.
+ * Kita sudah pakai DebugToolbar via Filter ($globals['after']) dengan daftar "except".
+ * Ini mencegah injeksi ganda & menjaga response PDF tetap bersih.
+ */

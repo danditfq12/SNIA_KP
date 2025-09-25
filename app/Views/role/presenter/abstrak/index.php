@@ -30,7 +30,6 @@ $formatLabel = function($f){
         </div>
       </div>
 
-      <!-- Abstrak perlu upload -->
       <div class="card shadow-sm mb-4 border-0 overflow-hidden">
         <div class="card-header bg-gradient-primary text-white">
           <h5 class="mb-0"><i class="bi bi-upload me-2"></i>Abstrak perlu upload</h5>
@@ -61,11 +60,11 @@ $formatLabel = function($f){
                     <div class="text-muted small mb-2"><?= esc($row['hint']) ?></div>
                   <?php endif; ?>
                   <div class="d-flex gap-2">
-                    <a class="btn btn-primary flex-fill" href="/presenter/abstrak/create/<?= (int)$row['event_id'] ?>">
+                    <a class="btn btn-primary flex-fill" href="<?= site_url('presenter/abstrak/create/'.(int)$row['event_id']) ?>">
                       <i class="bi bi-upload"></i> Upload Abstrak
                     </a>
                     <?php if (!empty($row['last_abs_id'])): ?>
-                      <a class="btn btn-outline-secondary flex-fill" href="/presenter/abstrak/detail/<?= (int)$row['last_abs_id'] ?>">
+                      <a class="btn btn-outline-secondary flex-fill" href="<?= site_url('presenter/abstrak/detail/'.(int)$row['last_abs_id']) ?>">
                         <i class="bi bi-eye"></i> Lihat Terakhir
                       </a>
                     <?php endif; ?>
@@ -78,7 +77,6 @@ $formatLabel = function($f){
         </div>
       </div>
 
-      <!-- Riwayat Abstrak -->
       <div class="card shadow-sm mb-4 border-0 overflow-hidden">
         <div class="card-header bg-gradient-primary text-white">
           <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Riwayat Abstrak</h5>
@@ -105,7 +103,7 @@ $formatLabel = function($f){
                   </div>
 
                   <?php if (!empty($h['status_hint'])): ?>
-                    <div class="small mb-2 <?= $h['status'] === 'diterima' ? 'text-success' : ($h['status'] === 'ditolak' ? 'text-danger' : 'text-muted') ?>">
+                    <div class="small mb-2 <?= ($h['status'] ?? '') === 'diterima' ? 'text-success' : (($h['status'] ?? '') === 'ditolak' ? 'text-danger' : 'text-muted') ?>">
                       <?= esc($h['status_hint']) ?>
                     </div>
                   <?php endif; ?>
@@ -115,19 +113,15 @@ $formatLabel = function($f){
                   </div>
 
                   <div class="mt-2 d-grid gap-2">
-                    <a class="btn btn-outline-primary btn-sm" href="/presenter/abstrak/detail/<?= (int)$h['id_abstrak'] ?>">
+                    <a class="btn btn-outline-primary btn-sm" href="<?= site_url('presenter/abstrak/detail/'.(int)$h['id_abstrak']) ?>">
                       <i class="bi bi-eye"></i> Detail
                     </a>
                     <?php if (($h['status'] ?? '') === 'ditolak'): ?>
-                      <a class="btn btn-danger btn-sm" href="/presenter/abstrak/create/<?= (int)$h['event_id'] ?>">
+                      <a class="btn btn-danger btn-sm" href="<?= site_url('presenter/abstrak/create/'.(int)$h['event_id']) ?>">
                         <i class="bi bi-upload"></i> Upload Ulang Abstrak
                       </a>
                     <?php endif; ?>
-
-                    <!-- NEW: selalu boleh lanjut full paper -->
-                    <a class="btn btn-success btn-sm" href="/presenter/fullpaper/create/<?= (int)$h['event_id'] ?>">
-                      <i class="bi bi-file-earmark-text"></i> Lanjut Full Paper
-                    </a>
+                    <!-- Tidak ada tombol ke Full Paper -->
                   </div>
                 </div>
               </div>

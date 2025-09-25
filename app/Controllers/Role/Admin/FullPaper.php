@@ -164,19 +164,25 @@ class FullPaper extends BaseController
         $eventId = $this->request->getGet('event_id');
 
         $select = [];
-        $select[] = "{$cols['pk']} AS id";
-        $select[] = "{$cols['title']} AS title";
-        if ($cols['event_id']) $select[] = "{$cols['event_id']} AS event_id";
+        $select[] = "{$table}.{$cols['pk']} AS id";
+        $select[] = "{$table}.{$cols['title']} AS title";
+        if ($cols['event_id']) $select[] = "{$table}.{$cols['event_id']} AS event_id";
         foreach (['full_paper_status','full_paper_uploaded_at','full_paper_path','revisi_ke'] as $c)
-            if ($this->columnExists($table,$c)) $select[] = $c;
+            if ($this->columnExists($table,$c)) $select[] = "{$table}.{$c}";
         foreach (['penulis_nama','nama_lengkap','presenter_name','author_name','nama','penulis_email','email','presenter_email','author_email'] as $c)
-            if ($this->columnExists($table,$c)) $select[] = $c;
+            if ($this->columnExists($table,$c)) $select[] = "{$table}.{$c}";
 
         $b = $this->db->table($table)->select(implode(', ', $select));
-        if ($status)  $b->where('full_paper_status', $status);
-        if ($eventId && $cols['event_id']) $b->where($cols['event_id'], (int)$eventId);
 
-        $rows = $b->orderBy($cols['pk'],'DESC')->get()->getResultArray();
+        if ($cols['user_id'] && $this->db->tableExists('users')) {
+            $b->select('users.nama_lengkap AS nama_lengkap, users.email AS email')
+              ->join('users', "users.id_user = {$table}.{$cols['user_id']}", 'left');
+        }
+
+        if ($status)  $b->where("{$table}.full_paper_status", $status);
+        if ($eventId && $cols['event_id']) $b->where("{$table}.{$cols['event_id']}", (int)$eventId);
+
+        $rows = $b->orderBy("{$table}.{$cols['pk']}",'DESC')->get()->getResultArray();
 
         $events = [];
         if ($this->db->tableExists('events')) {
@@ -372,57 +378,40 @@ class FullPaper extends BaseController
         return null;
     }
 
-    /** === STREAM INLINE: handle lokal & remote (proxy) + dukungan HTTP Range === */
-   public function view($id)
-{
-    $id = (int)$id;
-    $submission = $this->findSubmission($id);
-    if (!$submission) {
-        return $this->response
-            ->setContentType('text/html', 'utf-8')
-            ->setBody('<div style="padding:12px;font-family:system-ui">Submission tidak ditemukan.</div>');
+    /** === Inline preview dengan dukungan Range (anti-IDM) === */
+    public function view($id)
+    {
+        $id = (int) $id;
+
+        $submission = $this->findSubmission($id);
+        if (!$submission) {
+            return $this->response->setContentType('text/html', 'utf-8')
+                ->setBody('<div style="padding:12px;font-family:system-ui">Submission tidak ditemukan.</div>');
+        }
+
+        $path = $this->resolveFullPaperPath($submission);
+        if (!$path) {
+            return $this->response->setContentType('text/html', 'utf-8')
+                ->setBody('<div style="padding:12px;font-family:system-ui">File full paper tidak ditemukan.</div>');
+        }
+
+        // Untuk URL publik, biarkan browser handle sendiri (tetap inline)
+        if ($this->isPublicUrl($path)) {
+            return $this->response
+                ->setHeader('Referrer-Policy', 'no-referrer-when-downgrade')
+                ->setHeader('X-Content-Type-Options', 'nosniff')
+                ->setHeader('Cache-Control', 'private, max-age=0, must-revalidate')
+                ->redirect($path);
+        }
+
+        if (!is_readable($path)) {
+            return $this->response->setContentType('text/html', 'utf-8')
+                ->setBody('<div style="padding:12px;font-family:system-ui">File tidak dapat dibaca.</div>');
+        }
+
+        return $this->inlinePdfResponse($path, 'fullpaper-' . $id . '.pdf');
     }
 
-    $path = $this->resolveFullPaperPath($submission);
-    if (!$path) {
-        return $this->response
-            ->setContentType('text/html', 'utf-8')
-            ->setBody('<div style="padding:12px;font-family:system-ui">File full paper tidak ditemukan.</div>');
-    }
-
-    // Jika file berupa URL publik (mis. S3 dengan content-type benar), arahkan langsung
-    if ($this->isPublicUrl($path)) {
-        return redirect()->to($path);
-    }
-
-    if (!is_readable($path)) {
-        return $this->response
-            ->setContentType('text/html', 'utf-8')
-            ->setBody('<div style="padding:12px;font-family:system-ui">File tidak dapat dibaca.</div>');
-    }
-
-    // Matikan buffer & toolbar agar header tidak ketimpa
-    if (function_exists('ob_get_level')) {
-        while (ob_get_level() > 0) { @ob_end_clean(); }
-    }
-    // Kalau CI Debug Toolbar aktif global, abaikan untuk endpoint ini:
-    if (function_exists('service') && service('toolbar')) {
-        service('toolbar')->disable();
-    }
-
-    $filename = 'fullpaper-'.$id.'.pdf';
-    $binary   = file_get_contents($path);
-
-    // KIRIM INLINE DENGAN CONTENT-TYPE RESMI CI
-    return $this->response
-        ->setContentType('application/pdf')                     // << kunci
-        ->setHeader('X-Content-Type-Options', 'nosniff')
-        ->setHeader('Content-Disposition', 'inline; filename="'.$filename.'"')
-        ->setHeader('Accept-Ranges', 'none')                    // sederhana; aktifkan Range kalau perlu
-        ->setHeader('Cache-Control', 'private, max-age=0, must-revalidate')
-        ->setHeader('Pragma', 'public')
-        ->setBody($binary);
-}
     /** === Download (force attachment) === */
     public function download($id)
     {
@@ -434,7 +423,6 @@ class FullPaper extends BaseController
         if (!$path) return redirect()->back()->with('error','File full paper tidak ditemukan');
 
         if ($this->isPublicUrl($path)) {
-            // biar unduh juga kalau sumber remote
             return redirect()->to($path);
         }
         return $this->response->download($path, null);
@@ -442,105 +430,65 @@ class FullPaper extends BaseController
 
     /* ========================= Low-level streaming helpers ========================= */
 
-    private function failInline(string $message)
+    private function inlinePdfResponse(string $path, string $filename)
     {
-        // halaman HTML kecil agar iframe tidak blank
-        $html = '<!doctype html><meta charset="utf-8"><div style="padding:16px;font-family:system-ui">
-                   <b>Gagal memuat dokumen</b><br><span style="color:#6b7280">'.$message.'</span>
-                 </div>';
-        return $this->response
-            ->setHeader('Content-Type', 'text/html; charset=utf-8')
-            ->setBody($html);
-    }
-
-    private function streamLocalPdf(string $path, string $filename)
-    {
-        // Matikan output buffering kalau ada
+        // Bersihkan buffer output
         if (function_exists('ob_get_level')) {
             while (ob_get_level() > 0) { @ob_end_clean(); }
         }
 
-        $size = filesize($path);
+        $size  = filesize($path);
         $start = 0;
-        $length = $size;
+        $end   = $size - 1;
+        $code  = 200;
 
-        $this->response->setHeader('Content-Type', 'application/pdf');
-        $this->response->setHeader('X-Content-Type-Options', 'nosniff');
-        $this->response->setHeader('Accept-Ranges', 'bytes');
-        $this->response->setHeader('Content-Disposition', 'inline; filename="'.$filename.'"');
-
-        // Range support
-        if (isset($_SERVER['HTTP_RANGE'])) {
-            if (preg_match('/bytes=(\d+)-(\d*)/i', $_SERVER['HTTP_RANGE'], $m)) {
-                $start = (int)$m[1];
-                $end   = ($m[2] !== '') ? (int)$m[2] : ($size - 1);
-                $length = $end - $start + 1;
-
-                $this->response->setStatusCode(206);
-                $this->response->setHeader('Content-Range', "bytes $start-$end/$size");
-                $this->response->setHeader('Content-Length', (string)$length);
-            }
-        } else {
-            $this->response->setHeader('Content-Length', (string)$size);
+        // Dukung Range request
+        $range = $this->request->getHeaderLine('Range');
+        if ($range && preg_match('/bytes=(\d*)-(\d*)/i', $range, $m)) {
+            if ($m[1] !== '') $start = (int)$m[1];
+            if ($m[2] !== '') $end   = (int)$m[2];
+            if ($end > $size - 1) $end = $size - 1;
+            if ($start > $end)    $start = 0;
+            $code = 206; // Partial Content
         }
 
+        $length = $end - $start + 1;
+
+        // Header untuk inline viewer (tidak memicu IDM)
+        $this->response->setStatusCode($code);
+        $this->response->setHeader('Content-Type', 'application/pdf');
+        $this->response->setHeader('X-Content-Type-Options', 'nosniff');
+        $this->response->setHeader('Content-Disposition', 'inline; filename="'.$filename.'"');
+        $this->response->setHeader('Accept-Ranges', 'bytes');
+        $this->response->setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+        $this->response->setHeader('Pragma', 'public');
+        $this->response->setHeader('Content-Length', (string)$length);
+        if ($code === 206) {
+            $this->response->setHeader('Content-Range', "bytes $start-$end/$size");
+        }
+
+        // Stream bagian file yang diminta
         $fp = fopen($path, 'rb');
+        if ($fp === false) {
+            return $this->response->setStatusCode(500)->setBody('Gagal membuka file.');
+        }
+
         if ($start > 0) fseek($fp, $start);
 
-        // kirim chunk supaya hemat memori
         $chunk = 8192;
-        while (!feof($fp) && $length > 0) {
-            $read = ($length > $chunk) ? $chunk : $length;
-            $buffer = fread($fp, $read);
+        $sent  = 0;
+        while (!feof($fp) && $sent < $length) {
+            $remaining = $length - $sent;
+            $read      = $remaining > $chunk ? $chunk : $remaining;
+            $buffer    = fread($fp, $read);
+            if ($buffer === false) break;
             echo $buffer;
-            flush();
-            $length -= $read;
+            $sent += strlen($buffer);
+            if (function_exists('fastcgi_finish_request')) { @flush(); }
+            else { @flush(); @ob_flush(); }
         }
         fclose($fp);
-        // hentikan eksekusi setelah streaming manual
-        exit;
-    }
 
-    private function proxyRemotePdf(string $url, string $filename)
-    {
-        if (!function_exists('curl_init')) {
-            // fallback: data URI (tidak ideal untuk file sangat besar)
-            $data = @file_get_contents($url);
-            if ($data === false) return $this->failInline('Gagal mengambil file dari sumber eksternal.');
-            // kirim inline normal
-            if (function_exists('ob_get_level')) { while (ob_get_level() > 0) { @ob_end_clean(); } }
-            $this->response->setHeader('Content-Type', 'application/pdf');
-            $this->response->setHeader('X-Content-Type-Options', 'nosniff');
-            $this->response->setHeader('Content-Disposition', 'inline; filename="'.$filename.'"');
-            $this->response->setHeader('Content-Length', (string)strlen($data));
-            $this->response->setBody($data);
-            return $this->response;
-        }
-
-        // cURL proxy
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_BINARYTRANSFER => true,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_HTTPHEADER     => ['Accept: application/pdf,*/*;q=0.8'],
-        ]);
-        $data = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($code < 200 || $code >= 300 || $data === false) {
-            return $this->failInline('Gagal memuat dokumen dari sumber eksternal.');
-        }
-
-        if (function_exists('ob_get_level')) { while (ob_get_level() > 0) { @ob_end_clean(); } }
-        $this->response->setHeader('Content-Type', 'application/pdf');
-        $this->response->setHeader('X-Content-Type-Options', 'nosniff');
-        $this->response->setHeader('Content-Disposition', 'inline; filename="'.$filename.'"');
-        $this->response->setHeader('Content-Length', (string)strlen($data));
-        $this->response->setBody($data);
         return $this->response;
     }
 }

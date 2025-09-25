@@ -10,8 +10,10 @@ $badge = [
   'diterima'        => 'success',
   'ditolak'         => 'danger',
 ][$status] ?? 'secondary';
-?>
 
+// hanya untuk tombol reupload abstrak bila ditolak
+$showReuploadAbstract = ($status === 'ditolak');
+?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
 
@@ -36,8 +38,11 @@ $badge = [
       <div class="row g-3">
         <div class="col-12 col-lg-8">
           <div class="card shadow-sm mb-3">
-            <div class="card-header bg-light">
+            <div class="card-header bg-light d-flex align-items-center justify-content-between">
               <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Informasi Abstrak</h6>
+              <a href="javascript:history.back()" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Kembali
+              </a>
             </div>
             <div class="card-body">
               <div class="mb-2">
@@ -53,21 +58,17 @@ $badge = [
                 <div class="fw-semibold"><?= !empty($abs['tanggal_upload']) ? date('d M Y H:i', strtotime($abs['tanggal_upload'])) : '-' ?></div>
               </div>
 
-              <div class="d-flex gap-2 mt-3">
-                <a class="btn btn-outline-secondary" href="/presenter/abstrak/download/<?= esc($abs['file_abstrak']) ?>">
+              <div class="d-flex flex-wrap gap-2 mt-3">
+                <a class="btn btn-outline-secondary" href="<?= site_url('/presenter/abstrak/download/'.esc($abs['file_abstrak'])) ?>">
                   <i class="bi bi-download"></i> Unduh File
                 </a>
 
-                <?php if ($status === 'ditolak'): ?>
-                  <a class="btn btn-danger" href="/presenter/abstrak/create/<?= (int)$abs['event_id'] ?>">
+                <?php if ($showReuploadAbstract): ?>
+                  <a class="btn btn-danger" href="<?= site_url('/presenter/abstrak/create/'.(int)$abs['event_id']) ?>">
                     <i class="bi bi-upload"></i> Upload Ulang Abstrak
                   </a>
                 <?php endif; ?>
-
-                <!-- NEW: selalu ada -->
-                <a class="btn btn-success" href="/presenter/fullpaper/create/<?= (int)$abs['event_id'] ?>">
-                  <i class="bi bi-file-earmark-text"></i> Lanjut Full Paper
-                </a>
+                <!-- tidak ada tombol menuju Full Paper di halaman ini -->
               </div>
             </div>
           </div>
@@ -80,12 +81,23 @@ $badge = [
               <div class="row g-2">
                 <div class="col-6">
                   <div class="text-muted small">Tanggal Event</div>
-                  <div class="fw-semibold"><?= isset($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-' ?></div>
+                  <div class="fw-semibold">
+                    <?= isset($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-' ?>
+                  </div>
                 </div>
                 <div class="col-6">
                   <div class="text-muted small">Deadline Abstrak</div>
-                  <div class="fw-semibold"><?= !empty($event['abstract_deadline']) ? date('d M Y H:i', strtotime($event['abstract_deadline'])) : '-' ?></div>
+                  <div class="fw-semibold">
+                    <?= !empty($event['abstract_deadline']) ? date('d M Y H:i', strtotime($event['abstract_deadline'])) : '-' ?>
+                  </div>
                 </div>
+                <div class="col-6">
+                  <div class="text-muted small">Deadline Full Paper</div>
+                  <div class="fw-semibold">
+                    <?= !empty($event['full_paper_deadline']) ? date('d M Y H:i', strtotime($event['full_paper_deadline'])) : '-' ?>
+                  </div>
+                </div>
+                <!-- Info status FP tidak ditampilkan di halaman abstrak -->
               </div>
             </div>
           </div>
@@ -95,16 +107,17 @@ $badge = [
         <div class="col-12 col-lg-4">
           <div class="card shadow-sm">
             <div class="card-header bg-light">
-              <h6 class="mb-0"><i class="bi bi-flag me-2"></i>Status & Arah Lanjut</h6>
+              <h6 class="mb-0"><i class="bi bi-flag me-2"></i>Status</h6>
             </div>
             <div class="card-body">
               <?php if ($status === 'menunggu' || $status === 'sedang_direview'): ?>
-                <div class="alert alert-info">Abstrak Anda sedang diproses. Anda boleh lanjut unggah Full Paper sekarang.</div>
+                <div class="alert alert-info mb-0">Abstrak Anda sedang diproses oleh reviewer.</div>
               <?php elseif ($status === 'ditolak'): ?>
-                <div class="alert alert-danger">Abstrak ditolak. Silakan upload ulang abstrak. Full Paper (jika sudah diunggah) dapat ditahan sampai abstrak diterima.</div>
+                <div class="alert alert-danger mb-0">Abstrak ditolak. Silakan unggah ulang sesuai catatan revisi dari reviewer.</div>
               <?php elseif ($status === 'diterima'): ?>
-                <div class="alert alert-success">Abstrak diterima. Langkah selanjutnya: <strong>Upload Full Paper</strong>. Pembayaran dilakukan setelah Full Paper di-ACC.</div>
+                <div class="alert alert-success mb-0">Abstrak diterima.</div>
               <?php endif; ?>
+              <!-- Tidak ada arahan ke Full Paper di panel ini -->
             </div>
           </div>
         </div>

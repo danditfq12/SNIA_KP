@@ -86,10 +86,7 @@ $oldJudul    = old('judul');
                   <button type="submit" class="btn btn-success">
                     <i class="bi bi-send me-1"></i>Kirim Abstrak
                   </button>
-                  <!-- NEW: submit & lanjut full paper -->
-                  <button type="submit" name="goto" value="to_fullpaper" class="btn btn-primary">
-                    <i class="bi bi-file-earmark-text me-1"></i>Kirim & Lanjut Full Paper
-                  </button>
+                  <!-- ⛔️ Tombol “Kirim & Lanjut Full Paper” DIHAPUS -->
                 </div>
               </form>
             </div>
