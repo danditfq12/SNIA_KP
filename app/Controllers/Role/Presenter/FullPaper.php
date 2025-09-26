@@ -24,7 +24,7 @@ class Fullpaper extends BaseController
         helper(['date', 'text']);
     }
 
-    /* ===== util: window pengumpulan FP ===== */
+    /* ===== window pengumpulan FP ===== */
     private function isFullPaperOpen(array $event): bool
     {
         if (empty($event['is_active'])) return false;
@@ -36,35 +36,7 @@ class Fullpaper extends BaseController
         return (time() <= strtotime(($event['event_date'] ?? '2099-12-31') . ' 23:59:00'));
     }
 
-    /* ===== util: abstrak terbaru per event milik user ===== */
-    private function latestAbstractByEvent(int $userId): array
-    {
-        // Wajib mengembalikan minimal: event_id, status, tanggal_upload, full_paper_status, full_paper_path
-        $allAbs = $this->abstrakModel->getByUserWithDetails($userId);
-        $latest = [];
-        foreach ($allAbs as $a) {
-            $eid = (int) $a['event_id'];
-            if (!isset($latest[$eid]) || strtotime($a['tanggal_upload']) > strtotime($latest[$eid]['tanggal_upload'])) {
-                $latest[$eid] = $a;
-            }
-        }
-        return $latest;
-    }
-
-    /* ===== util: badge abstrak (untuk tampilan kecil) ===== */
-    private function mapAbsMeta(?array $abs): array
-    {
-        $s = strtolower((string)($abs['status'] ?? ''));
-        return match ($s) {
-            'diterima'         => ['badge' => 'success', 'label' => 'Abstrak ACC'],
-            'ditolak'          => ['badge' => 'danger',  'label' => 'Abstrak Ditolak'],
-            'sedang_direview'  => ['badge' => 'info',    'label' => 'Abstrak Direview'],
-            'menunggu'         => ['badge' => 'warning', 'label' => 'Abstrak Menunggu'],
-            default            => ['badge' => 'secondary','label'=> 'Belum upload abstrak'],
-        };
-    }
-
-    /* ===== util: normalisasi status FP -> NONE|UPLOADED|REVISION|ACCEPTED|REJECTED ===== */
+    /* ===== normalisasi status FP -> NONE|UPLOADED|REVISION|ACCEPTED|REJECTED ===== */
     private function normalizeFpStatus(?string $raw): string
     {
         $s = strtolower(trim((string) $raw));
@@ -78,10 +50,41 @@ class Fullpaper extends BaseController
         };
     }
 
-    /* ===== util: meta FP terbaru (prioritas tabel fullpaper) ===== */
+    /* ===== badge mini utk abstrak ===== */
+    private function mapAbsMeta(?array $abs): array
+    {
+        $s = strtolower((string)($abs['status'] ?? ''));
+        return match ($s) {
+            'diterima'         => ['badge' => 'success', 'label' => 'Abstrak ACC'],
+            'ditolak'          => ['badge' => 'danger',  'label' => 'Abstrak Ditolak'],
+            'sedang_direview'  => ['badge' => 'info',    'label' => 'Abstrak Direview'],
+            'menunggu'         => ['badge' => 'warning', 'label' => 'Abstrak Menunggu'],
+            'revisi'           => ['badge' => 'primary', 'label' => 'Abstrak Revisi'],
+            default            => ['badge' => 'secondary','label'=> 'Belum upload abstrak'],
+        };
+    }
+
+    /* ===== badge FP utk UI ===== */
+    private function mapFpStatusMeta(string $status): array
+    {
+        $s = strtoupper($status);
+        return match ($s) {
+            'NONE'     => ['badge' => 'secondary', 'label' => 'Belum Upload',     'hint' => 'Belum ada full paper'],
+            'UPLOADED' => ['badge' => 'info',      'label' => 'Menunggu Review',  'hint' => 'Reviewer sedang menilai'],
+            'REVISION' => ['badge' => 'warning',   'label' => 'Revisi',           'hint' => 'Unggah revisi sesuai catatan'],
+            'ACCEPTED' => ['badge' => 'success',   'label' => 'Diterima',         'hint' => 'Full paper diterima'],
+            'REJECTED' => ['badge' => 'danger',    'label' => 'Ditolak',          'hint' => 'Unggah ulang jika diperbolehkan'],
+            default    => ['badge' => 'secondary', 'label' => ucfirst(strtolower($s)), 'hint' => 'Status tidak dikenal'],
+        };
+    }
+
+    /**
+     * Ambil meta FP terbaru. Prioritaskan tabel fullpaper.
+     * Fallback ke kolom lama abstrak HANYA jika ada path.
+     * Return: [$status, $path, $createdAt, $reviewedAt, $decisionAt, $notes, $fpRow]
+     */
     private function latestFullpaperMeta(int $userId, int $eventId, ?array $absRow): array
     {
-        // Return: [$status, $path, $createdAt, $reviewedAt, $decisionAt, $notes, $fpRow]
         $fpRow = method_exists($this->fpModel, 'getLatestRowByUserEvent')
             ? $this->fpModel->getLatestRowByUserEvent($userId, $eventId)
             : null;
@@ -96,57 +99,63 @@ class Fullpaper extends BaseController
             return [$status, $path, $createdAt, $reviewedAt, $decisionAt, $notes, $fpRow];
         }
 
-        // fallback (kolom lama di abstrak)
-        $status      = $this->normalizeFpStatus($absRow['full_paper_status'] ?? '');
-        $path        = (string)($absRow['full_paper_path'] ?? '');
-        $createdAt   = null;
-        $reviewedAt  = null;
-        $decisionAt  = null;
-        $notes       = '';
-        return [$status, $path, $createdAt, $reviewedAt, $decisionAt, $notes, null];
+        $pathAbs = (string)($absRow['full_paper_path'] ?? '');
+        if ($pathAbs !== '') {
+            $statusAbs  = $this->normalizeFpStatus($absRow['full_paper_status'] ?? '');
+            return [$statusAbs, $pathAbs, ($absRow['full_paper_uploaded_at'] ?? null), null, null, '', null];
+        }
+
+        return ['NONE', '', null, null, null, '', null];
     }
 
-    /* ===== util: map status FP ke meta UI ===== */
-    private function mapFpStatusMeta(string $status): array
+    /* ===== helper eligibility abstrak untuk FP (kebijakan BARU) ===== */
+    private function isAbstractEligible(?array $abs): bool
     {
-        $s = strtoupper($status);
-        return match ($s) {
-            'NONE'     => ['badge' => 'secondary', 'label' => 'Belum Upload',     'hint' => 'Belum ada full paper'],
-            'UPLOADED' => ['badge' => 'info',      'label' => 'Menunggu Review',  'hint' => 'Reviewer sedang menilai'],
-            'REVISION' => ['badge' => 'warning',   'label' => 'Revisi',           'hint' => 'Unggah revisi sesuai catatan'],
-            'ACCEPTED' => ['badge' => 'success',   'label' => 'Diterima',         'hint' => 'Full paper diterima'],
-            'REJECTED' => ['badge' => 'danger',    'label' => 'Ditolak',          'hint' => 'Unggah ulang jika diperbolehkan'],
-            default    => ['badge' => 'secondary', 'label' => ucfirst(strtolower($s)), 'hint' => 'Status tidak dikenal'],
-        };
+        if (empty($abs)) return false;                                   // belum pernah upload
+        $s = strtolower((string)($abs['status'] ?? ''));
+        if ($s === 'ditolak') return false;                              // tidak boleh kalau ditolak
+        // selain ditolak: menunggu, direview, revisi, diterima -> boleh
+        return true;
     }
 
-    /* ===== INDEX (tetap disertakan agar “full controller”) ===== */
+    /* ===== INDEX ===== */
     public function index()
     {
         $userId = (int) session()->get('id_user');
 
-        $regs      = $this->regModel->listByUser($userId);
-        $latestAbs = $this->latestAbstractByEvent($userId);
-
+        $regs = $this->regModel->listByUser($userId) ?? [];
         $needUpload = [];
         $history    = [];
 
         foreach ($regs as $r) {
-            $eid   = (int) $r['id_event'];
+            $eid   = (int) ($r['id_event'] ?? 0);
+            if (!$eid) continue;
+
             $event = $this->eventModel->find($eid);
             if (!$event) continue;
 
-            $abs         = $latestAbs[$eid] ?? null;
-            $absAccepted = !empty($abs) && strtolower($abs['status'] ?? '') === 'diterima';
+            // abstrak terbaru
+            $abs = $this->abstrakModel->where('id_user',$userId)
+                                      ->where('event_id',$eid)
+                                      ->orderBy('id_abstrak','DESC')->first();
 
+            $absEligible = $this->isAbstractEligible($abs);
+
+            // meta FP
             [$fpStatus, $fpPath, $fpTs] = $this->latestFullpaperMeta($userId, $eid, $abs);
 
-            $meta     = $this->mapFpStatusMeta($fpStatus);
-            $absMeta  = $this->mapAbsMeta($abs);
-            $isOpen   = $this->isFullPaperOpen($event);
+            // jika abstrak tidak eligible (belum upload / ditolak) -> drop FP di UI
+            if (!$absEligible) {
+                $fpStatus = 'NONE';
+                $fpPath   = '';
+            }
 
-            // Upload hanya bila abstrak ACC & window open & status NONE/REVISION/REJECTED
-            $canUpload = $isOpen && $absAccepted && in_array($fpStatus, ['NONE','REVISION','REJECTED'], true);
+            $meta    = $this->mapFpStatusMeta($fpStatus);
+            $absMeta = $this->mapAbsMeta($abs);
+            $isOpen  = $this->isFullPaperOpen($event);
+
+            // Upload box: window open + abstrak eligible + FP NONE/REVISION/REJECTED
+            $canUpload = $isOpen && $absEligible && in_array($fpStatus, ['NONE','REVISION','REJECTED'], true);
 
             if ($canUpload) {
                 $needUpload[] = [
@@ -199,28 +208,26 @@ class Fullpaper extends BaseController
         $eventId = (int) $eventId;
 
         $event = $this->eventModel->find($eventId);
-        if (!$event) {
-            return redirect()->to('/presenter/fullpaper')->with('error', 'Event tidak ditemukan.');
-        }
+        if (!$event) return redirect()->to('/presenter/fullpaper')->with('error', 'Event tidak ditemukan.');
 
         $reg = $this->regModel->findUserReg($eventId, $userId);
-        if (!$reg) {
-            return redirect()->to('/presenter/fullpaper')->with('error', 'Anda belum terdaftar pada event ini.');
-        }
+        if (!$reg) return redirect()->to('/presenter/fullpaper')->with('error', 'Anda belum terdaftar pada event ini.');
 
-        $abs = $this->abstrakModel->where('id_user', $userId)
-                                  ->where('event_id', $eventId)
+        $abs = $this->abstrakModel->where('id_user',$userId)
+                                  ->where('event_id',$eventId)
                                   ->orderBy('id_abstrak','DESC')->first();
 
         [$status, $path, $createdAt, $reviewedAt, $decisionAt, $notes]
             = $this->latestFullpaperMeta($userId, $eventId, $abs);
 
+        $absEligible = $this->isAbstractEligible($abs);
+        if (!$absEligible) { $status = 'NONE'; $path = ''; }
+
         $statusMeta   = $this->mapFpStatusMeta($status);
         $absMeta      = $this->mapAbsMeta($abs);
         $isOpen       = $this->isFullPaperOpen($event);
-        $absAccepted  = !empty($abs) && strtolower($abs['status'] ?? '') === 'diterima';
-        $canReupload  = $isOpen && $absAccepted && in_array($status, ['REVISION','REJECTED'], true);
-        $canUploadNew = $isOpen && $absAccepted && $status === 'NONE';
+        $canReupload  = $isOpen && $absEligible && in_array($status, ['REVISION','REJECTED'], true);
+        $canUploadNew = $isOpen && $absEligible && $status === 'NONE';
 
         return view('role/presenter/fullpaper/detail', [
             'title'        => 'Detail Full Paper',
@@ -238,45 +245,40 @@ class Fullpaper extends BaseController
             'can_reupload' => $canReupload,
             'can_upload'   => $canUploadNew,
             'event_id'     => $eventId,
-            'history'      => [], // isi jika kamu punya method riwayat
+            'history'      => [],
         ]);
     }
 
-    /* ===== CREATE (FORM UPLOAD) — DIBATASI SEKALI SAJA ===== */
+    /* ===== CREATE (FORM UPLOAD) ===== */
     public function create($eventId)
     {
         $userId  = (int) session()->get('id_user');
         $eventId = (int) $eventId;
 
         $event = $this->eventModel->find($eventId);
-        if (!$event) {
-            return redirect()->to('/presenter/fullpaper')->with('error', 'Event tidak ditemukan.');
-        }
+        if (!$event) return redirect()->to('/presenter/fullpaper')->with('error', 'Event tidak ditemukan.');
 
         $reg = $this->regModel->findUserReg($eventId, $userId);
-        if (!$reg) {
-            return redirect()->to('/presenter/events/detail/'.$eventId)->with('error', 'Anda belum terdaftar pada event ini.');
-        }
+        if (!$reg) return redirect()->to('/presenter/events/detail/'.$eventId)->with('error', 'Anda belum terdaftar pada event ini.');
 
         if (!$this->isFullPaperOpen($event)) {
             return redirect()->to('/presenter/fullpaper')->with('error', 'Pengumpulan Full Paper ditutup.');
         }
 
-        // Cek status abstrak & FP terkini
-        $abs = $this->abstrakModel->where('id_user', $userId)
-                                  ->where('event_id', $eventId)
+        $abs = $this->abstrakModel->where('id_user',$userId)
+                                  ->where('event_id',$eventId)
                                   ->orderBy('id_abstrak','DESC')->first();
 
         [$fpStatus] = $this->latestFullpaperMeta($userId, $eventId, $abs);
-        $absAccepted = !empty($abs) && strtolower($abs['status'] ?? '') === 'diterima';
+        $absEligible = $this->isAbstractEligible($abs);
 
-        // POLICY: Upload pertama hanya jika abstrak ACC
-        if (!$absAccepted) {
-            return redirect()->to('/presenter/abstrak/detail/'.(int)($abs['id_abstrak'] ?? 0))
-                ->with('error', 'Abstrak belum diterima. Upload Full Paper hanya dibuka setelah abstrak ACC.');
+        // Kebijakan baru: boleh jika abstrak sudah diupload & bukan ditolak
+        if (!$absEligible) {
+            return redirect()->to('/presenter/abstrak/create/'.$eventId)
+                ->with('error', 'Upload Full Paper tersedia setelah Anda mengunggah abstrak (dan tidak ditolak).');
         }
 
-        // Sudah pernah upload? Hanya izinkan jika status revisi/ditolak
+        // Sudah pernah upload? Hanya izinkan jika revisi/ditolak
         if ($fpStatus !== 'NONE' && !in_array($fpStatus, ['REVISION','REJECTED'], true)) {
             return redirect()->to('/presenter/fullpaper/detail/'.$eventId)
                 ->with('error', 'Anda sudah mengunggah Full Paper. Tidak bisa upload lagi pada status saat ini.');
@@ -290,7 +292,7 @@ class Fullpaper extends BaseController
         ]);
     }
 
-    /* ===== STORE (SIMPAN FILE) — DIBATASI SEKALI SAJA ===== */
+    /* ===== STORE ===== */
     public function store()
     {
         $userId  = (int) session()->get('id_user');
@@ -311,17 +313,17 @@ class Fullpaper extends BaseController
             return redirect()->to('/presenter/fullpaper')->with('error', 'Pengumpulan Full Paper ditutup.');
         }
 
-        // HARD CHECK sebelum simpan (anti-bypass URL langsung)
-        $abs = $this->abstrakModel->where('id_user', $userId)
-                                  ->where('event_id', $eventId)
+        // HARD CHECK
+        $abs = $this->abstrakModel->where('id_user',$userId)
+                                  ->where('event_id',$eventId)
                                   ->orderBy('id_abstrak','DESC')->first();
 
-        [$fpStatus] = $this->latestFullpaperMeta($userId, $eventId, $abs);
-        $absAccepted = !empty($abs) && strtolower($abs['status'] ?? '') === 'diterima';
+        [$fpStatus]  = $this->latestFullpaperMeta($userId, $eventId, $abs);
+        $absEligible = $this->isAbstractEligible($abs);
 
-        if (!$absAccepted) {
-            return redirect()->to('/presenter/abstrak/detail/'.(int)($abs['id_abstrak'] ?? 0))
-                ->with('error', 'Abstrak belum diterima. Upload Full Paper hanya dibuka setelah abstrak ACC.');
+        if (!$absEligible) {
+            return redirect()->to('/presenter/abstrak/create/'.$eventId)
+                ->with('error', 'Upload Full Paper tersedia setelah Anda mengunggah abstrak (dan tidak ditolak).');
         }
 
         if ($fpStatus !== 'NONE' && !in_array($fpStatus, ['REVISION','REJECTED'], true)) {
@@ -355,7 +357,7 @@ class Fullpaper extends BaseController
             ->with('success', 'Full Paper berhasil diunggah. Menunggu review.');
     }
 
-    /* ===== UNDuh ===== */
+    /* ===== UNDUH ===== */
     public function download($filename)
     {
         $path = WRITEPATH.'uploads/fullpaper/'.$filename;

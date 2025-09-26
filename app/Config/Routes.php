@@ -274,21 +274,23 @@ $routes->group('presenter', [
     $routes->get ('events/cancel/(:num)',        'Event::cancel/$1');
 
     // Abstrak
-    $routes->get ('abstrak',                          'Abstrak::index');
-    $routes->get ('abstrak/create/(:num)',            'Abstrak::create/$1');
-    $routes->post('abstrak/store',                    'Abstrak::store');
-    $routes->get ('abstrak/detail/(:num)',            'Abstrak::detail/$1');
-    $routes->get ('abstrak/download/(:segment)',      'Abstrak::download/$1'); // pakai (:segment) utk nama file
+    $routes->get ('abstrak',                           'Abstrak::index');
+    $routes->get ('abstrak/create/(:num)',             'Abstrak::create/$1');
+    $routes->post('abstrak/store',                     'Abstrak::store');
+    $routes->get ('abstrak/detail/(:num)',             'Abstrak::detail/$1');
+    $routes->get ('abstrak/download/(:segment)',       'Abstrak::download/$1'); // nama file
+    $routes->post('abstrak/cancel/(:num)',             'Abstrak::cancel/$1');   // <-- TAMBAHAN (POST only)
+    
 
     // ==== FULL PAPER (PRESENTER) ====
     $routes->group('fullpaper', static function ($routes) {
-    // Pakai nama controller yang benar: Fullpaper (sesuai class)
-    $routes->get ('',                 'Fullpaper::index');        // /presenter/fullpaper
-    $routes->get ('detail/(:num)',    'Fullpaper::detail/$1');    // /presenter/fullpaper/detail/14
-    $routes->get ('create/(:num)',    'Fullpaper::create/$1');    // /presenter/fullpaper/create/{eventId}
-    $routes->post('store',            'Fullpaper::store');        // /presenter/fullpaper/store
-    $routes->get ('download/(:segment)','Fullpaper::download/$1');// /presenter/fullpaper/download/{filename}
-    $routes->post('delete/(:num)',    'Fullpaper::delete/$1');
+        // Pakai nama controller yang benar: Fullpaper (sesuai class)
+        $routes->get ('',                  'Fullpaper::index');          // /presenter/fullpaper
+        $routes->get ('detail/(:num)',     'Fullpaper::detail/$1');      // /presenter/fullpaper/detail/14
+        $routes->get ('create/(:num)',     'Fullpaper::create/$1');      // /presenter/fullpaper/create/{eventId}
+        $routes->post('store',             'Fullpaper::store');          // /presenter/fullpaper/store
+        $routes->get ('download/(:segment)','Fullpaper::download/$1');   // /presenter/fullpaper/download/{filename}
+        $routes->post('delete/(:num)',     'Fullpaper::delete/$1');      // hapus FP (POST)
     });
 
     // ==== KONTRIBUTOR (PRESENTER) ====

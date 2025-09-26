@@ -83,10 +83,8 @@ $fmtDate = function ($date, $withTime = false) {
                 $state = $statusIndex[$evId]['state'] ?? 'belum_daftar';
                 $label = $statusIndex[$evId]['label'] ?? '';
                 $hint  = $statusIndex[$evId]['hint']  ?? '';
-                // chip
                 $showChip  = (bool)($ui['show_chip'] ?? false);
                 $chipClass = $ui['chip_class'] ?? ('bg-'.$stateBadge($state).'-subtle text-'.$stateBadge($state));
-                // CTA utama (satu tombol)
                 $cta = $ui['cta'] ?? [
                   'visible' => false,
                   'label'   => 'Detail Event',
@@ -123,17 +121,16 @@ $fmtDate = function ($date, $withTime = false) {
                   <?php endif; ?>
 
                   <div class="d-flex align-items-center justify-content-between gap-2">
-                    <!-- Satu tombol utama -->
                     <a
                       class="btn <?= esc($cta['class'] ?? 'btn-outline-primary') ?> flex-fill <?= !empty($cta['disabled']) ? 'disabled' : '' ?>"
                       href="<?= esc($cta['url'] ?? site_url('presenter/events/detail/'.$evId)) ?>"
                       <?php if (!empty($cta['disabled'])): ?> aria-disabled="true"<?php endif; ?>
                     >
                       <?php
-                        // ikon ringan sesuai label
                         $lbl = strtolower((string)($cta['label'] ?? ''));
                         $icon = 'bi-info-circle';
                         if (str_contains($lbl,'daftar')) $icon='bi-box-arrow-in-right';
+                        elseif (str_contains($lbl,'kontributor')) $icon='bi-people';
                         elseif (str_contains($lbl,'upload')) $icon='bi-upload';
                         elseif (str_contains($lbl,'bayar')) $icon='bi-credit-card';
                         elseif (str_contains($lbl,'cek') || str_contains($lbl,'status')) $icon='bi-clock-history';
@@ -142,7 +139,6 @@ $fmtDate = function ($date, $withTime = false) {
                       <i class="bi <?= $icon ?> me-1"></i><?= esc($cta['label'] ?? 'Detail') ?>
                     </a>
 
-                    <!-- Link kecil ke detail (bukan tombol kedua) -->
                     <a class="text-decoration-none small text-muted" href="/presenter/events/detail/<?= $evId ?>">
                       Detail
                       <i class="bi bi-chevron-right ms-1"></i>
@@ -210,7 +206,6 @@ $fmtDate = function ($date, $withTime = false) {
                   <?php endif; ?>
 
                   <div class="d-flex align-items-center justify-content-between gap-2">
-                    <!-- Satu tombol utama -->
                     <a
                       class="btn <?= esc($cta['class'] ?? 'btn-outline-secondary') ?> flex-fill <?= !empty($cta['disabled']) ? 'disabled' : '' ?>"
                       href="<?= esc($cta['url'] ?? site_url('presenter/events/detail/'.$evId)) ?>"
@@ -219,7 +214,7 @@ $fmtDate = function ($date, $withTime = false) {
                       <?php
                         $lbl = strtolower((string)($cta['label'] ?? ''));
                         $icon = 'bi-info-circle';
-                        if (str_contains($lbl,'daftar')) $icon='bi-box-arrow-in-right';
+                        if (str_contains($lbl,'kontributor')) $icon='bi-people';
                         elseif (str_contains($lbl,'upload')) $icon='bi-upload';
                         elseif (str_contains($lbl,'bayar')) $icon='bi-credit-card';
                         elseif (str_contains($lbl,'cek') || str_contains($lbl,'status')) $icon='bi-clock-history';
@@ -228,7 +223,6 @@ $fmtDate = function ($date, $withTime = false) {
                       <i class="bi <?= $icon ?> me-1"></i><?= esc($cta['label'] ?? 'Detail') ?>
                     </a>
 
-                    <!-- Link kecil ke detail -->
                     <a class="text-decoration-none small text-muted" href="/presenter/events/detail/<?= $evId ?>">
                       Detail
                       <i class="bi bi-chevron-right ms-1"></i>
@@ -249,51 +243,117 @@ $fmtDate = function ($date, $withTime = false) {
 <?= $this->include('partials/footer') ?>
 
 <style>
+  /* ===== Design Tokens (palette & radii) ===== */
   :root{
-    --primary-color:#2563eb; --info-color:#06b6d4; --success-color:#10b981; --secondary:#475569;
+    --primary-50:#eff6ff; --primary-100:#dbeafe; --primary-200:#bfdbfe;
+    --primary-300:#93c5fd; --primary-400:#60a5fa; --primary-500:#3b82f6;
+    --primary-600:#2563eb; --primary-700:#1d4ed8; --primary-800:#1e40af; --primary-900:#1e3a8a;
+
+    --teal-500:#06b6d4; --teal-600:#0891b2;
+    --success-600:#10b981; --warning-600:#d97706; --danger-600:#ef4444; --slate-600:#475569;
+
+    --card-r:16px; --chip-r:999px; --ring:0 0 0 .22rem rgba(37,99,235,.18);
   }
+
+  /* ===== Page background ===== */
+  body{
+    background:
+      radial-gradient(1200px 380px at 10% -20%, var(--primary-200) 0, #fff 45%) fixed;
+  }
+
+  /* ===== Hero / Header biru ===== */
   .header-section.header-blue{
-    background:linear-gradient(135deg,var(--primary-color),#1e40af);
-    color:#fff; padding:24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
+    position:relative;
+    background:
+      radial-gradient(150% 120% at 10% -40%, var(--primary-600), var(--primary-700) 45%, var(--primary-800) 95%);
+    color:#fff;
+    padding:24px;
+    border-radius:18px;
+    border:1px solid rgba(255,255,255,.16);
+    box-shadow:
+      0 18px 40px rgba(29,78,216,.18),
+      inset 0 0 50px rgba(255,255,255,.06);
+    overflow:hidden;
   }
-  .welcome-text{ font-weight:700; }
+  .header-section.header-blue:after{
+    content:"";
+    position:absolute; inset:0;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent 60%);
+    transform:skewY(-6deg); pointer-events:none;
+  }
+  .welcome-text{ font-weight:800; letter-spacing:.2px; }
+
+  /* ===== Gradient header on cards ===== */
   .bg-gradient-primary{
-    background:linear-gradient(135deg,var(--primary-color),var(--info-color))!important;
+    background:linear-gradient(135deg, var(--primary-600), var(--teal-500))!important;
+    color:#fff;
+    border-bottom:1px solid rgba(255,255,255,.18);
+    padding:12px 16px;
   }
+
+  /* ===== Generic card polish ===== */
+  .card{
+    border-radius:var(--card-r);
+    border:1px solid rgba(30,41,59,.06);
+    box-shadow:0 10px 26px rgba(2,8,23,.06);
+  }
+  .card:hover{ box-shadow:0 14px 30px rgba(2,8,23,.10); transition:box-shadow .2s ease; }
+
+  /* ===== Event card ===== */
   .event-card{
-    background:#fff; border-radius:14px; padding:16px; border:1px solid #eef2f7;
+    background:linear-gradient(180deg,#fff, rgba(255,255,255,.96));
+    border:1px solid rgba(30,41,59,.08);
+    border-radius:18px;
+    padding:16px;
+    box-shadow:0 12px 26px rgba(2,8,23,.06);
+    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .event-card:hover{
+    transform:translateY(-2px);
+    border-color:rgba(37,99,235,.25);
+    box-shadow:0 18px 36px rgba(2,8,23,.12);
   }
   .opacity-90{ opacity:.92; }
 
-  /* Compact search */
+  /* ===== Search compact ===== */
   .search-compact .form-control,
   .search-compact .btn{
-    height: 42px;
-    border-radius: 10px;
-    font-size: .95rem;
+    height:44px; border-radius:12px; font-size:.96rem;
   }
-  .search-compact .form-control{ padding: .45rem .75rem; }
+  .search-compact .form-control{
+    background:#fff; border:1px solid rgba(2,8,23,.12);
+  }
+  .search-compact .form-control:focus{
+    border-color:var(--primary-400); box-shadow:var(--ring);
+  }
 
-  /* Fallback -subtle */
-  .bg-primary-subtle{ background:#e7f0ff !important; color:#2563eb !important;}
-  .bg-info-subtle{ background:#e6f9fc !important; color:#06b6d4 !important;}
-  .bg-warning-subtle{ background:#fff7e6 !important; color:#d97706 !important;}
-  .bg-danger-subtle{ background:#ffe9e9 !important; color:#ef4444 !important;}
-  .bg-secondary-subtle{ background:#f1f5f9 !important; color:#475569 !important;}
-  .bg-success-subtle{ background:#eafaf3 !important; color:#0f766e !important;}
-  .text-primary{ color:#2563eb !important;}
-  .text-info{ color:#06b6d4 !important;}
-  .text-warning{ color:#d97706 !important;}
-  .text-danger{ color:#ef4444 !important;}
-  .text-secondary{ color:#475569 !important;}
-  .text-success{ color:#0f766e !important;}
+  /* ===== Buttons ===== */
+  .btn-primary{ background:var(--primary-600); border-color:var(--primary-600); }
+  .btn-primary:hover{ background:var(--primary-700); border-color:var(--primary-700); }
+  .btn-outline-primary{ color:var(--primary-700); border-color:var(--primary-200); }
+  .btn-outline-primary:hover{ background:var(--primary-50); border-color:var(--primary-300); color:var(--primary-800); }
+  .btn:focus{ box-shadow:var(--ring); }
 
+  /* ===== Subtle badges (fallback untuk Bootstrap <5.3) ===== */
+  .badge{ border-radius:10px; font-weight:600; letter-spacing:.1px; }
+  .bg-primary-subtle{ background: #e9f1ff !important; color: var(--primary-700) !important; }
+  .bg-info-subtle{ background:#e6fbff !important; color: var(--teal-600) !important; }
+  .bg-success-subtle{ background:#eafaf3 !important; color:var(--success-600)!important; }
+  .bg-warning-subtle{ background:#fff7e8 !important; color:var(--warning-600)!important; }
+  .bg-danger-subtle{ background:#ffe9ec !important; color:var(--danger-600)!important; }
+  .bg-secondary-subtle{ background:#f1f5f9 !important; color:var(--slate-600)!important; }
+
+  /* ===== Chip style (untuk label state di card) ===== */
+  .badge.rounded-pill{ border-radius:var(--chip-r)!important; padding:.35rem .6rem; }
+
+  /* ===== Small helpers ===== */
+  .text-blue-900{ color:var(--primary-900)!important; }
+  .text-white-50{ color:rgba(255,255,255,.8)!important; }
+  .ratio > iframe{ border-radius:12px; }
+
+  /* ===== Responsive ===== */
   @media (max-width: 767.98px){
-    .header-section.header-blue{ padding:18px; }
-    .search-compact .form-control,
-    .search-compact .btn{ height: 40px; font-size: .92rem; }
+    .header-section.header-blue{ padding:18px; border-radius:16px; }
+    .search-compact .form-control, .search-compact .btn{ height: 42px; }
   }
 </style>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>

@@ -102,6 +102,28 @@ class Event extends BaseController
 
         $flow = $this->computeFlowStatus((int)$event['id'], $userId);
 
+        // ==== Ambil daftar kontributor (opsional) ====
+        $contributors = [];
+        if ($reg) {
+            if (method_exists($this->regModel, 'getContributors')) {
+                $contributors = $this->regModel->getContributors((int)$event['id'], $userId) ?? [];
+            } else {
+                $raw = $reg['contributors'] ?? $reg['kontributor'] ?? $reg['coauthors_json'] ?? null;
+                if ($raw) {
+                    $tmp = is_array($raw) ? $raw : json_decode((string)$raw, true);
+                    if (is_array($tmp)) $contributors = $tmp;
+                }
+            }
+            $main = [
+                'role'     => 'Presenter Utama',
+                'nama'     => $reg['nama']      ?? ($reg['full_name'] ?? (session()->get('nama') ?? '')),
+                'email'    => $reg['email']     ?? (session()->get('email') ?? ''),
+                'afiliasi' => $reg['afiliasi']  ?? ($reg['institution'] ?? ''),
+                'negara'   => $reg['negara']    ?? ($reg['country'] ?? ''),
+            ];
+            array_unshift($contributors, $main);
+        }
+
         return view('role/presenter/events/detail', [
             'title'                 => 'Detail Event',
             'event'                 => $event,
@@ -114,6 +136,7 @@ class Event extends BaseController
             'registration_deadline' => $event['registration_deadline'] ?? null,
             'abstract_deadline'     => $event['abstract_deadline'] ?? null,
             'full_paper_deadline'   => $event['full_paper_deadline'] ?? null,
+            'contributors'          => $contributors,
         ]);
     }
 
@@ -132,7 +155,7 @@ class Event extends BaseController
 
         $regId = $this->regModel->createPresenterRegistration((int)$id, $userId);
         if ($regId) {
-            // by default, langsung ke halaman kontributor (langkah 2)
+            // langsung ke halaman kontributor (langkah 2)
             return redirect()->to('/presenter/kontributor/start/'.$id)
                 ->with('success', 'Terdaftar. Lengkapi data kontributor terlebih dahulu.');
         }
@@ -181,12 +204,31 @@ class Event extends BaseController
             ->orderBy('id_pembayaran', 'DESC')->first();
     }
 
+    /**
+     * KONTRIBUTOR dianggap lengkap jika:
+     *  - ada salah satu flag boolean selesai (contributor_done / kontributor_done / profile_completed / is_profile_completed) bernilai true,
+     *    ATAU
+     *  - field 'afiliasi' di registrasi tidak kosong (minimal afiliasi).
+     *
+     * Ini menyamakan perilaku dengan controller Abstrak (yang mewajibkan afiliasi).
+     */
     private function isContributorCompleted(?array $reg): bool
     {
         if (!$reg) return false;
-        foreach (['contributor_done', 'kontributor_done', 'profile_completed', 'is_profile_completed'] as $f) {
-            if (array_key_exists($f, $reg)) return (bool) $reg[$f];
+
+        // 1) cek flag boolean selesai
+        foreach (['contributor_done','kontributor_done','profile_completed','is_profile_completed'] as $f) {
+            if (array_key_exists($f, $reg)) {
+                $v = $reg[$f];
+                if ($v === true || $v === 1 || $v === '1' || $v === 't' || $v === 'true') {
+                    return true;
+                }
+            }
         }
+
+        // 2) minimal afiliasi harus ada
+        if (!empty($reg['afiliasi'])) return true;
+
         return false;
     }
 
@@ -207,7 +249,7 @@ class Event extends BaseController
     }
 
     /**
-     * DEADLINE policy (POSTGRES-SAFE: boolean literal):
+     * DEADLINE policy:
      * - Lewat abstract_deadline & belum upload abstrak → drop.
      * - Lewat full_paper_deadline & sudah ada abstrak tapi belum ada full paper → drop.
      * - Lewat registration_deadline & sudah ada abstrak tapi belum ada full paper → drop.
@@ -229,7 +271,6 @@ class Event extends BaseController
         $regDL       = !empty($event['registration_deadline'])? strtotime($event['registration_deadline']) : null;
 
         if ($absDeadline && $now > $absDeadline && !$hasAbstract) {
-            // boolean true (bukan 1)
             $this->regModel->update((int)$reg['id'], ['is_dropped' => true, 'drop_reason' => 'abstract_deadline_passed']);
             $this->regModel->delete((int)$reg['id']);
             return;
@@ -422,7 +463,7 @@ class Event extends BaseController
                 if ($isOpen) $set('Daftar', site_url('presenter/events/register/'.$eventId));
                 break;
             case 'lengkapi_kontributor':
-                $set('Daftar Lanjutan', site_url('presenter/kontributor/start/'.$eventId));
+                $set('Lengkapi Kontributor', site_url('presenter/kontributor/start/'.$eventId));
                 break;
             case 'upload_abstrak':
                 $set('Upload Abstrak', site_url('presenter/abstrak/create/'.$eventId));
@@ -460,7 +501,6 @@ class Event extends BaseController
                 $set('Lihat Event', site_url('presenter/events/detail/'.$eventId), 'btn-success');
                 break;
             default:
-                // biarkan detail
                 break;
         }
 

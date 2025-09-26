@@ -16,23 +16,25 @@ $formatLabel = function($f){
 <?= $this->include('partials/alerts') ?>
 
 <div id="content">
-  <main class="flex-fill" style="padding-top:70px;">
-    <div class="container-fluid p-3 p-md-4">
+  <main class="flex-fill page-wrap-blue">
+    <div class="container-xxl px-3 px-md-4 py-4">
 
-      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3">
+      <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
         <div>
-          <h3 class="welcome-text mb-1"><i class="bi bi-journal-text me-2"></i>Abstrak</h3>
-          <div class="text-white-50">Upload & pantau status abstrak</div>
+          <h3 class="hero-title mb-1"><i class="bi bi-journal-text me-2"></i>Abstrak</h3>
+          <div class="text-white-75 small">Upload & pantau status abstrak</div>
         </div>
-        <div class="text-end d-none d-md-block">
-          <small class="text-white-50 d-block">Hari ini</small>
-          <strong class="text-white"><?= date('d M Y') ?></strong>
+        <div class="d-none d-md-block text-end">
+          <div class="text-white-75 small">Hari ini</div>
+          <div class="fw-semibold text-white"><?= date('d M Y') ?></div>
         </div>
       </div>
 
-      <div class="card shadow-sm mb-4 border-0 overflow-hidden">
-        <div class="card-header bg-gradient-primary text-white">
-          <h5 class="mb-0"><i class="bi bi-upload me-2"></i>Abstrak perlu upload</h5>
+      <!-- Abstrak perlu upload -->
+      <div class="card shadow-soft card-glass-plain mb-4">
+        <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+          <span class="badge bg-blue-soft"><i class="bi bi-upload"></i></span>
+          <h5 class="mb-0 fw-semibold text-blue-900">Abstrak perlu upload</h5>
         </div>
         <div class="card-body">
           <?php if (empty($uploadEvents)): ?>
@@ -41,24 +43,24 @@ $formatLabel = function($f){
             <div class="row g-3">
               <?php foreach ($uploadEvents as $row): ?>
               <div class="col-12 col-md-6 col-xl-4">
-                <div class="event-card h-100 shadow-sm">
+                <div class="event-card h-100 p-3">
                   <div class="d-flex align-items-start justify-content-between mb-2">
-                    <h5 class="mb-0"><?= esc($row['title'] ?? '-') ?></h5>
-                    <span class="badge bg-<?= esc($row['status_badge']) ?>">
+                    <h6 class="mb-0 text-blue-900"><?= esc($row['title'] ?? '-') ?></h6>
+                    <span class="badge bg-<?= esc($row['status_badge']) ?>-subtle text-<?= esc($row['status_badge']) ?>">
                       <?= esc($row['status_label']) ?>
                     </span>
                   </div>
+
                   <div class="small text-muted mb-2">
-                    Tanggal Event:
-                    <strong><?= esc($fmtDate($row['event_date'] ?? null)) ?></strong><br>
-                    Deadline Abstrak:
-                    <strong><?= esc($fmtDT($row['abstract_deadline'] ?? null)) ?></strong><br>
-                    Format:
-                    <strong><?= esc($formatLabel($row['format'] ?? '')) ?></strong>
+                    Tanggal Event: <strong class="text-blue-900"><?= esc($fmtDate($row['event_date'] ?? null)) ?></strong><br>
+                    Deadline Abstrak: <strong class="text-blue-900"><?= esc($fmtDT($row['abstract_deadline'] ?? null)) ?></strong><br>
+                    Format: <strong class="text-blue-900"><?= esc($formatLabel($row['format'] ?? '')) ?></strong>
                   </div>
+
                   <?php if (!empty($row['hint'])): ?>
                     <div class="text-muted small mb-2"><?= esc($row['hint']) ?></div>
                   <?php endif; ?>
+
                   <div class="d-flex gap-2">
                     <a class="btn btn-primary flex-fill" href="<?= site_url('presenter/abstrak/create/'.(int)$row['event_id']) ?>">
                       <i class="bi bi-upload"></i> Upload Abstrak
@@ -77,9 +79,11 @@ $formatLabel = function($f){
         </div>
       </div>
 
-      <div class="card shadow-sm mb-4 border-0 overflow-hidden">
-        <div class="card-header bg-gradient-primary text-white">
-          <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Riwayat Abstrak</h5>
+      <!-- Riwayat Abstrak -->
+      <div class="card shadow-soft card-glass-plain mb-4">
+        <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+          <span class="badge bg-blue-soft"><i class="bi bi-clock-history"></i></span>
+          <h5 class="mb-0 fw-semibold text-blue-900">Riwayat Abstrak</h5>
         </div>
         <div class="card-body">
           <?php if (empty($history)): ?>
@@ -88,40 +92,43 @@ $formatLabel = function($f){
             <div class="row g-3">
               <?php foreach ($history as $h): ?>
               <div class="col-12 col-md-6 col-xl-4">
-                <div class="event-card h-100 shadow-sm">
+                <div class="event-card h-100 p-3">
                   <div class="d-flex align-items-start justify-content-between mb-1">
-                    <h6 class="mb-0"><?= esc($h['judul']) ?></h6>
-                    <span class="badge bg-<?= esc($h['status_badge']) ?>">
+                    <h6 class="mb-0 text-blue-900"><?= esc($h['judul']) ?></h6>
+                    <span class="badge bg-<?= esc($h['status_badge']) ?>-subtle text-<?= esc($h['status_badge']) ?>">
                       <?= esc($h['status_label']) ?>
                     </span>
                   </div>
+
                   <div class="small text-muted mb-2"><?= esc($h['nama_kategori'] ?? '-') ?></div>
 
                   <div class="small text-muted mb-2">
-                    Event: <strong><?= esc($h['event_title'] ?? '-') ?></strong><br>
-                    Tanggal Event: <strong><?= esc($fmtDate($h['event_date'] ?? null)) ?></strong>
+                    Event: <strong class="text-blue-900"><?= esc($h['event_title'] ?? '-') ?></strong><br>
+                    Tanggal Event: <strong class="text-blue-900"><?= esc($fmtDate($h['event_date'] ?? null)) ?></strong>
                   </div>
 
                   <?php if (!empty($h['status_hint'])): ?>
-                    <div class="small mb-2 <?= ($h['status'] ?? '') === 'diterima' ? 'text-success' : (($h['status'] ?? '') === 'ditolak' ? 'text-danger' : 'text-muted') ?>">
-                      <?= esc($h['status_hint']) ?>
-                    </div>
+                    <?php
+                      $cls = (($h['status'] ?? '') === 'diterima') ? 'text-success' :
+                             ((($h['status'] ?? '') === 'ditolak') ? 'text-danger' : 'text-muted');
+                    ?>
+                    <div class="small mb-2 <?= $cls ?>"><?= esc($h['status_hint']) ?></div>
                   <?php endif; ?>
 
-                  <div class="small text-muted">
-                    Dikirim: <?= esc($fmtDT($h['tanggal_upload'] ?? null)) ?>
-                  </div>
+                  <div class="small text-muted">Dikirim: <strong class="text-blue-900"><?= esc($fmtDT($h['tanggal_upload'] ?? null)) ?></strong></div>
 
                   <div class="mt-2 d-grid gap-2">
                     <a class="btn btn-outline-primary btn-sm" href="<?= site_url('presenter/abstrak/detail/'.(int)$h['id_abstrak']) ?>">
                       <i class="bi bi-eye"></i> Detail
                     </a>
+
                     <?php if (($h['status'] ?? '') === 'ditolak'): ?>
                       <a class="btn btn-danger btn-sm" href="<?= site_url('presenter/abstrak/create/'.(int)$h['event_id']) ?>">
                         <i class="bi bi-upload"></i> Upload Ulang Abstrak
                       </a>
                     <?php endif; ?>
-                    <!-- Tidak ada tombol ke Full Paper -->
+
+                    <!-- sesuai permintaan: TIDAK ADA tombol Batalkan di index -->
                   </div>
                 </div>
               </div>
@@ -139,20 +146,42 @@ $formatLabel = function($f){
 
 <style>
   :root{
-    --primary-color:#2563eb; --info-color:#06b6d4; --success-color:#10b981; 
-    --warning-color:#f59e0b; --danger-color:#ef4444; --secondary:#475569;
+    --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
+    --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
+    --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
   }
-  .header-section.header-blue{
-    background:linear-gradient(135deg,var(--primary-color),#1e40af);
-    color:#fff; padding:24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
+  .page-wrap-blue{ background: linear-gradient(180deg, var(--blue-50), #fff 40%); min-height:100vh; padding-top:70px; }
+  .hero-blue{
+    background: radial-gradient(1200px 400px at 10% -20%, var(--blue-600) 0, var(--blue-700) 40%, var(--blue-800) 100%);
+    color:#fff; border-radius:18px; border:1px solid rgba(255,255,255,.15);
+    box-shadow: 0 10px 30px rgba(29,78,216,.25), inset 0 0 40px rgba(255,255,255,.06);
   }
-  .welcome-text{ font-weight:700; }
-  .bg-gradient-primary{ background:linear-gradient(135deg,var(--primary-color),var(--info-color))!important; }
+  .hero-title{ font-weight:800; letter-spacing:.2px; }
+  .text-white-75{ color:rgba(255,255,255,.85)!important; }
+
+  .card-glass-plain{ backdrop-filter: blur(3px); background: rgba(255,255,255,.7); border-radius:16px; border:1px solid rgba(30,64,175,.06); }
+  .shadow-soft{ box-shadow: 0 10px 24px rgba(30,64,175,.06); }
+  .bg-blue-soft{ background: var(--blue-100); color: var(--blue-800); border-radius:12px; padding:.35rem .6rem; }
+  .text-blue-900{ color: var(--blue-900)!important; }
+
   .event-card{
-    background:#f8fafc; border-radius:14px; padding:16px; border:1px solid #e5e7eb;
+    background: linear-gradient(180deg,#fff, rgba(255,255,255,.9));
+    border:1px solid rgba(30,64,175,.08); border-radius:14px;
+    box-shadow: 0 10px 22px rgba(30,64,175,.06);
   }
+
+  /* subtle badge variants */
+  .bg-success-subtle{ background:#eafaf3 !important; color:#0f766e !important;}
+  .bg-warning-subtle{ background:#fff7e6 !important; color:#a16207 !important;}
+  .bg-danger-subtle{ background:#ffe9e9 !important; color:#b91c1c !important;}
+  .bg-info-subtle{ background:#e6f9fc !important; color:#0369a1 !important;}
+  .bg-secondary-subtle{ background:#f1f5f9 !important; color:#334155 !important;}
+
+  .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); }
+  .btn-primary:hover{ background:var(--blue-700); border-color:var(--blue-700); }
+
   @media (max-width: 767.98px){
-    .event-card{ padding:14px; }
-    .header-section.header-blue{ padding:18px; }
+    .hero-blue{ border-radius:14px; }
+    .container-xxl{ padding-left:.9rem; padding-right:.9rem; }
   }
 </style>
