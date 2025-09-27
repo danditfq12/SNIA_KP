@@ -110,7 +110,7 @@ $formatLabel = function($f){
 
                   <?php if (!empty($h['status_hint'])): ?>
                     <div class="small mb-2 
-                      <?= $h['fp_status'] === 'ACCEPTED' ? 'text-success' : ($h['fp_status'] === 'REJECTED' ? 'text-danger' : 'text-muted') ?>">
+                      <?= ($h['fp_status'] ?? '') === 'ACCEPTED' ? 'text-success' : (($h['fp_status'] ?? '') === 'REJECTED' ? 'text-danger' : 'text-muted') ?>">
                       <?= esc($h['status_hint']) ?>
                     </div>
                   <?php endif; ?>
@@ -144,37 +144,165 @@ $formatLabel = function($f){
 <?= $this->include('partials/footer') ?>
 
 <style>
-  :root{
-    --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
-    --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
-    --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
-  }
-  .page-wrap-blue{ background: linear-gradient(180deg, var(--blue-50), #fff 40%); min-height:100vh; padding-top:70px; }
-  .hero-blue{
-    background: radial-gradient(1200px 400px at 10% -20%, var(--blue-600) 0, var(--blue-700) 40%, var(--blue-800) 100%);
-    color:#fff; border-radius:18px; border:1px solid rgba(255,255,255,.15);
-    box-shadow: 0 10px 30px rgba(29,78,216,.25), inset 0 0 40px rgba(255,255,255,.06);
-  }
-  .hero-title{ font-weight:800; letter-spacing:.2px; }
-  .text-white-75{ color:rgba(255,255,255,.85)!important; }
-  .card-glass-plain{ backdrop-filter: blur(3px); background: rgba(255,255,255,.7); border-radius:16px; border:1px solid rgba(30,64,175,.06); }
-  .shadow-soft{ box-shadow: 0 10px 24px rgba(30,64,175,.06); }
-  .bg-blue-soft{ background: var(--blue-100); color: var(--blue-800); border-radius:12px; padding:.35rem .6rem; }
-  .text-blue-900{ color: var(--blue-900)!important; }
-  .event-card{
-    background: linear-gradient(180deg,#fff, rgba(255,255,255,.9));
-    border:1px solid rgba(30,64,175,.08); border-radius:14px;
-    box-shadow: 0 10px 22px rgba(30,64,175,.06);
-  }
-  .bg-success-subtle{ background:#eafaf3 !important; color:#0f766e !important;}
-  .bg-warning-subtle{ background:#fff7e6 !important; color:#a16207 !important;}
-  .bg-danger-subtle{ background:#ffe9e9 !important; color:#b91c1c !important;}
-  .bg-info-subtle{ background:#e6f9fc !important; color:#0369a1 !important;}
-  .bg-secondary-subtle{ background:#f1f5f9 !important; color:#334155 !important;}
-  .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); }
-  .btn-primary:hover{ background:var(--blue-700); border-color:var(--blue-700); }
-  @media (max-width: 767.98px){
-    .hero-blue{ border-radius:14px; }
-    .container-xxl{ padding-left:.9rem; padding-right:.9rem; }
-  }
+:root{
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
+  --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
+  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+
+  --side-pad: 1rem;   /* padding kiri–kanan minimum */
+  --gutter-x: 1rem;   /* jarak antar kolom */
+}
+
+body{
+  font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size:14.6px;
+  line-height:1.5;
+}
+
+/* ===== Layout wrapper ===== */
+.page-wrap-blue{
+  background:linear-gradient(180deg,var(--blue-50),#fff 40%);
+  min-height:100vh;
+  padding-top:72px; /* seragam */
+}
+
+/* ===== Container — lebar tetap, padding kiri–kanan 1rem ===== */
+.container-xxl{
+  max-width:1400px;
+  padding-left:var(--side-pad) !important;
+  padding-right:var(--side-pad) !important;
+}
+
+/* ===== Gutter grid (seragam) ===== */
+.row.g-3, .row.g-4{ --bs-gutter-x: var(--gutter-x); --bs-gutter-y: var(--gutter-x); }
+
+/* ===== HERO (header biru) ===== */
+.hero-blue{
+  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
+  color:#fff !important;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.15);
+  box-shadow:0 12px 28px rgba(30,64,175,.10);
+  padding:1.6rem !important;
+  margin-bottom:1.25rem !important;
+}
+/* Matikan efek glass jika hero terlanjur diberi .card-glass / .card-glass-plain */
+.hero-blue.card-glass,
+.hero-blue.card-glass-plain{
+  backdrop-filter:none !important;
+  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
+  border:1px solid rgba(255,255,255,.15) !important;
+  box-shadow:0 12px 28px rgba(30,64,175,.10) !important;
+}
+.hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.45rem; }
+.text-white-75{ color:rgba(255,255,255,.85)!important; }
+
+/* ===== Card / Glass ===== */
+.card-glass{
+  backdrop-filter: blur(2px);
+  background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.10));
+  border-radius:16px; border:1px solid rgba(255,255,255,.28);
+}
+.card-glass-plain{
+  backdrop-filter:blur(6px);
+  background:rgba(255,255,255,.94);
+  border-radius:14px;
+  border:1px solid rgba(30,64,175,.10);
+}
+.shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
+
+.card-header{ padding:1rem 1rem .45rem 1rem !important; }
+.card-body{   padding:1.05rem !important; }
+
+/* ===== Badge lembut ===== */
+.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.4rem .6rem; font-weight:600; font-size:.85rem; }
+.bg-success-subtle{   background:#d1fae5!important; color:#065f46!important; }
+.bg-warning-subtle{   background:#fef3c7!important; color:#92400e!important; }
+.bg-danger-subtle{    background:#fee2e2!important; color:#991b1b!important; }
+.bg-info-subtle{      background:#e0f2fe!important; color:#0c4a6e!important; }
+.bg-secondary-subtle{ background:#f1f5f9!important; color:#475569!important; }
+.bg-primary-subtle{   background:#dbeafe!important; color:var(--blue-700)!important; }
+.text-blue-900{ color:var(--blue-900)!important; }
+
+/* ===== Event card (box on + compact) ===== */
+.event-card{
+  background:linear-gradient(180deg,#fff,rgba(255,255,255,.96));
+  border:1px solid rgba(30,64,175,.10);
+  border-radius:14px;
+  box-shadow:0 10px 22px rgba(30,64,175,.08);
+  padding:14px;
+}
+.event-card h6{ font-size:1.05rem; margin-bottom:.25rem; }
+.event-card .small{ font-size:.92rem; }
+.event-card .badge{ padding:.35rem .6rem; font-size:.78rem; border-radius:10px; }
+.event-card .btn{ border-radius:10px; padding:.58rem 1rem; font-size:.95rem; }
+.opacity-90{ opacity:.92; }
+
+/* ===== Table (kalau nanti dipakai) ===== */
+.table{ font-size:.95rem; margin-bottom:0; }
+.table thead th{
+  background-color:var(--blue-50)!important;
+  border-bottom:1px solid var(--blue-200);
+  font-weight:600; color:var(--blue-900);
+  font-size:.85rem; text-transform:uppercase; letter-spacing:.4px;
+  padding:.75rem 1rem;
+}
+.table tbody tr{ border-bottom:1px solid rgba(30,64,175,.08); }
+.table tbody td{
+  padding:.8rem 1rem; vertical-align:middle; border-top:none; font-size:.95rem;
+}
+.table-responsive{ border:1px solid rgba(30,64,175,.08); border-radius:12px; overflow:hidden; }
+
+/* ===== Buttons ===== */
+.btn{
+  font-weight:600; letter-spacing:.25px;
+  border-radius:10px; font-size:.95rem; padding:.55rem 1rem;
+}
+.btn-sm{ padding:.42rem .8rem; font-size:.86rem; }
+.btn-lg{ padding:.85rem 1.5rem; font-size:1.06rem; }
+.btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
+.btn-info{    background:#06b6d4; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,.2); }
+.btn-success{ background:#059669; border-color:#059669; box-shadow:0 4px 12px rgba(5,150,105,.2); }
+.btn-warning{ background:#d97706; border-color:#d97706; box-shadow:0 4px 12px rgba(217,119,6,.2); }
+.btn-danger{  background:#dc2626; border-color:#dc2626; box-shadow:0 4px 12px rgba(220,38,38,.2); }
+
+.d-grid.gap-2{ gap:1rem !important; }
+
+/* ===== Helpers ===== */
+.text-muted{ color:#6b7280!important; font-weight:500; font-size:.9rem; }
+.text-muted.small{ font-size:.84rem!important; }
+.fw-semibold{ font-weight:600!important; }
+.fw-medium{   font-weight:500!important; }
+a{ text-decoration:none; }
+a.text-primary{ color:var(--blue-600)!important; font-weight:500; }
+
+/* ===== Card glow (notif sukses) ===== */
+.card-glow{ box-shadow:0 8px 24px rgba(16,185,129,.18); border:1px solid rgba(16,185,129,.2); }
+
+/* ===== Responsive ===== */
+@media (max-width:575.98px){
+  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
+  .hero-blue{ border-radius:14px; padding:1.25rem!important; margin-bottom:1rem!important; }
+  .hero-title{ font-size:1.25rem; }
+  .card-body{  padding:.9rem!important; }
+  .card-header{ padding:.9rem .9rem .4rem .9rem!important; }
+  .badge{ padding:.38rem .6rem; font-size:.74rem; }
+  .event-card{ padding:12px; }
+  .event-card h6{ font-size:1rem; }
+  .event-card .small{ font-size:.9rem; }
+}
+@media (min-width:576px) and (max-width:767.98px){
+  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
+  .hero-title{ font-size:1.35rem; }
+  .card-body{  padding:1rem!important; }
+}
+@media (min-width:768px) and (max-width:991.98px){
+  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
+  .hero-title{ font-size:1.45rem; }
+}
+@media (min-width:992px){
+  .hero-blue{ padding:1.7rem!important; }
+  .card-body{  padding:1.05rem!important; }
+  .card-header{ padding:1rem 1rem .45rem 1rem!important; }
+}
 </style>

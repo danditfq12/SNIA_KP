@@ -36,7 +36,7 @@ $routes->group('qr', static function ($routes) {
 $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], static function ($routes) {
     $routes->get('login',  'Login::index');
     $routes->post('login', 'Login::login');
-    $routes->get('logout', 'Logout::index');
+    $routes->post('logout', 'Logout::index');
 
     $routes->get('register', 'Register::index');
     $routes->post('register','Register::store');
@@ -51,26 +51,26 @@ $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], static function 
 // NO authentication required for webhooks!
 // ---------------------------------------------------
 $routes->group('webhook', ['namespace' => 'App\Controllers\Webhook'], static function ($routes) {
-    // Main webhook endpoints - Path EXACT yang digunakan di dashboard Midtrans
-    $routes->post('midtrans/handle', 'Midtrans::handle');
-    $routes->get('midtrans/handle', 'Midtrans::handle'); // Untuk connectivity test
-    $routes->post('midtrans', 'Midtrans::handle'); // Alternative endpoint
+    // tangkap GET/POST/HEAD/OPTIONS, dengan/ tanpa trailing slash
+    $routes->match(['get','post','head','options'], 'midtrans/handle', 'Midtrans::handle');
+    $routes->match(['get','post','head','options'], 'midtrans/handle/', 'Midtrans::handle'); // optional slash
 
-    // Tambahan path variasi dari Midtrans
-    $routes->post('midtrans/handle/(:any)', 'Midtrans::handle');
+    // endpoint alternatif (opsional)
+    $routes->match(['get','post','head','options'], 'midtrans', 'Midtrans::handle');
+
+    // variasi path yang kadang dipakai Midtrans
+    $routes->match(['post','options'], 'midtrans/handle/(:any)', 'Midtrans::handle');
     $routes->post('midtrans/handle/v1.0/debit/notify', 'Midtrans::handle');
 
-    // Testing & debugging
+    // testing
     $routes->get('midtrans/test', 'Midtrans::test');
     $routes->post('midtrans/check/(:segment)', 'Midtrans::checkStatus/$1');
     $routes->get('midtrans/check/(:segment)', 'Midtrans::checkStatus/$1');
-    $routes->get('manual-check/(:any)', 'Webhook\Midtrans::checkStatus/$1');
 
-    if (ENVIRONMENT === 'development') {
-        $routes->get('midtrans/logs', 'Midtrans::logs');
-        $routes->post('midtrans/simulate', 'Midtrans::simulate');
-        $routes->get('midtrans/debug/(:segment)', 'Midtrans::debug/$1');
-    }
+    // perbaiki penulisan namespace ganda
+    $routes->get('manual-check/(:any)', 'Midtrans::checkStatus/$1');
+    $routes->match(['get','post','head','options'], 'midtrans/handle/', 'Midtrans::handle');
+
 });
 
 // Development/testing endpoints di root (tetap biarkan)
@@ -280,7 +280,6 @@ $routes->group('presenter', [
     $routes->get ('abstrak/detail/(:num)',             'Abstrak::detail/$1');
     $routes->get ('abstrak/download/(:segment)',       'Abstrak::download/$1'); // nama file
     $routes->post('abstrak/cancel/(:num)',             'Abstrak::cancel/$1');   // <-- TAMBAHAN (POST only)
-    
 
     // ==== FULL PAPER (PRESENTER) ====
     $routes->group('fullpaper', static function ($routes) {
@@ -355,7 +354,7 @@ $routes->group('audience', [
 
     // Additional payment endpoints
     $routes->get ('pembayaran/status/(:segment)',     'Pembayaran::checkStatus/$1');
-    $routes->post('pembayaran/retry/(:num)',          'Pembayaran::retryPayment/$1');
+    $routes->post('pembayaran/retry/(:num)',          'Pembayaran::retry/$1');
 
     // Absensi
     $routes->get ('absensi',              'Absensi::index');
@@ -438,12 +437,16 @@ $routes->group('profile', ['filter' => 'auth'], static function ($routes) {
 // ---------------------------------------------------
 // ENHANCED: Payment Processing Routes
 // ---------------------------------------------------
+
+// FIX: Callback eksternal harus publik (tanpa auth)
+$routes->post('payment/notification', 'Payment::notification');
+
 $routes->group('payment', ['filter' => 'auth'], static function ($routes) {
     $routes->get ('success',      'Payment::success');
     $routes->get ('pending',      'Payment::pending');
     $routes->get ('error',        'Payment::error');
     $routes->get ('finish',       'Payment::finish');
-    $routes->post('notification', 'Payment::notification'); // For external callbacks
+    // $routes->post('notification', 'Payment::notification'); // dipindah jadi publik
     $routes->get ('status/(:segment)', 'Payment::checkStatus/$1');
     $routes->post('retry/(:num)', 'Payment::retry/$1');
 });

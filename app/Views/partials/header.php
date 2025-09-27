@@ -56,8 +56,8 @@
 
     <div class="d-flex align-items-center gap-3">
       <?php
-        $nama  = session('nama_lengkap') ?? session('nama') ?? 'User';
-        $email = session('email') ?? '';
+        $nama     = session('nama_lengkap') ?? session('nama') ?? 'User';
+        $email    = session('email') ?? '';
         $foto     = session('foto') ?: 'default.png';
         $fotoVer  = session('foto_ver') ?: time();
         $avatarUrl= base_url('uploads/profile/' . $foto) . '?v=' . $fotoVer;
@@ -69,9 +69,8 @@
           <div class="nameblock d-none d-sm-block text-end">
             <div class="fw-semibold"><?= esc($nama) ?></div>
           </div>
-
           <img src="<?= $avatarUrl ?>" class="avatar" alt="Avatar"
-               onerror="this.outerHTML='<span class=&quot;avatar bg-primary text-white d-inline-flex justify-content-center align-items-center&quot; style=&quot;width:42px;height:42px;border-radius:50%;&quot;><i class=&quot;bi bi-person&quot;></i></span>';">
+               onerror="this.outerHTML='<span class=&quot;avatar bg-primary text-white d-inline-flex justify-content-center align-items-center&quot; style=&quot;width:42px;height:42px;border-radius:50%;&quot;><i class=&quot;bi bi-person&quot;></i></span>';"/>
         </button>
 
         <ul class="dropdown-menu dropdown-menu-end dropdown-menu-prof">
@@ -85,10 +84,15 @@
               <i class="bi bi-person-circle me-2"></i>Profil
             </a>
           </li>
+
+          <!-- Logout dengan konfirmasi SweetAlert + POST + CSRF -->
           <li>
-            <a class="dropdown-item" href="<?= site_url('auth/logout') ?>">
+            <button class="dropdown-item js-logout" type="button">
               <i class="bi bi-box-arrow-right me-2"></i>Logout
-            </a>
+            </button>
+            <form id="logoutForm" action="<?= site_url('auth/logout') ?>" method="post" class="d-none">
+              <?= csrf_field() ?>
+            </form>
           </li>
         </ul>
       </div>
@@ -96,6 +100,36 @@
   </header>
 
   <script>
-    // Wrapper yang selalu ada — dipanggil dari tombol burger
+    // Buka sidebar (dipanggil dari tombol burger). Implementasi toggle ada di partial sidebar.
     function openSidebar(){ if (window.toggleSidebar) window.toggleSidebar(true); }
+
+    // Handler konfirmasi Logout (aman walau SweetAlert baru dimuat di footer)
+    document.addEventListener('click', function(e){
+      const btn = e.target.closest('.js-logout');
+      if (!btn) return;
+
+      e.preventDefault();
+      const submitLogout = () => document.getElementById('logoutForm')?.submit();
+
+      const showConfirm = () => Swal.fire({
+        icon: 'question',
+        title: 'Keluar dari akun?',
+        text: 'Anda yakin ingin logout sekarang?',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, logout',
+        cancelButtonText: 'Batal',
+        reverseButtons: true,
+        focusCancel: true
+      }).then(res => { if (res.isConfirmed) submitLogout(); });
+
+      if (window.Swal) {
+        showConfirm();
+      } else {
+        // Fallback: jika halaman ini tidak meng-include partial alerts/footer
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/sweetalert2@11';
+        s.onload = showConfirm;
+        document.head.appendChild(s);
+      }
+    });
   </script>

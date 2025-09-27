@@ -8,11 +8,17 @@ class Logout extends BaseController
 {
     public function index()
     {
-        // Hapus semua session
-        session()->destroy();
+        helper('cookie');
+        // Hapus cookie remember-me jika ada
+        delete_cookie('remember_me');
+        delete_cookie('remember_token');
 
-        // Arahkan ke landing page (Home::index -> view/landing.php)
-        return redirect()->to('/')
-                         ->with('success', 'Anda berhasil logout.');
+        // Bersihkan session & cegah reuse ID
+        session()->destroy();
+        session()->start();
+        session()->regenerate(true);
+
+        return redirect()->to(site_url('auth/login'))
+            ->with('success', 'Anda berhasil logout.');
     }
 }

@@ -1,42 +1,54 @@
 <?php
-$event       = $event ?? [];
-$reg         = $reg ?? null;
-$abstrak     = $abstrak ?? null;
-$payment     = $payment ?? null;
-$flow        = $flow ?? [];
-$contributors= $contributors ?? [];
+$event        = $event ?? [];
+$reg          = $reg ?? null;
+$abstrak      = $abstrak ?? null;
+$payment      = $payment ?? null;
+$flow         = $flow ?? [];
+$contributors = $contributors ?? [];
+$price        = $price ?? null;
 
-/* ================= Normalisasi status ================= */
+/* ================= Utils & Normalisasi ================= */
 $abStatus  = strtolower($abstrak['status'] ?? '');
 $fpStatus  = strtolower($abstrak['full_paper_status'] ?? '');
 $payStatus = strtolower($payment['status'] ?? '');
 
-/* Ada full paper atau belum */
 $hasFullpaper = !empty($abstrak['full_paper_path']) || !empty($abstrak['full_paper_status']);
 
-/* helper label */
+$fmt = function($s, $withTime=false){
+  if (!$s) return '-';
+  $ts = strtotime((string)$s);
+  return $withTime ? date('d M Y H:i', $ts) : date('d M Y', $ts);
+};
+
+/* label format (match view Abstrak) */
+$formatLabel = function($f){
+  $f = strtolower((string)$f);
+  return $f === 'both' ? 'Hybrid' : ucfirst($f ?: '-');
+};
+
+/* nice status label */
 $nice = function($v) {
   if (!$v) return 'Belum';
-  $v = strtolower($v);
+  $v = strtolower((string)$v);
   return match($v){
-    'diterima','accepted','acc','approved'   => 'Diterima',
-    'ditolak','rejected'                     => 'Ditolak',
-    'revisi','revision'                      => 'Revisi',
-    'menunggu','sedang_direview','uploaded','pending' => 'Menunggu',
-    'verified'                               => 'Terverifikasi',
-    'canceled'                               => 'Dibatalkan',
-    'expired'                                => 'Kedaluwarsa',
-    default                                  => ucfirst($v)
+    'diterima','accepted','acc','approved'                      => 'Diterima',
+    'ditolak','rejected'                                        => 'Ditolak',
+    'revisi','revision'                                         => 'Revisi',
+    'menunggu','sedang_direview','uploaded','pending'           => 'Menunggu',
+    'verified'                                                  => 'Terverifikasi',
+    'canceled'                                                  => 'Dibatalkan',
+    'expired'                                                   => 'Kedaluwarsa',
+    default                                                     => ucfirst($v)
   };
 };
 
-/* Tentukan tombol utama */
+/* ====== Tentukan CTA utama/sekunder (seragam) ====== */
 $primaryBtn   = null;
 $secondaryBtn = null;
 
 $isReg = (bool)$reg;
 
-/* Kontributor selesai? */
+/* Kontributor selesai? (cover beragam field) */
 $kontributorDone = false;
 if ($reg) {
   foreach (['contributor_done','kontributor_done','profile_completed','is_profile_completed'] as $f) {
@@ -44,38 +56,39 @@ if ($reg) {
   }
 }
 
-/* Aturan tombol */
+$eventId = (int)($event['id'] ?? 0);
+
 if (!$isReg) {
-  $primaryBtn = ['label'=>'Daftar', 'url'=>site_url('/presenter/events/register/'.(int)$event['id']), 'class'=>'btn-primary'];
+  $primaryBtn = ['label'=>'Daftar', 'url'=>site_url('presenter/events/register/'.$eventId), 'class'=>'btn-primary'];
 } else {
   if (!$kontributorDone) {
-    $primaryBtn   = ['label'=>'Lengkapi Kontributor', 'url'=>site_url('/presenter/kontributor/start/'.(int)$event['id']), 'class'=>'btn-primary'];
-    $secondaryBtn = ['label'=>'Batalkan Pendaftaran', 'url'=>site_url('/presenter/events/cancel/'.(int)$event['id']), 'class'=>'btn-outline-danger'];
+    $primaryBtn   = ['label'=>'Lengkapi Kontributor', 'url'=>site_url('presenter/kontributor/start/'.$eventId), 'class'=>'btn-primary'];
+    $secondaryBtn = ['label'=>'Batalkan Pendaftaran', 'url'=>site_url('presenter/events/cancel/'.$eventId), 'class'=>'btn-outline-danger'];
   } else {
     if (!$abStatus) {
-      $primaryBtn = ['label'=>'Upload Abstrak', 'url'=>site_url('/presenter/abstrak/create/'.(int)$event['id']), 'class'=>'btn-primary'];
+      $primaryBtn = ['label'=>'Upload Abstrak', 'url'=>site_url('presenter/abstrak/create/'.$eventId), 'class'=>'btn-primary'];
     } else {
       if ($abStatus === 'ditolak') {
-        $primaryBtn = ['label'=>'Upload Ulang Abstrak', 'url'=>site_url('/presenter/abstrak/create/'.(int)$event['id']), 'class'=>'btn-warning'];
+        $primaryBtn = ['label'=>'Upload Ulang Abstrak', 'url'=>site_url('presenter/abstrak/create/'.$eventId), 'class'=>'btn-warning'];
       } elseif ($abStatus === 'diterima') {
         if (!$hasFullpaper) {
-          $primaryBtn = ['label'=>'Upload Full Paper', 'url'=>site_url('/presenter/fullpaper/create/'.(int)$event['id']), 'class'=>'btn-primary'];
+          $primaryBtn = ['label'=>'Upload Full Paper', 'url'=>site_url('presenter/fullpaper/create/'.$eventId), 'class'=>'btn-primary'];
         } else {
           $isRevision = in_array($fpStatus, ['revisi','revision','ditolak','rejected'], true);
           $isAccepted = in_array($fpStatus, ['diterima','accepted','acc','approved'], true);
           $isWaiting  = !$isRevision && !$isAccepted;
 
           if ($isRevision) {
-            $primaryBtn = ['label'=>'Upload Ulang Full Paper', 'url'=>site_url('/presenter/fullpaper/create/'.(int)$event['id']), 'class'=>'btn-warning'];
+            $primaryBtn = ['label'=>'Upload Ulang Full Paper', 'url'=>site_url('presenter/fullpaper/create/'.$eventId), 'class'=>'btn-warning'];
           } elseif ($isAccepted) {
             if (!$payStatus) {
-              $primaryBtn = ['label'=>'Lanjutkan Pembayaran', 'url'=>site_url('/presenter/pembayaran/instruction/'.(int)$event['id']), 'class'=>'btn-success'];
+              $primaryBtn = ['label'=>'Lanjutkan Pembayaran', 'url'=>site_url('presenter/pembayaran/instruction/'.$eventId), 'class'=>'btn-success'];
             } elseif ($payStatus === 'pending') {
-              $primaryBtn = ['label'=>'Cek Status Pembayaran', 'url'=>site_url('/presenter/pembayaran'), 'class'=>'btn-outline-success'];
+              $primaryBtn = ['label'=>'Cek Status Pembayaran', 'url'=>site_url('presenter/pembayaran'), 'class'=>'btn-outline-success'];
             } elseif (in_array($payStatus, ['rejected','ditolak','canceled','expired'], true)) {
-              $primaryBtn = ['label'=>'Bayar Ulang', 'url'=>site_url('/presenter/pembayaran/instruction/'.(int)$event['id']), 'class'=>'btn-danger'];
+              $primaryBtn = ['label'=>'Bayar Ulang', 'url'=>site_url('presenter/pembayaran/instruction/'.$eventId), 'class'=>'btn-danger'];
             } elseif ($payStatus === 'verified') {
-              $primaryBtn = ['label'=>'Buka Halaman Absensi', 'url'=>site_url('/presenter/absensi'), 'class'=>'btn-info'];
+              $primaryBtn = ['label'=>'Buka Halaman Absensi', 'url'=>site_url('presenter/absensi'), 'class'=>'btn-info'];
             }
           } elseif ($isWaiting) {
             $primaryBtn = null; // menunggu review FP
@@ -87,27 +100,30 @@ if (!$isReg) {
     }
   }
 }
-
-// helper tanggal
-$fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
 ?>
+
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
 <?= $this->include('partials/alerts') ?>
 
 <div id="content">
-  <main class="flex-fill" style="padding-top:70px;">
-    <div class="container-fluid p-3 p-md-4">
+  <main class="flex-fill page-wrap-blue">
+    <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- Header -->
-      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-3">
+      <!-- Hero (match palette & override seperti Abstrak) -->
+      <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
         <div>
-          <h3 class="welcome-text mb-1"><i class="bi bi-info-circle me-2"></i><?= esc($event['title'] ?? 'Event') ?></h3>
-          <div class="text-white-50">Detail event & status pendaftaran</div>
+          <h3 class="hero-title mb-1">
+            <i class="bi bi-info-circle me-2"></i><?= esc($event['title'] ?? 'Event') ?>
+          </h3>
+          <div class="text-white-75 small">Detail event & status pendaftaran</div>
         </div>
-        <div class="text-end d-none d-md-block">
-          <small class="text-white-50 d-block">Tanggal event</small>
-          <strong class="text-white"><?= $fmt($event['event_date']) ?> • <?= esc($event['event_time']) ?></strong>
+        <div class="d-none d-md-block text-end">
+          <div class="text-white-75 small">Tanggal Event</div>
+          <div class="fw-semibold text-white">
+            <?= esc($fmt($event['event_date'] ?? null)) ?>
+            <?= !empty($event['event_time']) ? ' • '.esc($event['event_time']) : '' ?>
+          </div>
         </div>
       </div>
 
@@ -115,45 +131,51 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
 
         <!-- Informasi Event -->
         <div class="col-12 col-lg-7">
-          <div class="card shadow-sm border-0 mb-3">
-            <div class="card-header bg-gradient-primary text-white">
-              <h5 class="mb-0"><i class="bi bi-calendar-event me-2"></i>Informasi Event</h5>
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-calendar-event"></i></span>
+              <h5 class="mb-0 fw-semibold text-blue-900">Informasi Event</h5>
             </div>
             <div class="card-body">
               <div class="row g-3">
                 <div class="col-12 col-md-6">
                   <div class="text-muted small">Tanggal</div>
-                  <div class="fw-semibold"><?= $fmt($event['event_date']) ?> <?= esc($event['event_time'] ? '• '.$event['event_time'] : '') ?></div>
+                  <div class="fw-semibold text-blue-900">
+                    <?= esc($fmt($event['event_date'] ?? null)) ?>
+                    <?= !empty($event['event_time']) ? ' • '.esc($event['event_time']) : '' ?>
+                  </div>
                 </div>
                 <div class="col-12 col-md-6">
                   <div class="text-muted small">Format</div>
-                  <div class="fw-semibold"><?= strtoupper($event['format'] ?? '-') ?></div>
+                  <div class="fw-semibold text-blue-900"><?= esc($formatLabel($event['format'] ?? '')) ?></div>
                 </div>
                 <div class="col-12">
                   <div class="text-muted small">Lokasi</div>
-                  <div class="fw-semibold"><?= esc($event['location'] ?: '-') ?></div>
+                  <div class="fw-semibold text-blue-900"><?= esc(($event['location'] ?? '') ?: '-') ?></div>
                 </div>
                 <?php if (!empty($event['zoom_link'])): ?>
                 <div class="col-12">
                   <div class="text-muted small">Link Online</div>
-                  <div class="fw-semibold"><a href="<?= esc($event['zoom_link']) ?>" target="_blank" rel="noopener">Buka Tautan</a></div>
+                  <div class="fw-semibold">
+                    <a href="<?= esc($event['zoom_link']) ?>" target="_blank" rel="noopener noreferrer">Buka Tautan</a>
+                  </div>
                 </div>
                 <?php endif; ?>
                 <div class="col-12 col-md-6">
                   <div class="text-muted small">Batas Pendaftaran</div>
-                  <div class="fw-semibold"><?= $fmt($event['registration_deadline'], true) ?></div>
+                  <div class="fw-semibold text-blue-900"><?= esc($fmt($event['registration_deadline'] ?? null, true)) ?></div>
                 </div>
                 <div class="col-12 col-md-6">
                   <div class="text-muted small">Batas Abstrak</div>
-                  <div class="fw-semibold"><?= $fmt($event['abstract_deadline'], true) ?></div>
+                  <div class="fw-semibold text-blue-900"><?= esc($fmt($event['abstract_deadline'] ?? null, true)) ?></div>
                 </div>
                 <div class="col-12 col-md-6">
                   <div class="text-muted small">Batas Full Paper</div>
-                  <div class="fw-semibold"><?= $fmt($event['full_paper_deadline'], true) ?></div>
+                  <div class="fw-semibold text-blue-900"><?= esc($fmt($event['full_paper_deadline'] ?? null, true)) ?></div>
                 </div>
                 <div class="col-12 col-md-6">
                   <div class="text-muted small">Harga (Presenter)</div>
-                  <div class="fw-semibold">
+                  <div class="fw-semibold text-blue-900">
                     <?= isset($price) && $price !== null ? 'Rp '.number_format((float)$price,0,',','.') : '-' ?>
                   </div>
                 </div>
@@ -161,10 +183,11 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
             </div>
           </div>
 
-          <!-- Deskripsi Event (dipisah) -->
-          <div class="card shadow-sm border-0 mb-3">
-            <div class="card-header bg-light">
-              <h6 class="mb-0"><i class="bi bi-file-text me-2"></i>Deskripsi Event</h6>
+          <!-- Deskripsi Event -->
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-file-text"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Deskripsi Event</h6>
             </div>
             <div class="card-body">
               <div class="text-muted"><?= nl2br(esc($event['description'] ?? '-')) ?></div>
@@ -172,11 +195,14 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
           </div>
 
           <!-- Daftar Kontributor -->
-          <div class="card shadow-sm border-0">
-            <div class="card-header bg-light d-flex align-items-center justify-content-between">
-              <h6 class="mb-0"><i class="bi bi-people me-2"></i>Daftar Kontributor</h6>
+          <div class="card shadow-soft card-glass-plain">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-blue-soft"><i class="bi bi-people"></i></span>
+                <h6 class="mb-0 fw-semibold text-blue-900">Daftar Kontributor</h6>
+              </div>
               <?php if ($isReg): ?>
-                <a href="<?= site_url('/presenter/kontributor/start/'.(int)$event['id']) ?>" class="btn btn-sm btn-primary">
+                <a href="<?= site_url('presenter/kontributor/start/'.$eventId) ?>" class="btn btn-sm btn-primary">
                   <i class="bi bi-pencil-square me-1"></i>Ubah
                 </a>
               <?php endif; ?>
@@ -189,7 +215,7 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
                   <table class="table table-sm mb-0">
                     <thead class="table-light">
                       <tr>
-                        <th style="width: 140px;">Peran</th>
+                        <th style="width:140px;">Peran</th>
                         <th>Nama</th>
                         <th>Email</th>
                         <th>Afiliasi</th>
@@ -200,10 +226,10 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
                       <?php foreach ($contributors as $c): ?>
                         <tr>
                           <td><?= esc($c['role'] ?? '-') ?></td>
-                          <td><?= esc($c['nama'] ?? $c['name'] ?? '-') ?></td>
+                          <td><?= esc($c['nama'] ?? ($c['name'] ?? '-')) ?></td>
                           <td><?= esc($c['email'] ?? '-') ?></td>
-                          <td><?= esc($c['afiliasi'] ?? $c['affiliation'] ?? '-') ?></td>
-                          <td><?= esc($c['negara'] ?? $c['country'] ?? '-') ?></td>
+                          <td><?= esc($c['afiliasi'] ?? ($c['affiliation'] ?? '-')) ?></td>
+                          <td><?= esc($c['negara'] ?? ($c['country'] ?? '-')) ?></td>
                         </tr>
                       <?php endforeach; ?>
                     </tbody>
@@ -217,35 +243,47 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
 
         <!-- Progress & Aksi -->
         <div class="col-12 col-lg-5">
-          <div class="card shadow-sm border-0 mb-3">
-            <div class="card-header bg-gradient-primary text-white">
-              <h5 class="mb-0"><i class="bi bi-flag me-2"></i>Progress Pendaftaran</h5>
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-flag"></i></span>
+              <h5 class="mb-0 fw-semibold text-blue-900">Progress Pendaftaran</h5>
             </div>
             <div class="card-body">
 
               <ul class="list-group list-group-flush mb-3">
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Pendaftaran</span>
-                  <strong><?= $isReg ? 'Terdaftar'.(!$kontributorDone ? ' (lengkapi kontributor)' : '') : 'Belum' ?></strong>
+                  <strong class="text-blue-900">
+                    <?= $isReg ? 'Terdaftar'.(!$kontributorDone ? ' (lengkapi kontributor)' : '') : 'Belum' ?>
+                  </strong>
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Abstrak</span>
-                  <strong><?= $nice($abStatus) ?></strong>
+                  <strong class="text-blue-900"><?= esc($nice($abStatus)) ?></strong>
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Full Paper</span>
-                  <strong><?= $nice($fpStatus ?: ($hasFullpaper ? 'uploaded' : '')) ?></strong>
+                  <strong class="text-blue-900"><?= esc($nice($fpStatus ?: ($hasFullpaper ? 'uploaded' : ''))) ?></strong>
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Pembayaran</span>
-                  <strong><?= $nice($payStatus) ?></strong>
+                  <strong class="text-blue-900"><?= esc($nice($payStatus)) ?></strong>
                 </li>
               </ul>
 
               <div class="d-grid gap-2">
-                <?php if ($primaryBtn): ?>
+                <?php if ($primaryBtn):
+                  $lbl = strtolower((string)($primaryBtn['label'] ?? ''));
+                  $icon = 'bi-info-circle';
+                  if (str_contains($lbl,'daftar')) $icon='bi-box-arrow-in-right';
+                  elseif (str_contains($lbl,'kontributor')) $icon='bi-people';
+                  elseif (str_contains($lbl,'upload')) $icon='bi-upload';
+                  elseif (str_contains($lbl,'bayar')) $icon='bi-credit-card';
+                  elseif (str_contains($lbl,'absen')) $icon='bi-qr-code-scan';
+                  elseif (str_contains($lbl,'cek') || str_contains($lbl,'status')) $icon='bi-clock-history';
+                ?>
                   <a class="btn <?= esc($primaryBtn['class']) ?>" href="<?= esc($primaryBtn['url']) ?>">
-                    <?= esc($primaryBtn['label']) ?>
+                    <i class="bi <?= esc($icon) ?> me-1"></i><?= esc($primaryBtn['label']) ?>
                   </a>
                 <?php endif; ?>
 
@@ -273,10 +311,136 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
 <?= $this->include('partials/footer') ?>
 
 <style>
-  :root{ --primary-color:#2563eb; --info-color:#06b6d4; }
-  .header-section.header-blue{
-    background:linear-gradient(135deg,var(--primary-color),#1e40af);
-    color:#fff; padding:24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
-  }
-  .bg-gradient-primary{ background:linear-gradient(135deg,var(--primary-color),var(--info-color))!important; }
-</style> 
+/* ===== Event Detail — diseragamkan dengan Abstrak/Index ===== */
+:root{
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
+  --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
+  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+  --side-pad: 1rem;
+  --gutter:   1rem;
+}
+
+body{
+  font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size:14.6px;
+  line-height:1.5;
+}
+
+/* Layout */
+.page-wrap-blue{
+  background:linear-gradient(180deg,var(--blue-50),#fff 40%);
+  min-height:100vh;
+  padding-top:72px;
+}
+.container-xxl{
+  max-width:1400px;
+  padding-left:var(--side-pad) !important;
+  padding-right:var(--side-pad) !important;
+}
+.row.g-3{ --bs-gutter-x: var(--gutter); --bs-gutter-y: var(--gutter); }
+
+/* Hero (override efek glass sama seperti Abstrak) */
+.hero-blue{
+  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
+  color:#fff !important;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.15);
+  box-shadow:0 12px 28px rgba(30,64,175,.10);
+  padding:1.6rem !important;
+  margin-bottom:1.25rem !important;
+}
+.hero-blue.card-glass,
+.hero-blue.card-glass-plain{
+  backdrop-filter:none !important;
+  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
+  border:1px solid rgba(255,255,255,.15) !important;
+  box-shadow:0 12px 28px rgba(30,64,175,.10) !important;
+}
+.hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.45rem; }
+.text-white-75{ color:rgba(255,255,255,.85)!important; }
+
+/* Card/Glass */
+.card-glass-plain{
+  backdrop-filter:blur(6px);
+  background:rgba(255,255,255,.94);
+  border-radius:14px;
+  border:1px solid rgba(30,64,175,.10);
+}
+.shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
+.card-header{ padding:1rem 1rem .45rem 1rem !important; }
+.card-body{   padding:1.05rem !important; }
+
+/* Badges kecil */
+.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.4rem .6rem; font-weight:600; font-size:.85rem; }
+.bg-success-subtle{   background:#d1fae5!important; color:#065f46!important; }
+.bg-warning-subtle{   background:#fef3c7!important; color:#92400e!important; }
+.bg-danger-subtle{    background:#fee2e2!important; color:#991b1b!important; }
+.bg-info-subtle{      background:#e0f2fe!important; color:#0c4a6e!important; }
+.bg-secondary-subtle{ background:#f1f5f9!important; color:#475569!important; }
+.bg-primary-subtle{   background:#dbeafe!important; color:var(--blue-700)!important; }
+.text-blue-900{ color:var(--blue-900)!important; }
+
+/* Table (kontributor) */
+.table{ font-size:.95rem; margin-bottom:0; }
+.table thead th{
+  background-color:var(--blue-50)!important;
+  border-bottom:1px solid var(--blue-200);
+  font-weight:600; color:var(--blue-900);
+  font-size:.85rem; text-transform:uppercase; letter-spacing:.4px;
+  padding:.75rem 1rem;
+}
+.table tbody tr{ border-bottom:1px solid rgba(30,64,175,.08); }
+.table tbody td{
+  padding:.75rem 1rem; vertical-align:middle; border-top:none; font-size:.95rem;
+}
+.table-responsive{ border:1px solid rgba(30,64,175,.08); border-radius:12px; overflow:hidden; }
+
+/* Progress list */
+.list-group-item{
+  background:transparent!important;
+  border-left:none!important; border-right:none!important;
+  font-size:.95rem; padding:.7rem 0; font-weight:500;
+}
+.list-group-item:first-child{ border-top:none!important; }
+.list-group-item:last-child{  border-bottom:none!important; }
+.list-group-item strong{ font-weight:600; font-size:.95rem; }
+
+/* Buttons */
+.btn{
+  font-weight:600; letter-spacing:.25px;
+  border-radius:10px; font-size:.95rem; padding:.55rem 1rem;
+}
+.btn-sm{ padding:.42rem .8rem; font-size:.86rem; }
+.btn-lg{ padding:.85rem 1.5rem; font-size:1.06rem; }
+.btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
+.btn-info{    background:#06b6d4; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,.2); }
+.btn-success{ background:#059669; border-color:#059669; box-shadow:0 4px 12px rgba(5,150,105,.2); }
+.btn-warning{ background:#d97706; border-color:#d97706; box-shadow:0 4px 12px rgba(217,119,6,.2); }
+.btn-danger{  background:#dc2626; border-color:#dc2626; box-shadow:0 4px 12px rgba(220,38,38,.2); }
+
+/* Responsive */
+@media (max-width:575.98px){
+  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
+  .hero-blue{ border-radius:14px; padding:1.25rem!important; margin-bottom:1rem!important; }
+  .hero-title{ font-size:1.25rem; }
+  .card-body{  padding:.9rem!important; }
+  .card-header{ padding:.9rem .9rem .4rem .9rem!important; }
+  .table thead th, .table tbody td{ padding:.6rem .7rem; font-size:.85rem; }
+  .list-group-item{ font-size:.95rem; padding:.6rem 0; }
+  .badge{ padding:.35rem .55rem; font-size:.7rem; }
+}
+@media (min-width:576px) and (max-width:767.98px){
+  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
+  .hero-title{ font-size:1.35rem; }
+  .card-body{  padding:1rem!important; }
+}
+@media (min-width:768px) and (max-width:991.98px){
+  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
+  .hero-title{ font-size:1.45rem; }
+}
+@media (min-width:992px){
+  .hero-blue{ padding:1.7rem!important; }
+  .card-body{  padding:1.05rem!important; }
+  .card-header{ padding:1rem 1rem .45rem 1rem!important; }
+}
+</style>

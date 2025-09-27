@@ -79,42 +79,51 @@ class Fullpaper extends BaseController
     }
 
     /**
-     * Ambil meta FP terbaru. Prioritaskan tabel fullpaper.
-     * Fallback ke kolom lama abstrak HANYA jika ada path.
+     * Ambil meta FP terbaru. Prioritaskan baris submissions/abstrak tetapi
+     * **HANYA** anggap ada FP jika kolom `full_paper_path` BUKAN kosong.
+     *
      * Return: [$status, $path, $createdAt, $reviewedAt, $decisionAt, $notes, $fpRow]
      */
     private function latestFullpaperMeta(int $userId, int $eventId, ?array $absRow): array
     {
-        $fpRow = method_exists($this->fpModel, 'getLatestRowByUserEvent')
+        $row = method_exists($this->fpModel, 'getLatestRowByUserEvent')
             ? $this->fpModel->getLatestRowByUserEvent($userId, $eventId)
             : null;
 
-        if ($fpRow) {
-            $status      = $this->normalizeFpStatus($fpRow['status'] ?? '');
-            $path        = (string)($fpRow['file_path'] ?? $fpRow['path'] ?? '');
-            $createdAt   = $fpRow['created_at']   ?? ($fpRow['tanggal_upload'] ?? null);
-            $reviewedAt  = $fpRow['reviewed_at']  ?? null;
-            $decisionAt  = $fpRow['decision_at']  ?? null;
-            $notes       = $fpRow['review_notes'] ?? ($fpRow['catatan_reviewer'] ?? '');
-            return [$status, $path, $createdAt, $reviewedAt, $decisionAt, $notes, $fpRow];
+        if ($row) {
+            $path       = (string)($row['full_paper_path'] ?? '');
+            $statusRaw  = (string)($row['full_paper_status'] ?? '');
+            $createdAt  = $row['full_paper_uploaded_at'] ?? null;
+            $reviewedAt = $row['reviewed_at'] ?? null;
+            $decisionAt = $row['decision_at'] ?? null;
+            $notes      = $row['review_notes'] ?? ($row['catatan_reviewer'] ?? '');
+
+            // Tidak ada path -> anggap belum ada FP
+            if ($path === '') {
+                return ['NONE', '', null, null, null, '', $row];
+            }
+
+            $status = $this->normalizeFpStatus($statusRaw ?: 'UPLOADED');
+            return [$status, $path, $createdAt, $reviewedAt, $decisionAt, $notes, $row];
         }
 
+        // Fallback ke kolom lama abstrak (kalau masih dipakai)
         $pathAbs = (string)($absRow['full_paper_path'] ?? '');
         if ($pathAbs !== '') {
-            $statusAbs  = $this->normalizeFpStatus($absRow['full_paper_status'] ?? '');
+            $statusAbs = $this->normalizeFpStatus($absRow['full_paper_status'] ?? 'UPLOADED');
             return [$statusAbs, $pathAbs, ($absRow['full_paper_uploaded_at'] ?? null), null, null, '', null];
         }
 
         return ['NONE', '', null, null, null, '', null];
     }
 
-    /* ===== helper eligibility abstrak untuk FP (kebijakan BARU) ===== */
+    /* ===== eligibility abstrak untuk FP ===== */
     private function isAbstractEligible(?array $abs): bool
     {
-        if (empty($abs)) return false;                                   // belum pernah upload
+        if (empty($abs)) return false;                 // belum pernah upload abstrak
         $s = strtolower((string)($abs['status'] ?? ''));
-        if ($s === 'ditolak') return false;                              // tidak boleh kalau ditolak
-        // selain ditolak: menunggu, direview, revisi, diterima -> boleh
+        if ($s === 'ditolak') return false;            // abstrak ditolak → tidak boleh FP
+        // menunggu / direview / revisi / diterima → boleh FP
         return true;
     }
 
@@ -128,26 +137,26 @@ class Fullpaper extends BaseController
         $history    = [];
 
         foreach ($regs as $r) {
-            $eid   = (int) ($r['id_event'] ?? 0);
+            $eid = (int)($r['id_event'] ?? 0);
             if (!$eid) continue;
 
             $event = $this->eventModel->find($eid);
             if (!$event) continue;
 
-            // abstrak terbaru
-            $abs = $this->abstrakModel->where('id_user',$userId)
-                                      ->where('event_id',$eid)
-                                      ->orderBy('id_abstrak','DESC')->first();
+            $abs = $this->abstrakModel->where('id_user', $userId)
+                                      ->where('event_id', $eid)
+                                      ->orderBy('id_abstrak', 'DESC')->first();
 
             $absEligible = $this->isAbstractEligible($abs);
 
             // meta FP
             [$fpStatus, $fpPath, $fpTs] = $this->latestFullpaperMeta($userId, $eid, $abs);
 
-            // jika abstrak tidak eligible (belum upload / ditolak) -> drop FP di UI
+            // Jika abstrak tidak eligible → treat seolah belum ada FP
             if (!$absEligible) {
                 $fpStatus = 'NONE';
                 $fpPath   = '';
+                $fpTs     = null;
             }
 
             $meta    = $this->mapFpStatusMeta($fpStatus);
@@ -171,23 +180,27 @@ class Fullpaper extends BaseController
                 ];
             }
 
-            $history[] = [
-                'event_id'      => $eid,
-                'event_title'   => $event['title'] ?? '-',
-                'event_date'    => $event['event_date'] ?? null,
-                'fp_status'     => $fpStatus,
-                'status_badge'  => $meta['badge'],
-                'status_label'  => $meta['label'],
-                'status_hint'   => $meta['hint'],
-                'fp_path'       => $fpPath,
-                'uploaded_at'   => $fpTs,
-                'is_open'       => $isOpen,
-                'abs'           => $abs,
-                'abs_badge'     => $absMeta['badge'],
-                'abs_label'     => $absMeta['label'],
-            ];
+            // === IMPORTANT: Hanya masukkan ke RIWAYAT jika SUDAH PERNAH UPLOAD (fpStatus != NONE) ===
+            if ($fpStatus !== 'NONE') {
+                $history[] = [
+                    'event_id'      => $eid,
+                    'event_title'   => $event['title'] ?? '-',
+                    'event_date'    => $event['event_date'] ?? null,
+                    'fp_status'     => $fpStatus,
+                    'status_badge'  => $meta['badge'],
+                    'status_label'  => $meta['label'],
+                    'status_hint'   => $meta['hint'],
+                    'fp_path'       => $fpPath,
+                    'uploaded_at'   => $fpTs,
+                    'is_open'       => $isOpen,
+                    'abs'           => $abs,
+                    'abs_badge'     => $absMeta['badge'],
+                    'abs_label'     => $absMeta['label'],
+                ];
+            }
         }
 
+        // urutkan riwayat: yang terbaru (uploaded_at) dulu; fallback ke tanggal event
         usort($history, function($a, $b) {
             $ta = $a['uploaded_at'] ? strtotime($a['uploaded_at']) : strtotime($a['event_date'] ?? '1970-01-01');
             $tb = $b['uploaded_at'] ? strtotime($b['uploaded_at']) : strtotime($b['event_date'] ?? '1970-01-01');
@@ -213,9 +226,9 @@ class Fullpaper extends BaseController
         $reg = $this->regModel->findUserReg($eventId, $userId);
         if (!$reg) return redirect()->to('/presenter/fullpaper')->with('error', 'Anda belum terdaftar pada event ini.');
 
-        $abs = $this->abstrakModel->where('id_user',$userId)
-                                  ->where('event_id',$eventId)
-                                  ->orderBy('id_abstrak','DESC')->first();
+        $abs = $this->abstrakModel->where('id_user', $userId)
+                                  ->where('event_id', $eventId)
+                                  ->orderBy('id_abstrak', 'DESC')->first();
 
         [$status, $path, $createdAt, $reviewedAt, $decisionAt, $notes]
             = $this->latestFullpaperMeta($userId, $eventId, $abs);
@@ -265,14 +278,13 @@ class Fullpaper extends BaseController
             return redirect()->to('/presenter/fullpaper')->with('error', 'Pengumpulan Full Paper ditutup.');
         }
 
-        $abs = $this->abstrakModel->where('id_user',$userId)
-                                  ->where('event_id',$eventId)
-                                  ->orderBy('id_abstrak','DESC')->first();
+        $abs = $this->abstrakModel->where('id_user', $userId)
+                                  ->where('event_id', $eventId)
+                                  ->orderBy('id_abstrak', 'DESC')->first();
 
         [$fpStatus] = $this->latestFullpaperMeta($userId, $eventId, $abs);
         $absEligible = $this->isAbstractEligible($abs);
 
-        // Kebijakan baru: boleh jika abstrak sudah diupload & bukan ditolak
         if (!$absEligible) {
             return redirect()->to('/presenter/abstrak/create/'.$eventId)
                 ->with('error', 'Upload Full Paper tersedia setelah Anda mengunggah abstrak (dan tidak ditolak).');

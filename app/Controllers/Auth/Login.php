@@ -9,45 +9,68 @@ class Login extends BaseController
 {
     public function index()
     {
+        // Kalau sudah login, langsung lempar ke dashboard saja
         if (session()->get('isLoggedIn')) {
-            return redirect()->to('/dashboard');
+            return redirect()->to(site_url('dashboard'));
         }
-        return view('auth/login');
+
+        return view('auth/login'); // tampilkan form login
     }
 
     public function login()
     {
-        $email    = $this->request->getPost('email');
-        $password = $this->request->getPost('password');
+        // Validasi input basic
+        $rules = [
+            'email'    => 'required|valid_email',
+            'password' => 'required|min_length[6]',
+        ];
+        if (! $this->validate($rules)) {
+            return redirect()->back()->withInput()
+                ->with('error', $this->validator->getError('email') ?: $this->validator->getError('password'));
+        }
 
+        // Normalisasi input
+        $email    = strtolower(trim((string) $this->request->getPost('email')));
+        $password = (string) $this->request->getPost('password');
+
+        // Ambil user
         $userModel = new UserModel();
         $user = $userModel->where('email', $email)->first();
 
-        if ($user && password_verify($password, $user['password'])) {
-            // Regenerate untuk cegah session fixation
-            session()->regenerate();
-
-            // Simpan data yang dipakai header (nama_lengkap, email, foto, foto_ver)
-            session()->set([
-                'isLoggedIn'   => true,
-                'id_user'      => $user['id_user'],
-                'role'         => $user['role'],
-                'nama_lengkap' => $user['nama_lengkap'],          // dipakai header
-                'nama'         => $user['nama_lengkap'],          // backward-compat
-                'email'        => $user['email'] ?? '',
-                'foto'         => $user['foto'] ?: 'default.png', // nama file saja
-                'foto_ver'     => time(),                         // cache-buster avatar
-            ]);
-
-            return redirect()->to('/dashboard');
+        // Verifikasi kredensial
+        if (! $user || ! password_verify($password, (string) $user['password'])) {
+            return redirect()->back()->withInput()->with('error', 'Email atau password salah.');
         }
 
-        return redirect()->back()->with('error', 'Email atau password salah.');
-    }
+        // (Opsional) cek status user jika ada kolom status
+        if (isset($user['status']) && $user['status'] !== 'aktif') {
+            return redirect()->back()->withInput()->with('error', 'Akun Anda belum aktif atau dinonaktifkan.');
+        }
 
-    public function logout()
-    {
-        session()->destroy();
-        return redirect()->to('/auth/login')->with('success', 'Berhasil logout.');
+        // Set session (KONSISTEN dengan AuthFilter & header)
+        session()->set([
+            'isLoggedIn'   => true,
+            'id_user'      => $user['id_user'],
+            'role'         => $user['role'],                      // 'admin' | 'presenter' | 'audience' | 'reviewer'
+            'nama_lengkap' => $user['nama_lengkap'] ?? 'User',
+            'nama'         => $user['nama_lengkap'] ?? 'User',    // alias untuk view lama
+            'email'        => $user['email'] ?? $email,
+            'foto'         => $user['foto'] ?? 'default.png',
+            'foto_ver'     => time(),                              // cache-buster avatar
+        ]);
+
+        // Penting: regenerate setelah privilege berubah
+        session()->regenerate();
+
+        // Redirect sesuai role
+        $dest = match ($user['role'] ?? '') {
+            'admin'     => 'admin/dashboard',
+            'presenter' => 'presenter/dashboard',
+            'reviewer'  => 'reviewer/dashboard',
+            'audience'  => 'audience/dashboard',
+            default     => 'dashboard',
+        };
+
+        return redirect()->to(site_url($dest))->with('success', 'Login berhasil.');
     }
 }

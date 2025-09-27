@@ -1,13 +1,13 @@
 <?php
-$title = $title ?? 'Instruksi Pembayaran';
-$event = $event ?? [];
-$basePrice = (int)($basePrice ?? 0);
-$midtransClientKey = $midtrans_client_key ?? '';
-$isProduction = $is_production ?? false;
+$title              = $title ?? 'Instruksi Pembayaran';
+$event              = $event ?? [];
+$basePrice          = (int)($basePrice ?? 0);
+$midtransClientKey  = $midtrans_client_key ?? '';
+$isProduction       = $is_production ?? false;
 
 $evTitle = $event['title'] ?? '-';
-$evDate = isset($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-';
-$evTime = $event['event_time'] ?? '-';
+$evDate  = isset($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-';
+$evTime  = $event['event_time'] ?? '-';
 $amountF = number_format($basePrice, 0, ',', '.');
 ?>
 
@@ -16,17 +16,17 @@ $amountF = number_format($basePrice, 0, ',', '.');
 <?= $this->include('partials/alerts') ?>
 
 <div id="content">
-  <main class="flex-fill" style="padding-top:70px;">
-    <div class="container-fluid p-3 p-md-4">
+  <main class="flex-fill page-wrap-blue">
+    <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- Header Biru -->
-      <div class="header-section header-blue d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3">
-        <div class="mb-2 mb-md-0">
-          <h3 class="welcome-text mb-1"><i class="bi bi-info-circle me-2"></i>Instruksi Pembayaran</h3>
-          <div class="text-white-50 small"><?= esc($evTitle) ?></div>
+      <!-- HERO seragam -->
+      <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+        <div>
+          <h3 class="hero-title mb-1"><i class="bi bi-info-circle me-2"></i>Instruksi Pembayaran</h3>
+          <div class="text-white-75 small"><?= esc($evTitle) ?></div>
         </div>
         <div class="text-start text-md-end">
-          <small class="text-white-50 d-block">Total Saat Ini</small>
+          <small class="text-white-75 d-block">Total Saat Ini</small>
           <div class="price-bubble" id="priceTop">Rp <?= $amountF ?></div>
         </div>
       </div>
@@ -34,44 +34,43 @@ $amountF = number_format($basePrice, 0, ',', '.');
       <div class="row g-3">
         <!-- Kiri: Informasi -->
         <div class="col-12 col-lg-7">
-          <div class="card shadow-sm mb-3">
-            <div class="card-header bg-gradient-primary text-white py-3">
-              <h5 class="mb-0 d-flex align-items-center"><i class="bi bi-info-circle me-2"></i>Informasi Event</h5>
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-calendar-event"></i></span>
+              <h5 class="mb-0 fw-semibold text-blue-900">Informasi Event</h5>
             </div>
-            <div class="card-body p-3 p-md-4">
+            <div class="card-body">
               <div class="row g-3">
                 <div class="col-md-6">
                   <div class="mini-label text-muted">Tanggal Event</div>
-                  <div class="fs-6 fw-semibold"><?= esc($evDate) ?></div>
+                  <div class="fw-semibold text-blue-900"><?= esc($evDate) ?></div>
                 </div>
                 <div class="col-md-6">
                   <div class="mini-label text-muted">Waktu</div>
-                  <div class="fs-6 fw-semibold"><?= esc($evTime) ?></div>
+                  <div class="fw-semibold text-blue-900"><?= esc($evTime) ?></div>
                 </div>
                 <div class="col-md-6">
                   <div class="mini-label text-muted">Mode Kehadiran</div>
-                  <div class="fs-6 fw-semibold"><span class="badge bg-primary">Offline</span></div>
+                  <div class="fw-semibold"><span class="badge bg-primary-subtle text-primary">Offline</span></div>
                 </div>
                 <div class="col-md-6">
                   <div class="mini-label text-muted">Role</div>
-                  <div class="fs-6 fw-semibold"><span class="badge bg-success">Presenter</span></div>
+                  <div class="fw-semibold"><span class="badge bg-success-subtle text-success">Presenter</span></div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Voucher Section -->
-          <div class="card border-primary mb-4" id="voucherSection">
-            <div class="card-header bg-primary text-white">
-              <h6 class="mb-0">
-                <i class="bi bi-tag me-2"></i>
-                Punya Kode Voucher?
-              </h6>
+          <!-- Voucher (auto-hide saat total 0) -->
+          <div class="card card-glass-plain shadow-soft mb-4" id="voucherSection" <?= $basePrice <= 0 ? 'style="display:none;"' : '' ?>>
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-tag"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Punya Kode Voucher?</h6>
             </div>
             <div class="card-body">
               <div class="row align-items-end g-2">
                 <div class="col">
-                  <input type="text" id="voucherCode" class="form-control" 
+                  <input type="text" id="voucherCode" class="form-control form-control-soft"
                          placeholder="Masukkan kode voucher (opsional)"
                          maxlength="20" autocomplete="off">
                   <div class="form-text">Masukkan kode voucher jika Anda memilikinya</div>
@@ -90,37 +89,39 @@ $amountF = number_format($basePrice, 0, ',', '.');
 
         <!-- Kanan: CTA -->
         <div class="col-12 col-lg-5">
-          <div class="card shadow-sm sticky-lg-top" style="top:84px;">
-            <div class="card-header bg-light">
-              <strong>Ringkasan Pembayaran</strong>
+          <div class="card shadow-soft card-glass-plain sticky-lg-top" style="top:88px;">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-wallet2"></i></span>
+              <strong class="text-blue-900">Ringkasan Pembayaran</strong>
             </div>
-            <div class="card-body p-3 p-md-4">
+            <div class="card-body">
               <div class="mb-2 d-flex justify-content-between">
                 <span>Harga Presenter (Offline)</span>
-                <span class="fw-semibold" id="basePrice">Rp <?= $amountF ?></span>
+                <span class="fw-semibold text-blue-900" id="basePrice">Rp <?= $amountF ?></span>
               </div>
-              <div class="mb-2 d-flex justify-content-between text-success" id="discountRow" style="display: none !important;">
+
+              <div class="mb-2 d-flex justify-content-between text-success" id="discountRow" style="display:none;">
                 <span>Diskon Voucher <span id="voucherCodeDisplay"></span></span>
                 <span class="fw-semibold" id="discountAmount">- Rp 0</span>
               </div>
+
               <hr class="my-2">
               <div class="d-flex justify-content-between align-items-center">
                 <div class="mini-label text-muted">Total Dibayar</div>
-                <div class="fs-4 fw-bold" id="boxTotal">Rp <?= $amountF ?></div>
+                <div class="fs-4 fw-bold text-blue-900" id="boxTotal">Rp <?= $amountF ?></div>
               </div>
 
-              <div class="mt-3">
-                <p class="text-muted small">
-                  Pembayaran menggunakan sistem digital Midtrans untuk verifikasi otomatis.
-                </p>
-              </div>
+              <p class="text-muted small mt-3 mb-3">
+                Pembayaran menggunakan sistem digital Midtrans untuk verifikasi otomatis.
+              </p>
 
-              <div class="d-grid gap-2">
-                <button type="button" id="btnProceed" class="btn btn-success btn-lg">
-                  <i class="bi bi-credit-card me-1"></i> Lanjut ke Pembayaran Digital
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" id="btnProceed" class="btn btn-success btn-lg flex-fill" <?= $basePrice <= 0 ? 'data-zero="1"' : '' ?>>
+                  <i class="bi bi-credit-card me-1"></i>
+                  <span id="btnProceedText"><?= $basePrice <= 0 ? 'Selesaikan (Total Rp 0)' : 'Lanjut ke Pembayaran Digital' ?></span>
                 </button>
-                <a class="btn btn-outline-secondary" href="/presenter/abstrak">
-                  Kembali ke Abstrak
+                <a class="btn btn-light border flex-fill" href="<?= site_url('presenter/pembayaran') ?>">
+                  <i class="bi bi-arrow-left"></i> Kembali
                 </a>
               </div>
             </div>
@@ -133,18 +134,17 @@ $amountF = number_format($basePrice, 0, ',', '.');
                 <div class="mini-label text-muted mb-1">Total</div>
                 <div class="mobile-total fw-bold" id="mobTotal">Rp <?= $amountF ?></div>
               </div>
-              <button type="button" class="btn btn-success btn-lg flex-fill" id="btnProceedMobile">
-                Bayar Digital
+              <button type="button" class="btn btn-success btn-lg flex-fill" id="btnProceedMobile" <?= $basePrice <= 0 ? 'data-zero="1"' : '' ?>>
+                <span id="btnProceedMobileText"><?= $basePrice <= 0 ? 'Selesaikan (Rp 0)' : 'Bayar Digital' ?></span>
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="alert alert-info mt-3">
+      <div class="alert alert-info mt-3 card-glass-plain border-0">
         <i class="bi bi-info-circle me-2"></i>
-        <strong>Pembayaran Digital:</strong> Menggunakan Midtrans untuk pembayaran yang aman dan verifikasi otomatis. 
-        Mendukung berbagai metode: Credit Card, Debit Card, E-Wallet (GoPay, ShopeePay, OVO, DANA), Bank Transfer, dan QRIS.
+        <strong>Pembayaran Digital:</strong> Menggunakan Midtrans (aman & otomatis). Mendukung Kartu, E-Wallet, Transfer Bank, & QRIS.
       </div>
 
     </div>
@@ -157,7 +157,7 @@ $amountF = number_format($basePrice, 0, ',', '.');
 <input type="hidden" id="baseAmount" value="<?= $basePrice ?>">
 
 <!-- Midtrans Snap Script -->
-<script type="text/javascript" 
+<script type="text/javascript"
         src="<?= $isProduction ? 'https://app.midtrans.com/snap/snap.js' : 'https://app.sandbox.midtrans.com/snap/snap.js' ?>"
         data-client-key="<?= esc($midtransClientKey) ?>">
 </script>
@@ -165,432 +165,304 @@ $amountF = number_format($basePrice, 0, ',', '.');
 <?= $this->include('partials/footer') ?>
 
 <style>
-:root { --primary:#2563eb; --primary-deep:#1e40af; --info:#06b6d4; }
+/* ===== Presenter Blue UI (seragam) ===== */
+:root{
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
+  --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
+  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
 
-.header-section.header-blue {
-  background: linear-gradient(135deg, var(--primary), var(--primary-deep));
-  color: #fff; 
-  padding: 20px; 
-  border-radius: 16px; 
-  box-shadow: 0 8px 28px rgba(0,0,0,.12);
+  --side-pad:1rem; --gutter-x:1rem;
+  --success:#10b981; --warning:#f59e0b; --danger:#ef4444; --secondary:#64748b;
 }
 
-.welcome-text { 
-  font-weight: 700; 
-  font-size: 1.25rem; 
-}
+body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:14.6px; line-height:1.5; }
 
-.price-bubble {
-  display: inline-block; 
-  padding: .35rem .75rem; 
-  background: rgba(255,255,255,.15);
-  border: 1px solid rgba(255,255,255,.3); 
-  border-radius: 999px; 
-  font-weight: 700;
-}
+.page-wrap-blue{ background:linear-gradient(180deg,var(--blue-50),#fff 40%); min-height:100vh; padding-top:72px; }
+.container-xxl{ max-width:1400px; padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; }
+.row.g-3{ --bs-gutter-x:var(--gutter-x); --bs-gutter-y:var(--gutter-x); }
 
-.card { border-radius: 14px; }
-.bg-gradient-primary { background: linear-gradient(135deg, var(--primary), var(--info))!important; }
-.mini-label { font-size: .85rem; }
+/* HERO (non-glass override seperti halaman lain) */
+.hero-blue{
+  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
+  color:#fff !important; border-radius:16px; border:1px solid rgba(255,255,255,.15);
+  box-shadow:0 12px 28px rgba(30,64,175,.10); padding:1.6rem !important; margin-bottom:1.25rem !important;
+}
+.hero-blue.card-glass,.hero-blue.card-glass-plain{ backdrop-filter:none !important; }
+.hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.45rem; }
+.text-white-75{ color:rgba(255,255,255,.85)!important; }
+
+/* Card & glass */
+.card-glass-plain{ backdrop-filter:blur(6px); background:#fff; border-radius:14px; border:1px solid rgba(30,64,175,.10); }
+.shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
+.card-header{ padding:1rem 1rem .45rem 1rem !important; }
+.card-body{   padding:1.05rem !important; }
+
+/* Badges subtle & helpers */
+.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.45rem .7rem; font-weight:600; font-size:.85rem; }
+.bg-success-subtle{ background:#d1fae5!important; color:#065f46!important; }
+.bg-primary-subtle{ background:#dbeafe!important; color:var(--blue-700)!important; }
+.text-blue-900{ color:var(--blue-900)!important; }
+
+/* Inputs & buttons */
+.form-control-soft{ border-radius:12px; border:1px solid rgba(30,64,175,.12); background:#fff; }
+.form-control-soft:focus{ border-color:var(--blue-400); box-shadow:0 0 0 .2rem rgba(59,130,246,.12); }
+
+.btn{ border-radius:12px; font-weight:600; }
+.btn-success{ box-shadow:0 6px 18px rgba(16,185,129,.18); }
+.btn-outline-primary{ border-color:var(--blue-400); color:var(--blue-700); }
+.btn-outline-primary:hover{ background:var(--blue-600); color:#fff; border-color:var(--blue-600); }
+
+/* Price bubble */
+.price-bubble{ display:inline-block; padding:.35rem .75rem; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); border-radius:999px; font-weight:700; }
 
 /* Mobile sticky CTA */
-.mobile-sticky { 
-  position: sticky; 
-  bottom: 0; 
-  left: 0; 
-  right: 0; 
-  margin-top: 12px; 
-  z-index: 1030; 
+.mobile-sticky{ position:sticky; bottom:0; left:0; right:0; margin-top:12px; z-index:1030; }
+.mobile-sticky__inner{
+  display:flex; gap:.75rem; align-items:center; justify-content:space-between;
+  background:#fff; border-top:1px solid #e5e7eb; padding:.75rem .9rem; box-shadow:0 -6px 18px rgba(0,0,0,.06);
 }
+.mobile-total{ font-size:1.25rem; }
 
-.mobile-sticky__inner {
-  display: flex; 
-  gap: .75rem; 
-  align-items: center; 
-  justify-content: space-between;
-  background: #ffffff; 
-  border-top: 1px solid #e5e7eb; 
-  padding: .75rem .9rem;
-  box-shadow: 0 -6px 18px rgba(0,0,0,.06);
-}
+/* Alerts */
+.alert{ border-radius:10px; border:none; font-size:.9rem; }
+.alert-success{ background:linear-gradient(135deg,#10b981 0%,#059669 100%); color:#fff; }
+.alert-danger{  background:linear-gradient(135deg,#ef4444 0%,#dc2626 100%); color:#fff; }
+.alert-warning{ background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%); color:#fff; }
+.alert-info{    background:#e0f2fe; color:#0c4a6e; }
 
-.mobile-total { font-size: 1.25rem; }
+/* Animasi jumlah */
+.price-bubble,#boxTotal,#mobTotal{ transition:all .3s ease; }
+.amount-changed{ animation:amountPulse .6s ease-in-out; }
+@keyframes amountPulse{ 0%{transform:scale(1);} 50%{transform:scale(1.05); color:#10b981;} 100%{transform:scale(1);} }
 
-.btn { border-radius: 12px; }
-.btn-success { box-shadow: 0 6px 18px rgba(16,185,129,.18); }
-.btn-outline-secondary { border-color: #cbd5e1; }
-
-/* Alert styles for voucher */
-.alert {
-  border-radius: 8px;
-  border: none;
-  font-size: 0.875rem;
-}
-
-.alert-success {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-}
-
-.alert-danger {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-}
-
-.alert-warning {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-}
-
-/* Animation for amount change */
-.price-bubble, #boxTotal, #mobTotal {
-  transition: all 0.3s ease;
-}
-
-.amount-changed {
-  animation: amountPulse 0.6s ease-in-out;
-}
-
-@keyframes amountPulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); color: #10b981; }
-  100% { transform: scale(1); }
+/* Responsive tweak */
+@media (max-width:575.98px){
+  .container-xxl{ padding-left:1rem!important; padding-right:1rem!important; }
+  .hero-blue{ border-radius:14px; padding:1.25rem!important; margin-bottom:1rem!important; }
+  .hero-title{ font-size:1.25rem; }
 }
 </style>
 
 <script>
-(function() {
+(function(){
   'use strict';
 
-  // Configuration
   const CONFIG = {
     eventId: parseInt(document.getElementById('eventId').value) || 0,
     baseAmount: parseFloat(document.getElementById('baseAmount').value) || 0,
-    midtransClientKey: '<?= esc($midtransClientKey) ?>',
-    isProduction: <?= $isProduction ? 'true' : 'false' ?>,
     siteUrl: '<?= site_url() ?>',
     csrfTokenName: '<?= csrf_token() ?>'
   };
 
-  // State
-  let currentAmount = CONFIG.baseAmount;
-  let appliedVoucher = null;
-  let voucherValidated = false;
+  let currentAmount   = CONFIG.baseAmount;
+  let appliedVoucher  = null;
+  let voucherValidated= false;
+  let paying          = false;
 
-  // DOM Elements
-  const elements = {
+  const els = {
     voucherCode: document.getElementById('voucherCode'),
     btnCheckVoucher: document.getElementById('btnCheckVoucher'),
     voucherSpinner: document.getElementById('voucherSpinner'),
     voucherResult: document.getElementById('voucherResult'),
     voucherBtnText: document.getElementById('voucherBtnText'),
-    
+
     btnProceed: document.getElementById('btnProceed'),
+    btnProceedText: document.getElementById('btnProceedText'),
     btnProceedMobile: document.getElementById('btnProceedMobile'),
-    
-    basePrice: document.getElementById('basePrice'),
-    discountRow: document.getElementById('discountRow'),
-    discountAmount: document.getElementById('discountAmount'),
-    voucherCodeDisplay: document.getElementById('voucherCodeDisplay'),
-    
+    btnProceedMobileText: document.getElementById('btnProceedMobileText'),
+
     priceTop: document.getElementById('priceTop'),
     boxTotal: document.getElementById('boxTotal'),
     mobTotal: document.getElementById('mobTotal'),
-    
+
+    discountRow: document.getElementById('discountRow'),
+    discountAmount: document.getElementById('discountAmount'),
+    voucherCodeDisplay: document.getElementById('voucherCodeDisplay'),
+
     csrfToken: document.getElementById('csrfToken')
   };
 
-  // Utility Functions
-  function formatCurrency(amount) {
-    return 'Rp ' + amount.toLocaleString('id-ID');
-  }
+  function fmt(a){ return 'Rp ' + (Math.max(0, Math.round(a))||0).toLocaleString('id-ID'); }
+  function getCsrf(){ return els.csrfToken ? els.csrfToken.value : '<?= csrf_hash() ?>'; }
+  function setCsrf(t){ if(t && els.csrfToken) els.csrfToken.value = t; }
 
-  function updateAmountDisplay() {
-    const formatted = formatCurrency(currentAmount);
-    
-    elements.priceTop.textContent = formatted;
-    elements.boxTotal.textContent = formatted;
-    elements.mobTotal.textContent = formatted;
-    
-    // Add animation
-    [elements.priceTop, elements.boxTotal, elements.mobTotal].forEach(el => {
+  function renderAmount(){
+    const f = fmt(currentAmount);
+    [els.priceTop, els.boxTotal, els.mobTotal].forEach(el => {
+      el.textContent = f;
       el.classList.add('amount-changed');
-      setTimeout(() => el.classList.remove('amount-changed'), 600);
+      setTimeout(()=>el.classList.remove('amount-changed'), 600);
     });
-  }
 
-  function getCurrentCsrfToken() {
-    return elements.csrfToken ? elements.csrfToken.value : '<?= csrf_hash() ?>';
-  }
-
-  function updateCsrfToken(newToken) {
-    if (newToken && elements.csrfToken) {
-      elements.csrfToken.value = newToken;
-    }
-  }
-
-  function showVoucherResult(message, type = 'info', icon = '') {
-    const alertClass = {
-      'success': 'alert-success',
-      'error': 'alert-danger', 
-      'danger': 'alert-danger',
-      'warning': 'alert-warning',
-      'info': 'alert-info'
-    }[type] || 'alert-info';
-
-    const iconHtml = icon ? `<i class="bi bi-${icon} me-2"></i>` : '';
-    
-    elements.voucherResult.innerHTML = `
-      <div class="alert ${alertClass} mb-0">
-        ${iconHtml}${message}
-      </div>
-    `;
-  }
-
-  function clearVoucherResult() {
-    elements.voucherResult.innerHTML = '';
-  }
-
-  function resetVoucherState() {
-    appliedVoucher = null;
-    currentAmount = CONFIG.baseAmount;
-    voucherValidated = false;
-    updateAmountDisplay();
-    clearVoucherResult();
-    
-    // Hide discount row
-    elements.discountRow.style.display = 'none';
-    
-    // Reset button
-    elements.voucherBtnText.textContent = 'Cek Voucher';
-    elements.btnCheckVoucher.classList.remove('btn-success');
-    elements.btnCheckVoucher.classList.add('btn-outline-primary');
-  }
-
-  function setButtonLoading(button, spinner, textEl, loading, loadingText = 'Loading...') {
-    if (loading) {
-      spinner.classList.remove('d-none');
-      textEl.textContent = loadingText;
-      button.disabled = true;
+    const zero = currentAmount <= 0;
+    if (zero){
+      if (els.btnProceedText) els.btnProceedText.textContent = 'Selesaikan (Total Rp 0)';
+      if (els.btnProceedMobileText) els.btnProceedMobileText.textContent = 'Selesaikan (Rp 0)';
+      els.btnProceed?.setAttribute('data-zero','1');
+      els.btnProceedMobile?.setAttribute('data-zero','1');
     } else {
-      spinner.classList.add('d-none');
-      button.disabled = false;
+      if (els.btnProceedText) els.btnProceedText.textContent = 'Lanjut ke Pembayaran Digital';
+      if (els.btnProceedMobileText) els.btnProceedMobileText.textContent = 'Bayar Digital';
+      els.btnProceed?.removeAttribute('data-zero');
+      els.btnProceedMobile?.removeAttribute('data-zero');
     }
   }
 
-  // Voucher Validation
-  async function validateVoucher() {
-    const code = elements.voucherCode.value.trim();
-    
-    if (!code) {
-      showVoucherResult('Masukkan kode voucher terlebih dahulu.', 'warning', 'exclamation-triangle');
-      return;
-    }
+  function setBtnLoading(on){
+    paying = on;
+    [els.btnProceed, els.btnProceedMobile].forEach(b=>{
+      if(!b) return;
+      b.disabled = on;
+      if(on){ b.classList.add('disabled'); } else { b.classList.remove('disabled'); }
+    });
+  }
 
-    setButtonLoading(elements.btnCheckVoucher, elements.voucherSpinner, elements.voucherBtnText, true, 'Validating...');
+  function showVoucherResult(msg, type='info', icon=''){
+    const cls = {success:'alert-success',error:'alert-danger',danger:'alert-danger',warning:'alert-warning',info:'alert-info'}[type] || 'alert-info';
+    const ic  = icon ? `<i class="bi bi-${icon} me-2"></i>` : '';
+    els.voucherResult.innerHTML = `<div class="alert ${cls} mb-0">${ic}${msg}</div>`;
+  }
+  function clearVoucher(){ els.voucherResult.innerHTML=''; }
 
-    try {
-      const formData = new FormData();
-      formData.append('event_id', CONFIG.eventId);
-      formData.append('kode_voucher', code);
-      formData.append(CONFIG.csrfTokenName, getCurrentCsrfToken());
+  function resetVoucher(){
+    appliedVoucher = null; voucherValidated=false; currentAmount = CONFIG.baseAmount;
+    els.discountRow.style.display='none';
+    els.voucherBtnText.textContent='Cek Voucher';
+    els.btnCheckVoucher.classList.remove('btn-success'); els.btnCheckVoucher.classList.add('btn-outline-primary');
+    clearVoucher(); renderAmount();
+  }
 
-      const response = await fetch(CONFIG.siteUrl + '/presenter/pembayaran/validate-voucher', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest'
-        }
+  async function validateVoucher(){
+    if(!els.voucherCode) return;
+    const code = (els.voucherCode.value||'').trim();
+    if(!code){ showVoucherResult('Masukkan kode voucher terlebih dahulu.','warning','exclamation-triangle'); return; }
+
+    els.voucherSpinner.classList.remove('d-none');
+    els.btnCheckVoucher.disabled = true;
+    els.voucherBtnText.textContent = 'Validating...';
+
+    try{
+      const fd = new FormData();
+      fd.append('event_id', CONFIG.eventId);
+      fd.append('kode_voucher', code);
+      fd.append(CONFIG.csrfTokenName, getCsrf());
+
+      const res = await fetch(CONFIG.siteUrl + '/presenter/pembayaran/validate-voucher', {
+        method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}
       });
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+      const json = await res.json();
+      setCsrf(json.token);
 
-      const result = await response.json();
-      updateCsrfToken(result.token);
-
-      if (result.ok) {
-        currentAmount = result.final_price;
-        appliedVoucher = {
-          id: result.voucher_id,
-          code: result.code
-        };
-        
-        const discount = CONFIG.baseAmount - result.final_price;
+      if(json.ok){
         voucherValidated = true;
-        
-        // Show discount
-        elements.discountAmount.textContent = '- ' + formatCurrency(discount);
-        elements.voucherCodeDisplay.textContent = `(${result.code})`;
-        elements.discountRow.style.display = 'flex';
-        
-        showVoucherResult(
-          `Voucher berhasil diterapkan! Diskon: ${formatCurrency(discount)}`, 
-          'success', 
-          'check-circle'
-        );
-        updateAmountDisplay();
-        
-        // Change button appearance
-        elements.voucherBtnText.textContent = 'Voucher Diterapkan';
-        elements.btnCheckVoucher.classList.remove('btn-outline-primary');
-        elements.btnCheckVoucher.classList.add('btn-success');
-        
-      } else {
-        resetVoucherState();
-        showVoucherResult(result.message || 'Voucher tidak valid', 'error', 'x-circle');
-      }
+        appliedVoucher = { id: json.voucher_id, code: json.code };
+        const final = Math.max(0, parseFloat(json.final_price)||CONFIG.baseAmount);
+        const disc  = Math.max(0, CONFIG.baseAmount - final);
+        currentAmount = final;
 
-    } catch (error) {
-      console.error('Voucher validation error:', error);
-      resetVoucherState();
-      showVoucherResult('Terjadi kesalahan saat memvalidasi voucher: ' + error.message, 'error', 'exclamation-triangle');
-    } finally {
-      setButtonLoading(elements.btnCheckVoucher, elements.voucherSpinner, elements.voucherBtnText, false);
-      elements.voucherBtnText.textContent = voucherValidated ? 'Voucher Diterapkan' : 'Cek Voucher';
+        els.discountAmount.textContent = '- ' + fmt(disc);
+        els.voucherCodeDisplay.textContent = `(${json.code})`;
+        els.discountRow.style.display='flex';
+
+        els.voucherBtnText.textContent='Voucher Diterapkan';
+        els.btnCheckVoucher.classList.remove('btn-outline-primary'); els.btnCheckVoucher.classList.add('btn-success');
+
+        showVoucherResult(`Voucher berhasil diterapkan! Diskon: ${fmt(disc)}`,'success','check-circle');
+        renderAmount();
+      }else{
+        resetVoucher();
+        showVoucherResult(json.message || 'Voucher tidak valid','error','x-circle');
+      }
+    }catch(e){
+      resetVoucher();
+      showVoucherResult('Terjadi kesalahan saat memvalidasi voucher.','error','exclamation-triangle');
+      console.error(e);
+    }finally{
+      els.voucherSpinner.classList.add('d-none');
+      els.btnCheckVoucher.disabled = false;
+      els.voucherBtnText.textContent = voucherValidated ? 'Voucher Diterapkan' : 'Cek Voucher';
     }
   }
 
-  // Payment Processing
-  async function processPayment() {
-    try {
-      const formData = new FormData();
-      formData.append('event_id', CONFIG.eventId);
-      formData.append('voucher_code', appliedVoucher?.code || '');
-      formData.append(CONFIG.csrfTokenName, getCurrentCsrfToken());
+  async function finalizeZeroPayment(){
+    window.location.href = CONFIG.siteUrl + '/presenter/pembayaran/finish?order_id=FREE-'+Date.now()+'&status=success';
+  }
 
-      const response = await fetch(CONFIG.siteUrl + '/presenter/pembayaran/process-payment', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest'
-        }
+  async function processPayment(){
+    if(paying) return;
+    setBtnLoading(true);
+    try{
+      if(currentAmount <= 0 || (this && this.getAttribute && this.getAttribute('data-zero') === '1')){
+        await finalizeZeroPayment();
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append('event_id', CONFIG.eventId);
+      fd.append('voucher_code', appliedVoucher?.code || '');
+      fd.append(CONFIG.csrfTokenName, getCsrf());
+
+      const res = await fetch(CONFIG.siteUrl + '/presenter/pembayaran/process-payment', {
+        method:'POST', body:fd, headers:{'X-Requested-With':'XMLHttpRequest'}
+      });
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const json = await res.json();
+      if(!json.success) throw new Error(json.message || 'Gagal membuat transaksi');
+
+      if(typeof snap === 'undefined') throw new Error('Midtrans Snap tidak tersedia.');
+      if(!json.snap_token) throw new Error('Token pembayaran tidak ditemukan.');
+
+      snap.pay(json.snap_token, {
+        onSuccess: function(r){
+          const oid = r.order_id || r.transaction_id;
+          window.location.href = oid
+            ? `${CONFIG.siteUrl}/presenter/pembayaran/finish?order_id=${oid}&status=success`
+            : `${CONFIG.siteUrl}/presenter/pembayaran?success=1`;
+        },
+        onPending: function(r){
+          const oid = r.order_id || r.transaction_id;
+          window.location.href = oid
+            ? `${CONFIG.siteUrl}/presenter/pembayaran/finish?order_id=${oid}&status=pending`
+            : `${CONFIG.siteUrl}/presenter/pembayaran?pending=1`;
+        },
+        onError: function(r){
+          const msg = r.status_message || r.error_message || 'Terjadi kesalahan dalam pembayaran';
+          alert('Pembayaran gagal: ' + msg);
+        },
+        onClose: function(){ /* user menutup popup */ }
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        await handleMidtransPayment(result);
-      } else {
-        throw new Error(result.message || 'Terjadi kesalahan tidak dikenal');
-      }
-
-    } catch (error) {
-      console.error('Payment processing error:', error);
-      alert('Gagal memproses pembayaran: ' + error.message);
+    }catch(e){
+      console.error(e);
+      alert('Gagal memproses pembayaran: ' + e.message);
+    }finally{
+      setBtnLoading(false);
     }
   }
 
-  // Midtrans Payment Handling
-  async function handleMidtransPayment(result) {
-    try {
-      if (typeof snap === 'undefined') {
-        throw new Error('Midtrans Snap tidak tersedia. Periksa koneksi internet Anda.');
-      }
-
-      if (!result.snap_token) {
-        throw new Error('Token pembayaran tidak tersedia.');
-      }
-
-      const snapConfig = {
-        onSuccess: function(result) {
-          console.log('Payment success:', result);
-          const orderId = result.order_id || result.transaction_id;
-          const redirectUrl = orderId ? 
-            `${CONFIG.siteUrl}/presenter/pembayaran/finish?order_id=${orderId}&status=success` :
-            `${CONFIG.siteUrl}/presenter/pembayaran?success=1`;
-          
-          window.location.href = redirectUrl;
-        },
-        onPending: function(result) {
-          console.log('Payment pending:', result);
-          const orderId = result.order_id || result.transaction_id;
-          const redirectUrl = orderId ? 
-            `${CONFIG.siteUrl}/presenter/pembayaran/finish?order_id=${orderId}&status=pending` :
-            `${CONFIG.siteUrl}/presenter/pembayaran?pending=1`;
-          
-          window.location.href = redirectUrl;
-        },
-        onError: function(result) {
-          console.error('Payment error:', result);
-          const errorMsg = result.status_message || 
-                         result.error_message || 
-                         'Terjadi kesalahan dalam pembayaran';
-          
-          alert('Pembayaran gagal: ' + errorMsg);
-        },
-        onClose: function() {
-          console.log('Payment popup closed by user');
-        }
-      };
-
-      snap.pay(result.snap_token, snapConfig);
-
-    } catch (error) {
-      console.error('Midtrans handling error:', error);
-      alert('Gagal membuka halaman pembayaran: ' + error.message);
-    }
-  }
-
-  // Event Listeners
-  function initEventListeners() {
-    // Voucher validation
-    elements.btnCheckVoucher.addEventListener('click', validateVoucher);
-    
-    // Reset voucher on input change
-    elements.voucherCode.addEventListener('input', function() {
-      if (!this.value.trim() && voucherValidated) {
-        resetVoucherState();
-      }
+  function init(){
+    // Voucher
+    document.getElementById('btnCheckVoucher')?.addEventListener('click', validateVoucher);
+    document.getElementById('voucherCode')?.addEventListener('input', function(){
+      if(!this.value.trim() && voucherValidated) resetVoucher();
+    });
+    document.getElementById('voucherCode')?.addEventListener('keypress', e=>{
+      if(e.key==='Enter'){ e.preventDefault(); validateVoucher(); }
     });
 
-    // Enter key for voucher validation
-    elements.voucherCode.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        validateVoucher();
-      }
-    });
+    // Payment
+    els.btnProceed?.addEventListener('click', processPayment);
+    els.btnProceedMobile?.addEventListener('click', processPayment);
 
-    // Payment processing
-    elements.btnProceed.addEventListener('click', processPayment);
-    elements.btnProceedMobile.addEventListener('click', processPayment);
+    // Sanity Snap
+    setTimeout(()=>{ if(typeof snap === 'undefined'){ console.warn('Midtrans Snap not loaded'); } }, 1200);
+
+    renderAmount();
   }
 
-  // Initialize
-  function initializePage() {
-    console.log('Initializing presenter payment page with config:', CONFIG);
-
-    if (!CONFIG.eventId) {
-      alert('Data event tidak lengkap. Silakan coba lagi.');
-      return;
-    }
-
-    // Check Midtrans availability
-    setTimeout(() => {
-      if (typeof snap === 'undefined') {
-        console.warn('Midtrans Snap not loaded properly');
-        alert('Sistem pembayaran sedang bermasalah. Silakan coba lagi nanti.');
-      } else {
-        console.log('Midtrans Snap loaded successfully');
-      }
-    }, 1000);
-
-    initEventListeners();
-    updateAmountDisplay();
-  }
-
-  // Initialize when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializePage);
-  } else {
-    initializePage();
-  }
-
+  document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
 })();
 </script>
