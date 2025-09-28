@@ -7,9 +7,9 @@
 *.env
 *.key
 
-# Storage & cache (opsional, sesuaikan project)
+# Writable (CI4 logs, cache, session, debugbar)
 writable/cache/*
 writable/logs/*
 writable/session/*
-!writable/.gitkeep
-
+writable/debugbar/*
+!writable/**/.gitkeep
