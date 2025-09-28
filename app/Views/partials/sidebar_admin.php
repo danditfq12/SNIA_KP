@@ -1,55 +1,61 @@
 <?php
-// Aktifkan menu berdasar URI
-$uri  = service('uri');
-$seg1 = strtolower($uri->getSegment(1) ?? '');
-$seg2 = strtolower($uri->getSegment(2) ?? '');
+// Aktifkan menu berdasar URI + dukung override dari view lewat $activeMenu = 'kelola_paper'
+$uri   = service('uri');
+$seg1  = strtolower($uri->getSegment(1) ?? '');
+$seg2  = strtolower($uri->getSegment(2) ?? '');
+$seg2  = $seg2 === '' ? 'dashboard' : $seg2; // normalisasi utk /admin jadi dashboard
 
-// helper aktif: seg1 harus 'admin', seg2 harus sama dengan slug (atau dashboard khusus)
-$active = function (string $slug) use ($seg1, $seg2): bool {
-    if ($slug === 'dashboard') return ($seg1 === 'admin' && ($seg2 === '' || $seg2 === 'dashboard'));
-    return $seg1 === 'admin' && $seg2 === strtolower($slug);
+// Kelompok route yang harus menandai "Kelola Paper" sebagai aktif
+$kelolaPaperGroup = ['kelola-paper', 'fullpaper', 'abstrak'];
+
+/**
+ * Penentu aktif:
+ * - slug 'dashboard' aktif pada /admin atau /admin/dashboard
+ * - slug 'kelola-paper' aktif pada /admin/{kelola-paper|fullpaper|abstrak}/**
+ * - slug lain aktif bila seg2==slug persis
+ * - override: jika $activeMenu==='kelola_paper', maka 'kelola-paper' dipaksa aktif
+ */
+$active = function (string $slug) use ($seg1, $seg2, $kelolaPaperGroup): bool {
+    if ($seg1 !== 'admin') return false;
+
+    if ($slug === 'dashboard') {
+        return in_array($seg2, ['dashboard'], true);
+    }
+
+    if ($slug === 'kelola-paper') {
+        // grup kelola paper (events, presenters, detail, dll)
+        if (in_array($seg2, $kelolaPaperGroup, true)) return true;
+        // dukung override dari view
+        if (isset($GLOBALS['activeMenu']) && $GLOBALS['activeMenu'] === 'kelola_paper') return true;
+        return false;
+    }
+
+    // default: cocokkan seg2 dengan slug
+    return $seg2 === strtolower($slug);
 };
 ?>
 <style>
   :root{ --admin-sidebar-w: 300px; }
   body{ padding-left: var(--admin-sidebar-w) !important; }
-
-  .admin-sidebar{
-    position:fixed; left:0; top:0; height:100vh; width:var(--admin-sidebar-w);
-    background: linear-gradient(180deg,#2563eb 0%,#1e40af 100%);
-    box-shadow: 4px 0 22px rgba(0,0,0,.12);
-    z-index:1030; overflow-y:auto; color:#fff;
-  }
+  .admin-sidebar{ position:fixed; left:0; top:0; height:100vh; width:var(--admin-sidebar-w);
+    background: linear-gradient(180deg,#2563eb 0%,#1e40af 100%); box-shadow: 4px 0 22px rgba(0,0,0,.12);
+    z-index:1030; overflow-y:auto; color:#fff; }
   .admin-sidebar::-webkit-scrollbar{ width:10px }
   .admin-sidebar::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.25); border-radius:8px }
-
-  .admin-sidebar .brand-wrap{
-    padding:14px 18px; border-bottom:1px solid rgba(255,255,255,.18)
-  }
+  .admin-sidebar .brand-wrap{ padding:14px 18px; border-bottom:1px solid rgba(255,255,255,.18) }
   .admin-sidebar .brand-wrap .title{ font-weight:700; }
   .admin-sidebar .brand-wrap .sub{ color:rgba(255,255,255,.7); font-size:.85rem }
-
-  .admin-sidebar .menu-label{
-    color:rgba(255,255,255,.6); font-size:.75rem; text-transform:uppercase;
-    letter-spacing:.06em; padding:10px 14px 6px; margin-top:8px
-  }
-
-  .admin-sidebar .nav-link{
-    position:relative; display:flex; align-items:center; gap:12px;
-    color:rgba(255,255,255,.92); text-decoration:none;
-    padding:11px 14px; margin:4px 8px; border-radius:12px;
-    transition:.18s ease;
-  }
-  .admin-sidebar .nav-link .ico{
-    width:28px; height:28px; display:grid; place-items:center;
-    font-size:1.05rem; color:#fff; background:rgba(255,255,255,.14); border-radius:10px
-  }
+  .admin-sidebar .menu-label{ color:rgba(255,255,255,.6); font-size:.75rem; text-transform:uppercase;
+    letter-spacing:.06em; padding:10px 14px 6px; margin-top:8px }
+  .admin-sidebar .nav-link{ position:relative; display:flex; align-items:center; gap:12px;
+    color:rgba(255,255,255,.92); text-decoration:none; padding:11px 14px; margin:4px 8px;
+    border-radius:12px; transition:.18s ease; }
+  .admin-sidebar .nav-link .ico{ width:28px; height:28px; display:grid; place-items:center;
+    font-size:1.05rem; color:#fff; background:rgba(255,255,255,.14); border-radius:10px }
   .admin-sidebar .nav-link:hover{ background:rgba(255,255,255,.12); color:#fff; transform:translateX(4px) }
-  .admin-sidebar .nav-link.is-active{
-    background:rgba(255,255,255,.22); color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.12) inset
-  }
-  .admin-sidebar .nav-link .active-pill,
-  .admin-sidebar .nav-link::after{ display:none !important; content:none !important; }
+  .admin-sidebar .nav-link.is-active{ background:rgba(255,255,255,.22); color:#fff;
+    box-shadow:0 6px 18px rgba(0,0,0,.12) inset }
+  .admin-sidebar .nav-link .active-pill, .admin-sidebar .nav-link::after{ display:none !important; content:none !important; }
 </style>
 
 <aside class="admin-sidebar">
@@ -71,15 +77,6 @@ $active = function (string $slug) use ($seg1, $seg2): bool {
     <a class="nav-link <?= $active('users') ? 'is-active':'' ?>" href="<?= site_url('admin/users') ?>">
       <span class="ico"><i class="bi bi-people-fill"></i></span><span>Manajemen User</span>
     </a>
-    <a class="nav-link <?= $active('abstrak') ? 'is-active':'' ?>" href="<?= site_url('admin/abstrak') ?>">
-      <span class="ico"><i class="bi bi-file-earmark-text"></i></span><span>Manajemen Abstrak</span>
-    </a>
-
-    <!-- ✅ Full Paper -->
-    <a class="nav-link <?= $active('fullpaper') ? 'is-active':'' ?>" href="<?= site_url('admin/fullpaper') ?>">
-      <span class="ico"><i class="bi bi-journal-richtext"></i></span><span>Manajemen Full Paper</span>
-    </a>
-
     <a class="nav-link <?= $active('kategori') ? 'is-active':'' ?>" href="<?= site_url('admin/kategori') ?>">
       <span class="ico"><i class="bi bi-tags-fill"></i></span><span>Kategori Abstrak</span>
     </a>
@@ -87,14 +84,16 @@ $active = function (string $slug) use ($seg1, $seg2): bool {
       <span class="ico"><i class="bi bi-credit-card"></i></span><span>Verifikasi Pembayaran</span>
     </a>
     <a class="nav-link <?= $active('reviewer') ? 'is-active':'' ?>" href="<?= site_url('admin/reviewer') ?>">
-      <span class="ico"><i class="bi bi-person-check"></i></span>
-      <span>Manajemen Reviewer</span>
+      <span class="ico"><i class="bi bi-person-check"></i></span><span>Manajemen Reviewer</span>
     </a>
 
     <!-- Bagian Kelola -->
     <div class="menu-label">Kelola</div>
     <a class="nav-link <?= $active('event') ? 'is-active':'' ?>" href="<?= site_url('admin/event') ?>">
       <span class="ico"><i class="bi bi-calendar2-event"></i></span><span>Kelola Event</span>
+    </a>
+    <a class="nav-link <?= $active('kelola-paper') ? 'is-active':'' ?>" href="<?= site_url('admin/kelola-paper') ?>">
+      <span class="ico"><i class="bi bi-journal-richtext"></i></span><span>Kelola Paper</span>
     </a>
     <a class="nav-link <?= $active('absensi') ? 'is-active':'' ?>" href="<?= site_url('admin/absensi') ?>">
       <span class="ico"><i class="bi bi-qr-code-scan"></i></span><span>Kelola Absensi</span>

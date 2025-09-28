@@ -49,7 +49,7 @@ class Profile extends BaseController
         foreach ($docTables as $d) {
             if (!$this->tExists($d['table'])) continue;
 
-            $fields = array_flip($this->db->getFieldNames($d['table']) ?: []);
+            $fields   = array_flip($this->db->getFieldNames($d['table']) ?: []);
             $nameCand = ['nama_file','nama_dokumen','filename','original_name','name','judul','title'];
             $nameCol  = null;
             foreach ($nameCand as $c) { if (isset($fields[$c])) { $nameCol = $c; break; } }
@@ -75,7 +75,7 @@ class Profile extends BaseController
                     'created_at' => $createdCol ? ($r[$createdCol] ?? null) : null,
                 ];
             }
-            if ($rows) return $docs; // sudah dapat dari salah satu tabel
+            if ($rows) return $docs; // cukup dari salah satu tabel
         }
 
         // Fallback: scan folder publik
@@ -121,7 +121,8 @@ class Profile extends BaseController
         $user = $this->userModel->find($uid);
         if (!$user) return redirect()->to('/auth/login');
 
-        $role        = strtolower((string)($user['role'] ?? 'audience'));
+        // role dipakai lintas-role (admin/presenter/audience)
+        $role        = strtolower(trim((string)($user['role'] ?? session('role') ?? 'audience'))) ?: 'audience';
         $eventsCount = $this->countJoinedEvents($uid);
         $docs        = $this->getUserDocs($uid);
 

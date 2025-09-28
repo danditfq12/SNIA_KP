@@ -1,155 +1,191 @@
 <?php
-// ====== DEFAULT VARS ======
-$abstrak  = $abstrak ?? [];     // id_abstrak, judul, nama_lengkap, email, nama_kategori, id_kategori, event_id, event_title, tanggal_upload, revisi_ke, status, file_abstrak
-$reviews  = $reviews ?? [];     // reviewer_name, tanggal_review, keputusan, komentar
+/**
+ * File: app/Views/role/admin/abstrak/detail.php
+ * Expect: $abstrak (array), $reviews (array), $assigned (array)
+ */
+$abstrak  = $abstrak ?? [];
+$reviews  = $reviews ?? [];
+$assigned = $assigned ?? [];
 $title    = 'Detail Abstrak';
+$activeMenu = 'kelola_paper';
 
-// mapping status → badge
 $badgeMap = [
-  'menunggu'        => 'warning',
-  'sedang_direview' => 'info',
   'diterima'        => 'success',
   'ditolak'         => 'danger',
-  'revisi'          => 'secondary',
+  'menunggu'        => 'secondary',
+  'revisi'          => 'warning',
+  'sedang_direview' => 'info',
 ];
 $stKey  = strtolower($abstrak['status'] ?? 'menunggu');
 $stCls  = $badgeMap[$stKey] ?? 'secondary';
-$stText = ucfirst(str_replace('_',' ', $stKey));
-?>
+$stText = ($stKey === 'sedang_direview') ? 'Sedang Ditinjau' : ucfirst(str_replace('_',' ', $stKey));
 
+$fmtDT = function($dt){
+  if(!$dt) return '-';
+  $t = strtotime((string)$dt);
+  return date('d M Y H:i', $t);
+};
+$idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
+?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
 <?= $this->include('partials/alerts') ?>
 
 <div id="content">
-  <main class="flex-fill" style="padding-top:70px;">
-    <div class="container-fluid p-3 p-md-4">
+  <main class="flex-fill page-wrap-blue">
+    <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- HEADER (override: header-blue) -->
-      <div class="header-section header-blue d-flex justify-content-between align-items-start mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="d-flex align-items-center gap-2">
+          <a href="<?= site_url('admin/kelola-paper') ?>" class="btn btn-soft-dark btn-xs">
+            <i class="bi bi-arrow-left"></i><span class="ms-1">Kembali</span>
+          </a>
+          <nav aria-label="breadcrumb" class="small">
+            <ol class="breadcrumb mb-0">
+              <li class="breadcrumb-item"><a href="<?= site_url('admin/kelola-paper') ?>">Kelola Paper</a></li>
+              <?php if (!empty($abstrak['event_id'])): ?>
+                <li class="breadcrumb-item">
+                  <a href="<?= site_url('admin/kelola-paper/event/'.(int)$abstrak['event_id']) ?>">
+                    <?= esc($abstrak['event_title'] ?? 'Event') ?>
+                  </a>
+                </li>
+              <?php endif; ?>
+              <li class="breadcrumb-item active" aria-current="page">Detail Abstrak</li>
+            </ol>
+          </nav>
+        </div>
+      </div>
+
+      <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
         <div class="pe-3">
-          <h3 class="welcome-text mb-1">
+          <h3 class="hero-title mb-1">
             <i class="bi bi-file-earmark-text me-2"></i>Detail Abstrak
           </h3>
-          <div class="text-muted"><?= esc($abstrak['judul'] ?? '-') ?></div>
+          <div class="text-white-75 small line-clip-2"><?= esc($abstrak['judul'] ?? '-') ?></div>
         </div>
         <div class="text-end">
-          <div class="mb-2">
-            <span class="badge bg-<?= $stCls ?>"><?= $stText ?></span>
-          </div>
-          <small class="text-muted d-block">Diunggah</small>
-          <strong><?= !empty($abstrak['tanggal_upload']) ? date('d M Y, H:i', strtotime($abstrak['tanggal_upload'])) : '-' ?></strong>
+          <div class="mb-2"><span class="badge bg-<?= $stCls ?>"><?= esc($stText) ?></span></div>
+          <div class="text-white-75 small">Diunggah</div>
+          <div class="fw-semibold text-white"><?= esc($fmtDT($abstrak['tanggal_upload'] ?? null)) ?></div>
         </div>
       </div>
 
       <div class="row g-3">
         <!-- LEFT -->
         <div class="col-lg-8">
-          <!-- Info Abstrak -->
-          <div class="card shadow-sm mb-3">
+          <!-- Informasi -->
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 d-flex align-items-center gap-2 pb-0">
+              <span class="badge bg-blue-soft"><i class="bi bi-info-circle"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Informasi</h6>
+            </div>
             <div class="card-body">
-              <h5 class="card-title mb-3">
-                <i class="bi bi-info-circle text-primary me-2"></i>Informasi Abstrak
-              </h5>
-
               <div class="row mb-3">
                 <div class="col-md-4 text-muted">Judul</div>
-                <div class="col-md-8 fw-semibold"><?= esc($abstrak['judul'] ?? '-') ?></div>
+                <div class="col-md-8 fw-semibold line-clip-2"><?= esc($abstrak['judul'] ?? '-') ?></div>
               </div>
-
               <div class="row mb-3">
                 <div class="col-md-4 text-muted">Penulis</div>
                 <div class="col-md-8">
-                  <?= esc($abstrak['nama_lengkap'] ?? '-') ?><br>
-                  <small class="text-muted"><?= esc($abstrak['email'] ?? '-') ?></small>
+                  <div class="fw-semibold"><?= esc($abstrak['nama_lengkap'] ?? '-') ?></div>
+                  <div class="small text-muted"><?= esc($abstrak['email'] ?? '-') ?></div>
                 </div>
               </div>
-
               <div class="row mb-3">
                 <div class="col-md-4 text-muted">Kategori</div>
                 <div class="col-md-8">
-                  <span class="badge bg-info"><?= esc($abstrak['nama_kategori'] ?? '-') ?></span>
+                  <span class="badge bg-primary-subtle"><?= esc($abstrak['nama_kategori'] ?? '-') ?></span>
                 </div>
               </div>
-
               <div class="row mb-3">
                 <div class="col-md-4 text-muted">Event</div>
                 <div class="col-md-8">
                   <?php if (!empty($abstrak['event_title'])): ?>
-                    <span class="badge bg-secondary"><?= esc($abstrak['event_title']) ?></span>
+                    <span class="badge bg-secondary-subtle"><?= esc($abstrak['event_title']) ?></span>
                   <?php else: ?>
                     <small class="text-muted">-</small>
                   <?php endif; ?>
                 </div>
               </div>
-
-              <div class="row mb-3">
-                <div class="col-md-4 text-muted">Revisi</div>
-                <div class="col-md-8">
-                  <span class="badge bg-secondary">Ke-<?= (int)($abstrak['revisi_ke'] ?? 0) ?></span>
-                </div>
-              </div>
-
               <div class="row">
                 <div class="col-md-4 text-muted">Status</div>
                 <div class="col-md-8">
-                  <span class="badge bg-<?= $stCls ?>"><?= $stText ?></span>
+                  <span class="badge bg-<?= $stCls ?>"><?= esc($stText) ?></span>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- File Abstrak -->
-          <div class="card shadow-sm mb-3">
-            <div class="card-body">
-              <h5 class="card-title mb-3">
-                <i class="bi bi-file-pdf text-danger me-2"></i>File Abstrak
-              </h5>
-
-              <div class="p-4 border rounded-3 bg-light-subtle text-center">
-                <div class="mb-2"><i class="bi bi-file-earmark-pdf fs-1 text-danger"></i></div>
-                <div class="fw-semibold mb-2"><?= esc($abstrak['file_abstrak'] ?? 'abstrak.pdf') ?></div>
-                <div class="text-muted mb-3">Klik tombol di bawah untuk mengunduh atau melihat di tab baru.</div>
-                <div class="d-flex gap-2 justify-content-center">
-                  <a class="btn btn-primary"
-                     href="<?= site_url('admin/abstrak/download/'.(int)($abstrak['id_abstrak'] ?? 0)) ?>">
-                    <i class="bi bi-download me-1"></i>Download
-                  </a>
-                  <a class="btn btn-outline-info"
-                     target="_blank"
-                     href="<?= site_url('admin/abstrak/download/'.(int)($abstrak['id_abstrak'] ?? 0)) ?>">
-                    <i class="bi bi-eye me-1"></i>Preview
-                  </a>
-                </div>
+          <!-- PREVIEW PDF + Aksi -->
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-blue-soft"><i class="bi bi-file-earmark-pdf"></i></span>
+                <h6 class="mb-0 fw-semibold text-blue-900">Berkas Abstrak</h6>
               </div>
+              <div class="d-flex gap-2">
+                <a class="btn btn-soft-dark btn-xs"
+                   href="<?= site_url('admin/abstrak/download/'.$idAbstrak) ?>">
+                  <i class="bi bi-download me-1"></i>Download
+                </a>
+                <a class="btn btn-ghost btn-xs" target="_blank"
+                   href="<?= site_url('admin/abstrak/view/'.$idAbstrak) ?>">
+                  <i class="bi bi-box-arrow-up-right me-1"></i>Buka Tab
+                </a>
+              </div>
+            </div>
+            <div class="card-body pt-2">
+              <div class="pdf-frame-wrap">
+                <iframe id="absFrame" class="pdf-frame" title="Preview Abstrak" allow="fullscreen"></iframe>
+              </div>
+              <script>
+                (function(){
+                  const frame = document.getElementById('absFrame');
+                  fetch('<?= site_url('admin/abstrak/blob/'.$idAbstrak) ?>', {
+                    headers: {'X-Requested-With':'XMLHttpRequest'}
+                  }).then(r => {
+                    if(!r.ok) throw new Error('HTTP '+r.status);
+                    return r.blob();
+                  }).then(b => {
+                    const url = URL.createObjectURL(b);
+                    frame.src = url + '#toolbar=1&navpanes=0';
+                  }).catch(() => {
+                    frame.src = '<?= site_url('admin/abstrak/view/'.$idAbstrak) ?>#toolbar=1&navpanes=0';
+                  });
+                })();
+              </script>
             </div>
           </div>
 
-          <!-- Riwayat Review -->
-          <div class="card shadow-sm">
+          <!-- Riwayat Penilaian -->
+          <div class="card shadow-soft card-glass-plain">
+            <div class="card-header bg-transparent border-0 d-flex align-items-center gap-2 pb-0">
+              <span class="badge bg-blue-soft"><i class="bi bi-clock-history"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Riwayat Penilaian</h6>
+            </div>
             <div class="card-body">
-              <h5 class="card-title mb-3">
-                <i class="bi bi-clock-history text-info me-2"></i>Riwayat Review
-              </h5>
-
               <?php if (empty($reviews)): ?>
                 <div class="p-4 text-center border rounded-3 bg-light-subtle">
                   <div class="mb-2"><i class="bi bi-inbox fs-3 text-secondary"></i></div>
-                  <div class="text-muted">Belum ada review untuk abstrak ini</div>
+                  <div class="text-muted">Belum ada penilaian</div>
                 </div>
               <?php else: ?>
                 <div class="vstack gap-2">
                   <?php foreach ($reviews as $r):
-                    $dMap = ['pending'=>'warning','diterima'=>'success','ditolak'=>'danger','revisi'=>'info'];
-                    $dCls = $dMap[strtolower($r['keputusan'] ?? 'pending')] ?? 'secondary';
+                    $dKey = strtolower($r['keputusan'] ?? 'pending');
+                    $dMap = ['diterima'=>'success','ditolak'=>'danger','revisi'=>'warning','pending'=>'secondary'];
+                    $dCls = $dMap[$dKey] ?? 'secondary';
                   ?>
                     <div class="p-3 border rounded-3 bg-white">
                       <div class="d-flex justify-content-between align-items-start">
                         <div>
-                          <div class="fw-semibold"><?= esc($r['reviewer_name'] ?? '-') ?></div>
-                          <div class="small text-muted"><?= !empty($r['tanggal_review']) ? date('d M Y, H:i', strtotime($r['tanggal_review'])) : '-' ?></div>
+                          <div class="fw-semibold">
+                            <?= esc($r['reviewer_name'] ?? '-') ?>
+                            <span class="text-muted fw-normal"> — <?= esc($r['reviewer_email'] ?? '') ?></span>
+                          </div>
+                          <div class="small text-muted"><?= esc($fmtDT($r['tanggal_review'] ?? null)) ?></div>
                         </div>
-                        <span class="badge bg-<?= $dCls ?>"><?= ucfirst($r['keputusan'] ?? 'pending') ?></span>
+                        <span class="badge bg-<?= $dCls ?>"><?= ucfirst($dKey) ?></span>
                       </div>
                       <?php if (!empty($r['komentar'])): ?>
                         <div class="mt-2 text-secondary"><?= nl2br(esc($r['komentar'])) ?></div>
@@ -164,84 +200,60 @@ $stText = ucfirst(str_replace('_',' ', $stKey));
 
         <!-- RIGHT -->
         <div class="col-lg-4">
-          <!-- Aksi Cepat -->
-          <div class="card shadow-sm mb-3">
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 d-flex align-items-center gap-2 pb-0">
+              <span class="badge bg-blue-soft"><i class="bi bi-magic"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Aksi</h6>
+            </div>
             <div class="card-body">
-              <h5 class="card-title mb-3">
-                <i class="bi bi-tools text-warning me-2"></i>Aksi Cepat
-              </h5>
               <div class="d-grid gap-2">
-                <button class="btn btn-primary" onclick="openStatusModal(<?= (int)($abstrak['id_abstrak'] ?? 0) ?>)">
-                  <i class="bi bi-pencil-square me-1"></i>Update Status
+                <button class="btn btn-primary" onclick="openStatusModal()">
+                  <i class="bi bi-pencil-square me-1"></i>Perbarui Status
                 </button>
 
-                <?php if ($stKey === 'menunggu'): ?>
-                  <button class="btn btn-success"
-                          onclick="openAssign(<?= (int)($abstrak['id_abstrak'] ?? 0) ?>,'<?= esc(addslashes($abstrak['judul'] ?? '-')) ?>',<?= (int)($abstrak['id_kategori'] ?? 0) ?>)">
-                    <i class="bi bi-person-plus me-1"></i>Assign Reviewer
-                  </button>
-                <?php endif; ?>
+                <button class="btn btn-soft-primary"
+                        onclick="openAssign(<?= $idAbstrak ?>,'<?= esc(addslashes($abstrak['judul'] ?? '-')) ?>',<?= (int)($abstrak['id_kategori'] ?? 0) ?>)">
+                  <i class="bi bi-person-plus me-1"></i>Tugaskan Reviewer
+                </button>
 
-                <a class="btn btn-outline-info"
-                   href="<?= site_url('admin/abstrak/download/'.(int)($abstrak['id_abstrak'] ?? 0)) ?>">
-                  <i class="bi bi-download me-1"></i>Download File
+                <a class="btn btn-soft-dark" href="<?= site_url('admin/abstrak/download/'.$idAbstrak) ?>">
+                  <i class="bi bi-download me-1"></i>Unduh Berkas
                 </a>
 
                 <hr class="my-2">
-                <button class="btn btn-danger" onclick="deleteAbstrak(<?= (int)($abstrak['id_abstrak'] ?? 0) ?>)">
-                  <i class="bi bi-trash me-1"></i>Hapus Abstrak
-                </button>
+                <button class="btn btn-danger" onclick="deleteAbstrak(<?= $idAbstrak ?>)"><i class="bi bi-trash me-1"></i>Hapus</button>
               </div>
             </div>
           </div>
 
-          <!-- Statistik singkat -->
-          <div class="card shadow-sm mb-3">
-            <div class="card-body">
-              <h5 class="card-title mb-3">
-                <i class="bi bi-graph-up text-success me-2"></i>Statistik
-              </h5>
-              <div class="d-flex justify-content-between py-2 border-bottom">
-                <span class="text-muted">Total Review</span>
-                <span class="badge bg-primary"><?= count($reviews) ?></span>
-              </div>
-              <div class="d-flex justify-content-between py-2 border-bottom">
-                <span class="text-muted">Review Pending</span>
-                <?php $pending = array_filter($reviews, fn($x)=>strtolower($x['keputusan'] ?? '')==='pending'); ?>
-                <span class="badge bg-warning text-dark"><?= count($pending) ?></span>
-              </div>
-              <div class="d-flex justify-content-between py-2">
-                <span class="text-muted">Waktu Upload</span>
-                <?php
-                  $days = '-';
-                  if (!empty($abstrak['tanggal_upload'])) {
-                    $days = floor((time() - strtotime($abstrak['tanggal_upload'])) / 86400) . ' hari lalu';
-                  }
-                ?>
-                <span class="badge bg-info"><?= $days ?></span>
-              </div>
+          <!-- Reviewer Ditugaskan -->
+          <div class="card shadow-soft card-glass-plain">
+            <div class="card-header bg-transparent border-0 d-flex align-items-center gap-2 pb-0">
+              <span class="badge bg-blue-soft"><i class="bi bi-people"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Reviewer Ditugaskan</h6>
             </div>
-          </div>
-
-          <!-- Navigasi -->
-          <div class="card shadow-sm">
             <div class="card-body">
-              <h5 class="card-title mb-3">
-                <i class="bi bi-compass text-info me-2"></i>Navigasi
-              </h5>
-              <div class="d-grid gap-2">
-                <a class="btn btn-outline-secondary" href="<?= site_url('admin/abstrak') ?>">
-                  <i class="bi bi-arrow-left me-1"></i>Kembali ke Daftar
-                </a>
-                <a class="btn btn-outline-primary" href="<?= site_url('admin/users') ?>">
-                  <i class="bi bi-person me-1"></i>Lihat Profil Penulis
-                </a>
-                <?php if (!empty($abstrak['event_id'])): ?>
-                  <a class="btn btn-outline-success" href="<?= site_url('admin/event/detail/'.(int)$abstrak['event_id']) ?>">
-                    <i class="bi bi-calendar-event me-1"></i>Detail Event
-                  </a>
-                <?php endif; ?>
-              </div>
+              <?php if (empty($assigned)): ?>
+                <div class="text-muted">Belum ada reviewer yang ditugaskan.</div>
+              <?php else: ?>
+                <div class="vstack gap-2">
+                  <?php foreach ($assigned as $a):
+                    $k = strtolower($a['status'] ?? 'pending');
+                    $cls = ['pending'=>'secondary','diterima'=>'success','ditolak'=>'danger','revisi'=>'warning'][$k] ?? 'secondary';
+                  ?>
+                  <div class="p-2 rounded border bg-white d-flex justify-content-between align-items-start">
+                    <div>
+                      <div class="fw-semibold"><?= esc($a['nama']) ?></div>
+                      <div class="small text-muted"><?= esc($a['email']) ?></div>
+                      <?php if(!empty($a['tanggal'])): ?>
+                        <div class="small text-muted"><?= esc($fmtDT($a['tanggal'])) ?></div>
+                      <?php endif; ?>
+                    </div>
+                    <span class="badge bg-<?= $cls ?>"><?= ucfirst($k) ?></span>
+                  </div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
             </div>
           </div>
         </div>
@@ -251,59 +263,56 @@ $stText = ucfirst(str_replace('_',' ', $stKey));
   </main>
 </div>
 
-<!-- Assign Reviewer Modal -->
+<!-- Modal Tugaskan Reviewer -->
 <div class="modal fade" id="assignModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog"><div class="modal-content">
     <div class="modal-header bg-primary text-white">
-      <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Assign Reviewer</h5>
+      <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Tugaskan Reviewer</h5>
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
     </div>
     <form id="assignForm" method="POST">
       <?= csrf_field() ?>
       <div class="modal-body">
         <div class="mb-3">
-          <label class="form-label">Judul Abstrak</label>
+          <label class="form-label">Judul</label>
           <input type="text" id="assignTitle" class="form-control" readonly>
         </div>
         <div class="mb-3">
           <label class="form-label">Pilih Reviewer</label>
           <select class="form-select" id="reviewerSelect" name="id_reviewer" required>
-            <option value="">-- Pilih Reviewer --</option>
+            <option value="">Pilih reviewer…</option>
           </select>
-          <div class="form-text">Ditampilkan reviewer sesuai kategori.</div>
+          <div class="form-text">Daftar disesuaikan dengan kategori.</div>
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">Batal</button>
-        <button class="btn btn-primary" type="submit"><i class="bi bi-save me-1"></i>Assign</button>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-save me-1"></i>Simpan</button>
       </div>
     </form>
   </div></div>
 </div>
 
-<!-- Update Status Modal -->
+<!-- Modal Perbarui Status -->
 <div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog"><div class="modal-content">
     <div class="modal-header bg-primary text-white">
-      <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Update Status Abstrak</h5>
+      <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Perbarui Status</h5>
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
     </div>
     <form id="statusForm">
       <?= csrf_field() ?>
       <div class="modal-body">
-        <input type="hidden" id="statusAbstrakId" name="id_abstrak" value="<?= (int)($abstrak['id_abstrak'] ?? 0) ?>">
+        <input type="hidden" id="statusAbstrakId" name="id_abstrak" value="<?= $idAbstrak ?>">
         <div class="mb-3">
           <label class="form-label">Status</label>
           <select class="form-select" id="statusSelect" name="status" required>
-            <option value="menunggu"        <?= $stKey==='menunggu'?'selected':'' ?>>Menunggu</option>
-            <option value="sedang_direview" <?= $stKey==='sedang_direview'?'selected':'' ?>>Sedang Review</option>
-            <option value="diterima"        <?= $stKey==='diterima'?'selected':'' ?>>Diterima</option>
-            <option value="ditolak"         <?= $stKey==='ditolak'?'selected':'' ?>>Ditolak</option>
-            <option value="revisi"          <?= $stKey==='revisi'?'selected':'' ?>>Perlu Revisi</option>
+            <option value="diterima" <?= $stKey==='diterima'?'selected':'' ?>>Diterima</option>
+            <option value="ditolak"  <?= $stKey==='ditolak'?'selected':''  ?>>Ditolak</option>
           </select>
         </div>
         <div class="mb-3">
-          <label class="form-label">Komentar (opsional)</label>
+          <label class="form-label">Catatan (opsional)</label>
           <textarea class="form-control" id="statusKomentar" name="komentar" rows="3"></textarea>
         </div>
       </div>
@@ -318,57 +327,59 @@ $stText = ucfirst(str_replace('_',' ', $stKey));
 <?= $this->include('partials/footer') ?>
 
 <style>
-  :root{
-    --primary-color:#2563eb; --success-color:#10b981; --warning-color:#f59e0b; --danger-color:#ef4444; --info-color:#06b6d4;
-  }
-  body{ background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%); font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
+:root{
+  --blue-50:#eff6ff; --blue-200:#bfdbfe; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+}
+.page-wrap-blue{ background:linear-gradient(180deg,var(--blue-50),#fff 40%); min-height:100vh; padding-top:72px; }
+.container-xxl{ max-width:1400px; }
+.hero-blue{
+  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%)!important;
+  color:#fff!important; border-radius:16px; border:1px solid rgba(255,255,255,.15);
+  box-shadow:0 12px 28px rgba(30,64,175,.10);
+}
+.text-white-75{ color:rgba(255,255,255,.85)!important; }
+.card-glass-plain{ backdrop-filter:blur(6px); background:rgba(255,255,255,.94); border-radius:14px; border:1px solid rgba(30,64,175,.10); }
+.shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
+.bg-blue-soft{ background:var(--blue-200); color:var(--blue-900); border-radius:12px; padding:.4rem .6rem; font-weight:600; font-size:.85rem; }
+.bg-secondary-subtle{ background:#f1f5f9!important; color:#475569!important; }
+.bg-primary-subtle{ background:#dbeafe!important; color:var(--blue-700)!important; }
+.text-blue-900{ color:var(--blue-900)!important; }
+.line-clip-2{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 
-  /* Default header style (dashboard) */
-  .header-section{ background:#fff; padding:20px; border-radius:14px; box-shadow:0 4px 20px rgba(0,0,0,.05); }
-  .welcome-text{ color:var(--primary-color); font-weight:700; }
+/* Buttons – samakan ukuran global */
+.btn{ border-radius:10px; font-weight:600; letter-spacing:.25px; font-size:.95rem; padding:.55rem 1rem; }
+.btn-xs{ padding:.42rem .75rem; font-size:.85rem; line-height:1.2; border-radius:8px; }
+.btn-soft-dark{ background:#f1f5f9; color:#111827; border:1px solid #e2e8f0; }
+.btn-soft-dark:hover{ background:#111827; color:#fff; border-color:#111827; }
+.btn-soft-primary{ background:#e0ecff; color:#123; border:1px solid rgba(37,99,235,.25); }
+.btn-soft-primary:hover{ background:#2563eb; color:#fff; border-color:#2563eb; }
 
-  /* Override khusus halaman: box biru teks putih */
-  .header-section.header-blue{
-    background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
-    color:#fff;
-    padding:28px 24px;
-    border-radius:16px;
-    box-shadow:0 8px 28px rgba(0,0,0,.12);
-  }
-  .header-section.header-blue .welcome-text{ color:#fff; font-weight:800; font-size:2rem; }
-  .header-section.header-blue .text-muted{ color: rgba(255,255,255,.9) !important; }
-  .header-section.header-blue strong{ color:#fff; }
-
-  /* Cards/komponen seragam dengan dashboard */
-  .stat-card{
-    background:#fff; border-radius:14px; padding:20px; box-shadow:0 8px 28px rgba(0,0,0,.08);
-    border-left:4px solid #e9ecef; position:relative; overflow:hidden;
-  }
-  .stat-card:before{
-    content:''; position:absolute; left:0; top:0; height:4px; width:100%;
-    background:linear-gradient(90deg,var(--primary-color),var(--info-color));
-  }
-
-  /* biar konten turun sedikit dari header global */
-  #content main>.container-fluid{ margin-top:.25rem; }
+.pdf-frame-wrap{ height:72vh; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; }
+.pdf-frame{ width:100%; height:100%; border:0; }
+.breadcrumb .breadcrumb-item + .breadcrumb-item::before{ content: ">"; }
+@media (max-width: 768px){
+  .pdf-frame-wrap{ height:60vh; }
+}
 </style>
 
 <script>
-  // ====== CSRF (CI4) ======
+  // CSRF
   const csrfName = '<?= csrf_token() ?>';
   let   csrfHash = '<?= csrf_hash() ?>';
 
-  // Update Status (open modal)
   function openStatusModal(){
     new bootstrap.Modal(document.getElementById('statusModal')).show();
   }
 
-  // Submit Update Status (AJAX)
   document.getElementById('statusForm')?.addEventListener('submit', function(e){
     e.preventDefault();
+    const statusVal = document.getElementById('statusSelect').value;
+    if (!['diterima','ditolak'].includes(statusVal)) {
+      return Swal?.fire('Tidak valid','Pilih status yang tersedia','warning');
+    }
     const data = new URLSearchParams();
     data.append('id_abstrak', document.getElementById('statusAbstrakId').value);
-    data.append('status',     document.getElementById('statusSelect').value);
+    data.append('status',     statusVal);
     data.append('komentar',   document.getElementById('statusKomentar').value || '');
     data.append(csrfName, csrfHash);
 
@@ -378,39 +389,46 @@ $stText = ucfirst(str_replace('_',' ', $stKey));
       body:data.toString()
     }).then(r=>r.json()).then(res=>{
       if(res && res.success){
-        Swal?.fire('Berhasil!', res.message || 'Status diperbarui', 'success').then(()=>location.reload());
+        Swal?.fire('Tersimpan', res.message || 'Status diperbarui', 'success').then(()=>location.reload());
       }else{
-        Swal?.fire('Gagal!', (res && res.message) || 'Terjadi kesalahan', 'error');
+        Swal?.fire('Gagal', (res && res.message) || 'Terjadi kesalahan', 'error');
       }
       if(res && res[csrfName]) csrfHash = res[csrfName];
-    }).catch(()=> Swal?.fire('Error','Gagal menghubungi server','error'));
+    }).catch(()=> Swal?.fire('Error','Tidak dapat menghubungi server','error'));
   });
 
-  // Assign reviewer (open + load reviewers)
   function openAssign(idAbstrak, judul, idKategori){
     document.getElementById('assignTitle').value = judul;
     document.getElementById('assignForm').action = '<?= site_url('admin/abstrak/assign') ?>/'+idAbstrak;
 
-    fetch('<?= site_url('admin/abstrak/reviewers-by-category') ?>/'+idKategori, {headers:{'X-Requested-With':'XMLHttpRequest'}})
-      .then(r=>r.json())
-      .then(list=>{
+    fetch('<?= site_url('admin/abstrak/reviewers-by-category') ?>/'+idKategori, {
+      headers:{'X-Requested-With':'XMLHttpRequest'}
+    }).then(r=>r.json())
+      .then(res=>{
+        // Support response: {success:true, data:[...]} atau array langsung
+        const items = Array.isArray(res) ? res : (res.data || []);
+        if (!items || items.length === 0) {
+          throw new Error('Daftar reviewer kosong');
+        }
         const sel = document.getElementById('reviewerSelect');
-        sel.innerHTML = '<option value="">-- Pilih Reviewer --</option>';
-        list.forEach(rv=>{
+        sel.innerHTML = '<option value="">Pilih reviewer…</option>';
+        items.forEach(rv=>{
           const opt = document.createElement('option');
-          opt.value = rv.id_user; opt.textContent = rv.nama_lengkap;
+          opt.value = rv.id_user || rv.id || rv.id_reviewer;
+          opt.textContent = (rv.nama || rv.nama_lengkap || '—') + (rv.email ? ' — ' + rv.email : '');
           sel.appendChild(opt);
         });
         new bootstrap.Modal(document.getElementById('assignModal')).show();
       })
-      .catch(()=> Swal?.fire('Error','Gagal memuat reviewer','error'));
+      .catch((err)=> Swal?.fire('Error','Gagal memuat reviewer','error'));
   }
 
-  // Hapus (POST + CSRF)
   function deleteAbstrak(id){
     Swal?.fire({
-      title:'Hapus Abstrak?', text:'Tindakan ini tidak dapat dibatalkan.',
-      icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', cancelButtonColor:'#6b7280',
+      title:'Hapus Abstrak?',
+      text:'Tindakan ini tidak dapat dibatalkan.',
+      icon:'warning', showCancelButton:true,
+      confirmButtonColor:'#d33', cancelButtonColor:'#6b7280',
       confirmButtonText:'Ya, hapus', cancelButtonText:'Batal'
     }).then(r=>{
       if(!r.isConfirmed) return;

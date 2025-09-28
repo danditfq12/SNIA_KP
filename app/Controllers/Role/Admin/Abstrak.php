@@ -19,38 +19,63 @@ class Abstrak extends BaseController
         $this->abstrakModel = new AbstrakModel();
         $this->reviewModel  = new ReviewModel();
         $this->revKatModel  = new ReviewerKategoriModel();
-        // FIXED: Initialize database connection
-        $this->db = \Config\Database::connect();
+        $this->db           = \Config\Database::connect();
     }
 
-    /**
-     * LIST + KPI
-     */
+    private function isPublicUrl(string $path): bool
+    {
+        return (bool) preg_match('~^https?://~i', $path);
+    }
+
+    private function resolveAbstrakPath(array $row): ?string
+    {
+        $fname = trim((string)($row['file_abstrak'] ?? ''));
+        if ($fname === '') return null;
+
+        if ($this->isPublicUrl($fname)) return $fname;
+
+        $clean = ltrim(str_replace('\\','/',$fname), '/');
+
+        $relCandidates = [
+            FCPATH    . $clean,
+            WRITEPATH . $clean,
+            ROOTPATH  . $clean,
+        ];
+        foreach ($relCandidates as $p) if (is_file($p)) return $p;
+
+        $just = basename($clean);
+        $nameCandidates = [
+            FCPATH    . 'uploads/abstrak/' . $just,
+            WRITEPATH . 'uploads/abstrak/' . $just,
+        ];
+        foreach ($nameCandidates as $p) if (is_file($p)) return $p;
+
+        if (is_file($fname)) return $fname;
+        return null;
+    }
+
+    /** LIST + KPI */
     public function index()
     {
         try {
-            $stats = $this->abstrakModel->getStats();
+            $stats    = $this->abstrakModel->getStats();
             $abstraks = $this->abstrakModel->getAbstrakWithDetails();
 
-            $data = [
-                'total_abstrak'   => $stats['total'] ?? 0,
-                'abstrak_pending' => $stats['menunggu'] ?? 0,
-                'abstrak_diterima'=> $stats['diterima'] ?? 0,
-                'abstrak_ditolak' => $stats['ditolak'] ?? 0,
-                'abstraks'        => $abstraks,
-                'reviewers'       => [],
-            ];
-
-            return view('role/admin/abstrak/index', $data);
+            return view('role/admin/abstrak/index', [
+                'total_abstrak'    => $stats['total'] ?? 0,
+                'abstrak_pending'  => $stats['menunggu'] ?? 0,
+                'abstrak_diterima' => $stats['diterima'] ?? 0,
+                'abstrak_ditolak'  => $stats['ditolak'] ?? 0,
+                'abstraks'         => $abstraks,
+                'reviewers'        => [],
+            ]);
         } catch (\Exception $e) {
             log_message('error', 'Admin Abstrak index error: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Terjadi kesalahan saat memuat data abstrak.');
         }
     }
 
-    /**
-     * DETAIL
-     */
+    /** DETAIL */
     public function detail($id)
     {
         try {
@@ -59,11 +84,35 @@ class Abstrak extends BaseController
                 return redirect()->to(site_url('admin/abstrak'))->with('error', 'Abstrak tidak ditemukan.');
             }
 
+            // Ambil seluruh record review/assignment (termasuk pending)
             $reviews = $this->reviewModel->getByAbstrakWithReviewer((int)$id);
 
+            // Kumpulkan info reviewer yang sudah ditugaskan (unique)
+            $assigned = [];
+            foreach ($reviews as $r) {
+                $rid = (int)($r['id_reviewer'] ?? 0);
+                if (!$rid) continue;
+                $key = $rid;
+                if (!isset($assigned[$key])) {
+                    $assigned[$key] = [
+                        'id_user' => $rid,
+                        'nama'    => $r['reviewer_name'] ?? '-',
+                        'email'   => $r['reviewer_email'] ?? '-',
+                        'status'  => strtolower($r['keputusan'] ?? 'pending'),
+                        'tanggal' => $r['tanggal_review'] ?? null,
+                    ];
+                } else {
+                    // jika ada review terbaru dengan keputusan, perbarui statusnya
+                    $st = strtolower((string)($r['keputusan'] ?? ''));
+                    if ($st) $assigned[$key]['status'] = $st;
+                    if (!empty($r['tanggal_review'])) $assigned[$key]['tanggal'] = $r['tanggal_review'];
+                }
+            }
+
             return view('role/admin/abstrak/detail', [
-                'abstrak' => $abstrak,
-                'reviews' => $reviews,
+                'abstrak'   => $abstrak,
+                'reviews'   => $reviews,
+                'assigned'  => array_values($assigned),
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Abstrak detail error: ' . $e->getMessage());
@@ -71,37 +120,70 @@ class Abstrak extends BaseController
         }
     }
 
-    /**
-     * ASSIGN REVIEWER - FIXED dengan proper transaction handling
-     */
+    /** ===== NEW: GET reviewers by category → JSON (dipakai modal) ===== */
+    public function getReviewersByCategory($idKategori)
+    {
+        try {
+            $idKategori = (int)$idKategori;
+
+            // Jika model punya method khusus, gunakan.
+            if (method_exists($this->revKatModel, 'getByCategory')) {
+                $rows = $this->revKatModel->getByCategory($idKategori);
+            } else {
+                // Fallback query manual
+                $builder = $this->db->table('reviewer_kategori rk')
+                    ->select('u.id_user, u.nama_lengkap, u.email')
+                    ->join('users u', 'u.id_user = rk.id_reviewer')
+                    ->where('rk.id_kategori', $idKategori)
+                    ->orderBy('u.nama_lengkap', 'ASC');
+                // opsional: hanya reviewer aktif
+                if ($this->db->fieldExists('status', 'users')) {
+                    $builder->groupStart()
+                            ->where('u.status', 'active')
+                            ->orWhere('u.status', 'aktif')
+                            ->groupEnd();
+                }
+                $rows = $builder->get()->getResultArray();
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'data'    => array_map(fn($r) => [
+                    'id_user' => (int)$r['id_user'],
+                    'nama'    => $r['nama_lengkap'] ?? '-',
+                    'email'   => $r['email'] ?? '',
+                ], $rows ?? []),
+            ]);
+        } catch (\Exception $e) {
+            log_message('error', 'getReviewersByCategory error: ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Gagal memuat reviewer.',
+            ])->setStatusCode(500);
+        }
+    }
+
+    /** ASSIGN REVIEWER */
     public function assign($idAbstrak)
     {
         try {
             $idAbstrak  = (int)$idAbstrak;
             $idReviewer = (int)$this->request->getPost('id_reviewer');
 
-            if (!$idReviewer) {
-                return redirect()->back()->with('error', 'Reviewer wajib dipilih.');
-            }
+            if (!$idReviewer) return redirect()->back()->with('error', 'Reviewer wajib dipilih.');
 
             $abstrak = $this->abstrakModel->find($idAbstrak);
-            if (!$abstrak) {
-                return redirect()->to(site_url('admin/abstrak'))->with('error', 'Abstrak tidak ditemukan.');
-            }
+            if (!$abstrak) return redirect()->to(site_url('admin/abstrak'))->with('error', 'Abstrak tidak ditemukan.');
 
             $eligible = $this->revKatModel->isReviewerEligible($idReviewer, (int)$abstrak['id_kategori']);
-            if (!$eligible) {
-                return redirect()->back()->with('error', 'Reviewer tidak sesuai kategori abstrak.');
-            }
+            if (!$eligible) return redirect()->back()->with('error', 'Reviewer tidak sesuai kategori abstrak.');
 
             if ($this->reviewModel->hasPendingReview($idAbstrak)) {
                 return redirect()->back()->with('error', 'Abstrak ini sudah memiliki assignment reviewer yang pending.');
             }
 
-            // FIXED: Use proper transaction methods
             $this->db->transStart();
 
-            // Assign reviewer
             $ok = $this->reviewModel->assignReviewer($idAbstrak, $idReviewer);
             if (!$ok) {
                 $this->db->transRollback();
@@ -109,32 +191,27 @@ class Abstrak extends BaseController
                 return redirect()->back()->with('error', 'Gagal assign reviewer. Silakan coba lagi.');
             }
 
-            // Update status abstrak
             if (($abstrak['status'] ?? 'menunggu') === 'menunggu') {
                 $this->abstrakModel->update($idAbstrak, ['status' => 'sedang_direview']);
             }
 
             $this->db->transComplete();
 
-            // Check transaction status
-            if ($this->db->transStatus() === FALSE) {
+            if ($this->db->transStatus() === false) {
                 return redirect()->back()->with('error', 'Gagal assign reviewer karena masalah database.');
             }
 
-            return redirect()->to(site_url('admin/abstrak'))->with('success', 'Reviewer berhasil ditugaskan.');
+            return redirect()->to(site_url('admin/abstrak/detail/'.$idAbstrak))
+                ->with('success', 'Reviewer berhasil ditugaskan.');
 
         } catch (\Exception $e) {
-            if (isset($this->db)) {
-                $this->db->transRollback();
-            }
+            if (isset($this->db)) $this->db->transRollback();
             log_message('error', 'Assign reviewer error: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Terjadi kesalahan saat assign reviewer: ' . $e->getMessage());
         }
     }
 
-    /**
-     * UPDATE STATUS - FIXED transaction handling
-     */
+    /** UPDATE STATUS */
     public function updateStatus()
     {
         try {
@@ -160,27 +237,23 @@ class Abstrak extends BaseController
                 ]);
             }
 
-            // FIXED: Use proper transaction methods
             $this->db->transStart();
 
-            // Update status abstrak
             $this->abstrakModel->update($idAbstrak, ['status' => $status]);
 
-            // Log komentar admin jika ada dan tidak kosong
             if (!empty($komentar)) {
-                $reviewData = [
+                $this->reviewModel->insert([
                     'id_abstrak'     => $idAbstrak,
                     'id_reviewer'    => session('id_user') ?: null,
                     'keputusan'      => $status,
                     'komentar'       => $komentar,
                     'tanggal_review' => date('Y-m-d H:i:s'),
-                ];
-                $this->reviewModel->insert($reviewData, false);
+                ], false);
             }
 
             $this->db->transComplete();
 
-            if ($this->db->transStatus() === FALSE) {
+            if ($this->db->transStatus() === false) {
                 return $this->response->setJSON([
                     'success' => false,
                     'message' => 'Gagal menyimpan perubahan.',
@@ -195,9 +268,7 @@ class Abstrak extends BaseController
             ]);
 
         } catch (\Exception $e) {
-            if (isset($this->db)) {
-                $this->db->transRollback();
-            }
+            if (isset($this->db)) $this->db->transRollback();
             log_message('error', 'Update status error: ' . $e->getMessage());
             return $this->response->setJSON([
                 'success' => false,
@@ -207,9 +278,7 @@ class Abstrak extends BaseController
         }
     }
 
-    /**
-     * DELETE - FIXED transaction handling
-     */
+    /** DELETE */
     public function delete($id)
     {
         try {
@@ -219,103 +288,37 @@ class Abstrak extends BaseController
                 return redirect()->to(site_url('admin/abstrak'))->with('error', 'Abstrak tidak ditemukan.');
             }
 
-            // FIXED: Use proper transaction methods
             $this->db->transStart();
 
-            // Hapus review terkait
             $this->reviewModel->where('id_abstrak', $id)->delete();
 
-            // Hapus file fisik
             $filename = $abstrak['file_abstrak'] ?? '';
             if ($filename) {
                 $paths = [
                     FCPATH . 'uploads/abstrak/' . $filename,
                     WRITEPATH . 'uploads/abstrak/' . $filename,
                 ];
-                foreach ($paths as $p) {
-                    if (is_file($p)) {
-                        @unlink($p);
-                    }
-                }
+                foreach ($paths as $p) if (is_file($p)) @unlink($p);
             }
 
-            // Hapus row abstrak
             $this->abstrakModel->delete($id);
 
             $this->db->transComplete();
 
-            if ($this->db->transStatus() === FALSE) {
+            if ($this->db->transStatus() === false) {
                 return redirect()->to(site_url('admin/abstrak'))->with('error', 'Gagal menghapus abstrak.');
             }
 
             return redirect()->to(site_url('admin/abstrak'))->with('success', 'Abstrak berhasil dihapus.');
 
         } catch (\Exception $e) {
-            if (isset($this->db)) {
-                $this->db->transRollback();
-            }
+            if (isset($this->db)) $this->db->transRollback();
             log_message('error', 'Delete abstrak error: ' . $e->getMessage());
             return redirect()->to(site_url('admin/abstrak'))->with('error', 'Gagal menghapus abstrak.');
         }
     }
 
-    /**
-     * BULK UPDATE STATUS
-     */
-    public function bulkUpdateStatus()
-    {
-        try {
-            $ids    = (array)$this->request->getPost('ids');
-            $status = (string)$this->request->getPost('status');
-
-            $allowed = ['menunggu', 'sedang_direview', 'diterima', 'ditolak', 'revisi'];
-            if (!$ids || !in_array($status, $allowed, true)) {
-                return $this->response->setJSON([
-                    'success' => false, 
-                    'message' => 'Input tidak valid.',
-                    csrf_token() => csrf_hash()
-                ]);
-            }
-
-            // Use transaction for bulk update
-            $this->db->transStart();
-
-            foreach ($ids as $id) {
-                $this->abstrakModel->update((int)$id, ['status' => $status]);
-            }
-
-            $this->db->transComplete();
-
-            if ($this->db->transStatus() === FALSE) {
-                return $this->response->setJSON([
-                    'success' => false, 
-                    'message' => 'Gagal melakukan update massal.',
-                    csrf_token() => csrf_hash()
-                ]);
-            }
-
-            return $this->response->setJSON([
-                'success' => true, 
-                'message' => 'Status berhasil diupdate massal.',
-                csrf_token() => csrf_hash()
-            ]);
-
-        } catch (\Exception $e) {
-            if (isset($this->db)) {
-                $this->db->transRollback();
-            }
-            log_message('error', 'Bulk update error: ' . $e->getMessage());
-            return $this->response->setJSON([
-                'success' => false, 
-                'message' => 'Terjadi kesalahan.',
-                csrf_token() => csrf_hash()
-            ]);
-        }
-    }
-
-    /**
-     * DOWNLOAD FILE
-     */
+    /** DOWNLOAD (attachment) */
     public function downloadFile($id)
     {
         try {
@@ -325,19 +328,15 @@ class Abstrak extends BaseController
                 return redirect()->to(site_url('admin/abstrak'))->with('error', 'File tidak ditemukan.');
             }
 
-            $filename = $abstrak['file_abstrak'];
-            $paths = [
-                FCPATH . 'uploads/abstrak/' . $filename,
-                WRITEPATH . 'uploads/abstrak/' . $filename,
-            ];
+            $path = $this->resolveAbstrakPath($abstrak);
+            if (!$path) return redirect()->to(site_url('admin/abstrak'))->with('error', 'File tidak ada di server.');
 
-            foreach ($paths as $p) {
-                if (is_file($p)) {
-                    return $this->response->download($p, null)->setFileName($filename);
-                }
-            }
+            if ($this->isPublicUrl($path)) return redirect()->to($path);
 
-            return redirect()->to(site_url('admin/abstrak'))->with('error', 'File tidak ada di server.');
+            if (function_exists('ob_get_level')) while (ob_get_level() > 0) @ob_end_clean();
+            @ini_set('display_errors','0');
+
+            return $this->response->download($path, null)->setFileName(basename($path));
 
         } catch (\Exception $e) {
             log_message('error', 'Download file error: ' . $e->getMessage());
@@ -345,78 +344,85 @@ class Abstrak extends BaseController
         }
     }
 
-    /**
-     * EXPORT CSV
-     */
-    public function export()
+    /** Preview inline (iframe) */
+    public function view($id)
     {
-        try {
-            $rows = $this->abstrakModel->getAbstrakWithDetails();
-
-            $csv = fopen('php://temp', 'w+');
-            fputcsv($csv, ['No', 'Judul', 'Penulis', 'Email', 'Kategori', 'Event', 'Status', 'Tanggal Upload', 'Revisi Ke']);
-
-            $i = 1;
-            foreach ($rows as $r) {
-                fputcsv($csv, [
-                    $i++,
-                    $r['judul'] ?? '',
-                    $r['nama_lengkap'] ?? '',
-                    $r['email'] ?? '',
-                    $r['nama_kategori'] ?? '',
-                    $r['event_title'] ?? '',
-                    $r['status'] ?? '',
-                    isset($r['tanggal_upload']) ? date('d/m/Y H:i', strtotime($r['tanggal_upload'])) : '',
-                    $r['revisi_ke'] ?? 0,
-                ]);
-            }
-
-            rewind($csv);
-            $content = stream_get_contents($csv);
-            fclose($csv);
-
-            $filename = 'abstrak_' . date('Ymd_His') . '.csv';
-            return $this->response
-                ->setHeader('Content-Type', 'text/csv')
-                ->setHeader('Content-Disposition', 'attachment; filename="'.$filename.'"')
-                ->setBody($content);
-
-        } catch (\Exception $e) {
-            log_message('error', 'Export abstrak error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Gagal export data.');
+        $id = (int)$id;
+        $row = $this->abstrakModel->find($id);
+        if (!$row) {
+            return $this->response->setContentType('text/html', 'utf-8')
+                ->setBody('<div style="padding:12px;font-family:system-ui">Abstrak tidak ditemukan.</div>');
         }
+
+        $path = $this->resolveAbstrakPath($row);
+        if (!$path) {
+            return $this->response->setContentType('text/html', 'utf-8')
+                ->setBody('<div style="padding:12px;font-family:system-ui">File abstrak tidak ditemukan.</div>');
+        }
+
+        if (function_exists('ob_get_level')) while (ob_get_level() > 0) @ob_end_clean();
+        @ini_set('display_errors','0');
+
+        $this->response
+            ->setHeader('X-Frame-Options','SAMEORIGIN')
+            ->setHeader('Content-Security-Policy',"frame-ancestors 'self'")
+            ->setHeader('X-Content-Type-Options','nosniff');
+
+        if ($this->isPublicUrl($path)) {
+            $ctx = stream_context_create(['http'=>['follow_location'=>1,'timeout'=>20]]);
+            $binary = @file_get_contents($path,false,$ctx);
+            if ($binary === false) return $this->response->setStatusCode(502)->setBody('Gagal mengambil file eksternal.');
+        } else {
+            if (!is_readable($path)) {
+                return $this->response->setContentType('text/html','utf-8')
+                    ->setBody('<div style="padding:12px;font-family:system-ui">File tidak dapat dibaca.</div>');
+            }
+            $binary = @file_get_contents($path);
+            if ($binary === false) return $this->response->setStatusCode(500)->setBody('Gagal membaca file.');
+        }
+
+        return $this->response
+            ->setContentType('application/pdf')
+            ->setHeader('Content-Disposition','inline; filename="abstrak-'.$id.'.pdf"')
+            ->setHeader('Cache-Control','private, max-age=0, must-revalidate')
+            ->setBody($binary);
     }
 
-    /**
-     * STATISTICS JSON
-     */
-    public function statistics()
+    /** Endpoint blob untuk di-fetch() */
+    public function blob($id)
     {
-        try {
-            return $this->response->setJSON($this->abstrakModel->getStats());
-        } catch (\Exception $e) {
-            log_message('error', 'Statistics error: ' . $e->getMessage());
-            return $this->response->setJSON(['error' => 'Gagal memuat statistik']);
+        $id = (int)$id;
+        $row = $this->abstrakModel->find($id);
+        if (!$row) return $this->response->setStatusCode(404)->setBody('Not found');
+
+        $path = $this->resolveAbstrakPath($row);
+        if (!$path) return $this->response->setStatusCode(404)->setBody('File not found');
+
+        if (function_exists('ob_get_level')) while (ob_get_level() > 0) @ob_end_clean();
+        @ini_set('display_errors','0');
+
+        $this->response
+            ->setHeader('X-Frame-Options','SAMEORIGIN')
+            ->setHeader('Content-Security-Policy',"frame-ancestors 'self'")
+            ->setHeader('X-Content-Type-Options','nosniff')
+            ->setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0')
+            ->setHeader('Pragma','no-cache')
+            ->setHeader('Expires','Sat, 01 Jan 2000 00:00:00 GMT')
+            ->setHeader('X-Accel-Buffering','no');
+
+        if ($this->isPublicUrl($path)) {
+            $ctx = stream_context_create(['http'=>['follow_location'=>1,'timeout'=>20]]);
+            $binary = @file_get_contents($path,false,$ctx);
+            if ($binary === false) return $this->response->setStatusCode(502)->setBody('Bad gateway');
+        } else {
+            if (!is_readable($path)) return $this->response->setStatusCode(404)->setBody('NF');
+            $binary = @file_get_contents($path);
+            if ($binary === false) return $this->response->setStatusCode(500)->setBody('IO error');
         }
-    }
 
-    /**
-     * AJAX: Get Reviewers by Category
-     */
-    public function getReviewersByCategory($idKategori)
-    {
-        try {
-            $idKategori = (int)$idKategori;
-            if (!$idKategori) {
-                return $this->response->setJSON([]);
-            }
-
-            $list = $this->revKatModel->getReviewersByKategori($idKategori);
-            return $this->response->setJSON($list);
-
-        } catch (\Exception $e) {
-            log_message('error', 'Get reviewers by category error: ' . $e->getMessage());
-            return $this->response->setJSON([]);
-        }
+        return $this->response
+            ->setContentType('application/pdf')
+            ->setHeader('Content-Disposition','inline; filename="blob.pdf"')
+            ->setBody($binary);
     }
 }

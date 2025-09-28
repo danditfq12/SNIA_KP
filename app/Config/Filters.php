@@ -26,10 +26,10 @@ class Filters extends BaseFilters
         'pagecache'     => PageCache::class,
         'performance'   => PerformanceMetrics::class,
 
-        // Custom
+        // custom
         'auth'          => \App\Filters\AuthFilter::class,
         'role'          => \App\Filters\RoleFilter::class,
-        'nocache'       => \App\Filters\NoCacheFilter::class, // ⬅️ tambahkan ini
+        'nocache'       => \App\Filters\NoCacheFilter::class,
     ];
 
     public array $required = [
@@ -39,9 +39,10 @@ class Filters extends BaseFilters
 
     public array $globals = [
         'before' => [
-            // kosong, kita kontrol di Routes
+            // kosong — akses diatur via Routes (auth/role dsb).
         ],
         'after' => [
+            // ⚠️ pastikan DebugToolbar TIDAK menyentuh response biner (PDF)
             'toolbar' => [
                 'except' => [
                     'admin/fullpaper/view/*',
@@ -52,9 +53,31 @@ class Filters extends BaseFilters
                     'dokumen/download/*',
                 ],
             ],
+            // secure headers bisa memblok iframe; exclude endpoint PDF
+            'secureheaders' => [
+                'except' => [
+                    'admin/fullpaper/view/*',
+                    'admin/fullpaper/blob/*',
+                    'admin/fullpaper/download/*',
+                    'presenter/fullpaper/download/*',
+                    'reviewer/fullpaper/download/*',
+                    'dokumen/preview/*',
+                    'dokumen/download/*',
+                    
+                ],
+            ],
         ],
     ];
 
     public array $methods = [];
-    public array $filters = [];
+
+    // bisa dipakai bila mau paksa nocache di endpoint PDF
+    public array $filters = [
+        'nocache' => [
+            'after' => [
+                'admin/fullpaper/view/*',
+                'dokumen/preview/*',
+            ],
+        ],
+    ];
 }
