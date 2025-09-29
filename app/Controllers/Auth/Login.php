@@ -24,9 +24,15 @@ class Login extends BaseController
             'email'    => 'required|valid_email',
             'password' => 'required|min_length[6]',
         ];
+
         if (! $this->validate($rules)) {
-            return redirect()->back()->withInput()
-                ->with('error', $this->validator->getError('email') ?: $this->validator->getError('password'));
+            $msg = $this->validator->getError('email')
+                ?: $this->validator->getError('password')
+                ?: 'Input tidak valid.';
+            return redirect()
+                ->to(site_url('auth/login'))
+                ->withInput()
+                ->with('error', $msg);
         }
 
         // Normalisasi input
@@ -38,13 +44,20 @@ class Login extends BaseController
         $user = $userModel->where('email', $email)->first();
 
         // Verifikasi kredensial
-        if (! $user || ! password_verify($password, (string) $user['password'])) {
-            return redirect()->back()->withInput()->with('error', 'Email atau password salah.');
+        $hash = (string) ($user['password'] ?? '');
+        if (! $user || ! password_verify($password, $hash)) {
+            return redirect()
+                ->to(site_url('auth/login'))
+                ->withInput()
+                ->with('error', 'Email atau password salah.');
         }
 
         // (Opsional) cek status user jika ada kolom status
         if (isset($user['status']) && $user['status'] !== 'aktif') {
-            return redirect()->back()->withInput()->with('error', 'Akun Anda belum aktif atau dinonaktifkan.');
+            return redirect()
+                ->to(site_url('auth/login'))
+                ->withInput()
+                ->with('error', 'Akun Anda belum aktif atau dinonaktifkan.');
         }
 
         // Set session (KONSISTEN dengan AuthFilter & header)
