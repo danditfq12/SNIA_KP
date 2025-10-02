@@ -76,7 +76,7 @@ class Dokumen extends BaseController
             ->where('p.event_id', $eventId)
             ->where('p.status', 'verified')
             ->groupStart()
-                ->where("COALESCE(p.participation_type, u.role) =", 'presenter', false)
+                ->where("u.role =", 'presenter', false) // <= gunakan role murni dari users
                 ->orWhere('u.role', 'presenter')
             ->groupEnd()
             ->orderBy('u.nama_lengkap', 'ASC')
@@ -112,7 +112,7 @@ class Dokumen extends BaseController
             ->where('p.event_id', $eventId)
             ->where('p.status', 'verified')
             ->groupStart()
-                ->where("COALESCE(p.participation_type, u.role) =", 'presenter', false)
+                ->where("u.role =", 'presenter', false)
                 ->orWhere('u.role', 'presenter')
             ->groupEnd();
 
@@ -138,7 +138,103 @@ class Dokumen extends BaseController
         ]);
     }
 
-    /** Semua peserta yang HADIR (untuk sertifikat). */
+    /**
+     * BARU (disesuaikan route): Ambil SEMUA user yang punya pembayaran pada event,
+     * lengkap dengan status pembayaran, has_loa, dan flag eligible (presenter + verified).
+     * Endpoint: GET dokumen/users-for-loa/{eventId}
+     */
+    public function getUsersForLoa(int $eventId = 0)
+    {
+        if ($eventId <= 0) {
+            return $this->response->setJSON(['status'=>'error','message'=>'event_id tidak valid'])->setStatusCode(400);
+        }
+
+        $rows = $this->db->table('pembayaran p')
+            ->distinct()
+            ->select("
+                u.id_user,
+                u.nama_lengkap,
+                u.email,
+                u.role AS role_user,
+                p.status AS pay_status,
+                CASE WHEN d.id_dokumen IS NULL THEN 0 ELSE 1 END AS has_loa
+            ", false)
+            ->join('users u', 'u.id_user = p.id_user', 'left')
+            ->join('dokumen d', "d.id_user = u.id_user AND d.event_id = p.event_id AND d.tipe = 'loa'", 'left')
+            ->where('p.event_id', $eventId)
+            ->orderBy('u.nama_lengkap', 'ASC')
+            ->get()->getResultArray();
+
+        $data = array_map(static function($r){
+            $roleFinal  = strtolower($r['role_user'] ?? '');
+            $payStatus  = strtolower($r['pay_status'] ?? '');
+            $eligible   = ($roleFinal === 'presenter' && $payStatus === 'verified');
+
+            return [
+                'id_user'      => (int) $r['id_user'],
+                'nama_lengkap' => (string) ($r['nama_lengkap'] ?? ''),
+                'email'        => (string) ($r['email'] ?? ''),
+                'role'         => $roleFinal ?: 'audience',
+                'pay_status'   => $payStatus ?: '',
+                'has_loa'      => (bool)   ($r['has_loa'] ?? false),
+                'eligible'     => (bool)   $eligible,
+                'note'         => $eligible ? '' : 'LOA khusus presenter & pembayaran harus verified',
+            ];
+        }, $rows);
+
+        return $this->response->setJSON(['status' => 'success', 'data' => $data]);
+    }
+
+    /**
+     * BARU (disesuaikan route): Ambil SEMUA user yang punya pembayaran pada event,
+     * lengkap dengan attended (absen hadir), has_cert, dan flag eligible (harus hadir).
+     * Endpoint: GET dokumen/users-for-certificate/{eventId}
+     */
+    public function getUsersForCertificate(int $eventId = 0)
+    {
+        if ($eventId <= 0) {
+            return $this->response->setJSON(['status'=>'error','message'=>'event_id tidak valid'])->setStatusCode(400);
+        }
+
+        $rows = $this->db->table('pembayaran p')
+            ->distinct()
+            ->select("
+                u.id_user,
+                u.nama_lengkap,
+                u.email,
+                u.role AS role_user,
+                CASE WHEN a.id_user IS NULL THEN 0 ELSE 1 END AS attended,
+                COALESCE(a.status, '') AS attend_status,
+                CASE WHEN d.id_dokumen IS NULL THEN 0 ELSE 1 END AS has_cert
+            ", false)
+            ->join('users u', 'u.id_user = p.id_user', 'left')
+            ->join('absensi a', "a.id_user = u.id_user AND a.event_id = p.event_id AND a.status = 'hadir'", 'left')
+            ->join('dokumen d', "d.id_user = u.id_user AND d.event_id = p.event_id AND d.tipe = 'sertifikat'", 'left')
+            ->where('p.event_id', $eventId)
+            ->orderBy('u.nama_lengkap', 'ASC')
+            ->get()->getResultArray();
+
+        $data = array_map(static function($r){
+            $roleFinal = strtolower($r['role_user'] ?? '');
+            $attended  = (bool) ($r['attended'] ?? false);
+
+            return [
+                'id_user'       => (int) $r['id_user'],
+                'nama_lengkap'  => (string) ($r['nama_lengkap'] ?? ''),
+                'email'         => (string) ($r['email'] ?? ''),
+                'role'          => $roleFinal ?: '',
+                'attended'      => $attended,
+                'attend_status' => (string) ($r['attend_status'] ?? ''),
+                'has_cert'      => (bool)   ($r['has_cert'] ?? false),
+                'eligible'      => $attended,
+                'note'          => $attended ? '' : 'Belum absen',
+            ];
+        }, $rows);
+
+        return $this->response->setJSON(['status' => 'success', 'data' => $data]);
+    }
+
+    /** Semua peserta yang HADIR (legacy, tetap untuk kompatibilitas lama). */
     public function getAttendees(int $eventId = 0)
     {
         if ($eventId <= 0) {
@@ -167,46 +263,6 @@ class Dokumen extends BaseController
         ]);
     }
 
-    /**
-     * BARU: Ambil SEMUA user yang terdaftar (berdasar tabel pembayaran p.event_id),
-     * lengkap dengan status pembayaran & apakah sudah punya LOA.
-     */
-    public function getUsersForLoa(int $eventId = 0)
-    {
-        if ($eventId <= 0) {
-            return $this->response->setJSON(['status'=>'error','message'=>'event_id tidak valid'])->setStatusCode(400);
-        }
-
-        $rows = $this->db->table('pembayaran p')
-            ->select("
-                u.id_user,
-                u.nama_lengkap,
-                u.email,
-                COALESCE(p.participation_type, u.role) AS role,
-                p.status AS pay_status,
-                CASE WHEN d.id_dokumen IS NULL THEN 0 ELSE 1 END AS has_loa
-            ", false)
-            ->join('users u', 'u.id_user = p.id_user', 'left')
-            ->join('dokumen d', "d.id_user = u.id_user AND d.event_id = p.event_id AND d.tipe = 'loa'", 'left')
-            ->where('p.event_id', $eventId)
-            ->orderBy('u.nama_lengkap', 'ASC')
-            ->get()->getResultArray();
-
-        return $this->response->setJSON([
-            'status' => 'success',
-            'data'   => array_map(static function($r){
-                return [
-                    'id_user'      => (int) $r['id_user'],
-                    'nama_lengkap' => (string) ($r['nama_lengkap'] ?? ''),
-                    'email'        => (string) ($r['email'] ?? ''),
-                    'role'         => (string) ($r['role'] ?? ''),
-                    'pay_status'   => (string) ($r['pay_status'] ?? ''),
-                    'has_loa'      => (bool)   ($r['has_loa'] ?? false),
-                ];
-            }, $rows),
-        ]);
-    }
-
     // ================== UPLOAD ==================
 
     public function uploadLoa()
@@ -230,11 +286,11 @@ class Dokumen extends BaseController
         $user  = $this->userModel->find($userId);
         if (!$user)  return redirect()->to(site_url('admin/dokumen'))->with('error', 'User tidak ditemukan.');
 
-        // wajib verified payment
+        // wajib verified payment & role presenter
         $verifiedPayment = $this->pembayaranModel
             ->where('id_user', $userId)->where('event_id', $eventId)->where('status', 'verified')->first();
-        if (!$verifiedPayment) {
-            return redirect()->to(site_url('admin/dokumen'))->with('error', 'User belum memiliki pembayaran yang terverifikasi untuk event ini.');
+        if (!$verifiedPayment || strtolower($user['role'] ?? '') !== 'presenter') {
+            return redirect()->to(site_url('admin/dokumen'))->with('error', 'LOA hanya untuk Presenter dengan pembayaran terverifikasi.');
         }
 
         // tidak boleh dobel
@@ -419,7 +475,7 @@ class Dokumen extends BaseController
                 ->where('p.id_user', $userId)
                 ->where('p.status', 'verified')
                 ->groupStart()
-                    ->where("COALESCE(p.participation_type, u.role) =", 'presenter', false)
+                    ->where("u.role =", 'presenter', false)
                     ->orWhere('u.role', 'presenter')
                 ->groupEnd()
                 ->get()->getRowArray();
@@ -432,6 +488,7 @@ class Dokumen extends BaseController
             }
             $eligiblePresenters = [$presenter];
         } else {
+            // gunakan method model yang sudah ada
             $eligiblePresenters = $this->dokumenModel->getEligiblePresentersForLOA($eventId);
             if (empty($eligiblePresenters)) {
                 return redirect()->to(site_url('admin/dokumen'))->with('error', 'Tidak ada presenter yang memenuhi syarat untuk LOA.');
@@ -564,18 +621,17 @@ class Dokumen extends BaseController
 
     private function getCompletionPerEvent(int $eventId): array
     {
+        // Eligible LOA: Presenter + pembayaran verified
         $eligibleLoa = $this->db->table('pembayaran p')
             ->join('users u', 'u.id_user = p.id_user', 'left')
             ->where('p.event_id', $eventId)
             ->where('p.status', 'verified')
-            ->groupStart()
-                ->where("COALESCE(p.participation_type, u.role) =", 'presenter', false)
-                ->orWhere('u.role', 'presenter')
-            ->groupEnd()
+            ->where('u.role', 'presenter')
             ->countAllResults();
 
         $givenLoa = $this->dokumenModel->where(['event_id' => $eventId, 'tipe' => 'loa'])->countAllResults(true);
 
+        // Eligible certificate: semua yang hadir
         $eligibleCert = $this->db->table('absensi')->where(['event_id' => $eventId, 'status' => 'hadir'])->countAllResults();
         $givenCert    = $this->dokumenModel->where(['event_id' => $eventId, 'tipe' => 'sertifikat'])->countAllResults(true);
 

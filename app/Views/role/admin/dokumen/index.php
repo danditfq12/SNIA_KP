@@ -208,7 +208,7 @@ $current_tipe  = $current_tipe ?? '';
   .table-responsive { overflow-x:auto; }
   .spin { animation: spin 0.8s linear infinite; }
   @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
-  /* LOA pick list */
+  /* PICK LIST */
   .picklist-item { cursor:pointer; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; background:#fff; transition: .15s ease; }
   .picklist-item:hover { box-shadow:0 8px 18px rgba(15,23,42,.08); transform: translateY(-1px); }
   .picklist-item.disabled { opacity:.55; }
@@ -312,9 +312,9 @@ $current_tipe  = $current_tipe ?? '';
   </div>
 </div>
 
-<!-- Upload Sertifikat (biarkan versi standard-mu) -->
+<!-- Upload Sertifikat (STYLE SAMA SEPERTI LOA) -->
 <div class="modal fade" id="uploadSertifikatModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
     <form action="<?= site_url('admin/dokumen/uploadSertifikat') ?>" method="POST" enctype="multipart/form-data" id="sertifikatForm" class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Upload Sertifikat</h5>
@@ -322,26 +322,37 @@ $current_tipe  = $current_tipe ?? '';
       </div>
       <div class="modal-body">
         <?= csrf_field() ?>
-        <div class="mb-3">
-          <label class="form-label">Event *</label>
-          <select class="form-select" name="event_id" id="sertifikatEventId" required>
-            <option value="">-- Pilih Event --</option>
-            <?php foreach ($events as $e): ?>
-              <option value="<?= (int)$e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
-            <?php endforeach; ?>
-          </select>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Event *</label>
+            <select class="form-select" name="event_id" id="sertifikatEventId" required>
+              <option value="">-- Pilih Event --</option>
+              <?php foreach ($events as $e): ?>
+                <option value="<?= (int)$e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">File Sertifikat *</label>
+            <input type="file" class="form-control" name="sertifikat_file" accept=".pdf,.jpg,.jpeg,.png" required>
+            <div class="form-text">PDF / JPG / PNG · maks 5MB</div>
+          </div>
         </div>
-        <div class="mb-3">
-          <label class="form-label">Peserta *</label>
-          <select class="form-select" name="user_id" id="sertifikatUserId" required>
-            <option value="">-- Pilih Event terlebih dahulu --</option>
-          </select>
-          <div class="form-text"><i class="bi bi-info-circle me-1"></i>Menampilkan semua peserta yang hadir.</div>
+
+        <hr class="my-3">
+
+        <!-- Picklist user (semua pendaftar) -->
+        <input type="hidden" name="user_id" id="sertifikatUserIdHidden" required>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0"><i class="bi bi-people me-2"></i>Pilih User pada event</h6>
+          <span id="sertifikatCountBadge" class="badge bg-light text-dark d-none">0 ditemukan</span>
         </div>
-        <div class="mb-3">
-          <label class="form-label">File Sertifikat *</label>
-          <input type="file" class="form-control" name="sertifikat_file" accept=".pdf,.jpg,.jpeg,.png" required>
-          <div class="form-text">PDF / JPG / PNG · maks 5MB</div>
+        <div id="sertifikatUserListWrap" class="border rounded p-2" style="max-height:330px; overflow:auto;">
+          <div class="text-muted small">Pilih event terlebih dahulu.</div>
+        </div>
+        <div class="form-text mt-1">
+          Menampilkan semua pendaftar event. Yang <strong>belum absen</strong> akan diberi label <em>“Belum Absen”</em>.
+          Jika sudah punya sertifikat akan diberi label <em>“Sudah ada Sertifikat”</em>. Mengirim ulang akan ditolak oleh sistem.
         </div>
       </div>
       <div class="modal-footer">
@@ -450,7 +461,7 @@ $current_tipe  = $current_tipe ?? '';
       `);
 
       $row.on('click', function(){
-        $('.picklist-item').removeClass('active');
+        $('.picklist-item', $loaWrap).removeClass('active');
         $(this).addClass('active');
         $loaHidden.val($(this).data('id'));
       });
@@ -475,6 +486,75 @@ $current_tipe  = $current_tipe ?? '';
       .fail(()=> $loaWrap.html('<div class="text-danger small">Gagal memuat user.</div>'));
   });
 
+  // ====== SERTIFIKAT PICK LIST (STYLE SAMA) ======
+  const $sertEvent   = $('#sertifikatEventId');
+  const $sertWrap    = $('#sertifikatUserListWrap');
+  const $sertHidden  = $('#sertifikatUserIdHidden');
+  const $sertCount   = $('#sertifikatCountBadge');
+
+  function renderCertificateUsers(items){
+    $sertWrap.empty();
+    $sertHidden.val('');
+    if(!items || !items.length){
+      $sertWrap.html('<div class="text-muted small">Belum ada pendaftar pada event ini.</div>');
+      $sertCount.addClass('d-none').text('0 ditemukan');
+      return;
+    }
+    $sertCount.removeClass('d-none').text(items.length+' ditemukan');
+
+    items.forEach(u=>{
+      const attended = !!u.attended;
+      const hasCert  = !!(u.has_cert ?? u.has_certificate); // kompat nama key
+      const role     = (u.role||'').toString();
+
+      const badgeAttend = attended
+        ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Hadir</span>'
+        : '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Belum Absen</span>';
+
+      const badgeCert = hasCert
+        ? '<span class="badge bg-info-subtle text-info border border-info-subtle ms-1">Sudah ada Sertifikat</span>'
+        : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">Belum ada Sertifikat</span>';
+
+      const badgeRole = role
+        ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${role}</span>`
+        : '';
+
+      const $row = $(`
+        <div class="picklist-item d-flex justify-content-between align-items-start mb-2 ${hasCert?'disabled':''}" data-id="${u.id_user}">
+          <div>
+            <div class="fw-semibold">${escapeHtml(u.nama_lengkap||'-')}</div>
+            <div class="small text-muted">${escapeHtml(u.email||'')}</div>
+          </div>
+          <div class="text-end">
+            ${badgeAttend} ${badgeCert} ${badgeRole}
+          </div>
+        </div>
+      `);
+
+      $row.on('click', function(){
+        $('.picklist-item', $sertWrap).removeClass('active');
+        $(this).addClass('active');
+        $sertHidden.val($(this).data('id'));
+      });
+
+      $sertWrap.append($row);
+    });
+  }
+
+  $sertEvent.on('change', function(){
+    const id = $(this).val();
+    $sertWrap.html('<div class="text-muted small">Memuat user...</div>');
+    $sertHidden.val('');
+    $sertCount.addClass('d-none').text('0 ditemukan');
+    if(!id){ $sertWrap.html('<div class="text-muted small">Pilih event terlebih dahulu.</div>'); return; }
+    $.get('<?= site_url('admin/dokumen/users-for-certificate/') ?>' + encodeURIComponent(id))
+      .done(res => {
+        if(res && res.status === 'success'){ renderCertificateUsers(res.data||[]); }
+        else { $sertWrap.html('<div class="text-danger small">Gagal memuat peserta.</div>'); }
+      })
+      .fail(() => { $sertWrap.html('<div class="text-danger small">Gagal memuat peserta.</div>'); });
+  });
+
   // Validasi submit LOA
   $('#loaForm').on('submit', function(e){
     const eventId = $('#loaEventId').val();
@@ -492,32 +572,21 @@ $current_tipe  = $current_tipe ?? '';
     const btn = $('#loaSubmitBtn'); btn.prop('disabled',true).find('span').text('Memproses...');
   });
 
-  // ===== Sertifikat: load attendees (biarkan sama seperti sebelumnya) =====
-  $('#sertifikatEventId').on('change', function(){
-    const id = $(this).val();
-    const $sel = $('#sertifikatUserId');
-    $sel.html('<option value="">Loading...</option>').prop('disabled', true);
-    if(id){
-      $.get('<?= site_url('admin/dokumen/getAttendees/') ?>' + encodeURIComponent(id))
-        .done(res => {
-          $sel.prop('disabled', false);
-          if(res && res.status === 'success' && Array.isArray(res.data) && res.data.length){
-            $sel.html('<option value="">-- Pilih Peserta --</option>');
-            const groups = {};
-            res.data.forEach(u => { const r = u.role || 'Peserta'; (groups[r] ||= []).push(u); });
-            Object.keys(groups).sort().forEach(r => {
-              const $optg = $('<optgroup/>',{label: r.charAt(0).toUpperCase()+r.slice(1)});
-              groups[r].forEach(u => $optg.append($('<option/>',{ value:u.id_user, text:`${u.nama_lengkap} - ${u.email}` })));
-              $sel.append($optg);
-            });
-          } else {
-            $sel.html('<option value="">Tidak ada peserta yang memenuhi syarat</option>');
-          }
-        })
-        .fail(() => { $sel.prop('disabled', false).html('<option value="">Gagal memuat data peserta</option>'); });
-    } else {
-      $sel.prop('disabled', false).html('<option value="">-- Pilih Event terlebih dahulu --</option>');
-    }
+  // Validasi submit Sertifikat
+  $('#sertifikatForm').on('submit', function(e){
+    const eventId = $('#sertifikatEventId').val();
+    const userId  = $('#sertifikatUserIdHidden').val();
+    const fileInp = this.querySelector('input[name="sertifikat_file"]');
+    const file    = fileInp && fileInp.files[0];
+
+    if (!eventId){ e.preventDefault(); Swal.fire('Error','Pilih event terlebih dahulu.','error'); return; }
+    if (!userId){ e.preventDefault(); Swal.fire('Error','Pilih user pada daftar.','error'); return; }
+    if (!file){ e.preventDefault(); Swal.fire('Error','Pilih file Sertifikat.','error'); return; }
+    if (file.size > 5242880){ e.preventDefault(); Swal.fire('Error','Ukuran file tidak boleh lebih dari 5MB.','error'); return; }
+    const ext = (file.name.split('.').pop()||'').toLowerCase();
+    if (!['pdf','jpg','jpeg','png'].includes(ext)){ e.preventDefault(); Swal.fire('Error','File harus PDF/JPG/PNG.','error'); return; }
+
+    const btn = $('#sertifikatSubmitBtn'); btn.prop('disabled',true).find('span').text('Memproses...');
   });
 
   // Flash messages
