@@ -225,15 +225,17 @@ $routes->group('admin', [
 
     // Dokumen
     $routes->get ('dokumen',                           'Dokumen::index');
-    $routes->post('dokumen/uploadLoa/(:num)',          'Dokumen::uploadLoa/$1');
-    $routes->post('dokumen/uploadSertifikat/(:num)',   'Dokumen::uploadSertifikat/$1');
+    $routes->post('dokumen/uploadLoa',                 'Dokumen::uploadLoa');
+    $routes->post('dokumen/uploadSertifikat',          'Dokumen::uploadSertifikat');
     $routes->get ('dokumen/download/(:num)',           'Dokumen::download/$1');
-    $routes->get ('dokumen/preview/(:num)',            'Dokumen::preview/$1');
     $routes->post('dokumen/delete/(:num)',             'Dokumen::delete/$1');
     $routes->post('dokumen/generateBulkLOA',           'Dokumen::generateBulkLOA');
     $routes->post('dokumen/generateBulkSertifikat',    'Dokumen::generateBulkSertifikat');
     $routes->get ('dokumen/getVerifiedPresenters/(:num)','Dokumen::getVerifiedPresenters/$1');
     $routes->get ('dokumen/getAttendees/(:num)',       'Dokumen::getAttendees/$1');
+    $routes->get ('dokumen/search-eligible-loa',       'Dokumen::searchEligibleLoa');
+    $routes->get('dokumen/users-for-loa/(:num)', 'Dokumen::getUsersForLoa/$1');
+    $routes->get('dokumen/users-for-certificate/(:num)', 'Dokumen::getUsersForCertificate/$1');
 
     // Voucher
     $routes->get ('voucher',                           'Voucher::index');

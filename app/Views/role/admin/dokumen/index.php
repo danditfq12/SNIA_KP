@@ -1,13 +1,12 @@
 <?php
-// ====== DEFAULT VARS WITH NULL CHECKS ======
-$title = $title ?? 'Manajemen Dokumen';
-$stats = $stats ?? ['total_documents'=>0,'loa_count'=>0,'sertifikat_count'=>0,'recent_uploads'=>0];
-$events = $events ?? [];
-$documents = $documents ?? [];
+// ====== DEFAULT VARS ======
+$title         = $title ?? 'Manajemen Dokumen';
+$stats         = $stats ?? ['total_documents'=>0,'loa_count'=>0,'sertifikat_count'=>0,'recent_uploads'=>0];
+$events        = $events ?? [];
+$documents     = $documents ?? [];
 $current_event = $current_event ?? '';
-$current_tipe = $current_tipe ?? '';
+$current_tipe  = $current_tipe ?? '';
 ?>
-
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
 <?= $this->include('partials/alerts') ?>
@@ -32,50 +31,22 @@ $current_tipe = $current_tipe ?? '';
 
       <!-- KPI -->
       <div class="row g-3 mb-3">
-        <div class="col-6 col-xl-3">
-          <div class="stat-card shadow-sm h-100">
-            <div class="d-flex align-items-center">
-              <div class="stat-icon bg-primary"><i class="bi bi-file-earmark-text"></i></div>
-              <div class="ms-3">
-                <div class="stat-number"><?= number_format((int)$stats['total_documents']) ?></div>
-                <div class="text-muted">Total Dokumen</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-xl-3">
-          <div class="stat-card shadow-sm h-100">
-            <div class="d-flex align-items-center">
-              <div class="stat-icon bg-success"><i class="bi bi-file-earmark-arrow-up"></i></div>
-              <div class="ms-3">
-                <div class="stat-number"><?= number_format((int)$stats['loa_count']) ?></div>
-                <div class="text-muted">LOA</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-xl-3">
-          <div class="stat-card shadow-sm h-100">
-            <div class="d-flex align-items-center">
-              <div class="stat-icon bg-warning"><i class="bi bi-patch-check"></i></div>
-              <div class="ms-3">
-                <div class="stat-number"><?= number_format((int)$stats['sertifikat_count']) ?></div>
-                <div class="text-muted">Sertifikat</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-6 col-xl-3">
-          <div class="stat-card shadow-sm h-100">
-            <div class="d-flex align-items-center">
-              <div class="stat-icon bg-info"><i class="bi bi-clock-history"></i></div>
-              <div class="ms-3">
-                <div class="stat-number"><?= number_format((int)$stats['recent_uploads']) ?></div>
-                <div class="text-muted">Upload Minggu Ini</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <div class="col-6 col-xl-3"><div class="stat-card shadow-sm h-100"><div class="d-flex align-items-center">
+          <div class="stat-icon bg-primary"><i class="bi bi-file-earmark-text"></i></div>
+          <div class="ms-3"><div class="stat-number"><?= number_format((int)$stats['total_documents']) ?></div><div class="text-muted">Total Dokumen</div></div>
+        </div></div></div>
+        <div class="col-6 col-xl-3"><div class="stat-card shadow-sm h-100"><div class="d-flex align-items-center">
+          <div class="stat-icon bg-success"><i class="bi bi-file-earmark-arrow-up"></i></div>
+          <div class="ms-3"><div class="stat-number"><?= number_format((int)$stats['loa_count']) ?></div><div class="text-muted">LOA</div></div>
+        </div></div></div>
+        <div class="col-6 col-xl-3"><div class="stat-card shadow-sm h-100"><div class="d-flex align-items-center">
+          <div class="stat-icon bg-warning"><i class="bi bi-patch-check"></i></div>
+          <div class="ms-3"><div class="stat-number"><?= number_format((int)$stats['sertifikat_count']) ?></div><div class="text-muted">Sertifikat</div></div>
+        </div></div></div>
+        <div class="col-6 col-xl-3"><div class="stat-card shadow-sm h-100"><div class="d-flex align-items-center">
+          <div class="stat-icon bg-info"><i class="bi bi-clock-history"></i></div>
+          <div class="ms-3"><div class="stat-number"><?= number_format((int)$stats['recent_uploads']) ?></div><div class="text-muted">Upload Minggu Ini</div></div>
+        </div></div></div>
       </div>
 
       <!-- FILTER -->
@@ -139,7 +110,6 @@ $current_tipe = $current_tipe ?? '';
             <span class="badge bg-light text-dark"><?= count($documents) ?> dokumen</span>
           </div>
         </div>
-
         <div class="card-body">
           <?php if (empty($documents)): ?>
             <div class="text-center py-5">
@@ -162,39 +132,25 @@ $current_tipe = $current_tipe ?? '';
                   </tr>
                 </thead>
                 <tbody>
-                <?php 
-                  $no = 1; 
-                  foreach($documents as $d): 
-                    $id = (int)($d['id_dokumen'] ?? 0);
-                    $type = strtolower($d['tipe'] ?? 'loa');
-                    $file = $d['file_path'] ?? '';
-                    $nama = $d['nama_lengkap'] ?? 'Unknown';
-                    $email = $d['email'] ?? '';
-                    $role = $d['role'] ?? '';
-                    $eventTitle = $d['event_title'] ?? '';
-                    $uploadedAt = $d['uploaded_at'] ?? '';
-                    $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-                    $icon = 'bi-file-earmark';
-                    $icColor = 'text-secondary';
-                    if ($ext === 'pdf') { $icon = 'bi-file-earmark-pdf'; $icColor = 'text-danger'; }
-                    elseif (in_array($ext, ['doc','docx'])) { $icon = 'bi-file-earmark-word'; $icColor = 'text-primary'; }
-                    elseif (in_array($ext, ['jpg','jpeg','png'])) { $icon = 'bi-file-earmark-image'; $icColor = 'text-success'; }
+                <?php $no=1; foreach($documents as $d):
+                    $id=(int)($d['id_dokumen']??0); $type=strtolower($d['tipe']??'loa'); $file=$d['file_path']??'';
+                    $nama=$d['nama_lengkap']??'Unknown'; $email=$d['email']??''; $role=$d['role']??'';
+                    $eventTitle=$d['event_title']??''; $uploadedAt=$d['uploaded_at']??'';
+                    $ext=strtolower(pathinfo($file,PATHINFO_EXTENSION));
+                    $icon='bi-file-earmark'; $icColor='text-secondary';
+                    if($ext==='pdf'){ $icon='bi-file-earmark-pdf'; $icColor='text-danger'; }
+                    elseif(in_array($ext,['doc','docx'])){ $icon='bi-file-earmark-word'; $icColor='text-primary'; }
+                    elseif(in_array($ext,['jpg','jpeg','png'])){ $icon='bi-file-earmark-image'; $icColor='text-success'; }
                 ?>
                   <tr>
                     <td><?= $no++ ?></td>
-                    <td>
-                      <?php if ($type === 'loa'): ?>
-                        <span class="badge bg-success"><i class="bi bi-file-earmark-arrow-up me-1"></i> LOA</span>
-                      <?php else: ?>
-                        <span class="badge bg-warning text-dark"><i class="bi bi-patch-check me-1"></i> Sertifikat</span>
-                      <?php endif; ?>
-                    </td>
+                    <td><?= $type==='loa'
+                      ? '<span class="badge bg-success"><i class="bi bi-file-earmark-arrow-up me-1"></i> LOA</span>'
+                      : '<span class="badge bg-warning text-dark"><i class="bi bi-patch-check me-1"></i> Sertifikat</span>' ?></td>
                     <td>
                       <div class="fw-semibold"><?= esc($nama) ?></div>
                       <?php if ($email): ?><small class="text-muted"><?= esc($email) ?></small><?php endif; ?>
-                      <?php if ($role): ?>
-                        <div><span class="badge bg-<?= $role === 'presenter' ? 'primary' : 'secondary' ?>"><?= ucfirst($role) ?></span></div>
-                      <?php endif; ?>
+                      <?php if ($role): ?><div><span class="badge bg-<?= $role==='presenter'?'primary':'secondary' ?>"><?= ucfirst($role) ?></span></div><?php endif; ?>
                     </td>
                     <td><?= $eventTitle ? '<strong>'.esc($eventTitle).'</strong>' : '<span class="text-muted">-</span>' ?></td>
                     <td>
@@ -221,171 +177,13 @@ $current_tipe = $current_tipe ?? '';
           <?php endif; ?>
         </div>
       </div>
-
-      <!-- MODALS -->
-      <!-- Upload LOA -->
-      <div class="modal fade" id="uploadLoaModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-          <form action="<?= site_url('admin/dokumen/uploadLoa') ?>" method="POST" enctype="multipart/form-data" id="loaForm" class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Upload LOA</h5>
-              <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <?= csrf_field() ?>
-              <div class="mb-3">
-                <label class="form-label">Event *</label>
-                <select class="form-select" name="event_id" id="loaEventId" required>
-                  <option value="">-- Pilih Event --</option>
-                  <?php foreach ($events as $e): ?>
-                    <option value="<?= $e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-
-              <div class="mb-3">
-                <label class="form-label">User/Presenter *</label>
-                <select class="form-select" name="user_id" id="loaUserId" required>
-                  <option value="">-- Pilih Event terlebih dahulu --</option>
-                </select>
-                <div class="form-text">Daftar otomatis menampilkan presenter dengan pembayaran <strong>verified</strong>.</div>
-              </div>
-
-              <!-- PENCARIAN ELIGIBLE (VERIFIED) -->
-              <div class="mb-3">
-                <label class="form-label">Cari user yang sudah membayar</label>
-                <div class="input-group">
-                  <input type="text" id="loaSearchBox" class="form-control" placeholder="Ketik nama atau email..." autocomplete="off">
-                  <button class="btn btn-outline-secondary" type="button" id="loaShowAllBtn" title="Tampilkan semua yang sudah membayar"><i class="bi bi-people"></i></button>
-                </div>
-                <div class="form-text">Pencarian ini hanya menampilkan user dengan status pembayaran <strong>verified</strong> pada event terpilih.</div>
-                <div id="loaSearchWrap" class="mt-2" style="max-height: 220px; overflow:auto; display:none;">
-                  <ul id="loaSearchList" class="list-group"></ul>
-                </div>
-              </div>
-
-              <div class="mb-3">
-                <label class="form-label">File LOA *</label>
-                <input type="file" class="form-control" name="loa_file" accept=".pdf,.doc,.docx" required>
-                <div class="form-text">PDF, DOC, DOCX · maks 5MB</div>
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
-              <button class="btn btn-success" type="submit"><i class="bi bi-upload me-1"></i>Upload LOA</button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <!-- Upload Sertifikat -->
-      <div class="modal fade" id="uploadSertifikatModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-          <form action="<?= site_url('admin/dokumen/uploadSertifikat') ?>" method="POST" enctype="multipart/form-data" id="sertifikatForm" class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Upload Sertifikat</h5>
-              <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <?= csrf_field() ?>
-              <div class="mb-3">
-                <label class="form-label">Event *</label>
-                <select class="form-select" name="event_id" id="sertifikatEventId" required>
-                  <option value="">-- Pilih Event --</option>
-                  <?php foreach ($events as $e): ?>
-                    <option value="<?= $e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Peserta *</label>
-                <select class="form-select" name="user_id" id="sertifikatUserId" required>
-                  <option value="">-- Pilih Event terlebih dahulu --</option>
-                </select>
-                <div class="form-text"><i class="bi bi-info-circle me-1"></i>Menampilkan semua peserta yang hadir (Presenter, Audience Online, Audience Offline)</div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">File Sertifikat *</label>
-                <input type="file" class="form-control" name="sertifikat_file" accept=".pdf,.jpg,.jpeg,.png" required>
-                <div class="form-text">PDF / JPG / PNG · maks 5MB</div>
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
-              <button class="btn btn-warning" type="submit"><i class="bi bi-upload me-1"></i>Upload Sertifikat</button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <!-- Bulk LOA -->
-      <div class="modal fade" id="bulkLoaModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-          <form action="<?= site_url('admin/dokumen/generateBulkLOA') ?>" method="POST" id="bulkLoaForm" class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title"><i class="bi bi-stars me-2"></i>Generate Bulk LOA</h5>
-              <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <?= csrf_field() ?>
-              <div class="mb-3">
-                <label class="form-label">Event *</label>
-                <select class="form-select" name="event_id" required>
-                  <option value="">-- Pilih Event --</option>
-                  <?php foreach ($events as $e): ?>
-                    <option value="<?= $e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-              <div class="alert alert-info mb-0"><i class="bi bi-info-circle me-1"></i>LOA digenerate untuk presenter dengan pembayaran <strong>terverifikasi</strong>.</div>
-            </div>
-            <div class="modal-footer">
-              <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
-              <button class="btn btn-info" type="submit"><i class="bi bi-stars me-1"></i>Generate LOA</button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <!-- Bulk Sertifikat -->
-      <div class="modal fade" id="bulkSertifikatModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog">
-          <form action="<?= site_url('admin/dokumen/generateBulkSertifikat') ?>" method="POST" id="bulkSertifikatForm" class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title"><i class="bi bi-stars me-2"></i>Generate Bulk Sertifikat</h5>
-              <button class="btn-close" type="button" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <?= csrf_field() ?>
-              <div class="mb-3">
-                <label class="form-label">Event *</label>
-                <select class="form-select" name="event_id" required>
-                  <option value="">-- Pilih Event --</option>
-                  <?php foreach ($events as $e): ?>
-                    <option value="<?= $e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
-                  <?php endforeach; ?>
-                </select>
-              </div>
-              <div class="alert alert-warning mb-0">
-                <i class="bi bi-exclamation-triangle me-1"></i>
-                Sertifikat akan dibuat untuk <strong>semua peserta yang tercatat hadir</strong>.
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
-              <button class="btn btn-secondary" type="submit"><i class="bi bi-stars me-1"></i>Generate Sertifikat</button>
-            </div>
-          </form>
-        </div>
-      </div>
-
     </div>
   </main>
 </div>
 
 <?= $this->include('partials/footer') ?>
 
-<!-- STYLES -->
+<!-- ====== STYLES ====== -->
 <style>
   :root{ --primary-color:#2563eb; --info-color:#06b6d4; --success-color:#10b981; --warning-color:#f59e0b; --danger-color:#ef4444; }
   body{ background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%); font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
@@ -404,13 +202,20 @@ $current_tipe = $current_tipe ?? '';
   .btn-soft-info{ background:rgba(6,182,212,.12); color:#0e7490; border-color:rgba(6,182,212,.25); }
   .btn-soft-danger{ background:rgba(239,68,68,.12); color:#991b1b; border-color:rgba(239,68,68,.25); }
   #documentsTable thead th{ background:#f8fafc; white-space:nowrap; }
-  #documentsTable { width: 100% !important; }
-  #documentsTable td, #documentsTable th { padding: 8px 12px; vertical-align: middle; border-bottom: 1px solid #dee2e6; }
-  #documentsTable tbody tr:hover { background-color: #f8f9fa; }
-  .table-responsive { overflow-x: auto; }
+  #documentsTable { width:100%!important; }
+  #documentsTable td, #documentsTable th { padding:8px 12px; vertical-align:middle; border-bottom:1px solid #dee2e6; }
+  #documentsTable tbody tr:hover { background:#f8f9fa; }
+  .table-responsive { overflow-x:auto; }
+  .spin { animation: spin 0.8s linear infinite; }
+  @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+  /* LOA pick list */
+  .picklist-item { cursor:pointer; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; background:#fff; transition: .15s ease; }
+  .picklist-item:hover { box-shadow:0 8px 18px rgba(15,23,42,.08); transform: translateY(-1px); }
+  .picklist-item.disabled { opacity:.55; }
+  .picklist-item.active { outline:2px solid var(--primary-color); }
 </style>
 
-<!-- SCRIPTS - FIXED ORDER -->
+<!-- ====== SCRIPTS ====== -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
@@ -423,96 +228,287 @@ $current_tipe = $current_tipe ?? '';
     return [].slice.call(scope.querySelectorAll('[data-bs-toggle="tooltip"]'))
       .map(el => new bootstrap.Tooltip(el));
   }
-
   $(function(){
-    var $table = $('#documentsTable');
-    var hasDocuments = <?= !empty($documents) ? 'true' : 'false' ?>;
+    const $table = $('#documentsTable');
+    const hasDocuments = <?= !empty($documents) ? 'true' : 'false' ?>;
     if (hasDocuments && $table.length && typeof $.fn.DataTable !== 'undefined') {
       if ($.fn.DataTable.isDataTable('#documentsTable')) $('#documentsTable').DataTable().destroy();
       $('#documentsTable').DataTable({
         paging:true,lengthChange:true,searching:true,ordering:true,info:true,autoWidth:false,responsive:true,
         pageLength:25,lengthMenu:[[10,25,50,-1],[10,25,50,'Semua']],order:[[5,'desc']],
         columnDefs:[{orderable:false,targets:[6]},{searchable:false,targets:[0]}],
-        language:{search:'Cari:',lengthMenu:'Tampilkan _MENU_ data per halaman',zeroRecords:'Tidak ada data ditemukan',info:'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',infoEmpty:'Menampilkan 0 sampai 0 dari 0 data',infoFiltered:'(difilter dari _MAX_ total data)',paginate:{first:'Pertama',last:'Terakhir',next:'Selanjutnya',previous:'Sebelumnya'}},
+        language:{search:'Cari:',lengthMenu:'Tampilkan _MENU_ data per halaman',zeroRecords:'Tidak ada data ditemukan',info:'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',infoEmpty:'Menampilkan 0 sampai 0 dari 0 data',infoFiltered:'(difilter dari _MAX_ total data)',paginate:{first:'Pertama',last:'Terakhir',next:'Selanjutnya',previous:'Sebelumnya'}],
         drawCallback:function(){ initTooltips(); }
       });
     }
     initTooltips();
   });
 
-  // ===== LOA: load verified presenters by event =====
-  $('#loaEventId').on('change', function(){
-    const id = $(this).val();
-    const $sel = $('#loaUserId');
-    $sel.html('<option value="">Loading...</option>').prop('disabled', true);
-    $('#loaSearchBox').val('');
-    $('#loaSearchWrap').hide();
-    if(id){
-      $.get('<?= site_url('admin/dokumen/getVerifiedPresenters/') ?>' + id)
-        .done(res => {
-          $sel.prop('disabled', false);
-          if(res.status === 'success' && (res.data || []).length){
-            $sel.html('<option value="">-- Pilih Presenter --</option>');
-            res.data.forEach(u => $sel.append(`<option value="${u.id_user}">${u.nama_lengkap} (${u.email})</option>`));
-          } else {
-            $sel.html('<option value="">Tidak ada presenter yang memenuhi syarat</option>');
-          }
-        })
-        .fail(() => { $sel.prop('disabled', false).html('<option value="">Gagal memuat data presenter</option>'); });
-    } else {
-      $sel.prop('disabled', false).html('<option value="">-- Pilih Event terlebih dahulu --</option>');
+  // ===== DELETE via hidden form =====
+  function deleteDocument(id){
+    Swal.fire({
+      title:'Hapus Dokumen?', text:'File akan dihapus permanen dari server dan database.',
+      icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', cancelButtonColor:'#6b7280',
+      confirmButtonText:'Ya, Hapus', cancelButtonText:'Batal'
+    }).then(r => {
+      if(r.isConfirmed){
+        const f=document.createElement('form'); f.method='POST'; f.action='<?= site_url('admin/dokumen/delete/') ?>'+encodeURIComponent(id);
+        const csrfName='<?= csrf_token() ?>', csrfVal='<?= csrf_hash() ?>';
+        const i=document.createElement('input'); i.type='hidden'; i.name=csrfName; i.value=csrfVal; f.appendChild(i);
+        document.body.appendChild(f); f.submit();
+      }
+    });
+  }
+  window.deleteDocument = deleteDocument;
+</script>
+
+<!-- ================= MODALS ================= -->
+
+<!-- Upload LOA (CENTERED) -->
+<div class="modal fade" id="uploadLoaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <form action="<?= site_url('admin/dokumen/uploadLoa') ?>" method="POST" enctype="multipart/form-data" id="loaForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Upload LOA</h5>
+        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <?= csrf_field() ?>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Event *</label>
+            <select class="form-select" name="event_id" id="loaEventId" required>
+              <option value="">-- Pilih Event --</option>
+              <?php foreach ($events as $e): ?>
+                <option value="<?= (int)$e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">File LOA *</label>
+            <input type="file" class="form-control" name="loa_file" accept=".pdf,.doc,.docx" required>
+            <div class="form-text">PDF, DOC, DOCX · maks 5MB</div>
+          </div>
+        </div>
+
+        <hr class="my-3">
+
+        <!-- List user dinamis -->
+        <input type="hidden" name="user_id" id="loaUserIdHidden" required>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0"><i class="bi bi-people me-2"></i>Pilih User pada event</h6>
+          <span id="loaCountBadge" class="badge bg-light text-dark d-none">0 ditemukan</span>
+        </div>
+        <div id="loaUserListWrap" class="border rounded p-2" style="max-height:330px; overflow:auto;">
+          <div class="text-muted small">Pilih event terlebih dahulu.</div>
+        </div>
+        <div class="form-text mt-1">User yang sudah punya LOA tetap ditampilkan dengan label <em>“Sudah dapat LOA”</em>. Mengirim ulang akan ditolak oleh sistem.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-success" type="submit" id="loaSubmitBtn"><i class="bi bi-upload me-1"></i><span>Upload LOA</span></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Upload Sertifikat (biarkan versi standard-mu) -->
+<div class="modal fade" id="uploadSertifikatModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form action="<?= site_url('admin/dokumen/uploadSertifikat') ?>" method="POST" enctype="multipart/form-data" id="sertifikatForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Upload Sertifikat</h5>
+        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <?= csrf_field() ?>
+        <div class="mb-3">
+          <label class="form-label">Event *</label>
+          <select class="form-select" name="event_id" id="sertifikatEventId" required>
+            <option value="">-- Pilih Event --</option>
+            <?php foreach ($events as $e): ?>
+              <option value="<?= (int)$e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Peserta *</label>
+          <select class="form-select" name="user_id" id="sertifikatUserId" required>
+            <option value="">-- Pilih Event terlebih dahulu --</option>
+          </select>
+          <div class="form-text"><i class="bi bi-info-circle me-1"></i>Menampilkan semua peserta yang hadir.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">File Sertifikat *</label>
+          <input type="file" class="form-control" name="sertifikat_file" accept=".pdf,.jpg,.jpeg,.png" required>
+          <div class="form-text">PDF / JPG / PNG · maks 5MB</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-warning" type="submit" id="sertifikatSubmitBtn"><i class="bi bi-upload me-1"></i><span>Upload Sertifikat</span></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Bulk LOA -->
+<div class="modal fade" id="bulkLoaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form action="<?= site_url('admin/dokumen/generateBulkLOA') ?>" method="POST" id="bulkLoaForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-stars me-2"></i>Generate Bulk LOA</h5>
+        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <?= csrf_field() ?>
+        <div class="mb-3">
+          <label class="form-label">Event *</label>
+          <select class="form-select" name="event_id" required>
+            <option value="">-- Pilih Event --</option>
+            <?php foreach ($events as $e): ?>
+              <option value="<?= (int)$e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="alert alert-info mb-0"><i class="bi bi-info-circle me-1"></i>LOA digenerate untuk presenter dengan pembayaran terverifikasi.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-info" type="submit"><i class="bi bi-stars me-1"></i>Generate LOA</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Bulk Sertifikat -->
+<div class="modal fade" id="bulkSertifikatModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form action="<?= site_url('admin/dokumen/generateBulkSertifikat') ?>" method="POST" id="bulkSertifikatForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-stars me-2"></i>Generate Bulk Sertifikat</h5>
+        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <?= csrf_field() ?>
+        <div class="mb-3">
+          <label class="form-label">Event *</label>
+          <select class="form-select" name="event_id" required>
+            <option value="">-- Pilih Event --</option>
+            <?php foreach ($events as $e): ?>
+              <option value="<?= (int)$e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="alert alert-warning mb-0"><i class="bi bi-exclamation-triangle me-1"></i>Sertifikat dibuat untuk semua peserta yang hadir.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-secondary" type="submit"><i class="bi bi-stars me-1"></i>Generate Sertifikat</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // ====== LOA PICK LIST ======
+  const $loaEvent  = $('#loaEventId');
+  const $loaWrap   = $('#loaUserListWrap');
+  const $loaHidden = $('#loaUserIdHidden');
+  const $loaCount  = $('#loaCountBadge');
+
+  function renderLoaUsers(items){
+    $loaWrap.empty();
+    $loaHidden.val('');
+    if(!items || !items.length){
+      $loaWrap.html('<div class="text-muted small">Tidak ada user pada event ini.</div>');
+      $loaCount.addClass('d-none').text('0 ditemukan');
+      return;
     }
+    $loaCount.removeClass('d-none').text(items.length+' ditemukan');
+
+    items.forEach(u=>{
+      const hasLoa = !!u.has_loa;
+      const pay = (u.pay_status||'').toUpperCase();
+      const badgeLoa = hasLoa
+        ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Sudah dapat LOA</span>'
+        : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Belum dapat LOA</span>';
+      const badgePay = pay
+        ? `<span class="badge ${pay==='VERIFIED'?'bg-success':'bg-outline-secondary'} ms-1">${pay}</span>` : '';
+      const role = u.role ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${u.role}</span>` : '';
+
+      const $row = $(`
+        <div class="picklist-item d-flex justify-content-between align-items-start mb-2 ${hasLoa?'disabled':''}" data-id="${u.id_user}">
+          <div>
+            <div class="fw-semibold">${escapeHtml(u.nama_lengkap||'-')}</div>
+            <div class="small text-muted">${escapeHtml(u.email||'')}</div>
+          </div>
+          <div class="text-end">
+            ${badgeLoa} ${badgePay} ${role}
+          </div>
+        </div>
+      `);
+
+      $row.on('click', function(){
+        $('.picklist-item').removeClass('active');
+        $(this).addClass('active');
+        $loaHidden.val($(this).data('id'));
+      });
+
+      $loaWrap.append($row);
+    });
+  }
+
+  function escapeHtml(str){ return (str||'').replace(/[&<>"']/g, s=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#039;' }[s])); }
+
+  $loaEvent.on('change', function(){
+    const id = $(this).val();
+    $loaWrap.html('<div class="text-muted small">Memuat user...</div>');
+    $loaHidden.val('');
+    $loaCount.addClass('d-none').text('0 ditemukan');
+    if(!id){ $loaWrap.html('<div class="text-muted small">Pilih event terlebih dahulu.</div>'); return; }
+    $.get('<?= site_url('admin/dokumen/users-for-loa/') ?>'+encodeURIComponent(id))
+      .done(res => {
+        if(res && res.status==='success'){ renderLoaUsers(res.data||[]); }
+        else { $loaWrap.html('<div class="text-danger small">Gagal memuat user.</div>'); }
+      })
+      .fail(()=> $loaWrap.html('<div class="text-danger small">Gagal memuat user.</div>'));
   });
 
-  // ===== LOA: live search verified presenters =====
-  const debounce = (fn, d=350)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn.apply(this,a), d);} };
-  function renderLoaSearch(items){
-    const $wrap = $('#loaSearchWrap');
-    const $list = $('#loaSearchList').empty();
-    if(!items || !items.length){ $wrap.hide(); return; }
-    items.forEach(u=>{
-      const li = $(`<li class='list-group-item list-group-item-action' style='cursor:pointer'></li>`)
-        .html(`<div class='d-flex justify-content-between'><div><strong>${u.nama_lengkap}</strong><div class='small text-muted'>${u.email}</div></div><span class='badge bg-success'>verified</span></div>`)
-        .on('click', ()=>{
-          const $sel = $('#loaUserId');
-          if(!$sel.find(\`option[value='${u.id_user}']\`).length){
-            $sel.append(\`<option value='${u.id_user}'>${u.nama_lengkap} (${u.email})</option>\`);
-          }
-          $sel.val(u.id_user).trigger('change');
-          $('#loaSearchWrap').hide();
-        });
-      $list.append(li);
-    });
-    $wrap.show();
-  }
-  const doLoaSearch = debounce(function(forceAll=false){
+  // Validasi submit LOA
+  $('#loaForm').on('submit', function(e){
     const eventId = $('#loaEventId').val();
-    const q = forceAll ? '*' : ($('#loaSearchBox').val()||'').trim();
-    if(!eventId || !q){ $('#loaSearchWrap').hide(); return; }
-    $.get('<?= site_url('admin/dokumen/search-eligible-loa') ?>', { event_id:eventId, q:q })
-      .done(res => { if(res.status==='success'){ renderLoaSearch(res.data); } else { $('#loaSearchWrap').hide(); } })
-      .fail(()=>$('#loaSearchWrap').hide());
-  }, 350);
-  $('#loaSearchBox').on('input', function(){ doLoaSearch(false); });
-  $('#loaShowAllBtn').on('click', function(){ doLoaSearch(true); });
+    const userId  = $('#loaUserIdHidden').val();
+    const fileInp = this.querySelector('input[name="loa_file"]');
+    const file    = fileInp && fileInp.files[0];
 
-  // ===== Sertifikat: attendees by event (sesuaikan backend kamu) =====
+    if (!eventId){ e.preventDefault(); Swal.fire('Error','Pilih event terlebih dahulu.','error'); return; }
+    if (!userId){ e.preventDefault(); Swal.fire('Error','Pilih user pada daftar.','error'); return; }
+    if (!file){ e.preventDefault(); Swal.fire('Error','Pilih file LOA.','error'); return; }
+    if (file.size > 5242880){ e.preventDefault(); Swal.fire('Error','Ukuran file tidak boleh lebih dari 5MB.','error'); return; }
+    const ext = (file.name.split('.').pop()||'').toLowerCase();
+    if (!['pdf','doc','docx'].includes(ext)){ e.preventDefault(); Swal.fire('Error','File harus PDF/DOC/DOCX.','error'); return; }
+
+    const btn = $('#loaSubmitBtn'); btn.prop('disabled',true).find('span').text('Memproses...');
+  });
+
+  // ===== Sertifikat: load attendees (biarkan sama seperti sebelumnya) =====
   $('#sertifikatEventId').on('change', function(){
     const id = $(this).val();
     const $sel = $('#sertifikatUserId');
     $sel.html('<option value="">Loading...</option>').prop('disabled', true);
     if(id){
-      $.get('<?= site_url('admin/dokumen/getAttendees/') ?>' + id)
+      $.get('<?= site_url('admin/dokumen/getAttendees/') ?>' + encodeURIComponent(id))
         .done(res => {
           $sel.prop('disabled', false);
-          if(res.status === 'success' && (res.data || []).length){
+          if(res && res.status === 'success' && Array.isArray(res.data) && res.data.length){
             $sel.html('<option value="">-- Pilih Peserta --</option>');
-            const g = {};
-            res.data.forEach(u => { const r = u.role || 'Peserta'; (g[r] ||= []).push(u); });
-            Object.keys(g).sort().forEach(r => {
-              const opt = $(`<optgroup label="${r.charAt(0).toUpperCase()+r.slice(1)}"></optgroup>`);
-              g[r].forEach(u => opt.append(`<option value="${u.id_user}">${u.nama_lengkap} - ${u.email}</option>`));
-              $sel.append(opt);
+            const groups = {};
+            res.data.forEach(u => { const r = u.role || 'Peserta'; (groups[r] ||= []).push(u); });
+            Object.keys(groups).sort().forEach(r => {
+              const $optg = $('<optgroup/>',{label: r.charAt(0).toUpperCase()+r.slice(1)});
+              groups[r].forEach(u => $optg.append($('<option/>',{ value:u.id_user, text:`${u.nama_lengkap} - ${u.email}` })));
+              $sel.append($optg);
             });
           } else {
             $sel.html('<option value="">Tidak ada peserta yang memenuhi syarat</option>');
@@ -524,42 +520,14 @@ $current_tipe = $current_tipe ?? '';
     }
   });
 
-  // Delete Function
-  function deleteDocument(id){
-    Swal.fire({ title:'Hapus Dokumen?', text:'File akan dihapus permanen dari server dan database.', icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', cancelButtonColor:'#6b7280', confirmButtonText:'Ya, Hapus', cancelButtonText:'Batal' })
-      .then(r => { if(r.isConfirmed){ const f=document.createElement('form'); f.method='POST'; f.action='<?= site_url('admin/dokumen/delete/') ?>'+id; const i=document.createElement('input'); i.type='hidden'; i.name='<?= csrf_token() ?>'; i.value='<?= csrf_hash() ?>'; f.appendChild(i); document.body.appendChild(f); f.submit(); } });
-  }
-  window.deleteDocument = deleteDocument;
-
-  // Client validation
-  $('#loaForm').on('submit', function(e) {
-    const eventId = $('#loaEventId').val();
-    const userId = $('#loaUserId').val();
-    const file = $('input[name="loa_file"]')[0].files[0];
-    if (!eventId) { e.preventDefault(); Swal.fire('Error','Pilih event terlebih dahulu.','error'); return; }
-    if (!userId) { e.preventDefault(); Swal.fire('Error','Pilih presenter terlebih dahulu.','error'); return; }
-    if (!file) { e.preventDefault(); Swal.fire('Error','Pilih file LOA untuk diupload.','error'); return; }
-    if (file.size > 5242880) { e.preventDefault(); Swal.fire('Error','Ukuran file tidak boleh lebih dari 5MB.','error'); return; }
-    const allowed = ['pdf','doc','docx']; const ext = file.name.split('.').pop().toLowerCase();
-    if (!allowed.includes(ext)) { e.preventDefault(); Swal.fire('Error','File harus PDF/DOC/DOCX.','error'); }
-  });
-  $('#sertifikatForm').on('submit', function(e) {
-    const eventId = $('#sertifikatEventId').val();
-    const userId = $('#sertifikatUserId').val();
-    const file = $('input[name="sertifikat_file"]')[0].files[0];
-    if (!eventId) { e.preventDefault(); Swal.fire('Error','Pilih event terlebih dahulu.','error'); return; }
-    if (!userId) { e.preventDefault(); Swal.fire('Error','Pilih peserta terlebih dahulu.','error'); return; }
-    if (!file) { e.preventDefault(); Swal.fire('Error','Pilih file sertifikat.','error'); return; }
-    if (file.size > 5242880) { e.preventDefault(); Swal.fire('Error','Ukuran file > 5MB.','error'); return; }
-    const allowed = ['pdf','jpg','jpeg','png']; const ext = file.name.split('.').pop().toLowerCase();
-    if (!allowed.includes(ext)) { e.preventDefault(); Swal.fire('Error','File harus PDF/JPG/PNG.','error'); }
-  });
-
   // Flash messages
-  <?php if (session('success')): ?>
-    Swal.fire({ icon:'success', title:'Berhasil!', text:'<?= esc(session('success')) ?>', timer:3000, showConfirmButton:false });
+  <?php if ($msg = session()->getFlashdata('success')): ?>
+    Swal.fire({ icon:'success', title:'Berhasil!', text:'<?= esc($msg) ?>', timer:3000, showConfirmButton:false });
   <?php endif; ?>
-  <?php if (session('error')): ?>
-    Swal.fire({ icon:'error', title:'Error!', text:'<?= esc(session('error')) ?>' });
+  <?php if ($msg = session()->getFlashdata('error')): ?>
+    Swal.fire({ icon:'error', title:'Error!', text:'<?= esc($msg) ?>' });
+  <?php endif; ?>
+  <?php if ($errors = session()->getFlashdata('errors')): ?>
+    Swal.fire({ icon:'error', title:'Validasi gagal', html:'<ul style="text-align:left; margin:0; padding-left:18px;"><?php foreach((array)$errors as $e){ echo "<li>".esc($e)."</li>"; } ?></ul>' });
   <?php endif; ?>
 </script>
