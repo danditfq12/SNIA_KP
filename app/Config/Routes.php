@@ -34,16 +34,27 @@ $routes->group('qr', static function ($routes) {
 // Auth (tanpa filter login)
 // ---------------------------------------------------
 $routes->group('auth', ['namespace' => 'App\Controllers\Auth'], static function ($routes) {
+    // Login/Logout
     $routes->get('login',  'Login::index');
     $routes->post('login', 'Login::login');
     $routes->post('logout', 'Logout::index');
 
+    // Register + Email Verify
     $routes->get('register', 'Register::index');
-    $routes->post('register','Register::store');
+    $routes->post('register', 'Register::store');
+    $routes->get('verify',   'Verify::index');
+    $routes->post('verify',  'Verify::check');
+    $routes->get('resend',   'Verify::resend');
 
-    $routes->get('verify',  'Verify::index');
-    $routes->post('verify', 'Verify::check');
-    $routes->get('resend',  'Verify::resend');
+    // Reset Password (lupa → otp → password baru)
+    $routes->get ('forgot-password', 'PasswordReset::requestForm');
+    $routes->post('forgot-password', 'PasswordReset::requestSend');
+
+    $routes->get ('reset/verify', 'PasswordReset::verifyForm');
+    $routes->post('reset/verify', 'PasswordReset::verifyCheck');
+
+    $routes->get ('reset/new', 'PasswordReset::newPasswordForm');
+    $routes->post('reset/new', 'PasswordReset::updatePassword');
 });
 
 // ---------------------------------------------------

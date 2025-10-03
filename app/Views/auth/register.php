@@ -21,9 +21,8 @@
       <div class="form-panel">
         <h2>Daftar</h2>
 
-        <!-- Flash -->
         <?php if(session()->getFlashdata('error')): ?>
-          <div class="alert alert-danger"><?= esc(session()->getFlashdata('error')) ?></div>
+          <div class="alert alert-danger"><?= session()->getFlashdata('error') ?></div>
         <?php endif; ?>
         <?php if(session()->getFlashdata('success')): ?>
           <div class="alert alert-success"><?= esc(session()->getFlashdata('success')) ?></div>
@@ -32,7 +31,7 @@
           <div class="alert alert-danger"><?= $validation->listErrors() ?></div>
         <?php endif; ?>
 
-        <form action="<?= site_url('auth/register') ?>" method="post" novalidate class="auth-form">
+        <form action="<?= site_url('auth/register') ?>" method="post" novalidate class="auth-form" id="register-form" data-context="register">
           <?= csrf_field() ?>
 
           <div class="form-group">
@@ -49,7 +48,7 @@
             <label for="password">Kata Sandi</label>
             <div class="input-group">
               <input id="password" type="password" name="password" placeholder="Minimal 6 karakter" required>
-              <button type="button" class="toggle-password" aria-label="Tampilkan kata sandi"><i class="fa fa-eye" aria-hidden="true"></i></button>
+              <button type="button" class="toggle-password" aria-label="Tampilkan kata sandi"><i class="fa fa-eye"></i></button>
             </div>
           </div>
 
@@ -57,7 +56,7 @@
             <label for="password2">Konfirmasi Kata Sandi</label>
             <div class="input-group">
               <input id="password2" type="password" name="password2" placeholder="Ulangi kata sandi" required>
-              <button type="button" class="toggle-password" aria-label="Tampilkan kata sandi"><i class="fa fa-eye" aria-hidden="true"></i></button>
+              <button type="button" class="toggle-password" aria-label="Tampilkan kata sandi"><i class="fa fa-eye"></i></button>
             </div>
           </div>
 
