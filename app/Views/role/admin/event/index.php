@@ -683,8 +683,11 @@ function populateEditForm(event){
 // ===== Actions =====
 function toggleStatus(id){
   fetchJSON(`<?= base_url("admin/event/toggle-status") ?>/${id}`, {
-    method:'GET',
-    headers:{ 'X-Requested-With':'XMLHttpRequest' }
+    method:'POST',
+    headers:{
+      'X-CSRF-TOKEN': csrfToken,
+      'X-Requested-With':'XMLHttpRequest'
+    }
   })
   .then(d=>{
     if(!d.success) throw new Error(d.message || 'Gagal mengubah status');
@@ -695,8 +698,11 @@ function toggleStatus(id){
 }
 function toggleRegistration(id){
   fetchJSON(`<?= base_url("admin/event/toggle-registration") ?>/${id}`, {
-    method:'GET',
-    headers:{ 'X-Requested-With':'XMLHttpRequest' }
+    method:'POST',
+    headers:{
+      'X-CSRF-TOKEN': csrfToken,
+      'X-Requested-With':'XMLHttpRequest'
+    }
   })
   .then(d=>{
     if(!d.success) throw new Error(d.message || 'Gagal mengubah status registrasi');

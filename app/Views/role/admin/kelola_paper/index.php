@@ -1,11 +1,12 @@
 <?php
 /**
  * File: app/Views/role/admin/kelola_paper/index.php
- * Expect: $aktif (array event aktif/mendatang), $berakhir (array event selesai)
+ * Expect: $aktif (array event aktif/mendatang), $berakhir (array event selesai), $reviewerLoads (array)
  */
-$title = $title ?? 'Kelola Paper';
-$aktif = $aktif ?? [];
-$berakhir = $berakhir ?? [];
+$title         = $title ?? 'Kelola Paper';
+$aktif         = $aktif ?? [];
+$berakhir      = $berakhir ?? [];
+$reviewerLoads = $reviewerLoads ?? [];
 
 $fmtDate = function ($date, $withTime = false) {
   if (!$date) return '-';
@@ -26,12 +27,18 @@ $cntBerakhir = count($berakhir);
 
       <!-- HERO -->
       <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
-        <div>
-          <h3 class="hero-title mb-1">
+        <div class="d-flex flex-column gap-2">
+          <h3 class="hero-title mb-0">
             <i class="bi bi-journal-text me-2"></i>Kelola Paper
           </h3>
           <div class="text-white-75 small">
             Pusat penugasan reviewer untuk Abstrak & Full Paper per event.
+          </div>
+          <!-- Tombol buka panel reviewer (desktop/tablet) -->
+          <div class="d-none d-md-flex">
+            <button class="btn btn-light btn-sm fw-bold" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasReviewer">
+              <i class="bi bi-people me-1"></i> Reviewer (<?= number_format(count($reviewerLoads)) ?>)
+            </button>
           </div>
         </div>
         <div class="text-end d-none d-md-block">
@@ -67,6 +74,11 @@ $cntBerakhir = count($berakhir);
               </button>
             </div>
           </div>
+
+          <!-- Tombol buka panel reviewer (mobile) -->
+          <button class="btn btn-primary btn-sm d-md-none ms-auto" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasReviewer">
+            <i class="bi bi-people me-1"></i> Reviewer
+          </button>
         </div>
       </div>
 
@@ -221,6 +233,89 @@ $cntBerakhir = count($berakhir);
       </div>
 
     </div>
+
+    <!-- ====== OFFCANVAS: Reviewer & Beban (slide kanan) ====== -->
+    <div class="offcanvas offcanvas-end offcanvas-blue" tabindex="-1" id="offcanvasReviewer" aria-labelledby="offcanvasReviewerLabel">
+      <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title d-flex align-items-center gap-2" id="offcanvasReviewerLabel">
+          <i class="bi bi-people"></i>
+          Reviewer & Beban Saat Ini
+          <span class="badge bg-light text-dark"><?= number_format(count($reviewerLoads)) ?></span>
+        </h5>
+        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+      </div>
+      <div class="offcanvas-body d-flex flex-column">
+        <?php if (empty($reviewerLoads)): ?>
+          <div class="empty-hint mt-2">
+            <i class="bi bi-inboxes me-1"></i>Tidak ada data reviewer yang terdeteksi.
+          </div>
+        <?php else: ?>
+          <div class="input-group input-group-sm mb-3">
+            <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+            <input type="text" id="revSearch" class="form-control" placeholder="Cari reviewer…">
+          </div>
+
+          <div class="small text-muted mb-2">
+            Menampilkan beban <em>aktif</em> (yang belum ada keputusan final).
+          </div>
+
+          <div id="revList" class="rev-scroll flex-grow-1">
+            <div class="row g-2">
+              <?php foreach ($reviewerLoads as $rv): ?>
+                <?php
+                  $abs  = (int)$rv['active_abs'];
+                  $fp   = (int)$rv['active_fp'];
+                  $name = esc($rv['name']);
+                  $mail = esc($rv['email'] ?? '');
+                  $hay  = strtolower($name.' '.$mail);
+                  $total= $abs + $fp;
+                ?>
+                <div class="col-12 js-rev" data-hay="<?= $hay ?>">
+                  <div class="rev-item d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3 min-w-0">
+                      <div class="avatar-initial"><?= strtoupper(substr($name,0,1)) ?></div>
+                      <div class="min-w-0">
+                        <div class="fw-bold text-blue-900 text-truncate"><?= $name ?></div>
+                        <?php if ($mail): ?>
+                          <div class="small text-muted text-truncate"><?= $mail ?></div>
+                        <?php endif; ?>
+                      </div>
+                    </div>
+                    <div class="text-end d-flex align-items-center gap-2">
+                      <span class="badge px-2 py-1 <?= $abs>0?'bg-warning-subtle text-warning-900':'bg-success-subtle text-success-900' ?>" title="Abstrak aktif">
+                        Abs: <strong><?= $abs ?></strong>
+                      </span>
+                      <span class="badge px-2 py-1 <?= $fp>0?'bg-danger-subtle text-danger-900':'bg-success-subtle text-success-900' ?>" title="Full Paper aktif">
+                        FP: <strong><?= $fp ?></strong>
+                      </span>
+                    </div>
+                  </div>
+                  <!-- Bar total (visual ringkas) -->
+                  <div class="progress progress-thin mb-2">
+                    <?php
+                      $absPct = $total>0 ? round(($abs/$total)*100) : 0;
+                      $fpPct  = $total>0 ? (100 - $absPct) : 0;
+                    ?>
+                    <div class="progress-bar bg-abs" role="progressbar" style="width: <?= $absPct ?>%" aria-valuenow="<?= $absPct ?>" aria-valuemin="0" aria-valuemax="100" title="Abstrak aktif"></div>
+                    <div class="progress-bar bg-fp"  role="progressbar" style="width: <?= $fpPct ?>%"  aria-valuenow="<?= $fpPct ?>"  aria-valuemin="0" aria-valuemax="100" title="Full Paper aktif"></div>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        <?php endif; ?>
+      </div>
+      <div class="offcanvas-footer border-top p-3 d-flex justify-content-between align-items-center">
+        <div class="small text-muted">Geser panel untuk menutup • atau klik tombol tutup</div>
+        <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="offcanvas"><i class="bi bi-x-lg me-1"></i>Tutup</button>
+      </div>
+    </div>
+    <!-- ====== END OFFCANVAS ====== -->
+
+    <!-- FAB Reviewer (lebih menonjol di mobile/tablet kecil) -->
+    <button class="btn btn-primary fab-rev d-md-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasReviewer" aria-controls="offcanvasReviewer" title="Daftar Reviewer">
+      <i class="bi bi-people"></i>
+    </button>
   </main>
 </div>
 
@@ -228,12 +323,15 @@ $cntBerakhir = count($berakhir);
 
 <style>
 :root{
-  /* ——— Perlebar kanvas & kecilkan padding samping ——— */
+  /* Kanvas */
   --side-pad: clamp(1rem, 1.6vw, 1.6rem);
   --container-max: 1680px;
 
+  /* Warna */
   --blue-50:#eff6ff; --blue-200:#bfdbfe; --blue-600:#2563eb;
   --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+
+  --success-900:#065f46; --warning-900:#92400e; --danger-900:#7f1d1d;
 }
 
 .page-wrap-blue{
@@ -287,7 +385,7 @@ $cntBerakhir = count($berakhir);
 .line-clip-2{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 
 /* Status badges */
-.bg-success-subtle{ background:#d1fae5!important; color:#065f46!important; }
+.bg-success-subtle{ background:#d1fae5!important; color:var(--success-900)!important; }
 .bg-secondary-subtle{ background:#f1f5f9!important; color:#475569!important; }
 .text-blue-900{ color:var(--blue-900)!important; }
 
@@ -317,6 +415,37 @@ $cntBerakhir = count($berakhir);
 /* Grid gutter sedikit diperlebar */
 .row.g-3{ --bs-gutter-x: 1.1rem; --bs-gutter-y: 1.1rem; }
 
+/* ====== Offcanvas Reviewer ====== */
+.offcanvas-blue{ --bs-offcanvas-width: clamp(320px, 36vw, 420px); }
+.offcanvas-blue .offcanvas-header{ background:#fff; }
+.offcanvas-blue .offcanvas-footer{ background:#fff; }
+.rev-scroll{ overflow:auto; }
+.rev-item{
+  background:#fff; border:1px solid rgba(30,64,175,.12); border-radius:12px;
+  padding:.65rem .75rem; display:flex; gap:.75rem;
+}
+.avatar-initial{
+  width:36px; height:36px; border-radius:10px; display:grid; place-items:center;
+  background:var(--blue-200); color:var(--blue-900); font-weight:800;
+}
+.bg-warning-subtle{ background:#fef3c7!important; }
+.bg-danger-subtle{ background:#fee2e2!important; }
+.text-warning-900{ color:var(--warning-900)!important; }
+.text-danger-900{ color:var(--danger-900)!important; }
+.text-success-900{ color:var(--success-900)!important; }
+
+/* Progress mini */
+.progress-thin{ height:6px; border-radius:999px; background:#eef2ff; }
+.progress-thin .bg-abs{ background:#f59e0b; } /* amber */
+.progress-thin .bg-fp{ background:#ef4444; }   /* red */
+
+/* FAB (mobile) */
+.fab-rev{
+  position:fixed; right:14px; bottom:14px; z-index:1050;
+  border-radius:999px; width:52px; height:52px; display:grid; place-items:center;
+  box-shadow:0 10px 20px rgba(37,99,235,.25);
+}
+
 @media (max-width: 575.98px){
   .hero-title{ font-size:1.35rem; }
   .metrics-wrap{ grid-template-columns:1fr 1fr; }
@@ -325,30 +454,41 @@ $cntBerakhir = count($berakhir);
 
 <script>
 (function(){
+  // ====== Filter card event
   const input    = document.getElementById('searchInput');
   const clearBtn = document.getElementById('clearSearch');
-  if(!input) return;
-
-  const grids = Array.from(document.querySelectorAll('.js-card-grid'));
-  const cards = Array.from(document.querySelectorAll('.js-card'));
-
-  function applyFilter(query){
-    const q = (query || '').trim().toLowerCase();
-    cards.forEach(card => {
-      const hay = (card.dataset.search || card.textContent).toLowerCase();
-      const show = !q || hay.includes(q);
-      card.parentElement.style.display = show ? '' : 'none';
-    });
-    clearBtn.classList.toggle('d-none', !q);
-
-    // sedikit estetika: tinggi minimal saat filter result kosong
-    grids.forEach(grid => {
-      const anyVisible = Array.from(grid.children).some(c => c.style.display !== 'none');
-      grid.style.minHeight = anyVisible ? '' : '100px';
-    });
+  if(input){
+    const grids = Array.from(document.querySelectorAll('.js-card-grid'));
+    const cards = Array.from(document.querySelectorAll('.js-card'));
+    function applyFilter(query){
+      const q = (query || '').trim().toLowerCase();
+      cards.forEach(card => {
+        const hay = (card.dataset.search || card.textContent).toLowerCase();
+        const show = !q || hay.includes(q);
+        card.parentElement.style.display = show ? '' : 'none';
+      });
+      clearBtn?.classList.toggle('d-none', !q);
+      grids.forEach(grid => {
+        const anyVisible = Array.from(grid.children).some(c => c.style.display !== 'none');
+        grid.style.minHeight = anyVisible ? '' : '100px';
+      });
+    }
+    input.addEventListener('input', e => applyFilter(e.target.value));
+    clearBtn?.addEventListener('click', () => { input.value=''; applyFilter(''); input.focus(); });
   }
 
-  input.addEventListener('input', e => applyFilter(e.target.value));
-  clearBtn.addEventListener('click', () => { input.value=''; applyFilter(''); input.focus(); });
+  // ====== Pencarian reviewer di panel slide
+  const revSearch = document.getElementById('revSearch');
+  if(revSearch){
+    const items = Array.from(document.querySelectorAll('#revList .js-rev'));
+    const apply = (q) => {
+      const s = (q||'').toLowerCase();
+      items.forEach(el=>{
+        const hay = (el.dataset.hay||'') + ' ' + el.textContent.toLowerCase();
+        el.style.display = !s || hay.includes(s) ? '' : 'none';
+      });
+    };
+    revSearch.addEventListener('input', e => apply(e.target.value));
+  }
 })();
 </script>

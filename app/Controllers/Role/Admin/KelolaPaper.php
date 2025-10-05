@@ -14,6 +14,7 @@ class KelolaPaper extends BaseController
     /* =========================================================
      * INDEX  -> /admin/kelola-paper
      * (list semua event untuk kartu "Aktif/Mendatang" & "Berakhir")
+     * + ringkasan beban reviewer (abstrak & full paper yang masih aktif)
      * ========================================================= */
     public function index()
     {
@@ -121,10 +122,14 @@ class KelolaPaper extends BaseController
         }
         unset($e);
 
+        // ========== RINGKASAN BEBAN REVIEWER ==========
+        $reviewerLoads = $this->getReviewerLoads();
+
         return view('role/admin/kelola_paper/index', [
-            'title'    => 'Kelola Paper',
-            'aktif'    => $aktif,
-            'berakhir' => $berakhir,
+            'title'         => 'Kelola Paper',
+            'aktif'         => $aktif,
+            'berakhir'      => $berakhir,
+            'reviewerLoads' => $reviewerLoads, // ← untuk panel/slider daftar reviewer & beban aktif
         ]);
     }
 
@@ -402,5 +407,192 @@ class KelolaPaper extends BaseController
             return $m ?: null;
         }
         return null;
+    }
+
+    /* ============================ NEW: Reviewer loads ============================ */
+
+    /** Sumber identitas reviewer (users/reviewers) */
+    private function resolveReviewerSource(): array
+    {
+        $db = \Config\Database::connect();
+
+        $table = $db->tableExists('reviewers') ? 'reviewers'
+              : ($db->tableExists('users') ? 'users' : null);
+        if (!$table) return ['table'=>null,'id'=>null,'name'=>null,'email'=>null];
+
+        $fields = array_flip($db->getFieldNames($table) ?: []);
+        $idCol   = null; foreach (['id','id_user','user_id','reviewer_id'] as $c) if (isset($fields[$c])) { $idCol = $c; break; }
+        $nameCol = null; foreach (['nama_lengkap','nama','name','full_name','username'] as $c) if (isset($fields[$c])) { $nameCol = $c; break; }
+        $emailCol= null; foreach (['email','user_email','mail'] as $c) if (isset($fields[$c])) { $emailCol = $c; break; }
+
+        return ['table'=>$table,'id'=>$idCol,'name'=>$nameCol,'email'=>$emailCol];
+    }
+
+    /** Ambil semua reviewer */
+    private function getAllReviewers(): array
+    {
+        $db  = \Config\Database::connect();
+        $src = $this->resolveReviewerSource();
+        if (!$src['table'] || !$src['id']) return [];
+
+        $b = $db->table($src['table']);
+        $sel = ["{$src['table']}.{$src['id']} AS id"];
+        if ($src['name'])  $sel[] = "{$src['table']}.{$src['name']} AS name";
+        if ($src['email']) $sel[] = "{$src['table']}.{$src['email']} AS email";
+        $b->select(implode(', ', $sel));
+
+        if ($src['table'] === 'users' && in_array('role',$db->getFieldNames('users'),true)) {
+            $b->where('role','reviewer');
+        }
+        if ($src['name']) $b->orderBy($src['name'],'ASC');
+
+        return $b->get()->getResultArray();
+    }
+
+    /** Hitung beban aktif (belum final) abstrak per reviewer */
+    private function countActiveAbstractByReviewer(int $reviewerId): int
+    {
+        $db = \Config\Database::connect();
+
+        $pivot = $this->firstExistingTable(['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak']);
+        $revT  = $this->firstExistingTable(['reviews','abstrak_reviews','review']);
+
+        // definisi "final" utk abstrak
+        $finalAbs = ['diterima','revisi','ditolak','accepted','revision','rejected'];
+
+        if ($pivot) {
+            $colAbsP = $this->firstExistingColumn($pivot, ['id_abstrak','abstrak_id']);
+            $colRevP = $this->firstExistingColumn($pivot, ['id_reviewer','reviewer_id']);
+            if ($colAbsP && $colRevP) {
+                if ($revT) {
+                    $colAbsR = $this->firstExistingColumn($revT, ['id_abstrak','abstrak_id']);
+                    $colRevR = $this->firstExistingColumn($revT, ['id_reviewer','reviewer_id']);
+                    $colStR  = $this->firstExistingColumn($revT, ['keputusan','status','decision']);
+                    if ($colAbsR && $colRevR && $colStR) {
+                        $row = $db->query("
+                            SELECT COUNT(*) c
+                            FROM {$pivot} p
+                            WHERE p.{$colRevP} = ?
+                              AND NOT EXISTS (
+                                SELECT 1 FROM {$revT} r
+                                WHERE r.{$colAbsR} = p.{$colAbsP}
+                                  AND r.{$colRevR} = p.{$colRevP}
+                                  AND LOWER(r.{$colStR}) IN ('".implode("','",$finalAbs)."')
+                              )
+                        ", [$reviewerId])->getRow();
+                        return (int)($row->c ?? 0);
+                    }
+                }
+                // jika tdk ada tabel review → semua assignment dianggap aktif
+                return (int)$db->table($pivot)->where($colRevP, $reviewerId)->countAllResults();
+            }
+        }
+
+        // tanpa pivot: pakai tabel review (abstrak) → hitung distinct id_abstrak yg belum final utk reviewer tsb
+        if ($revT) {
+            $colAbsR = $this->firstExistingColumn($revT, ['id_abstrak','abstrak_id']);
+            $colRevR = $this->firstExistingColumn($revT, ['id_reviewer','reviewer_id']);
+            $colStR  = $this->firstExistingColumn($revT, ['keputusan','status','decision']);
+            if ($colAbsR && $colRevR && $colStR) {
+                $row = $db->query("
+                    SELECT COUNT(*) c FROM (
+                      SELECT {$colAbsR} as aid,
+                             MAX(CASE WHEN LOWER({$colStR}) IN ('".implode("','",$finalAbs)."') THEN 1 ELSE 0 END) AS has_final
+                      FROM {$revT}
+                      WHERE {$colRevR} = ?
+                      GROUP BY {$colAbsR}
+                    ) x
+                    WHERE x.has_final = 0
+                ", [$reviewerId])->getRow();
+                return (int)($row->c ?? 0);
+            }
+        }
+
+        return 0;
+    }
+
+    /** Hitung beban aktif (belum final) full paper per reviewer */
+    private function countActiveFullpaperByReviewer(int $reviewerId): int
+    {
+        $db   = \Config\Database::connect();
+        $fpP  = $this->firstExistingTable(['fullpaper_reviewers']);
+        $fpR  = $this->firstExistingTable(['fullpaper_reviews','fullpaper_review','fp_review','review_fullpaper']);
+
+        // definisi "final" utk full paper (assignment dianggap selesai)
+        $finalFp = ['accepted','rejected','revision'];
+
+        if ($fpP) {
+            $colSubP = $this->firstExistingColumn($fpP, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
+            $colRevP = $this->firstExistingColumn($fpP, ['reviewer_id','id_reviewer']);
+            if ($colSubP && $colRevP) {
+                if ($fpR) {
+                    $colSubR = $this->firstExistingColumn($fpR, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
+                    $colRevR = $this->firstExistingColumn($fpR, ['reviewer_id','id_reviewer']);
+                    $colStR  = $this->firstExistingColumn($fpR, ['keputusan','status','decision']);
+                    if ($colSubR && $colRevR && $colStR) {
+                        $row = $db->query("
+                            SELECT COUNT(*) c
+                            FROM {$fpP} fr
+                            WHERE fr.{$colRevP} = ?
+                              AND NOT EXISTS (
+                                SELECT 1 FROM {$fpR} r
+                                WHERE r.{$colSubR} = fr.{$colSubP}
+                                  AND r.{$colRevR} = fr.{$colRevP}
+                                  AND LOWER(r.{$colStR}) IN ('".implode("','",$finalFp)."')
+                              )
+                        ", [$reviewerId])->getRow();
+                        return (int)($row->c ?? 0);
+                    }
+                }
+                // jika tdk ada tabel review → semua assignment dianggap aktif
+                return (int)$db->table($fpP)->where($colRevP, $reviewerId)->countAllResults();
+            }
+        }
+
+        // tanpa pivot: hitung dari tabel review (distinct submission) yang belum final oleh reviewer tsb
+        if ($fpR) {
+            $colSubR = $this->firstExistingColumn($fpR, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
+            $colRevR = $this->firstExistingColumn($fpR, ['reviewer_id','id_reviewer']);
+            $colStR  = $this->firstExistingColumn($fpR, ['keputusan','status','decision']);
+            if ($colSubR && $colRevR && $colStR) {
+                $row = $db->query("
+                    SELECT COUNT(*) c FROM (
+                      SELECT {$colSubR} as sid,
+                             MAX(CASE WHEN LOWER({$colStR}) IN ('".implode("','",$finalFp)."') THEN 1 ELSE 0 END) AS has_final
+                      FROM {$fpR}
+                      WHERE {$colRevR} = ?
+                      GROUP BY {$colSubR}
+                    ) x
+                    WHERE x.has_final = 0
+                ", [$reviewerId])->getRow();
+                return (int)($row->c ?? 0);
+            }
+        }
+
+        return 0;
+    }
+
+    /** Daftar reviewer + beban aktif (abstrak & fullpaper) */
+    private function getReviewerLoads(): array
+    {
+        $reviewers = $this->getAllReviewers();
+        foreach ($reviewers as &$rv) {
+            $rid = (int)($rv['id'] ?? 0);
+            $rv['active_abs'] = $rid ? $this->countActiveAbstractByReviewer($rid)   : 0;
+            $rv['active_fp']  = $rid ? $this->countActiveFullpaperByReviewer($rid) : 0;
+        }
+        unset($rv);
+
+        // urutkan: yang beban paling banyak di atas
+        usort($reviewers, function($a,$b){
+            $A = (int)($a['active_abs'] ?? 0) + (int)($a['active_fp'] ?? 0);
+            $B = (int)($b['active_abs'] ?? 0) + (int)($b['active_fp'] ?? 0);
+            if ($A === $B) {
+                return strcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
+            }
+            return $B <=> $A;
+        });
+
+        return $reviewers;
     }
 }
