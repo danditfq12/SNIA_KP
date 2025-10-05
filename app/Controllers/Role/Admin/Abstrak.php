@@ -14,12 +14,19 @@ class Abstrak extends BaseController
     protected $revKatModel;
     protected $db;
 
+    // opsional: diinisiasi hanya jika class ada
+    protected $fpModel = null;
+
     public function __construct()
     {
         $this->abstrakModel = new AbstrakModel();
         $this->reviewModel  = new ReviewModel();
         $this->revKatModel  = new ReviewerKategoriModel();
         $this->db           = \Config\Database::connect();
+
+        if (class_exists(\App\Models\FullPaperModel::class)) {
+            $this->fpModel = new \App\Models\FullPaperModel();
+        }
     }
 
     private function isPublicUrl(string $path): bool
@@ -52,6 +59,65 @@ class Abstrak extends BaseController
 
         if (is_file($fname)) return $fname;
         return null;
+    }
+
+    /** ==========================================================
+     *  UTIL – Reopen assignment ke reviewer yang sama saat REVISI
+     *  (DINONAKTIFKAN sesuai permintaan: jangan auto-assign saat revisi)
+     *  ========================================================== */
+    private function reopenAssignmentsForRevision(int $idAbstrak): int
+    {
+        // DISABLED: Kembalikan 0 agar tidak membuat row pending baru.
+        return 0;
+    }
+
+    /** ==========================================================
+     *  UTIL – Tutup semua PENDING saat abstrak DITOLAK
+     *  ========================================================== */
+    private function closeAllPendingAsRejected(int $idAbstrak): int
+    {
+        $this->db->table('reviews')
+            ->where('id_abstrak', $idAbstrak)
+            ->where('keputusan', 'pending')
+            ->set('keputusan', 'ditolak')
+            ->set('komentar', 'Ditutup oleh editor (abstrak ditolak).', false)
+            ->set('tanggal_review', date('Y-m-d H:i:s'))
+            ->update();
+
+        return $this->db->affectedRows();
+    }
+
+    /** ==========================================================
+     *  UTIL – Cascade ke FullPaper jika abstrak ditolak
+     *  ========================================================== */
+    private function cascadeFullpaperOnAbstractRejected(array $absRow): void
+    {
+        if (!$this->fpModel) return; // skip jika model tidak tersedia
+
+        $userId  = (int)($absRow['id_user'] ?? 0);
+        $eventId = (int)($absRow['event_id'] ?? 0);
+        if (!$userId || !$eventId) return;
+
+        // Cari FP yang terkait (skema: user + event)
+        $row = method_exists($this->fpModel, 'getLatestRowByUserEvent')
+            ? $this->fpModel->getLatestRowByUserEvent($userId, $eventId)
+            : null;
+
+        if (!$row) return;
+
+        // Jika ada FP aktif, tandai dibatalkan akibat abstrak ditolak
+        $id = (int)($row['id'] ?? $row['id_fullpaper'] ?? 0);
+        if (!$id) return;
+
+        try {
+            $this->db->table($this->fpModel->table ?? 'full_papers')
+                ->where('id', $id)
+                ->set('full_paper_status', 'CANCELLED_ABSTRACT_REJECTED')
+                ->set('decision_at', date('Y-m-d H:i:s'))
+                ->update();
+        } catch (\Throwable $e) {
+            log_message('warning', 'Cascade FP fail: '.$e->getMessage());
+        }
     }
 
     /** LIST + KPI */
@@ -102,7 +168,6 @@ class Abstrak extends BaseController
                         'tanggal' => $r['tanggal_review'] ?? null,
                     ];
                 } else {
-                    // jika ada review terbaru dengan keputusan, perbarui statusnya
                     $st = strtolower((string)($r['keputusan'] ?? ''));
                     if ($st) $assigned[$key]['status'] = $st;
                     if (!empty($r['tanggal_review'])) $assigned[$key]['tanggal'] = $r['tanggal_review'];
@@ -120,23 +185,20 @@ class Abstrak extends BaseController
         }
     }
 
-    /** ===== NEW: GET reviewers by category → JSON (dipakai modal) ===== */
+    /** NEW: GET reviewers by category → JSON (dipakai modal) */
     public function getReviewersByCategory($idKategori)
     {
         try {
             $idKategori = (int)$idKategori;
 
-            // Jika model punya method khusus, gunakan.
             if (method_exists($this->revKatModel, 'getByCategory')) {
                 $rows = $this->revKatModel->getByCategory($idKategori);
             } else {
-                // Fallback query manual
                 $builder = $this->db->table('reviewer_kategori rk')
                     ->select('u.id_user, u.nama_lengkap, u.email')
                     ->join('users u', 'u.id_user = rk.id_reviewer')
                     ->where('rk.id_kategori', $idKategori)
                     ->orderBy('u.nama_lengkap', 'ASC');
-                // opsional: hanya reviewer aktif
                 if ($this->db->fieldExists('status', 'users')) {
                     $builder->groupStart()
                             ->where('u.status', 'active')
@@ -163,7 +225,7 @@ class Abstrak extends BaseController
         }
     }
 
-    /** ASSIGN REVIEWER */
+    /** ASSIGN REVIEWER (maks 1 reviewer aktif: cegah jika masih ada pending) */
     public function assign($idAbstrak)
     {
         try {
@@ -175,9 +237,11 @@ class Abstrak extends BaseController
             $abstrak = $this->abstrakModel->find($idAbstrak);
             if (!$abstrak) return redirect()->to(site_url('admin/abstrak'))->with('error', 'Abstrak tidak ditemukan.');
 
+            // validasi kesesuaian kategori
             $eligible = $this->revKatModel->isReviewerEligible($idReviewer, (int)$abstrak['id_kategori']);
             if (!$eligible) return redirect()->back()->with('error', 'Reviewer tidak sesuai kategori abstrak.');
 
+            // Cegah assign jika sudah ada assignment PENDING yang masih aktif
             if ($this->reviewModel->hasPendingReview($idAbstrak)) {
                 return redirect()->back()->with('error', 'Abstrak ini sudah memiliki assignment reviewer yang pending.');
             }
@@ -191,6 +255,7 @@ class Abstrak extends BaseController
                 return redirect()->back()->with('error', 'Gagal assign reviewer. Silakan coba lagi.');
             }
 
+            // set status jika masih "menunggu" → "sedang_direview"
             if (($abstrak['status'] ?? 'menunggu') === 'menunggu') {
                 $this->abstrakModel->update($idAbstrak, ['status' => 'sedang_direview']);
             }
@@ -211,7 +276,7 @@ class Abstrak extends BaseController
         }
     }
 
-    /** UPDATE STATUS */
+    /** UPDATE STATUS (Diterima/Ditolak/Revisi) — TANPA auto-assign saat Revisi */
     public function updateStatus()
     {
         try {
@@ -239,16 +304,30 @@ class Abstrak extends BaseController
 
             $this->db->transStart();
 
+            // Update status abstrak
             $this->abstrakModel->update($idAbstrak, ['status' => $status]);
 
-            if (!empty($komentar)) {
+            // Catat komentar admin (opsional)
+            if ($komentar !== '') {
                 $this->reviewModel->insert([
                     'id_abstrak'     => $idAbstrak,
-                    'id_reviewer'    => session('id_user') ?: null,
+                    'id_reviewer'    => session('id_user') ?: null, // admin as actor
                     'keputusan'      => $status,
                     'komentar'       => $komentar,
                     'tanggal_review' => date('Y-m-d H:i:s'),
                 ], false);
+            }
+
+            // Branching:
+            if ($status === 'revisi') {
+                // SESUAI PERMINTAAN: JANGAN auto-assign reviewer lagi
+                // (Tetap biarkan reviewer sebelumnya yang akan menilai ulang jika alur aplikasi mengizinkan)
+                // $this->reopenAssignmentsForRevision($idAbstrak); // DISABLED
+            } elseif ($status === 'ditolak') {
+                // tutup semua pending → ditolak
+                $this->closeAllPendingAsRejected($idAbstrak);
+                // cascade ke fullpaper (jika ada)
+                $this->cascadeFullpaperOnAbstractRejected($exists);
             }
 
             $this->db->transComplete();

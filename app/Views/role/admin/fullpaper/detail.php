@@ -1,25 +1,21 @@
 <?php
 /**
  * File: app/Views/role/admin/fullpaper/detail.php
- * Vars (dari controller):
- * - $submission, $author, $coauthors, $history
- * - $reviewers (kandidat — sudah difilter & exclude)
- * - $assignedReviewers (yang sudah ditugaskan di full paper)
- * - $abstractReviewers (yang ditugaskan di abstrak, read-only)
- * - $fpReviews (riwayat penilaian full paper)
- * - $title, $maxReviewer
+ * Layout selaras Index/Presenter (hero biru, card glass, kanvas lebar).
+ * Vars: $submission, $author, $coauthors, $history, $reviewers, $assignedReviewers,
+ *       $abstractReviewers, $fpReviews, $title, $maxReviewer
  */
-$submission  = $submission ?? [];
-$author      = $author ?? ['name'=>null,'email'=>null];
-$coauthors   = $coauthors ?? [];
-$history     = $history ?? [];
-$reviewers   = $reviewers ?? [];
-$assigned    = $assignedReviewers ?? [];
-$absReviewers= $abstractReviewers ?? [];
-$fpReviews   = $fpReviews ?? [];
-$maxReviewer = (int)($maxReviewer ?? 3);
+$submission   = $submission ?? [];
+$author       = $author ?? ['name'=>null,'email'=>null];
+$coauthors    = $coauthors ?? [];
+$history      = $history ?? [];
+$reviewers    = $reviewers ?? [];
+$assigned     = $assignedReviewers ?? [];
+$absReviewers = $abstractReviewers ?? [];
+$fpReviews    = $fpReviews ?? [];
+$maxReviewer  = (int)($maxReviewer ?? 3);
 
-$status = strtoupper($submission['full_paper_status'] ?? 'NONE');
+$status     = strtoupper($submission['full_paper_status'] ?? 'NONE');
 $badgeMap   = ['NONE'=>'secondary','UPLOADED'=>'info','REVISION'=>'warning','ACCEPTED'=>'success','REJECTED'=>'danger'];
 $statusText = ['NONE'=>'—','UPLOADED'=>'Diunggah','REVISION'=>'Revisi','ACCEPTED'=>'Diterima','REJECTED'=>'Ditolak'];
 $badge      = $badgeMap[$status] ?? 'secondary';
@@ -27,17 +23,28 @@ $uploadedAt = !empty($submission['full_paper_uploaded_at']) ? date('d M Y H:i', 
 $revisiKe   = isset($submission['revisi_ke']) ? (int)$submission['revisi_ke'] : 0;
 
 $eventId = (int)($submission['event_id'] ?? 0);
-$backUrl = $eventId ? site_url('admin/kelola-paper/presenters/'.$eventId) : site_url('admin/kelola-paper');
+$backUrl = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_url('admin/kelola-paper');
 
 $rvStatMap = [
   'diterima' => ['Diterima','success'],
+  'accepted' => ['Diterima','success'],
   'rejected' => ['Ditolak','danger'],
   'ditolak'  => ['Ditolak','danger'],
   'revisi'   => ['Revisi','warning'],
+  'revision' => ['Revisi','warning'],
   'pending'  => ['Pending','secondary'],
   ''         => ['—','secondary'],
   null       => ['—','secondary'],
 ];
+
+/** metrik sisi kanan */
+$assignedCount  = count($assigned);
+$completedCount = 0;
+foreach ($assigned as $ar) {
+  $st = strtolower($ar['status'] ?? '');
+  if (in_array($st, ['diterima','accepted','revisi','revision','ditolak','rejected'], true)) $completedCount++;
+}
+$missingCount = max(0, $maxReviewer - $assignedCount);
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
@@ -58,7 +65,7 @@ $rvStatMap = [
               <li class="breadcrumb-item"><a href="<?= site_url('admin/kelola-paper') ?>">Kelola Paper</a></li>
               <?php if ($eventId): ?>
                 <li class="breadcrumb-item">
-                  <a href="<?= site_url('admin/kelola-paper/presenters/'.$eventId) ?>">
+                  <a href="<?= site_url('admin/kelola-paper/detail/'.$eventId) ?>">
                     <?= esc($submission['event_title'] ?? 'Event') ?>
                   </a>
                 </li>
@@ -171,7 +178,7 @@ $rvStatMap = [
             </div>
           </div>
 
-          <!-- Riwayat Penilaian (Full Paper) -->
+          <!-- Riwayat Penilaian -->
           <div class="card shadow-soft card-glass-plain mb-3">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-clipboard-check"></i></span>
@@ -254,14 +261,34 @@ $rvStatMap = [
 
         <!-- RIGHT -->
         <div class="col-12 col-lg-4">
-          <!-- Reviewer Ditugaskan (Full Paper) -->
+          <!-- Metrics -->
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-body">
+              <div class="metrics-wrap">
+                <div class="metric-pill">
+                  <div class="label"><i class="bi bi-people me-1"></i>Ditugaskan</div>
+                  <div class="value"><?= number_format($assignedCount) ?> / <?= number_format($maxReviewer) ?></div>
+                </div>
+                <div class="metric-pill <?= $missingCount>0?'warn':'success' ?>">
+                  <div class="label"><i class="bi bi-person-gear me-1"></i>Kurang</div>
+                  <div class="value"><?= number_format($missingCount) ?></div>
+                </div>
+                <div class="metric-pill">
+                  <div class="label"><i class="bi bi-journal-check me-1"></i>Review masuk</div>
+                  <div class="value"><?= number_format($completedCount) ?></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reviewer Ditugaskan -->
           <div class="card shadow-soft card-glass-plain mb-3">
             <div class="card-header bg-transparent border-0 pb-0 d-flex justify-content-between align-items-center">
               <div class="d-flex align-items-center gap-2">
                 <span class="badge bg-blue-soft"><i class="bi bi-people"></i></span>
                 <h6 class="mb-0 fw-semibold text-blue-900">Reviewer Ditugaskan</h6>
               </div>
-              <span class="badge bg-secondary-subtle"><?= count($assigned) ?> / max <?= $maxReviewer ?></span>
+              <span class="badge bg-secondary-subtle"><?= $assignedCount ?> / max <?= $maxReviewer ?></span>
             </div>
             <div class="card-body pt-2">
               <?php if (!empty($assigned)): ?>
@@ -295,13 +322,13 @@ $rvStatMap = [
                 <div class="text-muted mb-2">Belum ada reviewer yang ditugaskan.</div>
               <?php endif; ?>
 
-              <!-- Form tambah reviewer (kandidat sudah exclude assigned & reviewer abstrak) -->
+              <!-- Form tambah reviewer -->
               <form method="post" action="<?= site_url('admin/fullpaper/assign/'.(int)($submission['id'] ?? 0)) ?>" class="row g-2">
                 <?= csrf_field() ?>
                 <div class="col-12">
                   <label class="form-label">Tambah Reviewer</label>
-                  <select name="reviewer_id" class="form-select" <?= count($assigned) >= $maxReviewer ? 'disabled' : '' ?> required>
-                    <?php if (count($assigned) >= $maxReviewer): ?>
+                  <select name="reviewer_id" class="form-select" <?= $assignedCount >= $maxReviewer ? 'disabled' : '' ?> required>
+                    <?php if ($assignedCount >= $maxReviewer): ?>
                       <option value="">Batas maksimum reviewer tercapai</option>
                     <?php else: ?>
                       <option value="">-- pilih --</option>
@@ -312,14 +339,14 @@ $rvStatMap = [
                           </option>
                         <?php endforeach; ?>
                       <?php else: ?>
-                        <option value="">Semua reviewer sudah ditugaskan / reviewer abstrak disembunyikan</option>
+                        <option value="">Semua reviewer sudah ditugaskan</option>
                       <?php endif; ?>
                     <?php endif; ?>
                   </select>
-                  <div class="form-text">Kandidat otomatis menyembunyikan reviewer yang sudah meninjau abstrak dan yang sudah ditugaskan di full paper.</div>
+                  <div class="form-text">Kandidat otomatis menyembunyikan reviewer yang sudah ditugaskan di full paper ini.</div>
                 </div>
                 <div class="col-12 d-grid">
-                  <button class="btn btn-ghost" <?= count($assigned) >= $maxReviewer ? 'disabled' : '' ?>>
+                  <button class="btn btn-primary" <?= $assignedCount >= $maxReviewer ? 'disabled' : '' ?>>
                     <i class="bi bi-person-plus me-1"></i>Tugaskan
                   </button>
                 </div>
@@ -328,7 +355,7 @@ $rvStatMap = [
             </div>
           </div>
 
-          <!-- Reviewer Abstrak (read-only, sebagai info & sekaligus dijadikan pengecualian kandidat) -->
+          <!-- Reviewer Abstrak (info) -->
           <div class="card shadow-soft card-glass-plain mb-3">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-people-fill"></i></span>
@@ -353,7 +380,7 @@ $rvStatMap = [
                   </table>
                 </div>
                 <div class="small text-muted mt-2">
-                  Reviewer di atas tidak akan muncul pada kandidat penugasan full paper.
+                  Daftar di atas hanya informasi. Anda boleh menugaskan reviewer yang sama di tahap full paper.
                 </div>
               <?php endif; ?>
             </div>
@@ -393,19 +420,24 @@ $rvStatMap = [
 <?= $this->include('partials/footer') ?>
 
 <style>
-/* ====== Unified Blue UI (match “abstrak”) ====== */
+/* ====== Selaraskan kanvas & token dg Index/Presenter ====== */
 :root{
+  --side-pad: clamp(1rem, 1.6vw, 1.6rem);
+  --container-max: 1680px;
+
   --blue-50:#eff6ff; --blue-200:#bfdbfe; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
 }
 .page-wrap-blue{ background:linear-gradient(180deg,var(--blue-50),#fff 40%); min-height:100vh; padding-top:72px; }
-.container-xxl{ max-width:1400px; }
+.container-xxl{ max-width:min(100%, var(--container-max)); padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; }
+
 .hero-blue{
   background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%)!important;
   color:#fff!important; border-radius:16px; border:1px solid rgba(255,255,255,.15);
   box-shadow:0 12px 28px rgba(30,64,175,.10);
 }
-.hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.45rem; }
+.hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.6rem; }
 .text-white-75{ color:rgba(255,255,255,.85)!important; }
+
 .card-glass-plain{ backdrop-filter:blur(6px); background:rgba(255,255,255,.94); border-radius:14px; border:1px solid rgba(30,64,175,.10); }
 .shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
 .bg-blue-soft{ background:var(--blue-200); color:var(--blue-900); border-radius:12px; padding:.35rem .55rem; font-weight:600; font-size:.82rem; }
@@ -416,43 +448,54 @@ $rvStatMap = [
 .table{ width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; }
 .table thead th{
   background-color:#f8fafc!important; border-bottom:1px solid #e5e7eb;
-  font-weight:600; color:var(--blue-900); font-size:.82rem; text-transform:uppercase; letter-spacing:.3px;
+  font-weight:700; color:var(--blue-900); font-size:.82rem; text-transform:uppercase; letter-spacing:.3px;
   padding:.55rem .5rem; white-space:nowrap;
 }
 .table tbody td{ padding:.55rem .5rem; vertical-align:middle; border-top:none; word-break:break-word; white-space:normal; }
-.line-clip-2{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 
-.btn{ border-radius:10px; font-weight:600; }
+.btn{ border-radius:12px; font-weight:700; }
 .btn-xs{ padding:.32rem .55rem; font-size:.8rem; line-height:1; border-radius:8px; }
 .btn-soft-dark{ background:#f1f5f9; color:#111827; border:1px solid #e2e8f0; transition:all .15s; }
 .btn-soft-dark:hover{ background:#111827; color:#fff; border-color:#111827; }
 .btn-ghost{ background:transparent; color:#334155; border:1px solid #cbd5e1; transition:all .15s; }
 .btn-ghost:hover{ background:#0f172a; color:#fff; border-color:#0f172a; }
+.btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
+
+.line-clip-2{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 
 /* PDF frame */
-.pdf-frame-wrap{ height:72vh; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; }
+.pdf-frame-wrap{ height:72vh; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; }
 .pdf-frame{ width:100%; height:100%; border:0; }
 
-/* Breadcrumb separator (tanpa garis bawaan navbar) */
+/* Breadcrumb */
 .breadcrumb .breadcrumb-item + .breadcrumb-item::before{ content: ">"; }
 
-/* ====== Fix “garis” di navbar (hilangkan border/shadow bawaan) ====== */
-.navbar, .app-navbar, header .navbar{
-  border-bottom: none !important;
-  box-shadow: none !important;
+/* Metrics (selaras halaman lain) */
+.metrics-wrap{
+  display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem;
 }
-.navbar .dropdown-menu{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
+.metric-pill{
+  border:1px solid rgba(30,64,175,.12);
+  background:linear-gradient(180deg,#fff,rgba(255,255,255,.96));
+  border-radius:12px; padding:.6rem .7rem;
+  display:flex; flex-direction:column; align-items:flex-start; justify-content:center; min-height:68px;
+}
+.metric-pill .label{ font-size:.8rem; color:#64748b; font-weight:700; }
+.metric-pill .value{ font-size:1.08rem; font-weight:800; color:var(--blue-900); line-height:1.2; }
+.metric-pill.warn .value{ color:#b45309; }     /* amber-700 */
+.metric-pill.success .value{ color:#065f46; }  /* emerald-900 */
 
-/* Responsive */
 @media (max-width: 768px){
+  .hero-title{ font-size:1.35rem; }
   .table thead th, .table tbody td{ padding:.48rem .42rem; font-size:.9rem; }
   .btn-xs{ padding:.3rem .5rem; font-size:.78rem; }
   .pdf-frame-wrap{ height:60vh; }
+  .metrics-wrap{ grid-template-columns:1fr 1fr; }
 }
 </style>
 
 <script>
-/* Preview anti-IDM: fetch → Blob → objectURL */
+/* Preview anti-IDM: fetch → Blob → objectURL (konsisten) */
 (function(){
   const iframe = document.getElementById('pdfFrame');
   const errBox = document.getElementById('pdfError');

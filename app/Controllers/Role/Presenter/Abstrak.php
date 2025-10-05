@@ -7,6 +7,8 @@ use App\Models\EventModel;
 use App\Models\EventRegistrationModel;
 use App\Models\AbstrakModel;
 use App\Models\KategoriAbstrakModel;
+use App\Models\ReviewModel;
+use App\Models\UserModel;
 
 class Abstrak extends BaseController
 {
@@ -14,6 +16,8 @@ class Abstrak extends BaseController
     protected EventRegistrationModel $regModel;
     protected AbstrakModel $abstrakModel;
     protected KategoriAbstrakModel $kategoriModel;
+    protected ReviewModel $reviewModel;
+    protected UserModel $userModel;
 
     public function __construct()
     {
@@ -21,6 +25,8 @@ class Abstrak extends BaseController
         $this->regModel      = new EventRegistrationModel();
         $this->abstrakModel  = new AbstrakModel();
         $this->kategoriModel = new KategoriAbstrakModel();
+        $this->reviewModel   = new ReviewModel();
+        $this->userModel     = new UserModel();
         helper(['date', 'text', 'filesystem']);
     }
 
@@ -138,80 +144,80 @@ class Abstrak extends BaseController
 
     /** ===== CREATE FORM ===== */
     public function create($eventId)
-{
-    $userId  = (int) session()->get('id_user');
-    $eventId = (int) $eventId;
+    {
+        $userId  = (int) session()->get('id_user');
+        $eventId = (int) $eventId;
 
-    $event = $this->eventModel->find($eventId);
-    if (!$event) {
-        return redirect()->to('/presenter/abstrak')
-            ->with('error','Event tidak ditemukan.')
-            ->with('swal', ['icon'=>'error','title'=>'Gagal','text'=>'Event tidak ditemukan.']);
-    }
+        $event = $this->eventModel->find($eventId);
+        if (!$event) {
+            return redirect()->to('/presenter/abstrak')
+                ->with('error','Event tidak ditemukan.')
+                ->with('swal', ['icon'=>'error','title'=>'Gagal','text'=>'Event tidak ditemukan.']);
+        }
 
-    $reg = $this->regModel->findUserReg($eventId, $userId);
-    if (!$reg) {
-        return redirect()->to('/presenter/abstrak')
-            ->with('error','Anda belum terdaftar pada event ini.')
-            ->with('swal', ['icon'=>'error','title'=>'Gagal','text'=>'Anda belum terdaftar pada event ini.']);
-    }
+        $reg = $this->regModel->findUserReg($eventId, $userId);
+        if (!$reg) {
+            return redirect()->to('/presenter/abstrak')
+                ->with('error','Anda belum terdaftar pada event ini.')
+                ->with('swal', ['icon'=>'error','title'=>'Gagal','text'=>'Anda belum terdaftar pada event ini.']);
+        }
 
-    if (!$this->isContributorCompleted($reg)) {
-        return redirect()->to('/presenter/kontributor/start/'.$eventId)
-            ->with('error','Lengkapi data kontributor (minimal afiliasi) sebelum upload abstrak.')
-            ->with('swal', ['icon'=>'warning','title'=>'Lengkapi Data','text'=>'Lengkapi data kontributor terlebih dahulu.']);
-    }
+        if (!$this->isContributorCompleted($reg)) {
+            return redirect()->to('/presenter/kontributor/start/'.$eventId)
+                ->with('error','Lengkapi data kontributor (minimal afiliasi) sebelum upload abstrak.')
+                ->with('swal', ['icon'=>'warning','title'=>'Lengkapi Data','text'=>'Lengkapi data kontributor terlebih dahulu.']);
+        }
 
-    if (!$this->eventModel->isAbstractSubmissionOpen($eventId)) {
-        return redirect()->to('/presenter/abstrak')
-            ->with('error','Pengumpulan abstrak telah ditutup.')
-            ->with('swal', ['icon'=>'info','title'=>'Ditutup','text'=>'Pengumpulan abstrak telah ditutup.']);
-    }
+        if (!$this->eventModel->isAbstractSubmissionOpen($eventId)) {
+            return redirect()->to('/presenter/abstrak')
+                ->with('error','Pengumpulan abstrak telah ditutup.')
+                ->with('swal', ['icon'=>'info','title'=>'Ditutup','text'=>'Pengumpulan abstrak telah ditutup.']);
+        }
 
-    // Ambil abstrak terakhir user pada event ini
-    $lastAbs = $this->abstrakModel->where('id_user',$userId)
-                ->where('event_id',$eventId)->orderBy('id_abstrak','DESC')->first();
+        // Ambil abstrak terakhir user pada event ini
+        $lastAbs = $this->abstrakModel->where('id_user',$userId)
+                    ->where('event_id',$eventId)->orderBy('id_abstrak','DESC')->first();
 
-    // Kunci form jika status aktif
-    $formLocked = false;
-    $showAlert  = false;
-    $lastUploadedId = 0;
+        // Kunci form jika status aktif
+        $formLocked = false;
+        $showAlert  = false;
+        $lastUploadedId = 0;
 
-    if ($lastAbs && in_array(strtolower((string)$lastAbs['status']), ['menunggu','sedang_direview','diterima'], true)) {
-        $formLocked     = true;
-        $showAlert      = true;                         // tampilkan alert “tunggu reviewer”
-        $lastUploadedId = (int)$lastAbs['id_abstrak'];  // untuk tombol Batalkan
-    } else {
-        // Cek flash “baru upload” supaya alert muncul tepat setelah store()
-        $flashShow = (bool) session()->getFlashdata('show_fp_cta');
-        $flashId   = (int) (session()->getFlashdata('just_uploaded_id') ?? 0);
-        if ($flashShow && $flashId > 0) {
-            $row = $this->abstrakModel->where('id_abstrak',$flashId)
-                    ->where('id_user',$userId)->where('event_id',$eventId)->first();
-            if ($row) {
-                $showAlert      = true;
-                $formLocked     = true;
-                $lastUploadedId = (int)$row['id_abstrak'];
-                $lastAbs        = $row;
+        if ($lastAbs && in_array(strtolower((string)$lastAbs['status']), ['menunggu','sedang_direview','diterima'], true)) {
+            $formLocked     = true;
+            $showAlert      = true;                         // tampilkan alert “tunggu reviewer”
+            $lastUploadedId = (int)$lastAbs['id_abstrak'];  // untuk tombol Batalkan
+        } else {
+            // Cek flash “baru upload” supaya alert muncul tepat setelah store()
+            $flashShow = (bool) session()->getFlashdata('show_fp_cta');
+            $flashId   = (int) (session()->getFlashdata('just_uploaded_id') ?? 0);
+            if ($flashShow && $flashId > 0) {
+                $row = $this->abstrakModel->where('id_abstrak',$flashId)
+                        ->where('id_user',$userId)->where('event_id',$eventId)->first();
+                if ($row) {
+                    $showAlert      = true;
+                    $formLocked     = true;
+                    $lastUploadedId = (int)$row['id_abstrak'];
+                    $lastAbs        = $row;
+                }
             }
         }
+
+        $kategoriList = $this->kategoriModel->orderBy('nama_kategori','ASC')->findAll();
+
+        return view('role/presenter/abstrak/create', [
+            'title'           => 'Kirim Abstrak',
+            'event'           => $event,
+            'eventId'         => $eventId,
+            'kategoriList'    => $kategoriList,
+            'lastAbs'         => $lastAbs,
+            'showFpCta'       => $showAlert,      // munculkan alert + tombol Next FP + Batalkan
+            'lastUploadedId'  => $lastUploadedId, // untuk Batalkan
+            'formLocked'      => $formLocked,     // VIEW akan disable form
+        ]);
     }
 
-    $kategoriList = $this->kategoriModel->orderBy('nama_kategori','ASC')->findAll();
-
-    return view('role/presenter/abstrak/create', [
-        'title'           => 'Kirim Abstrak',
-        'event'           => $event,
-        'eventId'         => $eventId,
-        'kategoriList'    => $kategoriList,
-        'lastAbs'         => $lastAbs,
-        'showFpCta'       => $showAlert,      // munculkan alert + tombol Next FP + Batalkan
-        'lastUploadedId'  => $lastUploadedId, // untuk Batalkan
-        'formLocked'      => $formLocked,     // VIEW akan disable form
-    ]);
-}
-
-    /** ===== STORE UPLOAD ===== */
+    /** ===== STORE UPLOAD ===== (sama persis dengan punyamu) */
     public function store()
     {
         $userId     = (int) session()->get('id_user');
@@ -314,8 +320,6 @@ class Abstrak extends BaseController
                 'icon'  => 'success',
                 'title' => 'Berhasil',
                 'text'  => 'Abstrak berhasil diunggah.',
-                // contoh opsi toast:
-                // 'toast' => true, 'position' => 'top-end', 'timer' => 3500
             ])
             ->with('show_fp_cta', true)
             ->with('just_uploaded_id', (int)$newId);
@@ -323,11 +327,6 @@ class Abstrak extends BaseController
 
     /**
      * ===== BATALKAN UPLOAD =====
-     * Syarat:
-     * - Hanya pemilik
-     * - Status 'menunggu'
-     * - Harus abstrak TERAKHIR pada event tsb.
-     * Aksi: hapus file (jika ada) + hapus record
      */
     public function cancel($idAbstrak)
     {
@@ -404,24 +403,117 @@ class Abstrak extends BaseController
                 ->with('swal', ['icon'=>'error','title'=>'Gagal','text'=>'Abstrak tidak ditemukan.']);
         }
 
-        $event = $this->eventModel->find((int)$row['event_id']);
+        $event  = $this->eventModel->find((int)$row['event_id']);
+        $status = strtolower((string)($row['status'] ?? 'menunggu'));
+        $badge  = $this->mapStatusMeta($status)['badge'] ?? 'secondary';
+
+        // ===== Ambil review (reviewer + komentar) dari ReviewModel
+        $reviews = $this->reviewModel->getReviewsForDisplay((int)$idAbstrak);
+
+        $reviewComments = [];
+        foreach ($reviews as $rv) {
+            if (!empty($rv['display_comment'])) {
+                $reviewComments[] = trim((string)$rv['display_comment']);
+            }
+        }
+        $reviewComments = array_values(array_unique(array_filter($reviewComments, fn($v)=>$v!=='')));
+
+        // Tentukan reviewer ditugaskan: prioritas yang pending, kalau tidak ada ambil review terbaru
+        $assigned = null;
+        foreach ($reviews as $rv) {
+            if (($rv['keputusan'] ?? '') === 'pending') { $assigned = $rv; break; }
+        }
+        if (!$assigned && !empty($reviews)) $assigned = $reviews[0];
+
+        $assignedReviewer = [
+            'name'  => $assigned['reviewer_name']  ?? null,
+            'email' => $assigned['reviewer_email'] ?? null,
+            'org'   => null, // kolom org tidak di-join di model; bisa ditambah nanti
+        ];
+
+        // ===== Kontributor mengikuti PATOKAN Kontributor (registrasi + presenter)
+        $contributors = $this->buildContributorsFromRegistration((int)$row['event_id'], $userId);
+
+        // Tombol aksi
+        $showReuploadAbstract = ($status === 'ditolak');
+        $showCancel           = ($status === 'menunggu');
 
         return view('role/presenter/abstrak/detail', [
-            'title' => 'Detail Abstrak',
-            'abs'   => $row,
-            'event' => $event,
+            'title'                => 'Detail Abstrak',
+            'abs'                  => $row,
+            'event'                => $event,
+            'status'               => $status,
+            'badge'                => $badge,
+            'showReuploadAbstract' => $showReuploadAbstract,
+            'showCancel'           => $showCancel,
+            'assignedReviewer'     => $assignedReviewer,
+            'reviewComments'       => $reviewComments,
+            'contributors'         => $contributors,
         ]);
     }
 
-    /** ===== DOWNLOAD ===== */
-    public function download($filename)
+    /**
+     * ====== Builder Kontributor (mengacu ke Controller Kontributor) ======
+     * - Presenter: ambil dari user/reg sebagai di Kontributor::start
+     * - Coauthors: dari reg.coauthors_json
+     */
+    private function buildContributorsFromRegistration(int $eventId, int $userId): array
     {
-        $path = WRITEPATH.'uploads/abstrak/'.$filename;
-        if (!is_file($path)) {
-            return redirect()->back()
-                ->with('error','File tidak ditemukan.')
-                ->with('swal', ['icon'=>'error','title'=>'Gagal','text'=>'File tidak ditemukan.']);
+        $out = [];
+
+        $reg  = $this->regModel->findUserReg($eventId, $userId);
+        $user = $this->userModel->find($userId);
+
+        // presenter email
+        $presenterEmail = trim((string)($user['email'] ?? ''));
+        if ($presenterEmail === '' && !empty($reg['email'])) $presenterEmail = trim((string)$reg['email']);
+
+        // presenter name (mengikuti Kontributor::start)
+        $presenterName =
+            trim((string)($user['nama_lengkap'] ?? '')) ?:
+            trim((string)($user['username']     ?? '')) ?:
+            trim((string)($reg['presenter_name'] ?? '')) ?:
+            trim((string)($reg['nama']          ?? ''));
+
+        if ($presenterName === '' && $presenterEmail !== '') {
+            $local = explode('@', $presenterEmail)[0] ?? '';
+            $local = str_replace(['.', '_', '-'], ' ', $local);
+            $presenterName = ucwords(preg_replace('/\s+/', ' ', trim($local)));
         }
-        return $this->response->download($path, null);
+
+        $afiliasi = (string)($reg['afiliasi'] ?? '');
+
+        // Tambahkan presenter dulu
+        if ($presenterName !== '' || $presenterEmail !== '' || $afiliasi !== '') {
+            $out[] = [
+                'name'        => $presenterName !== '' ? $presenterName : 'Presenter',
+                'email'       => $presenterEmail !== '' ? $presenterEmail : null,
+                'affiliation' => $afiliasi !== '' ? $afiliasi : null,
+                'presenter'   => true,
+                'role'        => 'Presenter',
+            ];
+        }
+
+        // Coauthors dari JSON
+        $coauthors = [];
+        if (!empty($reg['coauthors_json'])) {
+            $decoded = json_decode((string)$reg['coauthors_json'], true);
+            if (is_array($decoded)) $coauthors = $decoded;
+        }
+        foreach ($coauthors as $co) {
+            $nm = trim((string)($co['nama'] ?? $co['name'] ?? ''));
+            $em = trim((string)($co['email'] ?? ''));
+            $af = trim((string)($co['afiliasi'] ?? $co['affiliation'] ?? ''));
+            if ($nm === '' && $em === '' && $af === '') continue;
+            $out[] = [
+                'name'        => $nm !== '' ? $nm : 'Ko-Author',
+                'email'       => $em !== '' ? $em : null,
+                'affiliation' => $af !== '' ? $af : null,
+                'presenter'   => false,
+                'role'        => 'Penulis',
+            ];
+        }
+
+        return $out;
     }
 }

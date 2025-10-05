@@ -173,7 +173,7 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
                 <div class="vstack gap-2">
                   <?php foreach ($reviews as $r):
                     $dKey = strtolower($r['keputusan'] ?? 'pending');
-                    $dMap = ['diterima'=>'success','ditolak'=>'danger','revisi'=>'warning','pending'=>'secondary'];
+                    $dMap = ['diterima'=>'success','ditolak'=>'danger','revisi'=>'warning','pending'=>'secondary','sedang_direview'=>'info'];
                     $dCls = $dMap[$dKey] ?? 'secondary';
                   ?>
                     <div class="p-3 border rounded-3 bg-white">
@@ -239,7 +239,7 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
                 <div class="vstack gap-2">
                   <?php foreach ($assigned as $a):
                     $k = strtolower($a['status'] ?? 'pending');
-                    $cls = ['pending'=>'secondary','diterima'=>'success','ditolak'=>'danger','revisi'=>'warning'][$k] ?? 'secondary';
+                    $cls = ['pending'=>'secondary','diterima'=>'success','ditolak'=>'danger','revisi'=>'warning','sedang_direview'=>'info'][$k] ?? 'secondary';
                   ?>
                   <div class="p-2 rounded border bg-white d-flex justify-content-between align-items-start">
                     <div>
@@ -307,8 +307,10 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
         <div class="mb-3">
           <label class="form-label">Status</label>
           <select class="form-select" id="statusSelect" name="status" required>
-            <option value="diterima" <?= $stKey==='diterima'?'selected':'' ?>>Diterima</option>
-            <option value="ditolak"  <?= $stKey==='ditolak'?'selected':''  ?>>Ditolak</option>
+            <option value="diterima"        <?= $stKey==='diterima'?'selected':''        ?>>Diterima</option>
+            <option value="ditolak"         <?= $stKey==='ditolak'?'selected':''         ?>>Ditolak</option>
+            <option value="revisi"          <?= $stKey==='revisi'?'selected':''          ?>>Revisi</option>
+            <option value="sedang_direview" <?= $stKey==='sedang_direview'?'selected':'' ?>>Sedang Ditinjau</option>
           </select>
         </div>
         <div class="mb-3">
@@ -328,10 +330,28 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
 
 <style>
 :root{
+  /* tambah 2 token ini untuk kontrol lebar & padding */
+  --side-pad: clamp(.75rem, 1.2vw, 1.25rem);
+  --container-max: 1680px;
+
+  /* existing color tokens */
   --blue-50:#eff6ff; --blue-200:#bfdbfe; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
 }
-.page-wrap-blue{ background:linear-gradient(180deg,var(--blue-50),#fff 40%); min-height:100vh; padding-top:72px; }
-.container-xxl{ max-width:1400px; }
+
+/* latar & navbar offset tetap */
+.page-wrap-blue{
+  background:linear-gradient(180deg,var(--blue-50),#fff 40%);
+  min-height:100vh; padding-top:72px;
+}
+
+/* <<< LEBAR KONTEN DIBESARKAN & padding samping dirampingkan */
+.container-xxl{
+  max-width: min(100%, var(--container-max));
+  padding-left: var(--side-pad) !important;
+  padding-right: var(--side-pad) !important;
+}
+
+/* hero & cards (tetap) */
 .hero-blue{
   background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%)!important;
   color:#fff!important; border-radius:16px; border:1px solid rgba(255,255,255,.15);
@@ -346,7 +366,7 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
 .text-blue-900{ color:var(--blue-900)!important; }
 .line-clip-2{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 
-/* Buttons – samakan ukuran global */
+/* Buttons – sama */
 .btn{ border-radius:10px; font-weight:600; letter-spacing:.25px; font-size:.95rem; padding:.55rem 1rem; }
 .btn-xs{ padding:.42rem .75rem; font-size:.85rem; line-height:1.2; border-radius:8px; }
 .btn-soft-dark{ background:#f1f5f9; color:#111827; border:1px solid #e2e8f0; }
@@ -354,13 +374,32 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
 .btn-soft-primary{ background:#e0ecff; color:#123; border:1px solid rgba(37,99,235,.25); }
 .btn-soft-primary:hover{ background:#2563eb; color:#fff; border-color:#2563eb; }
 
+/* Tabel */
+.table{ width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; }
+.table thead th{
+  background-color:#f8fafc!important; border-bottom:1px solid #e5e7eb;
+  font-weight:600; color:var(--blue-900); font-size:.82rem; text-transform:uppercase; letter-spacing:.3px;
+  padding:.55rem .5rem; white-space:nowrap;
+}
+.table tbody td{ padding:.55rem .5rem; vertical-align:middle; border-top:none; word-break:break-word; white-space:normal; }
+
+/* PDF frame */
 .pdf-frame-wrap{ height:72vh; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; }
 .pdf-frame{ width:100%; height:100%; border:0; }
+
+/* breadcrumb */
 .breadcrumb .breadcrumb-item + .breadcrumb-item::before{ content: ">"; }
+
+/* optional: sedikit besarkan jarak antar kolom di layar lebar */
+@media (min-width: 1200px){
+  .row.g-3{ --bs-gutter-x: 1.25rem; }
+}
+
 @media (max-width: 768px){
   .pdf-frame-wrap{ height:60vh; }
 }
 </style>
+
 
 <script>
   // CSRF
@@ -374,7 +413,7 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
   document.getElementById('statusForm')?.addEventListener('submit', function(e){
     e.preventDefault();
     const statusVal = document.getElementById('statusSelect').value;
-    if (!['diterima','ditolak'].includes(statusVal)) {
+    if (!['diterima','ditolak','revisi','sedang_direview','menunggu'].includes(statusVal)) {
       return Swal?.fire('Tidak valid','Pilih status yang tersedia','warning');
     }
     const data = new URLSearchParams();
@@ -405,7 +444,6 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
       headers:{'X-Requested-With':'XMLHttpRequest'}
     }).then(r=>r.json())
       .then(res=>{
-        // Support response: {success:true, data:[...]} atau array langsung
         const items = Array.isArray(res) ? res : (res.data || []);
         if (!items || items.length === 0) {
           throw new Error('Daftar reviewer kosong');
@@ -420,7 +458,7 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
         });
         new bootstrap.Modal(document.getElementById('assignModal')).show();
       })
-      .catch((err)=> Swal?.fire('Error','Gagal memuat reviewer','error'));
+      .catch(()=> Swal?.fire('Error','Gagal memuat reviewer','error'));
   }
 
   function deleteAbstrak(id){

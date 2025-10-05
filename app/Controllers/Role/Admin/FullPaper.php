@@ -141,12 +141,10 @@ class FullPaper extends BaseController
         return $abs && !empty($abs['id_kategori']) ? (int)$abs['id_kategori'] : null;
     }
 
-    /** Ambil ID reviewer yang sudah ditugaskan di ABSTRAK untuk user+event yang sama (fleksibel nama tabel). */
+    /** Ambil ID reviewer yang sudah ditugaskan di ABSTRAK (untuk informasi). */
     private function getAbstractAssignedReviewerIds(?int $userId, ?int $eventId): array
     {
         if (!$userId || !$eventId) return [];
-
-        // Cari id_abstrak terbaru user+event
         if (!$this->db->tableExists('abstrak')) return [];
         $abs = $this->db->table('abstrak')
             ->select('id_abstrak')
@@ -158,8 +156,6 @@ class FullPaper extends BaseController
         $idAbstrak = (int)$abs['id_abstrak'];
 
         $ids = [];
-
-        // 1) Tabel pivot umum
         foreach (['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak'] as $t) {
             if ($this->db->tableExists($t)) {
                 $cols = $this->db->getFieldNames($t);
@@ -171,8 +167,6 @@ class FullPaper extends BaseController
                 }
             }
         }
-
-        // 2) Tabel penilaian abstrak (kalau tidak ada pivot)
         foreach (['reviews','abstrak_reviews','review'] as $t) {
             if ($this->db->tableExists($t)) {
                 $cols = $this->db->getFieldNames($t);
@@ -184,7 +178,6 @@ class FullPaper extends BaseController
                 }
             }
         }
-
         return array_values(array_unique(array_filter($ids)));
     }
 
@@ -211,7 +204,6 @@ class FullPaper extends BaseController
             }, $list ?: []);
         }
 
-        // pivot generic
         $src = $this->resolveReviewerSource();
         if (!$src['table'] || !$src['id']) return [];
 
@@ -275,7 +267,6 @@ class FullPaper extends BaseController
                 ->get()->getResultArray();
         }
 
-        // fallback tanpa status
         return $this->db->table('fullpaper_reviewers fr')
             ->select("fr.id, fr.reviewer_id, fr.assigned_at, {$emailCol} AS email, {$nameCol} AS name, NULL::text AS status, NULL::timestamp AS status_at")
             ->join($src['table'], "{$src['table']}.{$src['id']} = fr.reviewer_id", 'left')
@@ -334,7 +325,7 @@ class FullPaper extends BaseController
             if (is_array($decoded)) $coauthors = $decoded;
         }
 
-        // history
+        // history (semua versi user+event sama)
         $history = [];
         if ($cols['event_id'] && !empty($submission[$cols['event_id']]) && $cols['user_id'] && !empty($submission[$cols['user_id']])) {
             $select = [$cols['pk']." AS id"];
@@ -349,33 +340,32 @@ class FullPaper extends BaseController
                 ->get()->getResultArray();
         }
 
-        // reviewer candidates & assigned & reviews
+        // kandidat & assigned
         $kategoriId = $this->resolveCategoryId($submission, $cols);
         $assigned   = $this->getAssignedReviewers($id);
         $assignedIds= array_map(fn($r)=>(int)$r['reviewer_id'], $assigned);
 
-        // exclude juga reviewer yang sudah di ABSTRAK
-        $absAssignedIds = $this->getAbstractAssignedReviewerIds(
+        // Reviewer abstrak sebagai informasi (TIDAK di-exclude dari kandidat)
+        $absAssignedIds   = $this->getAbstractAssignedReviewerIds(
             $cols['user_id'] ? (int)$submission[$cols['user_id']] : null,
             $cols['event_id']? (int)$submission[$cols['event_id']] : null
         );
-
-        $exclude = array_values(array_unique(array_merge($assignedIds, $absAssignedIds)));
-        $reviewers = $this->getReviewersByCategory($kategoriId, $exclude);
-        $fpReviews = $this->getFullpaperReviews($id);
-
-        // kirim juga list reviewer abstrak untuk ditampilkan
         $abstractReviewers = $absAssignedIds ? $this->getReviewerIdentities($absAssignedIds) : [];
+
+        // Kandidat hanya exclude yang sudah assigned di full paper ini
+        $reviewers = $this->getReviewersByCategory($kategoriId, $assignedIds);
+
+        $fpReviews = $this->getFullpaperReviews($id);
 
         return view('role/admin/fullpaper/detail', [
             'submission'         => $submission,
             'author'             => $author,
             'coauthors'          => $coauthors,
             'history'            => $history,
-            'reviewers'          => $reviewers,           // kandidat (sudah difilter)
-            'assignedReviewers'  => $assigned,            // yg sudah ditugaskan full paper
-            'abstractReviewers'  => $abstractReviewers,   // hanya tampil (read-only)
-            'fpReviews'          => $fpReviews,           // riwayat penilaian
+            'reviewers'          => $reviewers,
+            'assignedReviewers'  => $assigned,
+            'abstractReviewers'  => $abstractReviewers,
+            'fpReviews'          => $fpReviews,
             'title'              => 'Detail Full Paper',
             'maxReviewer'        => 3,
         ]);
@@ -404,21 +394,11 @@ class FullPaper extends BaseController
     public function reviewersByCategory($kategoriId)
     {
         try {
-            // optional: bisa juga kirim ?submission_id=xx untuk exclude dinamis
             $submissionId = (int)($this->request->getGet('submission_id') ?? 0);
             $exclude = [];
             if ($submissionId) {
-                $sub  = $this->findSubmission($submissionId);
-                if ($sub) {
-                    $table = $this->tableName(); $cols = $this->resolveColumns($table);
-                    $assigned = $this->getAssignedReviewers($submissionId);
-                    $assignedIds = array_map(fn($r)=>(int)$r['reviewer_id'], $assigned);
-                    $absAssigned = $this->getAbstractAssignedReviewerIds(
-                        $cols['user_id'] ? (int)$sub[$cols['user_id']] : null,
-                        $cols['event_id']? (int)$sub[$cols['event_id']] : null
-                    );
-                    $exclude = array_values(array_unique(array_merge($assignedIds,$absAssigned)));
-                }
+                $assigned = $this->getAssignedReviewers($submissionId);
+                $exclude  = array_map(fn($r)=>(int)$r['reviewer_id'], $assigned);
             }
             $list = $this->getReviewersByCategory((int)$kategoriId, $exclude);
             return $this->response->setJSON(['success'=>true, 'data'=>$list]);
@@ -458,17 +438,8 @@ class FullPaper extends BaseController
                 return redirect()->back()->with('error','Reviewer ini sudah ditugaskan pada full paper.');
             }
 
-            // BLOCK: reviewer yang sudah ditugaskan pada abstrak (user+event yang sama)
-            $table = $this->tableName(); $cols = $this->resolveColumns($table);
-            $absAssigned = $this->getAbstractAssignedReviewerIds(
-                $cols['user_id'] ? (int)$sub[$cols['user_id']] : null,
-                $cols['event_id']? (int)$sub[$cols['event_id']] : null
-            );
-            if (in_array($reviewerId, $absAssigned, true)) {
-                return redirect()->back()->with('error','Reviewer ini sudah ditugaskan pada tahap abstrak.');
-            }
-
             // eligible kategori (jika modul tersedia)
+            $table = $this->tableName(); $cols = $this->resolveColumns($table);
             $kategoriId = $this->resolveCategoryId($sub, $cols);
             if ($kategoriId && $this->revKatModel && method_exists($this->revKatModel,'isReviewerEligible')) {
                 if (!$this->revKatModel->isReviewerEligible($reviewerId, $kategoriId)) {

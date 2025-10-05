@@ -145,38 +145,58 @@ $routes->group('admin', [
     $routes->post('users/update/(:num)', 'User::update/$1');
     $routes->get ('users/delete/(:num)', 'User::delete/$1');
 
-    // ==== ALUR BARU: SEMUA LIST VIA KELOLA PAPER ====
-    // Index Abstrak & Fullpaper diarahkan ke KelolaPaper::events
-    $routes->get('abstrak',   'KelolaPaper::events');   // /admin/abstrak -> Kelola Paper
-    $routes->get('fullpaper', 'KelolaPaper::events');   // /admin/fullpaper -> Kelola Paper
+    // ===== ALUR BARU: SEMUA LIST VIA KELOLA PAPER =====
+    $routes->get('abstrak',   'KelolaPaper::index'); // redirect listing ke KelolaPaper
+    $routes->get('fullpaper', 'KelolaPaper::index');
 
-    // ==== KELOLA PAPER (ADMIN) ====
+    // ===== KELOLA PAPER (INDEX/DETAIL) =====
     $routes->group('kelola-paper', static function ($routes) {
-        $routes->get('',                  'KelolaPaper::events');           // /admin/kelola-paper
-        $routes->get('event/(:num)',      'KelolaPaper::presenters/$1');    // /admin/kelola-paper/event/{eventId}
-        $routes->get('abstract/(:num)',   'KelolaPaper::viewAbstract/$1');  // /admin/kelola-paper/abstract/{id_abstrak}
-        $routes->get('full/(:num)/(:num)','KelolaPaper::viewFull/$1/$2');   // /admin/kelola-paper/full/{id_user}/{event_id}
+        $routes->get('',               'KelolaPaper::index');          // /admin/kelola-paper
+        $routes->get('detail/(:num)',  'KelolaPaper::detail/$1');      // /admin/kelola-paper/detail/{eventId}
+        $routes->get('abstract/(:num)','KelolaPaper::viewAbstract/$1');// lihat 1 abstrak
+        $routes->get('full/(:num)/(:num)','KelolaPaper::viewFull/$1/$2');// lihat 1 full paper
+        // compat rute lama:
+        $routes->get('event/(:num)',   'KelolaPaper::detail/$1');
     });
 
-    // Abstrak (DETAIL & AKSI tetap di controller Abstrak)
+    // ===== ABSTRAK (DETAIL & AKSI) =====
     $routes->get ('abstrak/detail/(:num)',         'Abstrak::detail/$1');
     $routes->post('abstrak/assign/(:num)',         'Abstrak::assign/$1');
     $routes->post('abstrak/update-status',         'Abstrak::updateStatus');
     $routes->post('abstrak/bulk-update-status',    'Abstrak::bulkUpdateStatus');
     $routes->match(['get','post'], 'abstrak/delete/(:num)', 'Abstrak::delete/$1');
     $routes->get ('abstrak/download/(:num)',       'Abstrak::downloadFile/$1');
-    // >>> Tambahan untuk preview di iframe (anti-404)
-    $routes->get ('abstrak/view/(:num)',           'Abstrak::view/$1');   // preview inline application/pdf
-    $routes->get ('abstrak/blob/(:num)',           'Abstrak::blob/$1');   // endpoint blob (anti-IDM)
-    // <<<
+    $routes->get ('abstrak/view/(:num)',           'Abstrak::view/$1'); // preview iframe
+    $routes->get ('abstrak/blob/(:num)',           'Abstrak::blob/$1'); // preview via fetch blob
     $routes->get ('abstrak/export',                'Abstrak::export');
     $routes->get ('abstrak/statistics',            'Abstrak::statistics');
 
-    // Reviewer helper alias (AJAX filter by category)
+    // Reviewer helper (AJAX)
     $routes->get ('reviewer/by-category/(:num)',           'Abstrak::getReviewersByCategory/$1');
     $routes->get ('abstrak/reviewers-by-category/(:num)',  'Abstrak::getReviewersByCategory/$1');
 
-    // Reviewer
+    // ===== FULL PAPER (DETAIL & AKSI) — DIPINDAH KE SINI (DEKAT ABSTRAK) =====
+    $routes->group('fullpaper', static function ($routes) {
+        $routes->get ('detail/(:num)',     'FullPaper::detail/$1');
+        $routes->post('set-status/(:num)', 'FullPaper::setStatus/$1'); // UPLOADED/REVISION/ACCEPTED/REJECTED
+        $routes->post('assign/(:num)',     'FullPaper::assign/$1');    // assign reviewer (>=3)
+
+        // File handling
+        $routes->get ('view/(:num)',       'FullPaper::view/$1');      // preview inline
+        $routes->get ('blob/(:num)',       'FullPaper::blob/$1');      // preview via blob
+        $routes->get ('download/(:num)',   'FullPaper::download/$1');  // download attachment
+        $routes->post('delete/(:num)',     'FullPaper::delete/$1');    // (opsional) hapus file
+    });
+
+    // ===== KATEGORI ABSTRAK =====
+    $routes->get   ('kategori',                        'Kategori::index');
+    $routes->post  ('kategori/store',                  'Kategori::store');
+    $routes->get   ('kategori/show/(:num)',            'Kategori::show/$1');
+    $routes->post  ('kategori/update/(:num)',          'Kategori::update/$1');
+    // pakai match supaya aman bila form tidak spoof DELETE
+    $routes->match(['post','delete'], 'kategori/delete/(:num)', 'Kategori::delete/$1');
+
+    // ===== REVIEWER =====
     $routes->get ('reviewer',                      'Reviewer::index');
     $routes->post('reviewer/store',                'Reviewer::store');
     $routes->get ('reviewer/detail/(:num)',        'Reviewer::detail/$1');
@@ -187,12 +207,12 @@ $routes->group('admin', [
     $routes->get ('reviewer/export',               'Reviewer::export');
     $routes->get ('reviewer/statistics',           'Reviewer::getStatistics');
 
-    // Event - ENHANCED WITH FORCE DELETE
+    // ===== EVENT =====
     $routes->get ('event',                             'Event::index');
     $routes->post('event/store',                       'Event::store');
     $routes->get ('event/edit/(:num)',                 'Event::edit/$1');
     $routes->post('event/update/(:num)',               'Event::update/$1');
-    $routes->post('event/delete/(:num)',               'Event::delete/$1'); // FORCE DELETE
+    $routes->post('event/delete/(:num)',               'Event::delete/$1');
     $routes->get ('event/detail/(:num)',               'Event::detail/$1');
     $routes->post('event/toggle-registration/(:num)',  'Event::toggleRegistration/$1');
     $routes->post('event/toggle-abstract-submission/(:num)','Event::toggleAbstractSubmission/$1');
@@ -201,7 +221,7 @@ $routes->group('admin', [
     $routes->get ('event/export',                      'Event::export');
     $routes->get ('event/statistics',                  'Event::statistics');
 
-    // ENHANCED: Pembayaran (Midtrans)
+    // ===== PEMBAYARAN =====
     $routes->get ('pembayaran',                        'Pembayaran::index');
     $routes->post('pembayaran/verifikasi/(:num)',      'Pembayaran::verifikasi/$1');
     $routes->get ('pembayaran/detail/(:num)',          'Pembayaran::detail/$1');
@@ -211,30 +231,26 @@ $routes->group('admin', [
     $routes->get ('pembayaran/export',                 'Pembayaran::export');
     $routes->get ('pembayaran/statistik',              'Pembayaran::statistik');
     $routes->post('pembayaran/delete/(:num)',          'Pembayaran::delete/$1');
-
-    // ENHANCED: Midtrans admin functions
     $routes->get ('pembayaran/midtrans',               'Pembayaran::midtransPayments');
     $routes->post('pembayaran/sync-midtrans/(:num)',   'Pembayaran::syncMidtransStatus/$1');
     $routes->get ('pembayaran/midtrans-stats',         'Pembayaran::midtransStatistics');
     $routes->post('pembayaran/force-verify/(:num)',    'Pembayaran::forceVerifyPayment/$1');
-
     if (ENVIRONMENT === 'development') {
         $routes->get('pembayaran/debug-bukti/(:num)',  'Pembayaran::debugBukti/$1');
         $routes->get('pembayaran/check-bukti/(:num)',  'Pembayaran::checkBukti/$1');
     }
 
-    // Absensi (admin)
+    // ===== ABSENSI =====
     $routes->get ('absensi',                           'Absensi::index');
     $routes->post('absensi/generateMultipleQRCodes',   'Absensi::generateMultipleQRCodes');
     $routes->get ('absensi/getEventStatus',            'Absensi::getEventStatus');
     $routes->post('absensi/markAttendance',            'Absensi::markAttendance');
     $routes->post('absensi/removeAttendance',          'Absensi::removeAttendance');
     $routes->post('absensi/bulkMarkAttendance',        'Absensi::bulkMarkAttendance');
-    $routes->get ('absensi/getEligibleUsers',          'Absensi::getEligibleUsers');
     $routes->get ('absensi/export',                    'Absensi::export');
     $routes->get ('absensi/liveStats',                 'Absensi::liveStats');
 
-    // Dokumen
+    // ===== DOKUMEN =====
     $routes->get ('dokumen',                           'Dokumen::index');
     $routes->post('dokumen/uploadLoa',                 'Dokumen::uploadLoa');
     $routes->post('dokumen/uploadSertifikat',          'Dokumen::uploadSertifikat');
@@ -245,10 +261,10 @@ $routes->group('admin', [
     $routes->get ('dokumen/getVerifiedPresenters/(:num)','Dokumen::getVerifiedPresenters/$1');
     $routes->get ('dokumen/getAttendees/(:num)',       'Dokumen::getAttendees/$1');
     $routes->get ('dokumen/search-eligible-loa',       'Dokumen::searchEligibleLoa');
-    $routes->get('dokumen/users-for-loa/(:num)', 'Dokumen::getUsersForLoa/$1');
-    $routes->get('dokumen/users-for-certificate/(:num)', 'Dokumen::getUsersForCertificate/$1');
+    $routes->get ('dokumen/users-for-loa/(:num)',            'Dokumen::getUsersForLoa/$1');
+    $routes->get ('dokumen/users-for-certificate/(:num)',    'Dokumen::getUsersForCertificate/$1');
 
-    // Voucher
+    // ===== VOUCHER =====
     $routes->get ('voucher',                           'Voucher::index');
     $routes->post('voucher/store',                     'Voucher::store');
     $routes->get ('voucher/edit/(:num)',               'Voucher::edit/$1');
@@ -263,33 +279,13 @@ $routes->group('admin', [
     $routes->get ('voucher/usage/(:num)',              'Voucher::usageHistory/$1');
     $routes->post('voucher/generate-bulk',             'Voucher::generateBulk');
 
-    // Laporan
+    // ===== LAPORAN =====
     $routes->get('laporan',                            'Laporan::index');
     $routes->get('laporan/export',                     'Laporan::export');
     $routes->get('laporan/chart-data',                 'Laporan::getChartData');
 
-    // Kategori abstrak
-    $routes->get   ('kategori',                        'Kategori::index');
-    $routes->post  ('kategori/store',                  'Kategori::store');
-    $routes->get   ('kategori/show/(:num)',            'Kategori::show/$1');
-    $routes->post  ('kategori/update/(:num)',          'Kategori::update/$1');
-    $routes->delete('kategori/delete/(:num)',          'Kategori::delete/$1');
-
-    // ==== FULL PAPER (DETAIL & AKSI) ====
-    $routes->group('fullpaper', static function ($routes) {
-        // Detail & aksi status
-        $routes->get ('detail/(:num)',     'FullPaper::detail/$1');
-        $routes->post('set-status/(:num)', 'FullPaper::setStatus/$1'); // UPLOADED/REVISION/ACCEPTED/REJECTED
-        $routes->post('assign/(:num)',     'FullPaper::assign/$1');    // assign reviewer
-
-        // File handling
-        $routes->get ('view/(:num)',       'FullPaper::view/$1');      // preview inline (application/pdf)
-        $routes->get ('blob/(:num)',       'FullPaper::blob/$1');      // preview anti-IDM via fetch() + Blob
-        $routes->get ('download/(:num)',   'FullPaper::download/$1');  // paksa unduh (attachment)
-        $routes->post('delete/(:num)',     'FullPaper::delete/$1');    // (opsional) hapus file (POST)
-    });
+    
 });
-
 // ---------------------------------------------------
 // Presenter Routes (rapih & konsisten)
 // ---------------------------------------------------
