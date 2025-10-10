@@ -1,6 +1,6 @@
 <?php
-$title        = $title ?? 'Tugas Full Paper';
-$rows         = $rows  ?? [];
+$title        = $title ?? 'Tugas Abstrak (Belum Direview)';
+$abstrak      = $abstrak ?? [];
 $eventOptions = $eventOptions ?? [];
 
 $formatDate = fn($d) => $d ? date('d M Y', strtotime($d)) : '-';
@@ -11,7 +11,7 @@ $badgeRev   = fn($s) => match(strtolower((string)$s)) {
   default    => 'secondary'
 };
 
-$isEmpty = empty($rows);
+$isEmpty = empty($abstrak);
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_reviewer') ?>
@@ -60,7 +60,7 @@ $isEmpty = empty($rows);
         <div class="card card-glass border-0">
           <div class="card-body text-center py-5">
             <div class="empty-icon mb-3"><i class="bi bi-inbox"></i></div>
-            <div class="empty-title mb-1">Belum ada tugas full paper untuk direview</div>
+            <div class="empty-title mb-1">Belum ada tugas untuk direview</div>
             <div class="empty-subtitle mb-4">Tugas yang sudah Anda review dipindah ke halaman Riwayat.</div>
             <div class="d-flex justify-content-center">
               <a href="<?= site_url('reviewer/riwayat') ?>" class="btn btn-primary">
@@ -70,13 +70,13 @@ $isEmpty = empty($rows);
           </div>
         </div>
       <?php else: ?>
-        <!-- LIST (tabel sederhana, tombol 'Tinjau') -->
+        <!-- LIST -->
         <div class="card card-glass border-0">
           <div class="table-responsive">
-            <table class="table align-middle mb-0" id="reviewTable">
+            <table class="table align-middle mb-0">
               <thead class="table-light">
                 <tr>
-                  <th class="fw-semibold" style="width:44%;">Full Paper</th>
+                  <th class="fw-semibold" style="width:44%;">Abstrak</th>
                   <th class="fw-semibold d-none d-md-table-cell" style="width:18%;">Event</th>
                   <th class="fw-semibold d-none d-lg-table-cell" style="width:18%;">Penulis</th>
                   <th class="fw-semibold d-none d-xl-table-cell" style="width:14%;">Kategori</th>
@@ -85,17 +85,17 @@ $isEmpty = empty($rows);
                 </tr>
               </thead>
               <tbody id="listBody">
-                <?php foreach ($rows as $r):
+                <?php foreach ($abstrak as $r):
                   $rev = strtolower((string)($r['review_status'] ?? 'menunggu'));
-                  $txt = strtolower(trim(($r['title'] ?? '').' '.($r['nama_lengkap'] ?? '').' '.($r['nama_kategori'] ?? '')));
-                  $id  = (int)($r['id'] ?? 0);
+                  $txt = strtolower(trim(($r['judul'] ?? '').' '.($r['nama_lengkap'] ?? '').' '.($r['nama_kategori'] ?? '')));
+                  $id  = (int)($r['id_abstrak'] ?? 0);
                 ?>
                   <tr class="review-row"
                       data-search="<?= esc($txt) ?>"
                       data-event="<?= (int)($r['event_id'] ?? 0) ?>"
                       data-status="<?= esc($rev) ?>">
                     <td>
-                      <div class="fw-semibold text-dark mb-1"><?= esc($r['title'] ?? '—') ?></div>
+                      <div class="fw-semibold text-dark mb-1"><?= esc($r['judul'] ?? '—') ?></div>
                       <div class="small text-muted d-flex flex-wrap gap-2">
                         <span><i class="bi bi-calendar2-plus me-1"></i><?= $formatDate($r['tanggal_upload'] ?? null) ?></span>
                         <span class="d-md-none">•</span>
@@ -115,7 +115,7 @@ $isEmpty = empty($rows);
                       <span class="badge bg-<?= $badgeRev($rev) ?> px-3 py-2"><?= ucfirst($rev) ?></span>
                     </td>
                     <td class="text-end">
-                      <a href="<?= site_url('reviewer/fullpaper/'.$id) ?>" class="btn btn-primary btn-sm">
+                      <a href="<?= site_url('reviewer/abstrak/'.$id) ?>" class="btn btn-primary btn-sm">
                         <i class="bi bi-eye me-1"></i>Tinjau
                       </a>
                     </td>
@@ -154,7 +154,7 @@ body{
   font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* Jika kamu pakai header-section, teks header putih */
+/* Jika kamu pakai header-section, judulnya putih */
 .header-section{ background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%); color:#fff; }
 .welcome-text{ color:#fff; }
 
@@ -204,12 +204,11 @@ body{
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  const searchInput  = document.getElementById('searchInput');
-  const eventFilter  = document.getElementById('eventFilter');
-  const statusFilter = document.getElementById('statusFilter');
-  const body         = document.getElementById('listBody');
+  const q  = document.getElementById('searchInput');
+  const ef = document.getElementById('eventFilter');
+  const sf = document.getElementById('statusFilter');
+  const body = document.getElementById('listBody');
 
-  // Jika data dari server kosong, tidak ada tabel/filter JS
   if (!body) return;
 
   const rows = Array.from(body.querySelectorAll('.review-row'));
@@ -226,17 +225,17 @@ document.addEventListener('DOMContentLoaded', function () {
     return empty;
   }
 
-  function applyFilters(){
-    const q  = (searchInput?.value || '').toLowerCase().trim();
-    const ev = eventFilter?.value || '';
-    const st = (statusFilter?.value || '').toLowerCase();
+  function apply(){
+    const qq = (q?.value || '').toLowerCase().trim();
+    const ev = ef?.value || '';
+    const st = (sf?.value || '').toLowerCase();
 
     let shown = 0;
-    rows.forEach(tr => {
+    rows.forEach(tr=>{
       const s = tr.dataset.search || '';
       const e = tr.dataset.event  || '';
       const t = tr.dataset.status || '';
-      const ok = (!q || s.includes(q)) && (!ev || ev===e) && (!st || st===t);
+      const ok = (!qq || s.includes(qq)) && (!ev || ev===e) && (!st || st===t);
       tr.style.display = ok ? '' : 'none';
       if (ok) shown++;
     });
@@ -249,8 +248,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  [searchInput, eventFilter, statusFilter].forEach(el=> el?.addEventListener('input', applyFilters));
-  [eventFilter, statusFilter].forEach(el=> el?.addEventListener('change', applyFilters));
-  applyFilters();
+  [q,ef,sf].forEach(el=> el?.addEventListener('input', apply));
+  [ef,sf].forEach(el=> el?.addEventListener('change', apply));
+
+  apply();
 });
 </script>

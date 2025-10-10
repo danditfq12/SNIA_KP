@@ -10,7 +10,6 @@ $formatLabel = function($f){
   return $f === 'both' ? 'Hybrid' : ucfirst($f ?: '-');
 };
 ?>
-
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
 <?= $this->include('partials/alerts') ?>
@@ -19,7 +18,7 @@ $formatLabel = function($f){
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- ===== Search Bar ===== -->
+      <!-- Search -->
       <div class="card card-glass-plain mb-4 card-ring">
         <div class="card-body py-3">
           <div class="d-flex align-items-center gap-2">
@@ -37,7 +36,7 @@ $formatLabel = function($f){
         </div>
       </div>
 
-      <!-- Abstrak perlu upload -->
+      <!-- Perlu Upload -->
       <div class="card shadow-soft card-glass-plain mb-4 section-card">
         <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
           <div class="d-flex align-items-center gap-2">
@@ -54,16 +53,27 @@ $formatLabel = function($f){
           <?php else: ?>
             <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3 row-cols-xxl-4 js-card-grid">
               <?php foreach ($uploadEvents as $row): ?>
+              <?php
+                $labelLower  = strtolower($row['status_label'] ?? '');
+                $isRevisi   = ($labelLower === 'revisi');
+                $isDitolak  = ($labelLower === 'ditolak');
+                $hasLast    = !empty($row['last_abs_id']);
+                $primaryUrl = $isRevisi && $hasLast
+                  ? site_url('presenter/abstrak/detail/'.(int)$row['last_abs_id']).'#section-revisi'  // ⬅️ CHANGED
+                  : site_url('presenter/abstrak/create/'.(int)$row['event_id']);
+                $primaryTxt = $isRevisi ? 'Kirim Revisi' : ($isDitolak ? 'Upload Ulang' : 'Upload Abstrak'); // ⬅️ CHANGED
+              ?>
               <div class="col">
                 <div class="event-card h-100 p-3 js-card card-accent"
                      data-search="<?= esc(strtolower(
                        ($row['title'] ?? '') . ' ' .
                        ($row['format'] ?? '') . ' ' .
                        ($fmtDate($row['event_date'] ?? null)) . ' ' .
-                       ($fmtDT($row['abstract_deadline'] ?? null))
+                       ($fmtDT($row['abstract_deadline'] ?? null)) . ' ' .
+                       ($row['status_label'] ?? '')
                      )) ?>">
 
-                  <!-- ==== MAIN ==== -->
+                  <!-- Main -->
                   <div class="event-main">
                     <div class="d-flex align-items-start justify-content-between mb-2">
                       <h6 class="mb-0 text-blue-900"><?= esc($row['title'] ?? '-') ?></h6>
@@ -74,9 +84,6 @@ $formatLabel = function($f){
 
                     <div class="chip-row mb-2">
                       <span class="chip"><i class="bi bi-laptop me-1"></i><?= esc($formatLabel($row['format'] ?? '')) ?></span>
-                      <?php if(!empty($row['status_label'])): ?>
-                        <span class="chip alt"><i class="bi bi-info-circle me-1"></i><?= esc($row['status_label']) ?></span>
-                      <?php endif; ?>
                     </div>
 
                     <ul class="meta-list mb-3">
@@ -89,14 +96,14 @@ $formatLabel = function($f){
                     <?php endif; ?>
                   </div>
 
-                  <!-- ==== FOOTER ==== -->
+                  <!-- Footer -->
                   <div class="event-footer d-flex gap-2 pt-2 border-top subtle-divider">
-                    <a class="btn btn-primary flex-fill" href="<?= site_url('presenter/abstrak/create/'.(int)$row['event_id']) ?>">
-                      <i class="bi bi-upload"></i> Upload Abstrak
+                    <a class="btn btn-primary flex-fill" href="<?= $primaryUrl ?>">
+                      <i class="bi bi-upload"></i> <?= esc($primaryTxt) ?>
                     </a>
-                    <?php if (!empty($row['last_abs_id'])): ?>
+                    <?php if ($hasLast): ?>
                       <a class="btn btn-outline-secondary flex-fill" href="<?= site_url('presenter/abstrak/detail/'.(int)$row['last_abs_id']) ?>">
-                        <i class="bi bi-eye"></i> Lihat Terakhir
+                        <i class="bi bi-eye"></i> Detail
                       </a>
                     <?php endif; ?>
                   </div>
@@ -109,7 +116,7 @@ $formatLabel = function($f){
         </div>
       </div>
 
-      <!-- Riwayat Abstrak -->
+      <!-- Riwayat -->
       <div class="card shadow-soft card-glass-plain mb-4 section-card">
         <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
           <div class="d-flex align-items-center gap-2">
@@ -137,12 +144,11 @@ $formatLabel = function($f){
                        ($h['status_label'] ?? '')
                      )) ?>">
 
-                  <!-- ==== MAIN ==== -->
                   <div class="event-main">
                     <div class="d-flex align-items-start justify-content-between mb-2">
-                      <h6 class="mb-0 text-blue-900"><?= esc($h['judul']) ?></h6>
+                      <h6 class="mb-0 text-blue-900"><?= esc($h['judul'] ?? '-') ?></h6>
                       <span class="badge bg-<?= esc($h['status_badge']) ?>-subtle text-<?= esc($h['status_badge']) ?>">
-                        <?= esc($h['status_label']) ?>
+                        <?= esc($h['status_label'] ?? '-') ?>
                       </span>
                     </div>
 
@@ -159,7 +165,6 @@ $formatLabel = function($f){
                     </ul>
 
                     <?php
-                      // Tampilkan hint KECUALI bila status = 'diterima' (permintaanmu)
                       if (!empty($h['status_hint']) && ($h['status'] ?? '') !== 'diterima'):
                         $cls = (($h['status'] ?? '') === 'ditolak') ? 'text-danger' : 'text-muted';
                     ?>
@@ -167,7 +172,6 @@ $formatLabel = function($f){
                     <?php endif; ?>
                   </div>
 
-                  <!-- ==== FOOTER ==== -->
                   <div class="event-footer mt-2 d-grid gap-2 pt-2 border-top subtle-divider">
                     <a class="btn btn-outline-primary btn-sm" href="<?= site_url('presenter/abstrak/detail/'.(int)$h['id_abstrak']) ?>">
                       <i class="bi bi-eye"></i> Detail
@@ -175,6 +179,10 @@ $formatLabel = function($f){
                     <?php if (($h['status'] ?? '') === 'ditolak'): ?>
                       <a class="btn btn-danger btn-sm" href="<?= site_url('presenter/abstrak/create/'.(int)$h['event_id']) ?>">
                         <i class="bi bi-upload"></i> Upload Ulang Abstrak
+                      </a>
+                    <?php elseif (($h['status'] ?? '') === 'revisi'): ?> <!-- ⬅️ NEW -->
+                      <a class="btn btn-primary btn-sm" href="<?= site_url('presenter/abstrak/detail/'.(int)$h['id_abstrak']) ?>#section-revisi">
+                        <i class="bi bi-arrow-repeat"></i> Kirim Revisi
                       </a>
                     <?php endif; ?>
                   </div>
@@ -205,7 +213,6 @@ $formatLabel = function($f){
 
 body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.5px; line-height:1.6; }
 
-/* latar halus */
 .page-wrap-blue{
   min-height:100vh; padding-top:72px; position:relative;
   background:
@@ -222,17 +229,14 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
   background-size: 40px 40px, 40px 40px;
 }
 
-/* container lebar */
 .container-xxl{
   max-width:min(100%, 1560px);
   padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important;
   margin-left:auto; margin-right:auto;
 }
 
-/* grid */
 .row.g-3, .row.g-4{ --bs-gutter-x: var(--gutter-x); --bs-gutter-y: var(--gutter-x); }
 
-/* cards & ring */
 .card-glass-plain{ backdrop-filter:blur(6px); background:rgba(255,255,255,.96); border-radius:14px; border:1px solid rgba(30,64,175,.10); }
 .shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
 .card-ring{ position:relative; }
@@ -243,16 +247,12 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
   -webkit-mask-composite:xor; mask-composite:exclude; padding:1px; pointer-events:none;
 }
 
-/* event card + accent + hover */
 .event-card{
   background:linear-gradient(180deg,#fff,rgba(255,255,255,.97));
   border:1px solid rgba(30,64,175,.12); border-radius:14px; box-shadow:0 10px 22px rgba(30,64,175,.06);
   padding:16px; transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
   position:relative; overflow:hidden;
-
-  /* ====== Uniform height trick ====== */
-  display:flex; flex-direction:column;
-  min-height: 310px; /* jaga seragam; boleh disesuaikan */
+  display:flex; flex-direction:column; min-height: 310px;
 }
 .card-accent::before{
   content:""; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:4px 0 0 4px;
@@ -262,11 +262,9 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .event-card:hover{ transform: translateY(-2px); box-shadow:0 16px 28px rgba(30,64,175,.12); border-color: rgba(30,64,175,.22); }
 .subtle-divider{ border-color: rgba(30,64,175,.12)!important; }
 
-/* main & footer agar footer rata bawah */
 .event-main{ flex:1 1 auto; }
 .event-footer{ margin-top:auto; }
 
-/* meta & chips */
 .meta-list{ list-style:none; padding-left:0; margin:0; }
 .meta-list li{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.35rem 0; }
 .meta-list li span{ color:#6b7280; }
@@ -274,14 +272,12 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .chip{ display:inline-flex; align-items:center; padding:.28rem .6rem; font-size:.88rem; border-radius:999px; background:#eef3ff; color:#1e3a8a; border:1px solid rgba(30,64,175,.15); font-weight:600; }
 .chip.alt{ background:#f1f5ff; color:#244aa4; }
 
-/* section counter */
 .section-card .count-badge{
   display:inline-flex; align-items:center; justify-content:center;
   min-width:32px; height:28px; padding:0 .4rem; border-radius:999px;
   background:linear-gradient(180deg,#eaf2ff,#e3edff); color:#274690; font-weight:700; border:1px solid rgba(39,70,144,.15);
 }
 
-/* typography & controls */
 .event-card h6{ font-size:1.12rem; margin-bottom:.35rem; }
 .event-card .small{ font-size:1rem; }
 .text-blue-900{ color:var(--blue-900)!important; }
@@ -292,10 +288,8 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .form-control{ padding:.7rem .9rem; font-size:1rem; border-radius:12px; }
 #searchInput{ height:46px; }
 
-/* empty hint */
 .empty-hint{ color:#567; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.8rem 1rem; font-weight:600; }
 
-/* responsive */
 @media (max-width:575.98px){
   .container-xxl{ padding-left:1rem!important; padding-right:1rem!important; }
   .event-card{ padding:14px; min-height: 280px; }

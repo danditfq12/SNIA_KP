@@ -146,40 +146,44 @@ $routes->group('admin', [
     $routes->get ('users/delete/(:num)', 'User::delete/$1');
 
     // ===== ALUR BARU: SEMUA LIST VIA KELOLA PAPER =====
-    $routes->get('abstrak',   'KelolaPaper::index'); // redirect listing ke KelolaPaper
+    $routes->get('abstrak',   'KelolaPaper::index'); // daftar → kelola-paper
     $routes->get('fullpaper', 'KelolaPaper::index');
 
     // ===== KELOLA PAPER (INDEX/DETAIL) =====
     $routes->group('kelola-paper', static function ($routes) {
-        $routes->get('',               'KelolaPaper::index');          // /admin/kelola-paper
-        $routes->get('detail/(:num)',  'KelolaPaper::detail/$1');      // /admin/kelola-paper/detail/{eventId}
-        $routes->get('abstract/(:num)','KelolaPaper::viewAbstract/$1');// lihat 1 abstrak
-        $routes->get('full/(:num)/(:num)','KelolaPaper::viewFull/$1/$2');// lihat 1 full paper
-        // compat rute lama:
-        $routes->get('event/(:num)',   'KelolaPaper::detail/$1');
+        $routes->get('',                 'KelolaPaper::index');        // /admin/kelola-paper
+        $routes->get('detail/(:num)',    'KelolaPaper::detail/$1');    // /admin/kelola-paper/detail/{eventId}
+
+        // Detail entitas via path kelola-paper (tetap pakai controller lama)
+        $routes->get('abstrak/(:num)',   'Abstrak::detail/$1');        // /admin/kelola-paper/abstrak/{id_abstrak}
+        $routes->get('fullpaper/(:num)', 'FullPaper::detail/$1');      // /admin/kelola-paper/fullpaper/{id_submission}
+
+        // kompat rute lama (opsional)
+        $routes->get('event/(:num)',     'KelolaPaper::detail/$1');
     });
 
     // ===== ABSTRAK (DETAIL & AKSI) =====
-    $routes->get ('abstrak/detail/(:num)',         'Abstrak::detail/$1');
-    $routes->post('abstrak/assign/(:num)',         'Abstrak::assign/$1');
-    $routes->post('abstrak/update-status',         'Abstrak::updateStatus');
-    $routes->post('abstrak/bulk-update-status',    'Abstrak::bulkUpdateStatus');
+    // (detail lama tetap ada agar link lama tidak 404)
+    $routes->get ('abstrak/detail/(:num)',   'Abstrak::detail/$1');
+    $routes->post('abstrak/assign/(:num)',   'Abstrak::assign/$1');
+    $routes->post('abstrak/update-status',   'Abstrak::updateStatus');
     $routes->match(['get','post'], 'abstrak/delete/(:num)', 'Abstrak::delete/$1');
-    $routes->get ('abstrak/download/(:num)',       'Abstrak::downloadFile/$1');
-    $routes->get ('abstrak/view/(:num)',           'Abstrak::view/$1'); // preview iframe
-    $routes->get ('abstrak/blob/(:num)',           'Abstrak::blob/$1'); // preview via fetch blob
-    $routes->get ('abstrak/export',                'Abstrak::export');
-    $routes->get ('abstrak/statistics',            'Abstrak::statistics');
+
+    // File handling (tetap di namespace abstrak)
+    $routes->get ('abstrak/download/(:num)', 'Abstrak::downloadFile/$1');
+    $routes->get ('abstrak/view/(:num)',     'Abstrak::view/$1');   // preview iframe
+    $routes->get ('abstrak/blob/(:num)',     'Abstrak::blob/$1');   // preview via fetch blob
 
     // Reviewer helper (AJAX)
-    $routes->get ('reviewer/by-category/(:num)',           'Abstrak::getReviewersByCategory/$1');
-    $routes->get ('abstrak/reviewers-by-category/(:num)',  'Abstrak::getReviewersByCategory/$1');
+    $routes->get ('reviewer/by-category/(:num)',          'Abstrak::getReviewersByCategory/$1');
+    $routes->get ('abstrak/reviewers-by-category/(:num)', 'Abstrak::getReviewersByCategory/$1');
 
-    // ===== FULL PAPER (DETAIL & AKSI) — DIPINDAH KE SINI (DEKAT ABSTRAK) =====
+    // ===== FULL PAPER (DETAIL & AKSI) =====
+    // (detail lama tetap ada)
     $routes->group('fullpaper', static function ($routes) {
         $routes->get ('detail/(:num)',     'FullPaper::detail/$1');
         $routes->post('set-status/(:num)', 'FullPaper::setStatus/$1'); // UPLOADED/REVISION/ACCEPTED/REJECTED
-        $routes->post('assign/(:num)',     'FullPaper::assign/$1');    // assign reviewer (>=3)
+        $routes->post('assign/(:num)',     'FullPaper::assign/$1');    // assign reviewer
 
         // File handling
         $routes->get ('view/(:num)',       'FullPaper::view/$1');      // preview inline
@@ -189,11 +193,10 @@ $routes->group('admin', [
     });
 
     // ===== KATEGORI ABSTRAK =====
-    $routes->get   ('kategori',                        'Kategori::index');
-    $routes->post  ('kategori/store',                  'Kategori::store');
-    $routes->get   ('kategori/show/(:num)',            'Kategori::show/$1');
-    $routes->post  ('kategori/update/(:num)',          'Kategori::update/$1');
-    // pakai match supaya aman bila form tidak spoof DELETE
+    $routes->get  ('kategori',                       'Kategori::index');
+    $routes->post ('kategori/store',                 'Kategori::store');
+    $routes->get  ('kategori/show/(:num)',           'Kategori::show/$1');
+    $routes->post ('kategori/update/(:num)',         'Kategori::update/$1');
     $routes->match(['post','delete'], 'kategori/delete/(:num)', 'Kategori::delete/$1');
 
     // ===== REVIEWER =====
@@ -283,9 +286,8 @@ $routes->group('admin', [
     $routes->get('laporan',                            'Laporan::index');
     $routes->get('laporan/export',                     'Laporan::export');
     $routes->get('laporan/chart-data',                 'Laporan::getChartData');
-
-    
 });
+
 // ---------------------------------------------------
 // Presenter Routes (rapih & konsisten)
 // ---------------------------------------------------
@@ -311,6 +313,7 @@ $routes->group('presenter', [
     $routes->get ('abstrak/detail/(:num)',             'Abstrak::detail/$1');  // {id_abstrak}
     $routes->get ('abstrak/download/(:segment)',       'Abstrak::download/$1');// {filename}
     $routes->post('abstrak/cancel/(:num)',             'Abstrak::cancel/$1');  // POST only
+    $routes->post('abstrak/revisi/(:num)',             'Abstrak::revisi/$1');  // ✅ NEW: upload revisi (POST only)
 
     // ====== Full Paper (presenter) ======
     // NOTE: Controller-nya bernama Fullpaper (bukan FullPaper)
@@ -353,6 +356,7 @@ $routes->group('presenter', [
     $routes->get ('dokumen/loa/download/(:segment)',        'Dokumen::downloadLoa/$1');
     $routes->get ('dokumen/sertifikat/download/(:segment)', 'Dokumen::downloadSertifikat/$1');
 });
+
 
 // ---------------------------------------------------
 // ENHANCED: Audience Routes with Better Payment Handling
@@ -406,29 +410,40 @@ $routes->group('reviewer', [
     'filter'    => 'role:reviewer',
     'namespace' => 'App\Controllers\Role\Reviewer',
 ], static function ($routes) {
-    $routes->get('dashboard', 'Dashboard::index');
-    $routes->get('notifications', 'Dashboard::getNotifications');
+    // Dashboard
+    $routes->get('dashboard',          'Dashboard::index');
+    $routes->get('notifications',      'Dashboard::getNotifications');
+    $routes->post('dashboard/confirm', 'Dashboard::confirm');
 
-    // Abstrak routes
-    $routes->get('abstrak', 'Abstrak::index');
-    $routes->get('abstrak/(:num)', 'Abstrak::detail/$1');
+    // Abstrak
+    $routes->get ('abstrak',                 'Abstrak::index');
+    $routes->get ('abstrak/(:num)',          'Abstrak::detail/$1');
+    $routes->get ('abstrak/preview/(:num)',  'Abstrak::preview/$1');
+    $routes->get ('abstrak/blob/(:num)',     'Abstrak::blob/$1');        // untuk iframe blob
+    $routes->get ('abstrak/download/(:num)', 'Abstrak::download/$1');
+    $routes->post('abstrak/confirm/(:num)',  'Abstrak::confirm/$1');     // tombol Terima/Tolak
+    $routes->post('abstrak/review/(:num)',   'Abstrak::review/$1');      // simpan review
+    // (opsional legacy alias, kalau masih dipakai UI lama)
+    // $routes->post('review/(:num)',          'Abstrak::review/$1');
 
-    // Review routes (abstrak)
-    $routes->post('review/(:num)', 'Review::store/$1');
-    $routes->get('review/file/(:any)', 'Review::file/$1');
-    $routes->get('review/download/(:any)', 'Review::download/$1');
-
-    // ==== FULL PAPER (REVIEWER) ====
+    // Full Paper
     $routes->group('fullpaper', static function ($routes) {
-        $routes->get ('',                 'FullPaper::index');        // daftar tugas
-        $routes->get ('(:num)',           'FullPaper::detail/$1');    // halaman detail + form keputusan
-        $routes->post('review/(:num)',    'FullPaper::submit/$1');    // submit keputusan (ACCEPTED/REVISION/REJECTED)
-        $routes->get ('download/(:num)',  'FullPaper::download/$1');  // unduh file full paper
+        $routes->get ('',                    'FullPaper::index');
+        $routes->get ('(:num)',              'FullPaper::detail/$1');
+        $routes->post('confirm/(:num)',      'FullPaper::confirm/$1');    // legacy: ACC kini via Dashboard
+        $routes->post('review/(:num)',       'FullPaper::submit/$1');     // simpan penilaian FP
+        $routes->get ('download/(:num)',     'FullPaper::download/$1');
+
+        // === Tambahan untuk pratinjau seperti Abstrak ===
+        $routes->get ('preview/(:num)',      'FullPaper::preview/$1');    // inline (Content-Disposition:inline)
+        $routes->get ('blob/(:num)',         'FullPaper::blob/$1');       // untuk iframe blob (fallback-friendly)
     });
 
     // Riwayat
     $routes->get('riwayat', 'Riwayat::index');
 });
+
+
 
 // ---------------------------------------------------
 // ENHANCED: Public API with Payment Support

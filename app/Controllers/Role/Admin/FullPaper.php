@@ -132,7 +132,7 @@ class FullPaper extends BaseController
         if (empty($submission[$cols['event_id']]) || empty($submission[$cols['user_id']])) return null;
 
         $abs = $this->db->table('abstrak')
-            ->select('id_abstrak, id_kategori')
+            ->select('id_abstrak, id_kategori, status')
             ->where('id_user', (int)$submission[$cols['user_id']])
             ->where('event_id', (int)$submission[$cols['event_id']])
             ->orderBy('tanggal_upload','DESC')
@@ -141,22 +141,53 @@ class FullPaper extends BaseController
         return $abs && !empty($abs['id_kategori']) ? (int)$abs['id_kategori'] : null;
     }
 
-    /** Ambil ID reviewer yang sudah ditugaskan di ABSTRAK (untuk informasi). */
-    private function getAbstractAssignedReviewerIds(?int $userId, ?int $eventId): array
+    /* ========= Abstrak: status global + reviewer-detail (nama, email, status review abstrak per reviewer) ========= */
+
+    private function getLatestAbstractRow(?int $userId, ?int $eventId): ?array
     {
-        if (!$userId || !$eventId) return [];
-        if (!$this->db->tableExists('abstrak')) return [];
-        $abs = $this->db->table('abstrak')
-            ->select('id_abstrak')
-            ->where('id_user', (int)$userId)
-            ->where('event_id', (int)$eventId)
-            ->orderBy('tanggal_upload','DESC')
-            ->get()->getRowArray();
+        if (!$userId || !$eventId) return null;
+        if (!$this->db->tableExists('abstrak')) return null;
+        return $this->db->table('abstrak')
+            ->where('id_user', $userId)->where('event_id', $eventId)
+            ->orderBy('tanggal_upload','DESC')->get()->getRowArray() ?: null;
+    }
+
+    private function getAbstractStatus(?int $userId, ?int $eventId): ?string
+    {
+        $abs = $this->getLatestAbstractRow($userId, $eventId);
+        return $abs['status'] ?? null;
+    }
+
+    private function getAbstractReviewersDetailed(?int $userId, ?int $eventId): array
+    {
+        $abs = $this->getLatestAbstractRow($userId, $eventId);
         if (!$abs) return [];
         $idAbstrak = (int)$abs['id_abstrak'];
 
+        $src = $this->resolveReviewerSource();
+        if (!$src['table'] || !$src['id']) return [];
+
+        // mapping table many-to-many abstrak → reviewer (opsional)
+        $mapTable = null;
+        foreach (['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak'] as $cand) {
+            if ($this->db->tableExists($cand)) { $mapTable = $cand; break; }
+        }
+
+        // semua reviewer yang terkait ke abstrak (lewat mapping atau lewat review langsung)
         $ids = [];
-        foreach (['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak'] as $t) {
+
+        if ($mapTable) {
+            $cols = $this->db->getFieldNames($mapTable);
+            $colAbs = in_array('id_abstrak',$cols,true) ? 'id_abstrak' : (in_array('abstrak_id',$cols,true) ? 'abstrak_id' : null);
+            $colRev = in_array('id_reviewer',$cols,true) ? 'id_reviewer' : (in_array('reviewer_id',$cols,true) ? 'reviewer_id' : null);
+            if ($colAbs && $colRev) {
+                $rows = $this->db->table($mapTable)->select($colRev.' AS reviewer_id')->where($colAbs, $idAbstrak)->get()->getResultArray();
+                foreach ($rows as $r) $ids[] = (int)$r['reviewer_id'];
+            }
+        }
+
+        // reviewer yang memberi review abstrak (tanpa map)
+        foreach (['abstrak_reviews','reviews','review'] as $t) {
             if ($this->db->tableExists($t)) {
                 $cols = $this->db->getFieldNames($t);
                 $colAbs = in_array('id_abstrak',$cols,true) ? 'id_abstrak' : (in_array('abstrak_id',$cols,true) ? 'abstrak_id' : null);
@@ -167,18 +198,51 @@ class FullPaper extends BaseController
                 }
             }
         }
-        foreach (['reviews','abstrak_reviews','review'] as $t) {
-            if ($this->db->tableExists($t)) {
-                $cols = $this->db->getFieldNames($t);
-                $colAbs = in_array('id_abstrak',$cols,true) ? 'id_abstrak' : (in_array('abstrak_id',$cols,true) ? 'abstrak_id' : null);
-                $colRev = in_array('id_reviewer',$cols,true) ? 'id_reviewer' : (in_array('reviewer_id',$cols,true) ? 'reviewer_id' : null);
-                if ($colAbs && $colRev) {
-                    $rows = $this->db->table($t)->select($colRev.' AS reviewer_id')->where($colAbs, $idAbstrak)->get()->getResultArray();
-                    foreach ($rows as $r) $ids[] = (int)$r['reviewer_id'];
-                }
+
+        $ids = array_values(array_unique(array_filter($ids)));
+        if (!$ids) return [];
+
+        $nameCol  = $src['name']  ? "{$src['table']}.{$src['name']}"  : "NULL";
+        $emailCol = $src['email'] ? "{$src['table']}.{$src['email']}" : "NULL";
+        $ident = $this->db->table($src['table'])
+            ->select("{$src['table']}.{$src['id']} AS id, {$nameCol} AS name, {$emailCol} AS email")
+            ->whereIn("{$src['table']}.{$src['id']}", $ids)->get()->getResultArray();
+
+        $identBy = [];
+        foreach ($ident as $r) $identBy[(int)$r['id']] = $r;
+
+        // ambil keputusan abstrak terbaru per reviewer
+        $latest = [];
+        foreach (['abstrak_reviews','reviews','review'] as $t) {
+            if (!$this->db->tableExists($t)) continue;
+            $cols = $this->db->getFieldNames($t);
+            $colAbs = in_array('id_abstrak',$cols,true) ? 'id_abstrak' : (in_array('abstrak_id',$cols,true) ? 'abstrak_id' : null);
+            $colRev = in_array('id_reviewer',$cols,true) ? 'id_reviewer' : (in_array('reviewer_id',$cols,true) ? 'reviewer_id' : null);
+            if (!$colAbs || !$colRev) continue;
+
+            $rows = $this->db->table($t)
+                ->select("$colRev AS reviewer_id, keputusan, tanggal_review")
+                ->where($colAbs, $idAbstrak)
+                ->orderBy($colRev,'ASC')->orderBy('tanggal_review','DESC')->get()->getResultArray();
+
+            foreach ($rows as $r) {
+                $rid = (int)$r['reviewer_id'];
+                if (!isset($latest[$rid])) $latest[$rid] = $r;
             }
         }
-        return array_values(array_unique(array_filter($ids)));
+
+        $out = [];
+        foreach ($ids as $rid) {
+            $info = $identBy[$rid] ?? ['name'=>'Reviewer','email'=>null];
+            $k = $latest[$rid]['keputusan'] ?? null;
+            $out[] = [
+                'id'     => $rid,
+                'name'   => $info['name']  ?? 'Reviewer',
+                'email'  => $info['email'] ?? null,
+                'status' => $k ? strtolower($k) : null,
+            ];
+        }
+        return $out;
     }
 
     private function getReviewersByCategory(?int $kategoriId, array $excludeIds = []): array
@@ -235,6 +299,8 @@ class FullPaper extends BaseController
             ->get()->getResultArray();
     }
 
+    /* ========================= Full paper: assigned + reviews ========================= */
+
     private function getAssignedReviewers(int $submissionId): array
     {
         if (!$this->db->tableExists('fullpaper_reviewers')) return [];
@@ -243,6 +309,13 @@ class FullPaper extends BaseController
         $emailCol = $src['email'] ? "{$src['table']}.{$src['email']}" : "NULL";
 
         $hasReviews = $this->db->tableExists('fullpaper_reviews');
+        $colsFR = array_flip($this->db->getFieldNames('fullpaper_reviewers'));
+
+        $assignCol = null;
+        foreach (['assignment_status','status_tugas','tugas_status','konfirmasi_status'] as $c) {
+            if (isset($colsFR[$c])) { $assignCol = "fr.$c"; break; }
+        }
+        $assignSel = $assignCol ? "$assignCol AS assignment_status" : "NULL AS assignment_status";
 
         if ($hasReviews) {
             $statusExpr = "(
@@ -260,7 +333,7 @@ class FullPaper extends BaseController
                 LIMIT 1
             )";
             return $this->db->table('fullpaper_reviewers fr')
-                ->select("fr.id, fr.reviewer_id, fr.assigned_at, {$emailCol} AS email, {$nameCol} AS name, {$statusExpr} AS status, {$tanggalExpr} AS status_at")
+                ->select("fr.id, fr.reviewer_id, fr.assigned_at, {$emailCol} AS email, {$nameCol} AS name, {$statusExpr} AS status, {$tanggalExpr} AS status_at, {$assignSel}")
                 ->join($src['table'], "{$src['table']}.{$src['id']} = fr.reviewer_id", 'left')
                 ->where('fr.submission_id', $submissionId)
                 ->orderBy('fr.id', 'ASC')
@@ -268,7 +341,7 @@ class FullPaper extends BaseController
         }
 
         return $this->db->table('fullpaper_reviewers fr')
-            ->select("fr.id, fr.reviewer_id, fr.assigned_at, {$emailCol} AS email, {$nameCol} AS name, NULL::text AS status, NULL::timestamp AS status_at")
+            ->select("fr.id, fr.reviewer_id, fr.assigned_at, {$emailCol} AS email, {$nameCol} AS name, NULL AS status, NULL AS status_at, {$assignSel}")
             ->join($src['table'], "{$src['table']}.{$src['id']} = fr.reviewer_id", 'left')
             ->where('fr.submission_id', $submissionId)
             ->orderBy('fr.id', 'ASC')
@@ -340,20 +413,17 @@ class FullPaper extends BaseController
                 ->get()->getResultArray();
         }
 
-        // kandidat & assigned
+        // kategori & reviewer
         $kategoriId = $this->resolveCategoryId($submission, $cols);
         $assigned   = $this->getAssignedReviewers($id);
         $assignedIds= array_map(fn($r)=>(int)$r['reviewer_id'], $assigned);
+        $reviewers  = $this->getReviewersByCategory($kategoriId, $assignedIds);
 
-        // Reviewer abstrak sebagai informasi (TIDAK di-exclude dari kandidat)
-        $absAssignedIds   = $this->getAbstractAssignedReviewerIds(
-            $cols['user_id'] ? (int)$submission[$cols['user_id']] : null,
-            $cols['event_id']? (int)$submission[$cols['event_id']] : null
-        );
-        $abstractReviewers = $absAssignedIds ? $this->getReviewerIdentities($absAssignedIds) : [];
-
-        // Kandidat hanya exclude yang sudah assigned di full paper ini
-        $reviewers = $this->getReviewersByCategory($kategoriId, $assignedIds);
+        // abstrak: status global + reviewer2 (dengan status review abstrak)
+        $userId  = $cols['user_id']  ? (int)($submission[$cols['user_id']]  ?? 0) : 0;
+        $eventId = $cols['event_id'] ? (int)($submission[$cols['event_id']] ?? 0) : 0;
+        $abstractStatus   = $this->getAbstractStatus($userId, $eventId);
+        $abstractReviewers= $this->getAbstractReviewersDetailed($userId, $eventId);
 
         $fpReviews = $this->getFullpaperReviews($id);
 
@@ -365,13 +435,14 @@ class FullPaper extends BaseController
             'reviewers'          => $reviewers,
             'assignedReviewers'  => $assigned,
             'abstractReviewers'  => $abstractReviewers,
+            'abstractStatus'     => $abstractStatus,
             'fpReviews'          => $fpReviews,
             'title'              => 'Detail Full Paper',
             'maxReviewer'        => 3,
         ]);
     }
 
-    /** Ambil identitas reviewer by IDs (untuk menampilkan daftar reviewer abstrak) */
+    /** Ambil identitas reviewer by IDs (dipertahankan untuk kompatibilitas lama) */
     private function getReviewerIdentities(array $ids): array
     {
         $ids = array_values(array_unique(array_map('intval',$ids)));
@@ -429,7 +500,7 @@ class FullPaper extends BaseController
                 return redirect()->back()->with('error','Maksimum 3 reviewer sudah tercapai.');
             }
 
-            // Duplicates (fullpaper)
+            // Duplicates
             $dup = $this->db->table('fullpaper_reviewers')
                     ->where('submission_id',$submissionId)
                     ->where('reviewer_id',$reviewerId)
@@ -471,6 +542,7 @@ class FullPaper extends BaseController
         try {
             $submissionId = (int)$submissionId;
             $status = strtoupper((string)$this->request->getPost('status'));
+            $komentar = trim((string)$this->request->getPost('komentar'));
             $allowed = ['UPLOADED','REVISION','ACCEPTED','REJECTED'];
             if (!$submissionId || !in_array($status,$allowed,true)) {
                 return redirect()->back()->with('error','Input tidak valid.');
@@ -479,8 +551,17 @@ class FullPaper extends BaseController
             $table = $this->tableName();
             $pk    = $this->primaryKey($table);
 
-            $ok = $this->db->table($table)->where($pk,$submissionId)
-                ->update(['full_paper_status'=>$status]);
+            $data = ['full_paper_status'=>$status];
+            // simpan komentar jika ada kolom yang cocok
+            foreach (['review_notes','catatan_reviewer','admin_comment','admin_notes'] as $col) {
+                if ($komentar !== '' && $this->columnExists($table,$col)) { $data[$col] = $komentar; break; }
+            }
+            // simpan decision_at bila kolom tersedia
+            foreach (['decision_at','full_paper_decision_at'] as $col) {
+                if ($this->columnExists($table,$col)) { $data[$col] = date('Y-m-d H:i:s'); break; }
+            }
+
+            $ok = $this->db->table($table)->where($pk,$submissionId)->update($data);
 
             if (!$ok) return redirect()->back()->with('error','Gagal memperbarui status.');
 

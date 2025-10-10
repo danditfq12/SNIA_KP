@@ -1,16 +1,27 @@
 <?php
-$title  = $title ?? 'Detail Abstrak';
-$abs    = $abs ?? [];
-$event  = $event ?? [];
-$status = strtolower($status ?? ($abs['status'] ?? 'menunggu'));
-$badge  = $badge ?? 'secondary';
+$title        = $title ?? 'Detail Abstrak';
+$abs          = $abs ?? [];
+$event        = $event ?? [];
+$status       = strtolower($status ?? ($abs['status'] ?? 'menunggu'));
+$badge        = $badge ?? 'secondary';
 
 $showReuploadAbstract = (bool)($showReuploadAbstract ?? false);
 $showCancel           = (bool)($showCancel ?? false);
 
 $assignedReviewer = $assignedReviewer ?? ['name'=>null,'email'=>null,'org'=>null];
-$reviewComments   = $reviewComments   ?? [];
+$reviewComments   = $reviewComments   ?? [];   // fallback lama (string list)
+$reviewList       = $reviewList       ?? [];   // ✅ NEW (kaya metadata)
 $contributors     = $contributors     ?? [];
+
+// ✅ optional gating dari controller; fallback: true kalau status 'revisi'
+$canUploadRevision = (bool)($canUploadRevision ?? ($status === 'revisi'));
+
+$fmtDate = fn($s) => $s ? date('d M Y', strtotime($s)) : '-';
+$fmtDT   = fn($s) => $s ? date('d M Y H:i', strtotime($s)) : '-';
+$formatLabel = function($f){
+  $f = strtolower((string)$f);
+  return $f === 'both' ? 'Hybrid' : ucfirst($f ?: '-');
+};
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
@@ -20,7 +31,7 @@ $contributors     = $contributors     ?? [];
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- HERO: TANPA STATUS -->
+      <!-- HERO -->
       <div class="hero-blue card-glass-plain mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
         <div>
           <h3 class="hero-title mb-1"><i class="bi bi-journal-text me-2"></i>Detail Abstrak</h3>
@@ -61,14 +72,10 @@ $contributors     = $contributors     ?? [];
               </ul>
 
               <div class="pt-3 d-flex flex-wrap gap-2 border-top subtle-divider">
-                <?php if (!empty($abs['file_abstrak'])): ?>
-                  <a class="btn btn-outline-secondary" href="<?= site_url('/presenter/abstrak/download/'.esc($abs['file_abstrak'])) ?>">
-                    <i class="bi bi-download"></i> Unduh File
-                  </a>
-                <?php endif; ?>
+                <?php /* Presenter tidak perlu tombol download file di sini */ ?>
 
-                <?php if ($showReuploadAbstract): ?>
-                  <a class="btn btn-danger" href="<?= site_url('/presenter/abstrak/create/'.(int)$abs['event_id']) ?>">
+                <?php if ($showReuploadAbstract && $status === 'ditolak'): ?>
+                  <a class="btn btn-danger" href="<?= site_url('/presenter/abstrak/create/'.(int)($abs['event_id'] ?? 0)) ?>">
                     <i class="bi bi-upload"></i> Upload Ulang Abstrak
                   </a>
                 <?php endif; ?>
@@ -92,82 +99,128 @@ $contributors     = $contributors     ?? [];
             </div>
           </div>
 
-          <!-- Data Kontributor (mengacu patokan Kontributor) -->
-          <div class="card shadow-soft card-glass-plain mb-3">
-            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
-              <div class="d-flex align-items-center gap-2">
-                <span class="badge bg-blue-soft"><i class="bi bi-people"></i></span>
-                <h6 class="mb-0 fw-semibold text-blue-900">Data Kontributor</h6>
+          <!-- Upload Revisi (muncul hanya saat status revisi) -->
+          <?php if ($status === 'revisi'): ?>
+            <?php if ($canUploadRevision): ?>
+              <div id="section-revisi" class="card shadow-soft card-glass-plain mb-3 card-accent">
+                <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+                  <span class="badge bg-blue-soft"><i class="bi bi-arrow-repeat"></i></span>
+                  <h6 class="mb-0 fw-semibold text-blue-900">Upload Revisi Abstrak</h6>
+                </div>
+                <div class="card-body">
+                  <form action="<?= site_url('/presenter/abstrak/revisi/'.(int)($abs['id_abstrak'] ?? 0)) ?>"
+                        method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                    <?= csrf_field() ?>
+                    <div class="mb-3">
+                      <label class="form-label">File Abstrak (PDF) <span class="text-danger">*</span></label>
+                      <input type="file" class="form-control form-control-soft" name="file_abstrak" accept=".pdf,application/pdf" required>
+                      <div class="form-text">Format PDF, maksimal 5MB.</div>
+                      <div class="invalid-feedback">File PDF wajib diunggah.</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                      <i class="bi bi-send me-1"></i> Kirim Revisi
+                    </button>
+                  </form>
+                </div>
               </div>
-              <?php if (!empty($contributors)): ?>
-                <span class="badge bg-primary-subtle text-blue-900 fw-semibold"><?= count($contributors) ?> orang</span>
-              <?php endif; ?>
-            </div>
-            <div class="card-body">
-              <?php if (empty($contributors)): ?>
-                <div class="empty-hint"><i class="bi bi-info-circle me-1"></i> Data kontributor belum tersedia.</div>
-              <?php else: ?>
-                <ul class="list-unstyled m-0">
-                  <?php foreach ($contributors as $c): ?>
-                    <li class="contrib-item">
-                      <div class="avatar-badge avatar-sm">
-                        <span><?= esc(strtoupper(mb_substr($c['name'] ?? 'K', 0, 1))) ?></span>
-                      </div>
-                      <div class="flex-fill">
-                        <div class="d-flex align-items-center gap-2">
-                          <span class="fw-bold text-blue-900"><?= esc($c['name'] ?? '—') ?></span>
-                          <?php if (!empty($c['presenter'])): ?>
-                            <span class="chip">Presenter</span>
-                          <?php elseif (!empty($c['role'])): ?>
-                            <span class="chip alt"><?= esc($c['role']) ?></span>
-                          <?php endif; ?>
-                        </div>
-                        <?php if (!empty($c['affiliation'])): ?>
-                          <div class="text-muted small"><i class="bi bi-buildings me-1"></i><?= esc($c['affiliation']) ?></div>
-                        <?php endif; ?>
-                        <?php if (!empty($c['email'])): ?>
-                          <div class="small">
-                            <i class="bi bi-envelope me-1"></i>
-                            <a class="text-primary" href="mailto:<?= esc($c['email']) ?>"><?= esc($c['email']) ?></a>
-                          </div>
-                        <?php endif; ?>
-                      </div>
-                    </li>
-                  <?php endforeach; ?>
-                </ul>
-              <?php endif; ?>
-            </div>
-          </div>
+            <?php else: ?>
+              <div class="card shadow-soft card-glass-plain mb-3 card-accent">
+                <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+                  <span class="badge bg-blue-soft"><i class="bi bi-lock"></i></span>
+                  <h6 class="mb-0 fw-semibold text-blue-900">Revisi Ditutup</h6>
+                </div>
+                <div class="card-body">
+                  <div class="alert alert-warning mb-0 fw-semibold">
+                    <i class="bi bi-exclamation-triangle me-1"></i> Batas waktu pengumpulan revisi telah berakhir.
+                  </div>
+                </div>
+              </div>
+            <?php endif; ?>
+          <?php endif; ?>
 
-          <!-- Komentar Reviewer -->
+          <!-- Komentar Reviewer (TIMELINE) -->
           <div class="card shadow-soft card-glass-plain mb-3">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-chat-left-dots"></i></span>
               <h6 class="mb-0 fw-semibold text-blue-900">Komentar Reviewer</h6>
             </div>
             <div class="card-body">
-              <?php if (!empty($reviewComments)): ?>
-                <ul class="list-unstyled m-0">
-                  <?php foreach ($reviewComments as $c): if (trim($c)==='') continue; ?>
-                    <li class="mb-2 d-flex align-items-start">
-                      <i class="bi bi-dot fs-4 me-1 opacity-75"></i>
-                      <span><?= nl2br(esc($c)) ?></span>
-                    </li>
+              <?php if (!empty($reviewList)): ?>
+                <div class="review-timeline">
+                  <?php foreach ($reviewList as $rv): ?>
+                    <?php
+                      $rk   = isset($rv['revisi_ke']) ? (int)$rv['revisi_ke'] : null;
+                      $kep  = strtolower($rv['keputusan'] ?? 'pending');
+                      $kLab = [
+                        'diterima' => ['success','Diterima'],
+                        'ditolak'  => ['danger','Ditolak'],
+                        'revisi'   => ['primary','Revisi'],
+                        'sedang_direview' => ['info','Sedang direview'],
+                        'pending'  => ['secondary','Pending'],
+                      ][$kep] ?? ['secondary', ucfirst($kep ?: 'pending')];
+
+                      $revName  = trim((string)($rv['reviewer_name'] ?? ''));
+                      $revEmail = trim((string)($rv['reviewer_email'] ?? ''));
+                      $tgl      = $rv['tanggal_review'] ?? null;
+                    ?>
+                    <div class="review-item">
+                      <div class="review-dot"></div>
+                      <div class="review-card">
+                        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-1">
+                          <div class="d-flex flex-wrap align-items-center gap-2">
+                            <span class="badge rounded-pill bg-light text-blue-900 border">
+                              Revisi: <strong class="ms-1"><?= $rk !== null ? (int)$rk : '—' ?></strong>
+                            </span>
+                            <span class="badge rounded-pill bg-<?= esc($kLab[0]) ?>-subtle text-<?= esc($kLab[0]) ?>">
+                              <?= esc($kLab[1]) ?>
+                            </span>
+                          </div>
+                          <div class="text-muted small"><?= $tgl ? date('d M Y H:i', strtotime($tgl)) : '-' ?></div>
+                        </div>
+
+                        <div class="d-flex align-items-start gap-2 mb-2">
+                          <div class="avatar-badge sm">
+                            <span><?= esc(strtoupper(mb_substr($revName !== '' ? $revName : 'R', 0, 1))) ?></span>
+                          </div>
+                          <div>
+                            <div class="fw-semibold text-blue-900"><?= esc($revName !== '' ? $revName : 'Reviewer') ?></div>
+                            <?php if ($revEmail !== ''): ?>
+                              <div class="small"><i class="bi bi-envelope me-1"></i>
+                                <a class="text-primary" href="mailto:<?= esc($revEmail) ?>"><?= esc($revEmail) ?></a>
+                              </div>
+                            <?php endif; ?>
+                          </div>
+                        </div>
+
+                        <div class="review-text"><?= nl2br(esc($rv['komentar'] ?? '')) ?></div>
+                      </div>
+                    </div>
                   <?php endforeach; ?>
-                </ul>
+                </div>
               <?php else: ?>
-                <?php if ($status === 'sedang_direview' || $status === 'menunggu'): ?>
-                  <div class="empty-hint">
-                    <i class="bi bi-hourglass-split me-1"></i> Belum ada komentar dari reviewer.
-                  </div>
-                <?php elseif ($status === 'ditolak'): ?>
-                  <div class="empty-hint">
-                    <i class="bi bi-info-circle me-1"></i> Abstrak ditolak, namun komentar tidak tersedia.
-                  </div>
+                <?php if (!empty($reviewComments)): ?>
+                  <ul class="list-unstyled m-0">
+                    <?php foreach ($reviewComments as $c): if (trim($c)==='') continue; ?>
+                      <li class="mb-2 d-flex align-items-start">
+                        <i class="bi bi-dot fs-4 me-1 opacity-75"></i>
+                        <span><?= nl2br(esc($c)) ?></span>
+                      </li>
+                    <?php endforeach; ?>
+                  </ul>
                 <?php else: ?>
-                  <div class="empty-hint">
-                    <i class="bi bi-info-circle me-1"></i> Tidak ada komentar tersimpan.
-                  </div>
+                  <?php if ($status === 'sedang_direview' || $status === 'menunggu'): ?>
+                    <div class="empty-hint">
+                      <i class="bi bi-hourglass-split me-1"></i> Belum ada komentar dari reviewer.
+                    </div>
+                  <?php elseif ($status === 'ditolak'): ?>
+                    <div class="empty-hint">
+                      <i class="bi bi-info-circle me-1"></i> Abstrak ditolak, namun komentar tidak tersedia.
+                    </div>
+                  <?php else: ?>
+                    <div class="empty-hint">
+                      <i class="bi bi-info-circle me-1"></i> Tidak ada komentar tersimpan.
+                    </div>
+                  <?php endif; ?>
                 <?php endif; ?>
               <?php endif; ?>
             </div>
@@ -183,21 +236,15 @@ $contributors     = $contributors     ?? [];
               <ul class="meta-list">
                 <li>
                   <span>Tanggal Event</span>
-                  <strong class="text-blue-900">
-                    <?= isset($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-' ?>
-                  </strong>
+                  <strong class="text-blue-900"><?= isset($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-' ?></strong>
                 </li>
                 <li>
                   <span>Deadline Abstrak</span>
-                  <strong class="text-blue-900">
-                    <?= !empty($event['abstract_deadline']) ? date('d M Y H:i', strtotime($event['abstract_deadline'])) : '-' ?>
-                  </strong>
+                  <strong class="text-blue-900"><?= !empty($event['abstract_deadline']) ? date('d M Y H:i', strtotime($event['abstract_deadline'])) : '-' ?></strong>
                 </li>
                 <li>
                   <span>Deadline Full Paper</span>
-                  <strong class="text-blue-900">
-                    <?= !empty($event['full_paper_deadline']) ? date('d M Y H:i', strtotime($event['full_paper_deadline'])) : '-' ?>
-                  </strong>
+                  <strong class="text-blue-900"><?= !empty($event['full_paper_deadline']) ? date('d M Y H:i', strtotime($event['full_paper_deadline'])) : '-' ?></strong>
                 </li>
               </ul>
             </div>
@@ -206,7 +253,7 @@ $contributors     = $contributors     ?? [];
 
         <!-- KANAN -->
         <div class="col-12 col-xl-4">
-          <!-- Status (sticky) -->
+          <!-- Status -->
           <div class="card shadow-soft card-glass-plain sticky-card mb-3">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-flag"></i></span>
@@ -217,9 +264,13 @@ $contributors     = $contributors     ?? [];
                 <div class="alert mb-0 bg-blue-soft-2 text-blue-900 border-0 fw-semibold">
                   <i class="bi bi-hourglass-split me-1"></i> Abstrak Anda sedang diproses oleh reviewer.
                 </div>
+              <?php elseif ($status === 'revisi'): ?>
+                <div class="alert alert-primary mb-0 fw-semibold">
+                  <i class="bi bi-arrow-repeat me-1"></i> Perlu revisi. Silakan unggah file revisi pada form di bawah.
+                </div>
               <?php elseif ($status === 'ditolak'): ?>
                 <div class="alert alert-danger mb-0 fw-semibold">
-                  <i class="bi bi-x-octagon me-1"></i> Abstrak ditolak. Silakan unggah ulang sesuai catatan revisi.
+                  <i class="bi bi-x-octagon me-1"></i> Abstrak ditolak. Silakan unggah ulang melalui halaman kirim abstrak.
                 </div>
               <?php elseif ($status === 'diterima'): ?>
                 <div class="alert alert-success mb-0 fw-semibold">
@@ -230,7 +281,7 @@ $contributors     = $contributors     ?? [];
           </div>
 
           <!-- Reviewer Ditugaskan -->
-          <div class="card shadow-soft card-glass-plain sticky-card">
+          <div class="card shadow-soft card-glass-plain sticky-card mb-3">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-person-badge"></i></span>
               <h6 class="mb-0 fw-semibold text-blue-900">Reviewer Ditugaskan</h6>
@@ -260,6 +311,37 @@ $contributors     = $contributors     ?? [];
               <?php endif; ?>
             </div>
           </div>
+
+          <!-- Kontributor -->
+          <?php if (!empty($contributors)): ?>
+          <div class="card shadow-soft card-glass-plain sticky-card">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-people"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Kontributor</h6>
+            </div>
+            <div class="card-body">
+              <?php foreach ($contributors as $c): ?>
+                <div class="contrib-item">
+                  <div class="avatar-badge">
+                    <span><?= esc(strtoupper(mb_substr($c['name'] ?? 'C', 0, 1))) ?></span>
+                  </div>
+                  <div>
+                    <div class="fw-semibold text-blue-900"><?= esc($c['name'] ?? '—') ?></div>
+                    <?php if (!empty($c['affiliation'])): ?>
+                      <div class="text-muted small"><i class="bi bi-building me-1"></i><?= esc($c['affiliation']) ?></div>
+                    <?php endif; ?>
+                    <?php if (!empty($c['email'])): ?>
+                      <div class="small"><i class="bi bi-envelope me-1"></i><a class="text-primary" href="mailto:<?= esc($c['email']) ?>"><?= esc($c['email']) ?></a></div>
+                    <?php endif; ?>
+                    <?php if (!empty($c['presenter'])): ?>
+                      <span class="badge bg-blue-soft mt-1">Presenter</span>
+                    <?php endif; ?>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -302,7 +384,7 @@ $contributors     = $contributors     ?? [];
 
 body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.5px; line-height:1.6; }
 
-/* BG konsisten */
+/* BG */
 .page-wrap-blue{
   min-height:100vh; padding-top:72px; position:relative;
   background:
@@ -310,16 +392,11 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
     radial-gradient(900px 300px at 80% 110%, rgba(59,130,246,.14), rgba(59,130,246,0) 70%),
     linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
-.page-wrap-blue::after{
-  content:""; position:absolute; inset:0; pointer-events:none; opacity:.18;
-  background-image: radial-gradient(#93c5fd 1px, transparent 1px), radial-gradient(#bfdbfe 1px, transparent 1px);
-  background-position: 0 0, 20px 20px; background-size: 40px 40px, 40px 40px;
-}
 
-/* Container lebar */
+/* Container */
 .container-xxl{ max-width:min(100%, 1560px); padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; margin-inline:auto; }
 
-/* Grid gutter */
+/* Grid */
 .row.g-3, .row.g-4{ --bs-gutter-x: var(--gutter-x); --bs-gutter-y: var(--gutter-x); }
 
 /* HERO */
@@ -331,7 +408,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.5rem; }
 .text-white-75{ color:rgba(255,255,255,.85)!important; }
 
-/* Cards & accent */
+/* Cards */
 .card-glass-plain{ backdrop-filter:blur(6px); background:rgba(255,255,255,.96); border-radius:14px; border:1px solid rgba(30,64,175,.10); }
 .shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
 .card-accent{ position:relative; overflow:hidden; }
@@ -345,7 +422,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .chip{ display:inline-flex; align-items:center; padding:.28rem .6rem; font-size:.88rem; border-radius:999px; background:#eef3ff; color:#1e3a8a; border:1px solid rgba(30,64,175,.15); font-weight:600; }
 .chip.alt{ background:#f1f5ff; color:#244aa4; }
 
-/* Badge kecil lembut */
+/* Badge kecil */
 .bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.5rem .7rem; font-weight:600; font-size:.9rem; }
 .text-blue-900{ color:var(--blue-900)!important; }
 
@@ -360,14 +437,14 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 /* Sticky di kanan */
 .sticky-card{ position:sticky; top:84px; }
 
-/* Avatar reviewer + contributor */
+/* Avatar */
 .avatar-badge{
   width:44px; height:44px; border-radius:50%;
   display:inline-flex; align-items:center; justify-content:center;
   background:linear-gradient(180deg,#eaf2ff,#e3edff);
   color:#274690; font-weight:800; border:1px solid rgba(39,70,144,.15);
 }
-.avatar-sm{ width:38px; height:38px; font-size:.95rem; }
+.avatar-badge.sm{ width:36px; height:36px; font-size:.9rem; }
 
 /* Kontributor list */
 .contrib-item{
@@ -378,6 +455,23 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 
 /* Empty hint */
 .empty-hint{ color:#567; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.75rem 1rem; font-weight:600; }
+
+/* ===== Review timeline ===== */
+.review-timeline{ position:relative; padding-left:18px; }
+.review-timeline::before{
+  content:""; position:absolute; left:5px; top:0; bottom:0; width:2px; background:rgba(30,64,175,.18);
+}
+.review-item{ position:relative; margin-bottom:16px; }
+.review-item:last-child{ margin-bottom:0; }
+.review-dot{
+  position:absolute; left:-1px; top:6px; width:12px; height:12px; border-radius:50%;
+  background:var(--blue-500); box-shadow:0 0 0 4px rgba(59,130,246,.18);
+}
+.review-card{
+  margin-left:14px; background:#fff; border:1px solid rgba(30,64,175,.12);
+  border-radius:12px; padding:12px 14px; box-shadow:0 6px 16px rgba(30,64,175,.06);
+}
+.review-text{ white-space:pre-wrap; }
 
 /* Responsive */
 @media (max-width:575.98px){
@@ -396,7 +490,6 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
     targetFormId = btn.getAttribute('data-form-id');
     const msg = btn.getAttribute('data-message') || 'Batalkan upload abstrak?';
     const textEl = document.getElementById('confirmCancelText');
-    if (textEl) textContent = msg;
     if (textEl) textEl.textContent = msg;
   });
 
@@ -409,5 +502,20 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
       form.submit();
     }
   });
+
+  // bootstrap validation (untuk form revisi)
+  const forms = document.querySelectorAll('.needs-validation');
+  Array.from(forms).forEach(form => {
+    form.addEventListener('submit', e => {
+      if (!form.checkValidity()) { e.preventDefault(); e.stopPropagation(); }
+      form.classList.add('was-validated');
+    }, false);
+  });
+
+  // jika ada hash #section-revisi saat load, scroll smooth
+  if (location.hash === '#section-revisi') {
+    const t = document.getElementById('section-revisi');
+    if (t) setTimeout(() => t.scrollIntoView({behavior:'smooth', block:'start'}), 100);
+  }
 })();
 </script>

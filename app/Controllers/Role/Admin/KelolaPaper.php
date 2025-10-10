@@ -16,40 +16,60 @@ class KelolaPaper extends BaseController
      * (list semua event untuk kartu "Aktif/Mendatang" & "Berakhir")
      * + ringkasan beban reviewer (abstrak & full paper yang masih aktif)
      * ========================================================= */
-    public function index()
-    {
-        $eventModel = new EventModel();
-        $events     = $eventModel->orderBy('event_date', 'DESC')->findAll();
+   public function index()
+{
+    $eventModel = new EventModel();
+    $events     = $eventModel->orderBy('event_date', 'DESC')->findAll();
 
-        $db = \Config\Database::connect();
+    $db = \Config\Database::connect();
 
-        // deteksi carrier fullpaper (submissions / abstrak)
-        $fpCarrierTable = $db->tableExists('submissions') ? 'submissions'
-                        : ($db->tableExists('abstrak')     ? 'abstrak'     : null);
-        $fpCarrierPK    = $fpCarrierTable === 'abstrak' ? 'id_abstrak' : 'id';
+    // deteksi carrier fullpaper (submissions / abstrak)
+    $fpCarrierTable = $db->tableExists('submissions') ? 'submissions'
+                    : ($db->tableExists('abstrak')     ? 'abstrak'     : null);
+    $fpCarrierPK    = $fpCarrierTable === 'abstrak' ? 'id_abstrak' : 'id';
 
-        $today    = date('Y-m-d');
-        $aktif    = [];
-        $berakhir = [];
+    $today    = date('Y-m-d');
+    $aktif    = [];
+    $berakhir = [];
 
-        foreach ($events as &$e) {
-            $eventId = (int)($e['id'] ?? 0);
+    foreach ($events as &$e) {
+        $eventId = (int)($e['id'] ?? 0);
 
-            // ========== PRESENTER COUNT ==========
-            $e['presenter_count'] = $db->tableExists('abstrak')
-                ? (int)$db->table('abstrak')->where('event_id', $eventId)->countAllResults()
-                : 0;
+        // ========== PRESENTER COUNT (DISTINCT USER) ==========
+        $e['presenter_count'] = 0;
+        if ($db->tableExists('abstrak')) {
+            $absUserCol = $this->firstExistingColumn('abstrak', ['id_user','user_id','presenter_id']);
+            if ($absUserCol) {
+                $e['presenter_count'] = (int) $db->query("
+                    SELECT COUNT(DISTINCT a.{$absUserCol}) c
+                    FROM abstrak a
+                    WHERE a.event_id = ?
+                ", [$eventId])->getRow('c');
+            }
+        } elseif ($fpCarrierTable) {
+            $eventCol = $this->firstExistingColumn($fpCarrierTable, ['event_id','id_event','events_id']);
+            $userCol  = $this->firstExistingColumn($fpCarrierTable, ['id_user','user_id','presenter_id','id_presenter']);
+            if ($eventCol && $userCol) {
+                $e['presenter_count'] = (int) $db->query("
+                    SELECT COUNT(DISTINCT s.{$userCol}) c
+                    FROM {$fpCarrierTable} s
+                    WHERE s.{$eventCol} = ?
+                ", [$eventId])->getRow('c');
+            }
+        }
 
-            // ========== ABSTRAK BELUM DIASSIGN ==========
-            $e['abs_unassigned'] = 0;
-            if ($db->tableExists('abstrak')) {
+        // ========== ABSTRAK BELUM DIASSIGN (DISTINCT USER) ==========
+        $e['abs_unassigned'] = 0;
+        if ($db->tableExists('abstrak')) {
+            $absUserCol = $this->firstExistingColumn('abstrak', ['id_user','user_id','presenter_id']);
+            if ($absUserCol) {
                 // prefer pivot mapping
                 $absPivot = $this->firstExistingTable(['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak']);
                 if ($absPivot) {
                     [$absCol,$revCol] = $this->findRelCols($absPivot, ['id_abstrak','abstrak_id'], ['id_reviewer','reviewer_id']);
                     if ($absCol && $revCol) {
                         $e['abs_unassigned'] = (int)$db->query("
-                            SELECT COUNT(*) c
+                            SELECT COUNT(DISTINCT a.{$absUserCol}) c
                             FROM abstrak a
                             WHERE a.event_id = ?
                               AND NOT EXISTS (SELECT 1 FROM {$absPivot} p WHERE p.{$absCol} = a.id_abstrak)
@@ -62,7 +82,7 @@ class KelolaPaper extends BaseController
                         $colAbs = $this->firstExistingColumn($absReview, ['id_abstrak','abstrak_id']);
                         if ($colAbs) {
                             $e['abs_unassigned'] = (int)$db->query("
-                                SELECT COUNT(*) c
+                                SELECT COUNT(DISTINCT a.{$absUserCol}) c
                                 FROM abstrak a
                                 WHERE a.event_id = ?
                                   AND NOT EXISTS (SELECT 1 FROM {$absReview} r WHERE r.{$colAbs} = a.id_abstrak)
@@ -71,67 +91,71 @@ class KelolaPaper extends BaseController
                     }
                 }
             }
+        }
 
-            // ========== FULL PAPER BELUM DIASSIGN ==========
-            $e['fp_unassigned'] = 0;
-            if ($fpCarrierTable && $this->columnExists($fpCarrierTable,'full_paper_path')) {
-                $eventCol = $this->firstExistingColumn($fpCarrierTable, ['event_id','id_event','events_id']);
-                if ($eventCol) {
-                    $fpPivot = $this->firstExistingTable(['fullpaper_reviewers']); // pivot resmi
-                    if ($fpPivot) {
-                        $relCol = $this->firstExistingColumn($fpPivot, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
+        // ========== FULL PAPER BELUM DIASSIGN (DISTINCT USER) ==========
+        $e['fp_unassigned'] = 0;
+        if ($fpCarrierTable && $this->columnExists($fpCarrierTable,'full_paper_path')) {
+            $eventCol = $this->firstExistingColumn($fpCarrierTable, ['event_id','id_event','events_id']);
+            $userCol  = $this->firstExistingColumn($fpCarrierTable, ['id_user','user_id','presenter_id','id_presenter']);
+            if ($eventCol && $userCol) {
+                $fpPivot = $this->firstExistingTable(['fullpaper_reviewers']); // pivot resmi
+                if ($fpPivot) {
+                    $relCol = $this->firstExistingColumn($fpPivot, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
+                    if ($relCol) {
+                        $e['fp_unassigned'] = (int)$db->query("
+                            SELECT COUNT(DISTINCT s.{$userCol}) c
+                            FROM {$fpCarrierTable} s
+                            WHERE s.{$eventCol} = ?
+                              AND s.full_paper_path IS NOT NULL
+                              AND s.full_paper_path <> ''
+                              AND NOT EXISTS (SELECT 1 FROM {$fpPivot} fr WHERE fr.{$relCol} = s.{$fpCarrierPK})
+                        ", [$eventId])->getRow('c');
+                    }
+                } else {
+                    // fallback: tabel review
+                    $fpReviewTable = $this->firstExistingTable(['fullpaper_reviews','fullpaper_review','fp_review','review_fullpaper']);
+                    if ($fpReviewTable) {
+                        $relCol = $this->firstExistingColumn($fpReviewTable, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
                         if ($relCol) {
                             $e['fp_unassigned'] = (int)$db->query("
-                                SELECT COUNT(*) c
+                                SELECT COUNT(DISTINCT s.{$userCol}) c
                                 FROM {$fpCarrierTable} s
                                 WHERE s.{$eventCol} = ?
                                   AND s.full_paper_path IS NOT NULL
                                   AND s.full_paper_path <> ''
-                                  AND NOT EXISTS (SELECT 1 FROM {$fpPivot} fr WHERE fr.{$relCol} = s.{$fpCarrierPK})
+                                  AND NOT EXISTS (SELECT 1 FROM {$fpReviewTable} r WHERE r.{$relCol} = s.{$fpCarrierPK})
                             ", [$eventId])->getRow('c');
                         }
                     } else {
-                        // fallback: belum ada pivot → cek review table
-                        $fpReviewTable = $this->firstExistingTable(['fullpaper_reviews','fullpaper_review','fp_review','review_fullpaper']);
-                        if ($fpReviewTable) {
-                            $relCol = $this->firstExistingColumn($fpReviewTable, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
-                            if ($relCol) {
-                                $e['fp_unassigned'] = (int)$db->query("
-                                    SELECT COUNT(*) c
-                                    FROM {$fpCarrierTable} s
-                                    WHERE s.{$eventCol} = ?
-                                      AND s.full_paper_path IS NOT NULL
-                                      AND s.full_paper_path <> ''
-                                      AND NOT EXISTS (SELECT 1 FROM {$fpReviewTable} r WHERE r.{$relCol} = s.{$fpCarrierPK})
-                                ", [$eventId])->getRow('c');
-                            }
-                        } else {
-                            // benar-benar belum ada sistem review → semua yang sudah upload dianggap belum diassign
-                            $e['fp_unassigned'] = (int)$db->table($fpCarrierTable)
-                                ->where($eventCol, $eventId)
-                                ->where("full_paper_path IS NOT NULL", null, false)
-                                ->where("full_paper_path <>", '')
-                                ->countAllResults();
-                        }
+                        // benar-benar belum ada sistem review → semua yang sudah upload (distinct user)
+                        $e['fp_unassigned'] = (int)$db->query("
+                            SELECT COUNT(DISTINCT s.{$userCol}) c
+                            FROM {$fpCarrierTable} s
+                            WHERE s.{$eventCol} = ?
+                              AND s.full_paper_path IS NOT NULL
+                              AND s.full_paper_path <> ''
+                        ", [$eventId])->getRow('c');
                     }
                 }
             }
-
-            // sort bucket
-            if (($e['event_date'] ?? '') < $today) $berakhir[] = $e; else $aktif[] = $e;
         }
-        unset($e);
 
-        // ========== RINGKASAN BEBAN REVIEWER ==========
-        $reviewerLoads = $this->getReviewerLoads();
-
-        return view('role/admin/kelola_paper/index', [
-            'title'         => 'Kelola Paper',
-            'aktif'         => $aktif,
-            'berakhir'      => $berakhir,
-            'reviewerLoads' => $reviewerLoads, // ← untuk panel/slider daftar reviewer & beban aktif
-        ]);
+        // sort bucket
+        if (($e['event_date'] ?? '') < $today) $berakhir[] = $e; else $aktif[] = $e;
     }
+    unset($e);
+
+    // ========== RINGKASAN BEBAN REVIEWER ==========
+    $reviewerLoads = $this->getReviewerLoads();
+
+    return view('role/admin/kelola_paper/index', [
+        'title'         => 'Kelola Paper',
+        'aktif'         => $aktif,
+        'berakhir'      => $berakhir,
+        'reviewerLoads' => $reviewerLoads,
+    ]);
+}
 
     /* =========================================================
      * DETAIL -> /admin/kelola-paper/detail/{eventId}

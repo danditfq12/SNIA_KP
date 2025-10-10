@@ -6,14 +6,18 @@ $status      = strtoupper($status ?? 'NONE');
 $meta        = $status_meta ?? ['badge'=>'secondary','label'=>'-','hint'=>'-'];
 $path        = trim((string)($path ?? ''));
 $createdAt   = $created_at  ?? null;
-$reviewedAt  = $reviewed_at ?? null;   // (tetap diparsing, tapi tidak ditampilkan di Info FP)
-$decisionAt  = $decision_at ?? null;   // (tetap diparsing, tapi tidak ditampilkan di Info FP)
+$reviewedAt  = $reviewed_at ?? null;
+$decisionAt  = $decision_at ?? null;
 $notes       = trim((string)($notes ?? ''));
 $absMeta     = $abs_meta    ?? ['badge'=>'secondary','label'=>'-'];
 $isOpen      = (bool)($is_open ?? false);
 $canReupload = (bool)($can_reupload ?? false);
 $canUpload   = (bool)($can_upload ?? false);
 $eventId     = (int)($event_id ?? 0);
+
+// NEW:
+$submissionId = $submission_id ?? null;
+$reviewers    = $reviewers ?? [];
 
 $fmt     = fn($s)=> $s ? date('d M Y H:i', strtotime($s)) : '-';
 $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
@@ -25,7 +29,7 @@ $formatLabel = function($f){
 
 $downloadUrl = $path !== '' ? site_url('presenter/fullpaper/download/'.rawurlencode($path)) : '';
 
-// ===== Komentar reviewer (dipindah ke kanan)
+// Komentar gabungan lama (tetap dipakai untuk fallback)
 $possibleCommentKeys = [
   'notes','komentar_reviewer','catatan_reviewer','reviewer_comment',
   'reviewer_comments','review_note','review_notes','alasan_ditolak'
@@ -44,7 +48,27 @@ foreach ($possibleCommentKeys as $k) {
 }
 $reviewComments = array_values(array_unique(array_map('trim', $reviewComments)));
 
-// ===== Kategori abstrak (fallback agar tidak kosong)
+// Badge helper utk keputusan reviewer
+$badgeForDecision = function($k){
+  $k = strtolower((string)$k);
+  return match (true) {
+    in_array($k,['accepted','accept','diterima']) => ['success','Accepted'],
+    in_array($k,['revision','revisi'])            => ['warning','Revision'],
+    in_array($k,['rejected','reject','ditolak'])  => ['danger','Rejected'],
+    default                                       => ['secondary', $k ? ucfirst($k) : '—'],
+  };
+};
+// Badge helper utk status penugasan reviewer
+$badgeForAssign = function($s){
+  $s = strtolower((string)$s);
+  return match ($s) {
+    'accepted' => ['primary','Assigned'],
+    'declined' => ['secondary','Declined'],
+    default    => ['secondary','Pending'],
+  };
+};
+
+// Kategori abstrak (fallback agar tidak kosong)
 $absKategori = $abs['nama_kategori']
   ?? $abs['kategori']
   ?? $abs['kategori_nama']
@@ -85,7 +109,7 @@ $absKategori = (trim((string)$absKategori) === '') ? '-' : $absKategori;
       <div class="row g-3">
         <!-- KIRI -->
         <div class="col-12 col-xl-8">
-          <!-- Informasi Full Paper (tanpa Status/Direview/Keputusan) -->
+          <!-- Informasi Full Paper -->
           <div class="card shadow-soft card-glass-plain mb-3 card-accent">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-info-circle"></i></span>
@@ -119,7 +143,7 @@ $absKategori = (trim((string)$absKategori) === '') ? '-' : $absKategori;
             </div>
           </div>
 
-          <!-- Informasi Abstrak di Event Ini -->
+          <!-- Informasi Abstrak -->
           <div class="card shadow-soft card-glass-plain mb-3">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
               <div class="d-flex align-items-center gap-2">
@@ -172,7 +196,7 @@ $absKategori = (trim((string)$absKategori) === '') ? '-' : $absKategori;
 
         <!-- KANAN -->
         <div class="col-12 col-xl-4">
-          <!-- Status (sticky) -->
+          <!-- Status FP -->
           <div class="card shadow-soft card-glass-plain sticky-card mb-3">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-flag"></i></span>
@@ -203,11 +227,68 @@ $absKategori = (trim((string)$absKategori) === '') ? '-' : $absKategori;
             </div>
           </div>
 
-          <!-- Komentar Reviewer (dipindah ke kanan) -->
+          <!-- NEW: Status Reviewer & Komentar -->
+          <div class="card shadow-soft card-glass-plain sticky-card mb-3">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-blue-soft"><i class="bi bi-people"></i></span>
+                <h6 class="mb-0 fw-semibold text-blue-900">Status Reviewer</h6>
+              </div>
+              <?php if ($submissionId): ?>
+                <span class="badge bg-light text-muted">#<?= (int)$submissionId ?></span>
+              <?php endif; ?>
+            </div>
+            <div class="card-body">
+              <?php if (empty($reviewers)): ?>
+                <div class="empty-hint">
+                  <i class="bi bi-info-circle me-1"></i> Belum ada reviewer yang ditugaskan.
+                </div>
+              <?php else: ?>
+                <div class="vstack gap-3">
+                  <?php foreach ($reviewers as $r):
+                    [$cls, $lbl] = $badgeForDecision($r['keputusan'] ?? null);
+                    [$csa, $lsa] = $badgeForAssign($r['assignment_status'] ?? null);
+                  ?>
+                  <div class="p-2 border rounded-3">
+                    <div class="d-flex align-items-start justify-content-between">
+                      <div>
+                        <div class="fw-semibold text-blue-900">
+                          <?= esc($r['name'] ?? 'Reviewer') ?>
+                          <?php if (!empty($r['email'])): ?>
+                            <small class="text-muted ms-1">&lt;<?= esc($r['email']) ?>&gt;</small>
+                          <?php endif; ?>
+                        </div>
+                        <div class="small text-muted">Tugas: <span class="badge bg-<?= $csa ?>"><?= $lsa ?></span></div>
+                      </div>
+                      <div>
+                        <span class="badge bg-<?= $cls ?>"><?= $lbl ?></span>
+                      </div>
+                    </div>
+
+                    <?php if (!empty($r['tanggal_review']) || !empty($r['komentar'])): ?>
+                      <div class="mt-2 small">
+                        <?php if (!empty($r['tanggal_review'])): ?>
+                          <div class="text-muted mb-1"><i class="bi bi-clock"></i> <?= esc($fmtDT($r['tanggal_review'])) ?></div>
+                        <?php endif; ?>
+                        <?php if (!empty($r['komentar'])): ?>
+                          <div class="px-2 py-2 bg-light rounded">
+                            <?= nl2br(esc($r['komentar'])) ?>
+                          </div>
+                        <?php endif; ?>
+                      </div>
+                    <?php endif; ?>
+                  </div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+
+          <!-- Komentar Reviewer (gabungan lama sebagai pelengkap) -->
           <div class="card shadow-soft card-glass-plain sticky-card">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-chat-left-dots"></i></span>
-              <h6 class="mb-0 fw-semibold text-blue-900">Komentar Reviewer</h6>
+              <h6 class="mb-0 fw-semibold text-blue-900">Komentar (Ringkas)</h6>
             </div>
             <div class="card-body">
               <?php if (!empty($reviewComments)): ?>
@@ -303,6 +384,8 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .bg-blue-soft-2{ background:linear-gradient(180deg,#eef4ff,#eaf2ff); }
 
 .sticky-card{ position:sticky; top:84px; }
+
+.empty-hint{ color:#567; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.8rem 1rem; font-weight:600; }
 
 @media (max-width:575.98px){
   .container-xxl{ padding-left:1rem!important; padding-right:1rem!important; }

@@ -7,7 +7,7 @@ use App\Models\EventModel;
 use App\Models\EventRegistrationModel;
 use App\Models\AbstrakModel;
 use App\Models\FullPaperModel;
-use App\Models\KategoriAbstrakModel; // ⬅️ tambahkan
+use App\Models\KategoriAbstrakModel;
 
 class Fullpaper extends BaseController
 {
@@ -15,7 +15,7 @@ class Fullpaper extends BaseController
     protected EventRegistrationModel $regModel;
     protected AbstrakModel $abstrakModel;
     protected FullPaperModel $fpModel;
-    protected KategoriAbstrakModel $kategoriModel; // ⬅️ tambahkan
+    protected KategoriAbstrakModel $kategoriModel;
 
     public function __construct()
     {
@@ -23,9 +23,11 @@ class Fullpaper extends BaseController
         $this->regModel      = new EventRegistrationModel();
         $this->abstrakModel  = new AbstrakModel();
         $this->fpModel       = new FullPaperModel();
-        $this->kategoriModel = new KategoriAbstrakModel(); // ⬅️ tambahkan
+        $this->kategoriModel = new KategoriAbstrakModel();
         helper(['date', 'text']);
     }
+
+    /* ======================= Normalizers & eligibility ======================= */
 
     private function isFullPaperOpen(array $event): bool
     {
@@ -116,6 +118,139 @@ class Fullpaper extends BaseController
         return true;
     }
 
+    /* ======================= Reviewer status helpers (for presenter) ======================= */
+
+    private function resolveReviewerSource(): array
+    {
+        $db = \Config\Database::connect();
+        $table = $db->tableExists('reviewers') ? 'reviewers'
+              : ($db->tableExists('users') ? 'users' : null);
+        if (!$table) return ['table'=>null,'id'=>null,'name'=>null,'email'=>null];
+
+        $fields = array_flip($db->getFieldNames($table) ?: []);
+        $idCol   = null; foreach (['id','id_user','user_id','reviewer_id'] as $c) if (isset($fields[$c])) { $idCol = $c; break; }
+        $nameCol = null; foreach (['nama_lengkap','nama','name','full_name','username'] as $c) if (isset($fields[$c])) { $nameCol = $c; break; }
+        $emailCol= null; foreach (['email','user_email','mail'] as $c) if (isset($fields[$c])) { $emailCol = $c; break; }
+
+        return ['table'=>$table,'id'=>$idCol,'name'=>$nameCol,'email'=>$emailCol];
+    }
+
+    /** Ambil reviewer yang ditugaskan + keputusan terakhir setelah upload terakhir */
+    private function getAssignedReviewersWithLatestDecision(int $submissionId, ?string $uploadedAt): array
+    {
+        $db = \Config\Database::connect();
+        if (!$db->tableExists('fullpaper_reviewers')) return [];
+
+        $fields = array_flip($db->getFieldNames('fullpaper_reviewers') ?: []);
+        $colRel = isset($fields['submission_id']) ? 'submission_id' : (isset($fields['id_submission']) ? 'id_submission' : null);
+        $colRev = isset($fields['reviewer_id'])   ? 'reviewer_id'   : (isset($fields['id_reviewer'])   ? 'id_reviewer'   : null);
+        $colSt  = isset($fields['assignment_status']) ? 'assignment_status'
+                 : (isset($fields['status_tugas']) ? 'status_tugas' : (isset($fields['tugas_status']) ? 'tugas_status' : (isset($fields['konfirmasi_status']) ? 'konfirmasi_status' : null)));
+        if (!$colRel || !$colRev) return [];
+
+        // reviewer yang ditugaskan
+        $assigned = $db->table('fullpaper_reviewers')
+            ->select("$colRev AS reviewer_id, ".($colSt ? "$colSt AS assignment_status, " : "'' AS assignment_status, ")." assigned_at")
+            ->where($colRel, $submissionId)
+            ->get()->getResultArray();
+
+        if (!$assigned) return [];
+
+        $ids = array_values(array_unique(array_map(fn($r)=>(int)$r['reviewer_id'], $assigned)));
+
+        // identitas reviewer
+        $src = $this->resolveReviewerSource();
+        $idCol   = $src['id']; $nameCol = $src['name']; $emailCol = $src['email'];
+        $ident = [];
+        if ($src['table'] && $idCol) {
+            $q = $db->table($src['table'])
+                ->select("$idCol AS id"
+                    .($nameCol? ", $nameCol AS name" : ", NULL AS name")
+                    .($emailCol? ", $emailCol AS email" : ", NULL AS email"))
+                ->whereIn($idCol, $ids)->get()->getResultArray();
+            foreach ($q as $r) $ident[(int)$r['id']] = ['name'=>$r['name'] ?? 'Reviewer', 'email'=>$r['email'] ?? null];
+        }
+
+        // keputusan terakhir per reviewer (round terbaru = >= uploadedAt)
+        $latest = [];
+        if ($db->tableExists('fullpaper_reviews')) {
+            $qb = $db->table('fullpaper_reviews')
+                ->select('reviewer_id, keputusan, komentar, tanggal_review')
+                ->where('submission_id', $submissionId)
+                ->whereIn('reviewer_id', $ids);
+            if ($uploadedAt) $qb->where('tanggal_review >=', $uploadedAt);
+            $rows = $qb->orderBy('reviewer_id','ASC')->orderBy('tanggal_review','DESC')->get()->getResultArray();
+            foreach ($rows as $r) {
+                $rid = (int)$r['reviewer_id'];
+                if (!isset($latest[$rid])) $latest[$rid] = $r;
+            }
+        }
+
+        // gabungkan
+        $out = [];
+        foreach ($assigned as $a) {
+            $rid   = (int)$a['reviewer_id'];
+            $stRaw = strtolower((string)($a['assignment_status'] ?? 'pending'));
+            $st    = match (true) {
+                in_array($stRaw, ['accepted','accept','ok','yes'], true)  => 'accepted',
+                in_array($stRaw, ['declined','decline','no'], true)       => 'declined',
+                default                                                   => 'pending',
+            };
+            $dec   = $latest[$rid]['keputusan'] ?? null;
+            $kom   = $latest[$rid]['komentar']  ?? null;
+            $ts    = $latest[$rid]['tanggal_review'] ?? null;
+
+            $out[] = [
+                'reviewer_id'       => $rid,
+                'name'              => $ident[$rid]['name']  ?? 'Reviewer',
+                'email'             => $ident[$rid]['email'] ?? null,
+                'assignment_status' => $st,
+                'keputusan'         => $dec,         // accepted | revision | rejected | null
+                'komentar'          => $kom,
+                'tanggal_review'    => $ts,
+            ];
+        }
+        return $out;
+    }
+
+    private function resolveSubmissionId(?array $row): ?int
+    {
+        if (!$row) return null;
+        $cands = ['submission_id','id_submission','fullpaper_id','id_fullpaper','id','id_abstrak'];
+        foreach ($cands as $k) if (isset($row[$k]) && $row[$k]) return (int)$row[$k];
+        if (property_exists($this->fpModel, 'primaryKey')) {
+            $pk = $this->fpModel->primaryKey;
+            if ($pk && isset($row[$pk]) && $row[$pk]) return (int)$row[$pk];
+        }
+        return null;
+    }
+
+    /** Cari submission id “carrier” saat ini (submissions|abstrak) untuk digunakan mengambil reviewer */
+    private function findCurrentSubmissionId(int $userId, int $eventId): ?int
+    {
+        $db = \Config\Database::connect();
+
+        if ($db->tableExists('submissions')) {
+            $row = $db->table('submissions')
+                ->select('id')
+                ->where('user_id', $userId)
+                ->where('event_id', $eventId)
+                ->orderBy('id','DESC')->get()->getRowArray();
+            if ($row) return (int)$row['id'];
+        }
+        if ($db->tableExists('abstrak')) {
+            $row = $db->table('abstrak')
+                ->select('id_abstrak')
+                ->where('id_user', $userId)
+                ->where('event_id', $eventId)
+                ->orderBy('id_abstrak','DESC')->get()->getRowArray();
+            if ($row) return (int)$row['id_abstrak'];
+        }
+        return null;
+    }
+
+    /* ======================= Pages ======================= */
+
     public function index()
     {
         $userId = (int) session()->get('id_user');
@@ -199,7 +334,6 @@ class Fullpaper extends BaseController
         $reg = $this->regModel->findUserReg($eventId, $userId);
         if (!$reg) return redirect()->to('/presenter/fullpaper')->with('error', 'Anda belum terdaftar pada event ini.');
 
-        // ⬇️ Ambil abstrak TERAKHIR user untuk event ini + join kategori agar ada `nama_kategori`
         $absTbl = $this->abstrakModel->getTable() ?? 'abstrak';
         $katTbl = $this->kategoriModel->getTable() ?? 'kategori_abstrak';
 
@@ -210,15 +344,12 @@ class Fullpaper extends BaseController
                                   ->orderBy("$absTbl.id_abstrak", 'DESC')
                                   ->first();
 
-        // Fallback kalau kolom/alias beda
         if ($abs && empty($abs['nama_kategori']) && !empty($abs['id_kategori'])) {
             $kat = $this->kategoriModel->find((int)$abs['id_kategori']);
-            if ($kat) {
-                $abs['nama_kategori'] = $kat['nama_kategori'] ?? ($kat['nama'] ?? null);
-            }
+            if ($kat) $abs['nama_kategori'] = $kat['nama_kategori'] ?? ($kat['nama'] ?? null);
         }
 
-        [$status, $path, $createdAt, $reviewedAt, $decisionAt, $notes]
+        [$status, $path, $createdAt, $reviewedAt, $decisionAt, $notes, $fpRow]
             = $this->latestFullpaperMeta($userId, $eventId, $abs);
 
         $absEligible = $this->isAbstractEligible($abs);
@@ -229,6 +360,13 @@ class Fullpaper extends BaseController
         $isOpen       = $this->isFullPaperOpen($event);
         $canReupload  = $isOpen && $absEligible && in_array($status, ['REVISION','REJECTED'], true);
         $canUploadNew = $isOpen && $absEligible && $status === 'NONE';
+
+        // ===== ambil submission id carrier + status reviewer
+        $submissionId = $this->findCurrentSubmissionId($userId, $eventId);
+        $reviewers    = [];
+        if ($submissionId) {
+            $reviewers = $this->getAssignedReviewersWithLatestDecision($submissionId, $createdAt);
+        }
 
         return view('role/presenter/fullpaper/detail', [
             'title'        => 'Detail Full Paper',
@@ -246,6 +384,9 @@ class Fullpaper extends BaseController
             'can_reupload' => $canReupload,
             'can_upload'   => $canUploadNew,
             'event_id'     => $eventId,
+            // NEW:
+            'submission_id'=> $submissionId,
+            'reviewers'    => $reviewers,
         ]);
     }
 
@@ -264,7 +405,6 @@ class Fullpaper extends BaseController
             return redirect()->to('/presenter/fullpaper')->with('error', 'Pengumpulan Full Paper ditutup.');
         }
 
-        // Ambil abstrak + kategori agar konsisten di form
         $absTbl = $this->abstrakModel->getTable() ?? 'abstrak';
         $katTbl = $this->kategoriModel->getTable() ?? 'kategori_abstrak';
         $abs = $this->abstrakModel->select("$absTbl.*, $katTbl.nama_kategori")
@@ -319,8 +459,8 @@ class Fullpaper extends BaseController
                                   ->where('event_id',$eventId)
                                   ->orderBy('id_abstrak','DESC')->first();
 
-        [$fpStatus]  = $this->latestFullpaperMeta($userId, $eventId, $abs);
-        $absEligible = $this->isAbstractEligible($abs);
+        [$fpStatus,,]  = $this->latestFullpaperMeta($userId, $eventId, $abs);
+        $absEligible   = $this->isAbstractEligible($abs);
 
         if (!$absEligible) {
             return redirect()->to('/presenter/abstrak/create/'.$eventId)
@@ -339,17 +479,38 @@ class Fullpaper extends BaseController
             return redirect()->back()->withInput()->with('error','Ukuran maksimal 20MB.');
         }
 
+        // Simpan submission id sebelumnya (jika ada)
+        $before = method_exists($this->fpModel,'getLatestRowByUserEvent')
+            ? $this->fpModel->getLatestRowByUserEvent($userId, $eventId) : null;
+        $beforeId = $this->resolveSubmissionId($before);
+
         try {
             $stored = $this->fpModel->moveUploadedFile($file, $userId, $eventId);
+
             $ok = $this->fpModel->attachFullPaperByUserEvent(
-                $userId,
-                $eventId,
-                $stored,
-                \App\Models\FullPaperModel::STATUS_UPLOADED
+                $userId, $eventId, $stored, \App\Models\FullPaperModel::STATUS_UPLOADED
             );
-            if (!$ok) {
-                return redirect()->back()->withInput()->with('error', 'Tidak ditemukan data abstrak/submission untuk ditempeli.');
+            if (!$ok) return redirect()->back()->withInput()->with('error','Tidak ditemukan data abstrak/submission untuk ditempeli.');
+
+            $this->forceUploadedStatus($userId, $eventId);
+
+            $after  = method_exists($this->fpModel,'getLatestRowByUserEvent')
+                ? $this->fpModel->getLatestRowByUserEvent($userId, $eventId) : null;
+            $newId  = $this->resolveSubmissionId($after);
+
+            // naikkan revisi_ke bila kolom ada
+            $db = \Config\Database::connect();
+            $table = $db->tableExists('submissions') ? 'submissions' : ($db->tableExists('abstrak') ? 'abstrak' : null);
+            if ($table && in_array('revisi_ke', $db->getFieldNames($table), true) && $newId) {
+                $pk = $table==='submissions' ? 'id' : 'id_abstrak';
+                $db->table($table)->where($pk, $newId)->set('revisi_ke','COALESCE(revisi_ke,0)+1', false)->update();
             }
+
+            // auto-copy assignment reviewer dari submission sebelumnya (kalau ada)
+            if ($newId && (!$beforeId || $newId !== $beforeId)) {
+                $this->propagateFullpaperAssignments($newId, $userId, $eventId, $beforeId);
+            }
+
         } catch (\Throwable $e) {
             return redirect()->back()->withInput()->with('error', 'Gagal mengunggah: '.$e->getMessage());
         }
@@ -365,5 +526,78 @@ class Fullpaper extends BaseController
             return redirect()->back()->with('error','File tidak ditemukan.');
         }
         return $this->response->download($path, null);
+    }
+
+    /* =========================== HELPERS: persist status uploaded & copy reviewer =========================== */
+
+    private function forceUploadedStatus(int $userId, int $eventId): void
+    {
+        $db = \Config\Database::connect();
+
+        if ($db->tableExists('submissions')) {
+            $new = $db->table('submissions')
+                ->select('id')
+                ->where('user_id', $userId)
+                ->where('event_id', $eventId)
+                ->orderBy('id','DESC')->get()->getRowArray();
+            if ($new && in_array('full_paper_status', $db->getFieldNames('submissions'), true)) {
+                $db->table('submissions')->where('id', (int)$new['id'])->update(['full_paper_status' => 'UPLOADED', 'eligible_to_pay' => false]);
+            }
+        } elseif ($db->tableExists('abstrak')) {
+            $abs = $db->table('abstrak')
+                ->select('id_abstrak')
+                ->where('id_user', $userId)
+                ->where('event_id', $eventId)
+                ->orderBy('id_abstrak','DESC')->get()->getRowArray();
+            if ($abs && in_array('full_paper_status', $db->getFieldNames('abstrak'), true)) {
+                $db->table('abstrak')->where('id_abstrak', (int)$abs['id_abstrak'])->update(['full_paper_status' => 'UPLOADED']);
+            }
+        }
+    }
+
+    private function propagateFullpaperAssignments(int $newSubmissionId, int $userId, int $eventId, ?int $prevSubmissionId = null): int
+    {
+        $db = \Config\Database::connect();
+        if (!$db->tableExists('fullpaper_reviewers')) return 0;
+
+        $pFields = array_flip($db->getFieldNames('fullpaper_reviewers'));
+        $colRel  = isset($pFields['submission_id']) ? 'submission_id'
+                 : (isset($pFields['id_submission']) ? 'id_submission' : null);
+        $colRev  = isset($pFields['reviewer_id']) ? 'reviewer_id'
+                 : (isset($pFields['id_reviewer']) ? 'id_reviewer' : null);
+        if (!$colRel || !$colRev) return 0;
+
+        if ($prevSubmissionId === null && $db->tableExists('submissions')) {
+            $prev = $db->table('submissions')
+                ->select('id')
+                ->where('user_id', $userId)
+                ->where('event_id', $eventId)
+                ->where('id <>', $newSubmissionId)
+                ->orderBy('id','DESC')->get()->getRowArray();
+            if ($prev) $prevSubmissionId = (int)$prev['id'];
+        }
+        if (!$prevSubmissionId) return 0;
+
+        $prevRevs = $db->table('fullpaper_reviewers')
+            ->select($colRev.' AS rid')
+            ->where($colRel, $prevSubmissionId)
+            ->get()->getResultArray();
+
+        $copied = 0;
+        foreach ($prevRevs as $r) {
+            $rid = (int)($r['rid'] ?? 0);
+            if ($rid <= 0) continue;
+
+            $exists = $db->table('fullpaper_reviewers')
+                ->where($colRel, $newSubmissionId)
+                ->where($colRev, $rid)
+                ->countAllResults();
+            if ($exists) continue;
+
+            $ins = [$colRel => $newSubmissionId, $colRev => $rid, 'assigned_at' => date('Y-m-d H:i:s')];
+            if ($db->table('fullpaper_reviewers')->insert($ins)) $copied++;
+        }
+
+        return $copied;
     }
 }

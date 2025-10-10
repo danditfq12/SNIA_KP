@@ -9,13 +9,13 @@ use App\Models\ReviewerKategoriModel;
 
 class Abstrak extends BaseController
 {
-    protected $abstrakModel;
-    protected $reviewModel;
-    protected $revKatModel;
+    protected AbstrakModel $abstrakModel;
+    protected ReviewModel $reviewModel;
+    protected ReviewerKategoriModel $revKatModel;
     protected $db;
-
-    // opsional: diinisiasi hanya jika class ada
     protected $fpModel = null;
+
+    private bool $autoAcceptOnAssign = false;
 
     public function __construct()
     {
@@ -38,89 +38,171 @@ class Abstrak extends BaseController
     {
         $fname = trim((string)($row['file_abstrak'] ?? ''));
         if ($fname === '') return null;
-
         if ($this->isPublicUrl($fname)) return $fname;
 
         $clean = ltrim(str_replace('\\','/',$fname), '/');
 
-        $relCandidates = [
-            FCPATH    . $clean,
-            WRITEPATH . $clean,
-            ROOTPATH  . $clean,
+        $candidates = [
+            FCPATH.$clean,
+            WRITEPATH.$clean,
+            ROOTPATH.$clean,
+            FCPATH.'uploads/abstrak/'.basename($clean),
+            WRITEPATH.'uploads/abstrak/'.basename($clean),
         ];
-        foreach ($relCandidates as $p) if (is_file($p)) return $p;
-
-        $just = basename($clean);
-        $nameCandidates = [
-            FCPATH    . 'uploads/abstrak/' . $just,
-            WRITEPATH . 'uploads/abstrak/' . $just,
-        ];
-        foreach ($nameCandidates as $p) if (is_file($p)) return $p;
-
+        foreach ($candidates as $p) if (is_file($p)) return $p;
         if (is_file($fname)) return $fname;
         return null;
     }
 
-    /** ==========================================================
-     *  UTIL – Reopen assignment ke reviewer yang sama saat REVISI
-     *  (DINONAKTIFKAN sesuai permintaan: jangan auto-assign saat revisi)
-     *  ========================================================== */
-    private function reopenAssignmentsForRevision(int $idAbstrak): int
+    private function reviewTable(): ?string
     {
-        // DISABLED: Kembalikan 0 agar tidak membuat row pending baru.
-        return 0;
+        if ($this->db->tableExists('reviews')) return 'reviews';
+        if ($this->db->tableExists('review'))  return 'review';
+        return null;
     }
 
-    /** ==========================================================
-     *  UTIL – Tutup semua PENDING saat abstrak DITOLAK
-     *  ========================================================== */
-    private function closeAllPendingAsRejected(int $idAbstrak): int
+    private function hasCol(string $table, string $col): bool
     {
-        $this->db->table('reviews')
-            ->where('id_abstrak', $idAbstrak)
-            ->where('keputusan', 'pending')
-            ->set('keputusan', 'ditolak')
-            ->set('komentar', 'Ditutup oleh editor (abstrak ditolak).', false)
-            ->set('tanggal_review', date('Y-m-d H:i:s'))
-            ->update();
-
-        return $this->db->affectedRows();
+        $cols = array_map('strtolower', $this->db->getFieldNames($table) ?: []);
+        return in_array(strtolower($col), $cols, true);
     }
 
-    /** ==========================================================
-     *  UTIL – Cascade ke FullPaper jika abstrak ditolak
-     *  ========================================================== */
-    private function cascadeFullpaperOnAbstractRejected(array $absRow): void
+    private function pickCol(string $table, array $cands): ?string
     {
-        if (!$this->fpModel) return; // skip jika model tidak tersedia
+        foreach ($cands as $c) if ($this->hasCol($table,$c)) return $c;
+        return null;
+    }
 
-        $userId  = (int)($absRow['id_user'] ?? 0);
-        $eventId = (int)($absRow['event_id'] ?? 0);
-        if (!$userId || !$eventId) return;
+    private function reviewCols(string $rt): array
+    {
+        return [
+            'pk'        => $this->pickCol($rt, ['id','id_review']) ?? 'id',
+            'reviewer'  => $this->pickCol($rt, ['id_reviewer','reviewer_id','user_id']) ?? 'id_reviewer',
+            'abstrakFk' => $this->pickCol($rt, ['id_abstrak']) ?? 'id_abstrak',
+            'decision'  => $this->pickCol($rt, ['keputusan','decision','status']),
+            'comment'   => $this->pickCol($rt, ['komentar','comment']),
+            'ts'        => $this->pickCol($rt, ['tanggal_review','updated_at','created_at']),
+            'task'      => $this->pickCol($rt, ['status_tugas','tugas_status','assignment_status','konfirmasi_status']),
+            'reason'    => $this->pickCol($rt, ['alasan_tolak','alasan','decline_reason','reason']),
+            'accAt'     => $this->pickCol($rt, ['accepted_at','confirmed_at','konfirmasi_at']),
+            'decAt'     => $this->pickCol($rt, ['declined_at','rejected_at']),
+            'type'      => $this->pickCol($rt, ['type','review_type']),
+        ];
+    }
 
-        // Cari FP yang terkait (skema: user + event)
-        $row = method_exists($this->fpModel, 'getLatestRowByUserEvent')
-            ? $this->fpModel->getLatestRowByUserEvent($userId, $eventId)
-            : null;
+    private function normTask(?string $v): string
+    {
+        $k = strtolower(trim((string)$v));
+        if ($k === '') return 'pending';
+        if (in_array($k, ['accept','accepted','ok','yes'], true)) return 'accepted';
+        if (in_array($k, ['decline','declined','no','rejected_task'], true)) return 'declined';
+        return in_array($k, ['requested','assigned','awaiting','waiting','new']) ? 'pending' : $k;
+    }
 
-        if (!$row) return;
+    private function normDecision(?string $v): string
+    {
+        $k = strtolower(trim((string)$v));
+        if (in_array($k, ['accepted','diterima','accept'], true)) return 'diterima';
+        if (in_array($k, ['revisi','revision'], true))          return 'revisi';
+        if (in_array($k, ['rejected','ditolak','reject'], true))return 'ditolak';
+        if (in_array($k, ['sedang_direview','in_review','pending'], true))return 'sedang_direview';
+        return 'pending';
+    }
 
-        // Jika ada FP aktif, tandai dibatalkan akibat abstrak ditolak
-        $id = (int)($row['id'] ?? $row['id_fullpaper'] ?? 0);
-        if (!$id) return;
+    private function countActiveHolders(int $idAbstrak): int
+    {
+        $rt = $this->reviewTable();
+        if (!$rt) return 0;
+        $R  = $this->reviewCols($rt);
 
-        try {
-            $this->db->table($this->fpModel->table ?? 'full_papers')
-                ->where('id', $id)
-                ->set('full_paper_status', 'CANCELLED_ABSTRACT_REJECTED')
-                ->set('decision_at', date('Y-m-d H:i:s'))
-                ->update();
-        } catch (\Throwable $e) {
-            log_message('warning', 'Cascade FP fail: '.$e->getMessage());
+        $b = $this->db->table($rt)->where($R['abstrakFk'], $idAbstrak);
+
+        if ($R['task']) {
+            $b->groupStart()
+                ->where("{$R['task']} IS NULL", null, false)
+                ->orWhereIn("LOWER({$R['task']})", ['pending','accepted','requested','assigned','awaiting','waiting','new'])
+              ->groupEnd();
         }
+        if ($R['decision']) {
+            $b->groupStart()
+                ->where("{$R['decision']} IS NULL", null, false)
+                ->orWhereIn("LOWER({$R['decision']})", ['pending','sedang_direview',''])
+              ->groupEnd();
+        }
+        return (int)$b->countAllResults();
     }
 
-    /** LIST + KPI */
+    private function fetchReviewsActive(int $idAbstrak): array
+    {
+        $rt = $this->reviewTable();
+        if (!$rt) return [];
+        $R  = $this->reviewCols($rt);
+
+        $sel = [
+            "r.{$R['pk']} AS id",
+            "r.{$R['reviewer']} AS id_reviewer",
+            ($R['decision'] ? "r.{$R['decision']} AS keputusan" : "'' AS keputusan"),
+            ($R['comment']  ? "r.{$R['comment']}  AS komentar"  : "'' AS komentar"),
+            ($R['ts']       ? "r.{$R['ts']}       AS tanggal_review" : "NULL AS tanggal_review"),
+            ($R['task']     ? "r.{$R['task']}     AS tugas_status" : "'' AS tugas_status"),
+            "u.nama_lengkap AS reviewer_name",
+            "u.email        AS reviewer_email",
+        ];
+
+        $b = $this->db->table("$rt r")
+            ->select(implode(', ', $sel), false)
+            ->join('users u', "u.id_user = r.{$R['reviewer']}", 'left')
+            ->where("r.{$R['abstrakFk']}", $idAbstrak);
+
+        if ($R['task']) {
+            $b->groupStart()
+                 ->where("r.{$R['task']} IS NULL", null, false)
+                 ->orWhereNotIn("LOWER(r.{$R['task']})", ['declined','rejected_task','decline','no'])
+              ->groupEnd();
+        }
+
+        $rows = $b->orderBy($R['pk'],'DESC')->get()->getResultArray();
+        foreach ($rows as &$r) {
+            $r['tugas_status'] = $this->normTask($r['tugas_status'] ?? '');
+            $r['keputusan']    = $this->normDecision($r['keputusan'] ?? '');
+            $r['komentar']     = (string)($r['komentar'] ?? '');
+        }
+        unset($r);
+        return $rows;
+    }
+
+    private function fetchReviewsDeclined(int $idAbstrak): array
+    {
+        $rt = $this->reviewTable();
+        if (!$rt) return [];
+        $R  = $this->reviewCols($rt);
+
+        $sel = [
+            "r.{$R['pk']} AS id",
+            "r.{$R['reviewer']} AS id_reviewer",
+            ($R['reason'] ? "r.{$R['reason']} AS alasan" : "'' AS alasan"),
+            ($R['decAt']  ? "r.{$R['decAt']}  AS declined_at" : "NULL AS declined_at"),
+            "u.nama_lengkap AS reviewer_name",
+            "u.email        AS reviewer_email",
+        ];
+
+        $b = $this->db->table("$rt r")
+            ->select(implode(', ', $sel), false)
+            ->join('users u', "u.id_user = r.{$R['reviewer']}", 'left')
+            ->where("r.{$R['abstrakFk']}", $idAbstrak);
+
+        if ($R['task']) {
+            $b->whereIn("LOWER(r.{$R['task']})", ['declined','rejected_task','decline','no']);
+        } else {
+            $b->where('0=1', null, false);
+        }
+
+        $rows = $b->orderBy($R['pk'],'DESC')->get()->getResultArray();
+        foreach ($rows as &$r) $r['alasan'] = (string)($r['alasan'] ?? '');
+        unset($r);
+        return $rows;
+    }
+
     public function index()
     {
         try {
@@ -135,57 +217,50 @@ class Abstrak extends BaseController
                 'abstraks'         => $abstraks,
                 'reviewers'        => [],
             ]);
-        } catch (\Exception $e) {
-            log_message('error', 'Admin Abstrak index error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat memuat data abstrak.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Admin Abstrak index error: '.$e->getMessage());
+            return redirect()->back()->with('error','Terjadi kesalahan saat memuat data abstrak.');
         }
     }
 
-    /** DETAIL */
     public function detail($id)
     {
         try {
-            $abstrak = $this->abstrakModel->getDetailWithRelations((int)$id);
+            $id = (int)$id;
+            $abstrak = $this->abstrakModel->getDetailWithRelations($id);
             if (!$abstrak) {
-                return redirect()->to(site_url('admin/abstrak'))->with('error', 'Abstrak tidak ditemukan.');
+                return redirect()->to(site_url('admin/abstrak'))->with('error','Abstrak tidak ditemukan.');
             }
 
-            // Ambil seluruh record review/assignment (termasuk pending)
-            $reviews = $this->reviewModel->getByAbstrakWithReviewer((int)$id);
+            $reviewsActive  = $this->fetchReviewsActive($id);
+            $reviewsDecline = $this->fetchReviewsDeclined($id);
 
-            // Kumpulkan info reviewer yang sudah ditugaskan (unique)
             $assigned = [];
-            foreach ($reviews as $r) {
+            foreach ($reviewsActive as $r) {
                 $rid = (int)($r['id_reviewer'] ?? 0);
-                if (!$rid) continue;
-                $key = $rid;
-                if (!isset($assigned[$key])) {
-                    $assigned[$key] = [
-                        'id_user' => $rid,
-                        'nama'    => $r['reviewer_name'] ?? '-',
-                        'email'   => $r['reviewer_email'] ?? '-',
-                        'status'  => strtolower($r['keputusan'] ?? 'pending'),
-                        'tanggal' => $r['tanggal_review'] ?? null,
-                    ];
-                } else {
-                    $st = strtolower((string)($r['keputusan'] ?? ''));
-                    if ($st) $assigned[$key]['status'] = $st;
-                    if (!empty($r['tanggal_review'])) $assigned[$key]['tanggal'] = $r['tanggal_review'];
-                }
+                if (!$rid || isset($assigned[$rid])) continue;
+                $assigned[$rid] = [
+                    'id_user'     => $rid,
+                    'nama'        => $r['reviewer_name'] ?? '-',
+                    'email'       => $r['reviewer_email'] ?? '-',
+                    'status'      => $r['keputusan'] ?? 'pending',
+                    'task_status' => $r['tugas_status'] ?? 'pending',
+                    'tanggal'     => $r['tanggal_review'] ?? null,
+                ];
             }
 
-            return view('role/admin/abstrak/detail', [
-                'abstrak'   => $abstrak,
-                'reviews'   => $reviews,
-                'assigned'  => array_values($assigned),
+            return view('role/admin/kelola_paper/abstrak_detail', [
+                'abstrak'    => $abstrak,
+                'reviews'    => $reviewsActive,
+                'assigned'   => array_values($assigned),
+                'declined'   => $reviewsDecline,
             ]);
-        } catch (\Exception $e) {
-            log_message('error', 'Abstrak detail error: ' . $e->getMessage());
-            return redirect()->to(site_url('admin/abstrak'))->with('error', 'Terjadi kesalahan.');
+        } catch (\Throwable $e) {
+            log_message('error','Abstrak detail error: '.$e->getMessage());
+            return redirect()->to(site_url('admin/abstrak'))->with('error','Terjadi kesalahan.');
         }
     }
 
-    /** NEW: GET reviewers by category → JSON (dipakai modal) */
     public function getReviewersByCategory($idKategori)
     {
         try {
@@ -194,30 +269,24 @@ class Abstrak extends BaseController
             if (method_exists($this->revKatModel, 'getByCategory')) {
                 $rows = $this->revKatModel->getByCategory($idKategori);
             } else {
-                $builder = $this->db->table('reviewer_kategori rk')
+                $rows = $this->db->table('reviewer_kategori rk')
                     ->select('u.id_user, u.nama_lengkap, u.email')
                     ->join('users u', 'u.id_user = rk.id_reviewer')
                     ->where('rk.id_kategori', $idKategori)
-                    ->orderBy('u.nama_lengkap', 'ASC');
-                if ($this->db->fieldExists('status', 'users')) {
-                    $builder->groupStart()
-                            ->where('u.status', 'active')
-                            ->orWhere('u.status', 'aktif')
-                            ->groupEnd();
-                }
-                $rows = $builder->get()->getResultArray();
+                    ->orderBy('u.nama_lengkap', 'ASC')
+                    ->get()->getResultArray();
             }
 
             return $this->response->setJSON([
                 'success' => true,
                 'data'    => array_map(fn($r) => [
-                    'id_user' => (int)$r['id_user'],
+                    'id_user' => (int)($r['id_user'] ?? 0),
                     'nama'    => $r['nama_lengkap'] ?? '-',
                     'email'   => $r['email'] ?? '',
                 ], $rows ?? []),
             ]);
-        } catch (\Exception $e) {
-            log_message('error', 'getReviewersByCategory error: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            log_message('error','getReviewersByCategory error: '.$e->getMessage());
             return $this->response->setJSON([
                 'success' => false,
                 'message' => 'Gagal memuat reviewer.',
@@ -225,7 +294,6 @@ class Abstrak extends BaseController
         }
     }
 
-    /** ASSIGN REVIEWER (maks 1 reviewer aktif: cegah jika masih ada pending) */
     public function assign($idAbstrak)
     {
         try {
@@ -237,58 +305,76 @@ class Abstrak extends BaseController
             $abstrak = $this->abstrakModel->find($idAbstrak);
             if (!$abstrak) return redirect()->to(site_url('admin/abstrak'))->with('error', 'Abstrak tidak ditemukan.');
 
-            // validasi kesesuaian kategori
-            $eligible = $this->revKatModel->isReviewerEligible($idReviewer, (int)$abstrak['id_kategori']);
-            if (!$eligible) return redirect()->back()->with('error', 'Reviewer tidak sesuai kategori abstrak.');
-
-            // Cegah assign jika sudah ada assignment PENDING yang masih aktif
-            if ($this->reviewModel->hasPendingReview($idAbstrak)) {
-                return redirect()->back()->with('error', 'Abstrak ini sudah memiliki assignment reviewer yang pending.');
+            if (method_exists($this->revKatModel, 'isReviewerEligible')) {
+                if (!$this->revKatModel->isReviewerEligible($idReviewer, (int)$abstrak['id_kategori'])) {
+                    return redirect()->back()->with('error', 'Reviewer tidak sesuai kategori abstrak.');
+                }
             }
+
+            if ($this->countActiveHolders($idAbstrak) > 0) {
+                return redirect()->back()->with('error', 'Masih ada reviewer aktif/menunggu konfirmasi.');
+            }
+
+            $rt = $this->reviewTable();
+            if (!$rt) {
+                return redirect()->back()->with('error', 'Tabel review tidak ditemukan.');
+            }
+            $R = $this->reviewCols($rt);
 
             $this->db->transStart();
 
-            $ok = $this->reviewModel->assignReviewer($idAbstrak, $idReviewer);
+            $payload = [
+                $R['abstrakFk'] => $idAbstrak,
+                $R['reviewer']  => $idReviewer,
+            ];
+            if ($R['decision'])  $payload[$R['decision']]  = 'pending';
+            if ($R['comment'])   $payload[$R['comment']]   = '';
+            if ($R['ts'])        $payload[$R['ts']]        = date('Y-m-d H:i:s');
+            if ($R['task'])      $payload[$R['task']]      = $this->autoAcceptOnAssign ? 'accepted' : null;
+            if ($this->autoAcceptOnAssign && $R['accAt'])  $payload[$R['accAt']]      = date('Y-m-d H:i:s');
+            if ($R['type'])      $payload[$R['type']]      = 'abstrak';
+
+            $ok = (bool)$this->db->table($rt)->insert($payload);
+
             if (!$ok) {
                 $this->db->transRollback();
-                log_message('error', 'Failed to assign reviewer: ' . json_encode($this->reviewModel->errors()));
                 return redirect()->back()->with('error', 'Gagal assign reviewer. Silakan coba lagi.');
             }
 
-            // set status jika masih "menunggu" → "sedang_direview"
-            if (($abstrak['status'] ?? 'menunggu') === 'menunggu') {
+            $cur = strtolower($abstrak['status'] ?? 'menunggu');
+            if (in_array($cur, ['menunggu','ditolak'], true)) {
                 $this->abstrakModel->update($idAbstrak, ['status' => 'sedang_direview']);
             }
 
             $this->db->transComplete();
-
             if ($this->db->transStatus() === false) {
                 return redirect()->back()->with('error', 'Gagal assign reviewer karena masalah database.');
             }
 
             return redirect()->to(site_url('admin/abstrak/detail/'.$idAbstrak))
-                ->with('success', 'Reviewer berhasil ditugaskan.');
+                ->with('success', $this->autoAcceptOnAssign
+                    ? 'Reviewer ditugaskan (langsung accepted).'
+                    : 'Reviewer ditugaskan. Menunggu konfirmasi di dashboard reviewer.');
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             if (isset($this->db)) $this->db->transRollback();
-            log_message('error', 'Assign reviewer error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat assign reviewer: ' . $e->getMessage());
+            log_message('error', 'Assign reviewer error: '.$e->getMessage());
+            return redirect()->back()->with('error', 'Terjadi kesalahan saat assign reviewer.');
         }
     }
 
-    /** UPDATE STATUS (Diterima/Ditolak/Revisi) — TANPA auto-assign saat Revisi */
     public function updateStatus()
     {
         try {
             $idAbstrak = (int)$this->request->getPost('id_abstrak');
             $status    = (string)$this->request->getPost('status');
             $komentar  = trim((string)$this->request->getPost('komentar'));
+            $allowed   = ['diterima','ditolak','revisi','sedang_direview','menunggu'];
 
-            $allowed = ['menunggu', 'sedang_direview', 'diterima', 'ditolak', 'revisi'];
             if (!$idAbstrak || !in_array($status, $allowed, true)) {
                 return $this->response->setJSON([
                     'success' => false,
-                    'message' => 'Data tidak valid.',
+                    'message' => 'Status tidak valid.',
                     csrf_token() => csrf_hash()
                 ]);
             }
@@ -304,30 +390,32 @@ class Abstrak extends BaseController
 
             $this->db->transStart();
 
-            // Update status abstrak
             $this->abstrakModel->update($idAbstrak, ['status' => $status]);
 
-            // Catat komentar admin (opsional)
             if ($komentar !== '') {
-                $this->reviewModel->insert([
-                    'id_abstrak'     => $idAbstrak,
-                    'id_reviewer'    => session('id_user') ?: null, // admin as actor
-                    'keputusan'      => $status,
-                    'komentar'       => $komentar,
-                    'tanggal_review' => date('Y-m-d H:i:s'),
-                ], false);
-            }
-
-            // Branching:
-            if ($status === 'revisi') {
-                // SESUAI PERMINTAAN: JANGAN auto-assign reviewer lagi
-                // (Tetap biarkan reviewer sebelumnya yang akan menilai ulang jika alur aplikasi mengizinkan)
-                // $this->reopenAssignmentsForRevision($idAbstrak); // DISABLED
-            } elseif ($status === 'ditolak') {
-                // tutup semua pending → ditolak
-                $this->closeAllPendingAsRejected($idAbstrak);
-                // cascade ke fullpaper (jika ada)
-                $this->cascadeFullpaperOnAbstractRejected($exists);
+                $rt = $this->reviewTable();
+                if ($rt) {
+                    $R = $this->reviewCols($rt);
+                    $row = [
+                        $R['abstrakFk'] => $idAbstrak,
+                        $R['reviewer']  => (int)(session('id_user') ?: 0),
+                    ];
+                    if ($R['decision'])  $row[$R['decision']]  = $status;
+                    if ($R['comment'])   $row[$R['comment']]   = $komentar;
+                    if ($R['ts'])        $row[$R['ts']]        = date('Y-m-d H:i:s');
+                    if ($R['type'])      $row[$R['type']]      = 'abstrak';
+                    $this->db->table($rt)->insert($row);
+                } else {
+                    try {
+                        $this->reviewModel->insert([
+                            'id_abstrak'     => $idAbstrak,
+                            'id_reviewer'    => (int)(session('id_user') ?: 0),
+                            'keputusan'      => $status,
+                            'komentar'       => $komentar,
+                            'tanggal_review' => date('Y-m-d H:i:s'),
+                        ], false);
+                    } catch (\Throwable $e) { /* ignore */ }
+                }
             }
 
             $this->db->transComplete();
@@ -346,9 +434,9 @@ class Abstrak extends BaseController
                 csrf_token() => csrf_hash()
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             if (isset($this->db)) $this->db->transRollback();
-            log_message('error', 'Update status error: ' . $e->getMessage());
+            log_message('error','Update status error: '.$e->getMessage());
             return $this->response->setJSON([
                 'success' => false,
                 'message' => 'Terjadi kesalahan sistem.',
@@ -357,25 +445,23 @@ class Abstrak extends BaseController
         }
     }
 
-    /** DELETE */
     public function delete($id)
     {
         try {
             $id = (int)$id;
             $abstrak = $this->abstrakModel->find($id);
-            if (!$abstrak) {
-                return redirect()->to(site_url('admin/abstrak'))->with('error', 'Abstrak tidak ditemukan.');
-            }
+            if (!$abstrak) return redirect()->to(site_url('admin/abstrak'))->with('error','Abstrak tidak ditemukan.');
 
             $this->db->transStart();
 
-            $this->reviewModel->where('id_abstrak', $id)->delete();
+            $rt = $this->reviewTable();
+            if ($rt) $this->db->table($rt)->where('id_abstrak',$id)->delete();
 
             $filename = $abstrak['file_abstrak'] ?? '';
             if ($filename) {
                 $paths = [
-                    FCPATH . 'uploads/abstrak/' . $filename,
-                    WRITEPATH . 'uploads/abstrak/' . $filename,
+                    FCPATH.'uploads/abstrak/'.basename($filename),
+                    WRITEPATH.'uploads/abstrak/'.basename($filename)
                 ];
                 foreach ($paths as $p) if (is_file($p)) @unlink($p);
             }
@@ -385,45 +471,38 @@ class Abstrak extends BaseController
             $this->db->transComplete();
 
             if ($this->db->transStatus() === false) {
-                return redirect()->to(site_url('admin/abstrak'))->with('error', 'Gagal menghapus abstrak.');
+                return redirect()->to(site_url('admin/abstrak'))->with('error','Gagal menghapus abstrak.');
             }
-
-            return redirect()->to(site_url('admin/abstrak'))->with('success', 'Abstrak berhasil dihapus.');
-
-        } catch (\Exception $e) {
+            return redirect()->to(site_url('admin/abstrak'))->with('success','Abstrak berhasil dihapus.');
+        } catch (\Throwable $e) {
             if (isset($this->db)) $this->db->transRollback();
-            log_message('error', 'Delete abstrak error: ' . $e->getMessage());
-            return redirect()->to(site_url('admin/abstrak'))->with('error', 'Gagal menghapus abstrak.');
+            log_message('error','Delete abstrak error: '.$e->getMessage());
+            return redirect()->to(site_url('admin/abstrak'))->with('error','Gagal menghapus abstrak.');
         }
     }
 
-    /** DOWNLOAD (attachment) */
     public function downloadFile($id)
     {
         try {
             $id = (int)$id;
             $abstrak = $this->abstrakModel->find($id);
             if (!$abstrak || empty($abstrak['file_abstrak'])) {
-                return redirect()->to(site_url('admin/abstrak'))->with('error', 'File tidak ditemukan.');
+                return redirect()->to(site_url('admin/abstrak'))->with('error','File tidak ditemukan.');
             }
-
             $path = $this->resolveAbstrakPath($abstrak);
-            if (!$path) return redirect()->to(site_url('admin/abstrak'))->with('error', 'File tidak ada di server.');
-
+            if (!$path) return redirect()->to(site_url('admin/abstrak'))->with('error','File tidak ada di server.');
             if ($this->isPublicUrl($path)) return redirect()->to($path);
 
             if (function_exists('ob_get_level')) while (ob_get_level() > 0) @ob_end_clean();
             @ini_set('display_errors','0');
 
             return $this->response->download($path, null)->setFileName(basename($path));
-
-        } catch (\Exception $e) {
-            log_message('error', 'Download file error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Gagal download file.');
+        } catch (\Throwable $e) {
+            log_message('error','Download file error: '.$e->getMessage());
+            return redirect()->back()->with('error','Gagal download file.');
         }
     }
 
-    /** Preview inline (iframe) */
     public function view($id)
     {
         $id = (int)$id;
@@ -467,7 +546,6 @@ class Abstrak extends BaseController
             ->setBody($binary);
     }
 
-    /** Endpoint blob untuk di-fetch() */
     public function blob($id)
     {
         $id = (int)$id;
@@ -503,5 +581,65 @@ class Abstrak extends BaseController
             ->setContentType('application/pdf')
             ->setHeader('Content-Disposition','inline; filename="blob.pdf"')
             ->setBody($binary);
+    }
+
+    /** ================== NEW: Re-open / requeue dari sisi Admin ================== */
+    public function reopen($idAbstrak)
+    {
+        $idAbstrak = (int)$idAbstrak;
+        $idReviewer = (int)($this->request->getPost('id_reviewer') ?? 0); // opsional
+
+        $rt = $this->reviewTable();
+        if (!$rt) return redirect()->back()->with('error','Tabel review tidak ditemukan.');
+        $R  = $this->reviewCols($rt);
+
+        $this->db->transStart();
+
+        $now = date('Y-m-d H:i:s');
+
+        // target reviewers: 1 orang (jika dipilih) atau semua yang pernah pegang
+        if ($idReviewer > 0) {
+            $target = [ ['reviewer_id' => $idReviewer] ];
+        } else {
+            $target = $this->db->table($rt)
+                ->select("{$R['reviewer']} AS reviewer_id", false)
+                ->where($R['abstrakFk'], $idAbstrak)
+                ->groupBy($R['reviewer'])
+                ->get()->getResultArray();
+        }
+
+        foreach ($target as $r) {
+            $rid = (int)($r['reviewer_id'] ?? 0);
+            if ($rid <= 0) continue;
+
+            // kalau sudah ada pending+accepted, skip
+            $q = $this->db->table($rt)->where($R['abstrakFk'], $idAbstrak)->where($R['reviewer'], $rid);
+            if ($R['decision']) $q->where($R['decision'], 'pending');
+            if ($R['task'])     $q->whereIn("LOWER({$R['task']})", ['accepted','accept','ok','yes']);
+            if ((int)$q->countAllResults() > 0) continue;
+
+            $row = [
+                $R['abstrakFk'] => $idAbstrak,
+                $R['reviewer']  => $rid,
+            ];
+            if ($R['decision']) $row[$R['decision']] = 'pending';
+            if ($R['ts'])       $row[$R['ts']]       = $now;
+            if ($R['task'])     $row[$R['task']]     = 'accepted';
+            if ($R['accAt'])    $row[$R['accAt']]    = $now;
+            if ($R['reason'])   $row[$R['reason']]   = null;
+            if ($R['decAt'])    $row[$R['decAt']]    = null;
+            if ($R['type'])     $row[$R['type']]     = 'abstrak';
+
+            $this->db->table($rt)->insert($row);
+        }
+
+        // pastikan status abstrak kembali ke sedang_direview
+        $this->abstrakModel->update($idAbstrak, ['status' => 'sedang_direview']);
+
+        $this->db->transComplete();
+
+        return $this->db->transStatus()
+            ? redirect()->back()->with('success','Review dibuka kembali. Tugas muncul lagi di dashboard reviewer.')
+            : redirect()->back()->with('error','Gagal membuka kembali review.');
     }
 }
