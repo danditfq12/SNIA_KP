@@ -308,28 +308,28 @@ $routes->group('presenter', [
 
     // ====== Abstrak (presenter) ======
     $routes->get ('abstrak',                           'Abstrak::index');
-    $routes->get ('abstrak/create/(:num)',             'Abstrak::create/$1');  // {eventId}
+    $routes->get ('abstrak/create/(:num)',             'Abstrak::create/$1'); 
     $routes->post('abstrak/store',                     'Abstrak::store');
-    $routes->get ('abstrak/detail/(:num)',             'Abstrak::detail/$1');  // {id_abstrak}
-    $routes->get ('abstrak/download/(:segment)',       'Abstrak::download/$1');// {filename}
-    $routes->post('abstrak/cancel/(:num)',             'Abstrak::cancel/$1');  // POST only
-    $routes->post('abstrak/revisi/(:num)',             'Abstrak::revisi/$1');  // ✅ NEW: upload revisi (POST only)
+    $routes->get ('abstrak/detail/(:num)',             'Abstrak::detail/$1');  
+    $routes->get ('abstrak/download/(:segment)',       'Abstrak::download/$1');
+    $routes->post('abstrak/cancel/(:num)',             'Abstrak::cancel/$1'); 
+    $routes->post('abstrak/revisi/(:num)',             'Abstrak::revisi/$1'); 
 
     // ====== Full Paper (presenter) ======
-    // NOTE: Controller-nya bernama Fullpaper (bukan FullPaper)
     $routes->group('fullpaper', static function ($routes) {
-        $routes->get ('',                    'Fullpaper::index');         // /presenter/fullpaper
-        $routes->get ('create/(:num)',       'Fullpaper::create/$1');     // {eventId}
-        $routes->post('store',               'Fullpaper::store');         // upload/simpan
-        $routes->get ('detail/(:num)',       'Fullpaper::detail/$1');     // {id_submission / id_fullpaper}
-        $routes->get ('download/(:segment)', 'Fullpaper::download/$1');   // {filename}
-        $routes->post('delete/(:num)',       'Fullpaper::delete/$1');     // POST only
+    $routes->get ('',                    'Fullpaper::index');
+    $routes->get ('create/(:num)',       'Fullpaper::create/$1');
+    $routes->post('store',               'Fullpaper::store');
+    $routes->get ('detail/(:num)',       'Fullpaper::detail/$1');
+    $routes->get ('download/(:any)',     'Fullpaper::download/$1'); // biar aman jika ada subfolder
+    $routes->get ('blob/(:any)',         'Fullpaper::blob/$1');     // <-- TAMBAH INI
+    $routes->post('delete/(:num)',       'Fullpaper::delete/$1');
     });
 
     // ====== Kontributor (presenter) ======
     $routes->group('kontributor', static function ($routes) {
-        $routes->get ('start/(:num)',  'Kontributor::start/$1');  // {eventId}
-        $routes->post('save/(:num)',   'Kontributor::save/$1');   // simpan/update
+        $routes->get ('start/(:num)',  'Kontributor::start/$1');
+        $routes->post('save/(:num)',   'Kontributor::save/$1'); 
     });
 
     // ====== Pembayaran (Midtrans) ======
@@ -410,40 +410,34 @@ $routes->group('reviewer', [
     'filter'    => 'role:reviewer',
     'namespace' => 'App\Controllers\Role\Reviewer',
 ], static function ($routes) {
-    // Dashboard
-    $routes->get('dashboard',          'Dashboard::index');
-    $routes->get('notifications',      'Dashboard::getNotifications');
+    $routes->get('dashboard', 'Dashboard::index');
+    $routes->get('notifications', 'Dashboard::getNotifications');
     $routes->post('dashboard/confirm', 'Dashboard::confirm');
 
-    // Abstrak
-    $routes->get ('abstrak',                 'Abstrak::index');
-    $routes->get ('abstrak/(:num)',          'Abstrak::detail/$1');
-    $routes->get ('abstrak/preview/(:num)',  'Abstrak::preview/$1');
-    $routes->get ('abstrak/blob/(:num)',     'Abstrak::blob/$1');        // untuk iframe blob
-    $routes->get ('abstrak/download/(:num)', 'Abstrak::download/$1');
-    $routes->post('abstrak/confirm/(:num)',  'Abstrak::confirm/$1');     // tombol Terima/Tolak
-    $routes->post('abstrak/review/(:num)',   'Abstrak::review/$1');      // simpan review
-    // (opsional legacy alias, kalau masih dipakai UI lama)
-    // $routes->post('review/(:num)',          'Abstrak::review/$1');
+    $routes->get('abstrak', 'Abstrak::index');
+    $routes->get('abstrak/(:num)', 'Abstrak::detail/$1');
+    $routes->get('abstrak/preview/(:num)', 'Abstrak::preview/$1');
+    $routes->get('abstrak/blob/(:num)', 'Abstrak::blob/$1');
+    $routes->get('abstrak/download/(:num)', 'Abstrak::download/$1');
+    $routes->post('abstrak/confirm/(:num)', 'Abstrak::confirm/$1');
+    $routes->post('abstrak/review/(:num)', 'Abstrak::review/$1');
 
-    // Full Paper
     $routes->group('fullpaper', static function ($routes) {
-        $routes->get ('',                    'FullPaper::index');
-        $routes->get ('(:num)',              'FullPaper::detail/$1');
-        $routes->post('confirm/(:num)',      'FullPaper::confirm/$1');    // legacy: ACC kini via Dashboard
-        $routes->post('review/(:num)',       'FullPaper::submit/$1');     // simpan penilaian FP
-        $routes->get ('download/(:num)',     'FullPaper::download/$1');
-
-        // === Tambahan untuk pratinjau seperti Abstrak ===
-        $routes->get ('preview/(:num)',      'FullPaper::preview/$1');    // inline (Content-Disposition:inline)
-        $routes->get ('blob/(:num)',         'FullPaper::blob/$1');       // untuk iframe blob (fallback-friendly)
+        $routes->get('', 'FullPaper::index');
+        $routes->get('(:num)', 'FullPaper::detail/$1');
+        $routes->post('action', 'FullPaper::action');
+        $routes->post('submit/(:num)', 'FullPaper::submit/$1');
+        $routes->post('(:num)/submit', 'FullPaper::submit/$1');
+        $routes->post('review/(:num)', 'FullPaper::submit/$1');
+        $routes->get('(:num)/download', 'FullPaper::download/$1');
+        $routes->get('download/(:num)', 'FullPaper::download/$1');
+        $routes->get('blob/(:num)', 'FullPaper::blob/$1');
+        $routes->get('preview/(:num)', 'FullPaper::preview/$1');
+        $routes->get('inline/(:num)', 'FullPaper::inline/$1');
     });
 
-    // Riwayat
     $routes->get('riwayat', 'Riwayat::index');
 });
-
-
 
 // ---------------------------------------------------
 // ENHANCED: Public API with Payment Support

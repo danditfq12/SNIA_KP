@@ -3,17 +3,28 @@ namespace App\Controllers\Role\Admin;
 
 use App\Controllers\BaseController;
 use App\Models\ReviewerKategoriModel;
+use App\Models\AbstrakModel;
+use App\Models\KategoriAbstrakModel;
 
 class FullPaper extends BaseController
 {
     protected $db;
     protected $revKatModel;
+    protected $abstrakModel;
+    protected $kategoriAbsModel;
 
     public function __construct()
     {
         $this->db = \Config\Database::connect();
+
         if (class_exists(\App\Models\ReviewerKategoriModel::class)) {
             $this->revKatModel = new ReviewerKategoriModel();
+        }
+        if (class_exists(\App\Models\AbstrakModel::class)) {
+            $this->abstrakModel = new AbstrakModel();
+        }
+        if (class_exists(\App\Models\KategoriAbstrakModel::class)) {
+            $this->kategoriAbsModel = new KategoriAbstrakModel();
         }
     }
 
@@ -36,29 +47,80 @@ class FullPaper extends BaseController
         return in_array($col, $this->fields($table), true);
     }
 
+    /** Ambil PK dinamis untuk tabel submission/abstrak (utama halaman ini) */
     private function primaryKey(string $table): string
     {
-        foreach (['id','id_submission','id_abstrak'] as $cand) {
-            if ($this->columnExists($table, $cand)) return $cand;
+        $fields = $this->fields($table);
+
+        $candidates = [
+            'id',
+            'id_submission','submission_id',
+            'id_fullpaper','fullpaper_id',
+            'id_paper','paper_id',
+            'id_abstrak','abstrak_id',
+        ];
+        foreach ($candidates as $cand) {
+            if (in_array($cand, $fields, true)) return $cand;
         }
-        return 'id';
+
+        // Try from information_schema (Postgres/MySQL)
+        try {
+            $row = $this->db->query(
+                "SELECT kcu.column_name
+                 FROM information_schema.table_constraints tc
+                 JOIN information_schema.key_column_usage kcu
+                   ON tc.constraint_name = kcu.constraint_name
+                  AND tc.table_schema    = kcu.table_schema
+                WHERE tc.constraint_type = 'PRIMARY KEY'
+                  AND tc.table_name      = ?
+                LIMIT 1",
+                [$table]
+            )->getRowArray();
+
+            if (!empty($row['column_name']) && in_array($row['column_name'], $fields, true)) {
+                return $row['column_name'];
+            }
+        } catch (\Throwable $e) { /* ignore */ }
+
+        return $fields[0] ?? 'id';
+    }
+
+    /** Helper umum untuk tabel lain (events, users, dll) */
+    private function tablePrimaryKeyFlexible(string $table, array $candidates = []): string
+    {
+        if (!$this->db->tableExists($table)) return 'id';
+        $fields = $this->db->getFieldNames($table) ?: [];
+
+        $defaultCands = ['id', $table.'_id', 'id_'.$table, 'id_'.$table.'_pk'];
+        $cands = array_unique(array_merge($candidates, $defaultCands));
+
+        foreach ($cands as $c) {
+            if (in_array($c, $fields, true)) return $c;
+        }
+        return $fields[0] ?? 'id';
     }
 
     private function resolveColumns(string $table): array
     {
         $pk = $this->primaryKey($table);
+
         $titleCand = ['title','judul','judul_paper','judul_penelitian','judul_abstrak','nama'];
         $eventCand = ['event_id','id_event','events_id'];
-        $userCand  = ['id_user','user_id','id_presenter'];
+        $userCand  = ['id_user','user_id','id_presenter','presenter_id'];
+        $catCand   = ['id_kategori','kategori_id','id_kategori_abstrak','kategori_abstrak_id'];
 
-        $titleCol = null; foreach ($titleCand as $c) if ($this->columnExists($table,$c)) { $titleCol = $c; break; }
-        $eventCol = null; foreach ($eventCand as $c) if ($this->columnExists($table,$c)) { $eventCol = $c; break; }
-        $userCol  = null; foreach ($userCand  as $c) if ($this->columnExists($table,$c)) { $userCol  = $c; break; }
+        $pick = function(array $cands) use ($table) {
+            foreach ($cands as $c) if ($this->columnExists($table,$c)) return $c;
+            return null;
+        };
 
-        $catCand = ['id_kategori','kategori_id','id_kategori_abstrak'];
-        $catCol = null; foreach ($catCand as $c) if ($this->columnExists($table, $c)) { $catCol = $c; break; }
-
-        return ['pk'=>$pk,'title'=>$titleCol ?? $pk,'event_id'=>$eventCol,'user_id'=>$userCol,'kategori_id'=>$catCol];
+        return [
+            'pk'          => $pk,
+            'title'       => $pick($titleCand) ?? $pk,
+            'event_id'    => $pick($eventCand),
+            'user_id'     => $pick($userCand),
+            'kategori_id' => $pick($catCand),
+        ];
     }
 
     private function findSubmission(int $id): ?array
@@ -128,28 +190,27 @@ class FullPaper extends BaseController
         if (!empty($cols['kategori_id']) && !empty($submission[$cols['kategori_id']])) {
             return (int)$submission[$cols['kategori_id']];
         }
-        if (!$this->db->tableExists('abstrak') || !$cols['event_id'] || !$cols['user_id']) return null;
-        if (empty($submission[$cols['event_id']]) || empty($submission[$cols['user_id']])) return null;
-
-        $abs = $this->db->table('abstrak')
-            ->select('id_abstrak, id_kategori, status')
-            ->where('id_user', (int)$submission[$cols['user_id']])
-            ->where('event_id', (int)$submission[$cols['event_id']])
-            ->orderBy('tanggal_upload','DESC')
-            ->get()->getRowArray();
-
-        return $abs && !empty($abs['id_kategori']) ? (int)$abs['id_kategori'] : null;
+        $userId  = $cols['user_id']  ? (int)($submission[$cols['user_id']]  ?? 0) : 0;
+        $eventId = $cols['event_id'] ? (int)($submission[$cols['event_id']] ?? 0) : 0;
+        if ($userId && $eventId) {
+            $abs = $this->getLatestAbstractRow($userId, $eventId);
+            if ($abs && !empty($abs['id_kategori'])) return (int)$abs['id_kategori'];
+        }
+        return null;
     }
 
-    /* ========= Abstrak: status global + reviewer-detail (nama, email, status review abstrak per reviewer) ========= */
+    /* ========= Abstrak: status global + reviewer-detail ========= */
 
     private function getLatestAbstractRow(?int $userId, ?int $eventId): ?array
     {
         if (!$userId || !$eventId) return null;
         if (!$this->db->tableExists('abstrak')) return null;
+
         return $this->db->table('abstrak')
-            ->where('id_user', $userId)->where('event_id', $eventId)
-            ->orderBy('tanggal_upload','DESC')->get()->getRowArray() ?: null;
+            ->where('id_user', $userId)
+            ->where('event_id', $eventId)
+            ->orderBy('tanggal_upload','DESC')
+            ->get()->getRowArray() ?: null;
     }
 
     private function getAbstractStatus(?int $userId, ?int $eventId): ?string
@@ -167,13 +228,11 @@ class FullPaper extends BaseController
         $src = $this->resolveReviewerSource();
         if (!$src['table'] || !$src['id']) return [];
 
-        // mapping table many-to-many abstrak → reviewer (opsional)
         $mapTable = null;
         foreach (['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak'] as $cand) {
             if ($this->db->tableExists($cand)) { $mapTable = $cand; break; }
         }
 
-        // semua reviewer yang terkait ke abstrak (lewat mapping atau lewat review langsung)
         $ids = [];
 
         if ($mapTable) {
@@ -186,7 +245,6 @@ class FullPaper extends BaseController
             }
         }
 
-        // reviewer yang memberi review abstrak (tanpa map)
         foreach (['abstrak_reviews','reviews','review'] as $t) {
             if ($this->db->tableExists($t)) {
                 $cols = $this->db->getFieldNames($t);
@@ -211,7 +269,6 @@ class FullPaper extends BaseController
         $identBy = [];
         foreach ($ident as $r) $identBy[(int)$r['id']] = $r;
 
-        // ambil keputusan abstrak terbaru per reviewer
         $latest = [];
         foreach (['abstrak_reviews','reviews','review'] as $t) {
             if (!$this->db->tableExists($t)) continue;
@@ -245,58 +302,139 @@ class FullPaper extends BaseController
         return $out;
     }
 
-    private function getReviewersByCategory(?int $kategoriId, array $excludeIds = []): array
+    /* ========= Tambahan util untuk kategori + people dari abstrak ========= */
+
+    private function getCategoryNameById(?int $kategoriId): ?string
     {
-        $list = $kategoriId ? $this->getReviewersByKategoriSmart($kategoriId) : $this->getAllReviewers();
-        if (!$excludeIds) return $list;
-        $ex = array_flip(array_map('intval', $excludeIds));
-        return array_values(array_filter($list, fn($r)=> !isset($ex[(int)$r['id']])));
+        if (!$kategoriId) return null;
+
+        if ($this->kategoriAbsModel instanceof KategoriAbstrakModel) {
+            $row = $this->kategoriAbsModel->where('id_kategori', $kategoriId)->select('nama_kategori')->get()->getRowArray();
+            if (!empty($row['nama_kategori'])) return $row['nama_kategori'];
+        }
+
+        $candidates = [
+            ['table'=>'kategori_abstrak','id'=>'id_kategori','name'=>'nama_kategori'],
+            ['table'=>'kategori_abstrak','id'=>'id','name'=>'nama'],
+            ['table'=>'abstrak_kategori','id'=>'id','name'=>'nama'],
+            ['table'=>'kategori','id'=>'id','name'=>'nama'],
+            ['table'=>'categories','id'=>'id','name'=>'name'],
+        ];
+        foreach ($candidates as $c) {
+            if (!$this->db->tableExists($c['table'])) continue;
+            $fields = array_flip($this->db->getFieldNames($c['table']) ?: []);
+            if (!isset($fields[$c['id']]) || !isset($fields[$c['name']])) continue;
+            $row = $this->db->table($c['table'])
+                ->select($c['name'].' AS name')->where($c['id'], $kategoriId)->get()->getRowArray();
+            if (!empty($row['name'])) return $row['name'];
+        }
+        return null;
     }
 
-    private function getReviewersByKategoriSmart(?int $kategoriId): array
+    private function extractContributorsFromAbs(array $abs): array
     {
-        if (!$kategoriId) return $this->getAllReviewers();
+        $cands = ['contributors','contributor','authors','author_list','co_authors','coauthor','coauthors',
+                  'penulis','penulis_lain','daftar_penulis','nama_penulis'];
+        $val = null;
+        foreach ($cands as $k) if (!empty($abs[$k])) { $val = $abs[$k]; break; }
+        if ($val === null) return [];
+        $list = is_array($val) ? $val : preg_split('/\r\n|\r|\n|;|,/', (string)$val);
+        $list = array_filter(array_map(fn($x)=>trim((string)$x),(array)$list), fn($x)=>$x!=='');
+        return array_values(array_unique($list));
+    }
 
-        if ($this->revKatModel && method_exists($this->revKatModel, 'getReviewersByKategori')) {
-            $list = $this->revKatModel->getReviewersByKategori($kategoriId);
-            return array_map(function($r){
-                return [
-                    'id'    => (int)($r['id'] ?? $r['id_user'] ?? $r['user_id'] ?? 0),
-                    'name'  => $r['nama_lengkap'] ?? $r['name'] ?? $r['username'] ?? '-',
-                    'email' => $r['email'] ?? ($r['mail'] ?? null),
-                ];
-            }, $list ?: []);
+    private function getAbstractPeopleData(?int $userId, ?int $eventId): array
+    {
+        $abs = $this->getLatestAbstractRow($userId, $eventId);
+        if (!$abs) return [
+            'author'=>['name'=>null,'email'=>null],
+            'coauthors'=>[], 'contributors'=>[],
+            'kategori_id'=>null, 'kategori_name'=>null, 'judul'=>null
+        ];
+
+        $author = ['name'=>null,'email'=>null];
+        foreach (['penulis_nama','nama_lengkap','author_name','nama'] as $c) if (!empty($abs[$c])) { $author['name'] = $abs[$c]; break; }
+        foreach (['penulis_email','email','author_email'] as $c) if (!empty($abs[$c])) { $author['email'] = $abs[$c]; break; }
+
+        $co = [];
+        if (!empty($abs['coauthors_json'])) {
+            $dec = json_decode((string)$abs['coauthors_json'], true);
+            if (is_array($dec)) $co = $dec;
+        } elseif (!empty($abs['co_authors'])) {
+            $co = array_map(fn($n)=>['nama'=>trim($n)], $this->extractContributorsFromAbs(['co_authors'=>$abs['co_authors']]));
         }
 
-        $src = $this->resolveReviewerSource();
-        if (!$src['table'] || !$src['id']) return [];
+        $contributors = $this->extractContributorsFromAbs($abs);
+        $kid = (int)($abs['id_kategori'] ?? 0) ?: null;
 
-        $mapTable = null;
-        foreach (['reviewer_kategori','reviewers_kategori','reviewer_categories','reviewer_category'] as $cand) {
-            if ($this->db->tableExists($cand)) { $mapTable = $cand; break; }
+        return [
+            'author'        => $author,
+            'coauthors'     => $co,
+            'contributors'  => $contributors,
+            'kategori_id'   => $kid,
+            'kategori_name' => $this->getCategoryNameById($kid),
+            'judul'         => $abs['judul'] ?? null,
+        ];
+    }
+
+    /* ====== Fallback identitas presenter dari users/registrations ====== */
+    private function getPresenterIdentity(?int $userId, ?int $eventId): array
+    {
+        $out = ['name'=>null,'email'=>null,'affiliation'=>null];
+
+        if ($userId) {
+            if ($this->db->tableExists('users')) {
+                $userPk = $this->tablePrimaryKeyFlexible('users', ['id','id_user','user_id']);
+                $u = $this->db->table('users')->where($userPk, $userId)->get()->getRowArray();
+                if ($u) {
+                    foreach (['nama_lengkap','full_name','name','username'] as $c) {
+                        if (!empty($u[$c])) { $out['name'] = trim((string)$u[$c]); break; }
+                    }
+                    if (empty($out['email'])) {
+                        foreach (['email','user_email'] as $c) if (!empty($u[$c])) { $out['email'] = trim((string)$u[$c]); break; }
+                    }
+                }
+            }
         }
-        if (!$mapTable) return $this->getAllReviewers();
 
-        $mapReviewerCol = null;
-        foreach (['id_reviewer','reviewer_id','id_user','user_id'] as $c) {
-            if (in_array($c, $this->db->getFieldNames($mapTable), true)) { $mapReviewerCol = $c; break; }
+        if ($eventId && $userId) {
+            $regTable = null;
+            foreach (['event_registrations','registrations','event_registration','event_pendaftar','pendaftaran_event'] as $t) {
+                if ($this->db->tableExists($t)) { $regTable = $t; break; }
+            }
+            if ($regTable) {
+                $fields = array_flip($this->db->getFieldNames($regTable) ?: []);
+                $fUser  = isset($fields['id_user']) ? 'id_user' : (isset($fields['user_id']) ? 'user_id' : null);
+                $fEvent = isset($fields['id_event']) ? 'id_event' : (isset($fields['event_id']) ? 'event_id' : null);
+                if ($fUser && $fEvent) {
+                    $reg = $this->db->table($regTable)
+                        ->where($fUser, $userId)->where($fEvent, $eventId)->get()->getRowArray();
+                    if ($reg) {
+                        if (empty($out['name'])) {
+                            foreach (['presenter_name','nama_lengkap','nama','name'] as $c) {
+                                if (!empty($reg[$c])) { $out['name'] = trim((string)$reg[$c]); break; }
+                            }
+                        }
+                        if (empty($out['email'])) {
+                            foreach (['email','presenter_email'] as $c) {
+                                if (!empty($reg[$c])) { $out['email'] = trim((string)$reg[$c]); break; }
+                            }
+                        }
+                        foreach (['afiliasi','affiliation','institusi','institution'] as $c) {
+                            if (!empty($reg[$c])) { $out['affiliation'] = trim((string)$reg[$c]); break; }
+                        }
+                    }
+                }
+            }
         }
-        $mapKategoriCol = null;
-        foreach (['id_kategori','kategori_id','id_kategori_abstrak'] as $c) {
-            if (in_array($c, $this->db->getFieldNames($mapTable), true)) { $mapKategoriCol = $c; break; }
+
+        if ((empty($out['name']) || $out['name'] === null) && !empty($out['email'])) {
+            $local = explode('@', $out['email'])[0] ?? '';
+            $local = str_replace(['.', '_', '-'], ' ', $local);
+            $out['name'] = ucwords(preg_replace('/\s+/', ' ', trim($local)));
         }
-        if (!$mapReviewerCol || !$mapKategoriCol) return $this->getAllReviewers();
 
-        $nameSel  = $src['name']  ? "{$src['table']}.{$src['name']}"  : "NULL";
-        $emailSel = $src['email'] ? "{$src['table']}.{$src['email']}" : "NULL";
-
-        return $this->db->table($mapTable.' rk')
-            ->select("{$src['table']}.{$src['id']} AS id, {$nameSel} AS name, {$emailSel} AS email")
-            ->join($src['table'], "{$src['table']}.{$src['id']} = rk.{$mapReviewerCol}", 'inner')
-            ->where("rk.{$mapKategoriCol}", $kategoriId)
-            ->groupBy("{$src['table']}.{$src['id']}, {$nameSel}, {$emailSel}")
-            ->orderBy($src['name'] ? $nameSel : "{$src['table']}.{$src['id']}", 'ASC')
-            ->get()->getResultArray();
+        return $out;
     }
 
     /* ========================= Full paper: assigned + reviews ========================= */
@@ -364,6 +502,62 @@ class FullPaper extends BaseController
             ->get()->getResultArray();
     }
 
+    /* ========================= Reviewer picker by kategori ========================= */
+
+    private function getReviewersByCategory(?int $kategoriId, array $excludeIds = []): array
+    {
+        $list = $kategoriId ? $this->getReviewersByKategoriSmart($kategoriId) : $this->getAllReviewers();
+        if (!$excludeIds) return $list;
+        $ex = array_flip(array_map('intval', $excludeIds));
+        return array_values(array_filter($list, fn($r)=> !isset($ex[(int)$r['id']])));
+    }
+
+    private function getReviewersByKategoriSmart(?int $kategoriId): array
+    {
+        if (!$kategoriId) return $this->getAllReviewers();
+
+        if ($this->revKatModel && method_exists($this->revKatModel, 'getReviewersByKategori')) {
+            $list = $this->revKatModel->getReviewersByKategori($kategoriId);
+            return array_map(function($r){
+                return [
+                    'id'    => (int)($r['id'] ?? $r['id_user'] ?? $r['user_id'] ?? 0),
+                    'name'  => $r['nama_lengkap'] ?? $r['name'] ?? $r['username'] ?? '-',
+                    'email' => $r['email'] ?? ($r['mail'] ?? null),
+                ];
+            }, $list ?: []);
+        }
+
+        $src = $this->resolveReviewerSource();
+        if (!$src['table'] || !$src['id']) return [];
+
+        $mapTable = null;
+        foreach (['reviewer_kategori','reviewers_kategori','reviewer_categories','reviewer_category'] as $cand) {
+            if ($this->db->tableExists($cand)) { $mapTable = $cand; break; }
+        }
+        if (!$mapTable) return $this->getAllReviewers();
+
+        $mapReviewerCol = null;
+        foreach (['id_reviewer','reviewer_id','id_user','user_id'] as $c) {
+            if (in_array($c, $this->db->getFieldNames($mapTable), true)) { $mapReviewerCol = $c; break; }
+        }
+        $mapKategoriCol = null;
+        foreach (['id_kategori','kategori_id','id_kategori_abstrak'] as $c) {
+            if (in_array($c, $this->db->getFieldNames($mapTable), true)) { $mapKategoriCol = $c; break; }
+        }
+        if (!$mapReviewerCol || !$mapKategoriCol) return $this->getAllReviewers();
+
+        $nameSel  = $src['name']  ? "{$src['table']}.{$src['name']}"  : "NULL";
+        $emailSel = $src['email'] ? "{$src['table']}.{$src['email']}" : "NULL";
+
+        return $this->db->table($mapTable.' rk')
+            ->select("{$src['table']}.{$src['id']} AS id, {$nameSel} AS name, {$emailSel} AS email")
+            ->join($src['table'], "{$src['table']}.{$src['id']} = rk.{$mapReviewerCol}", 'inner')
+            ->where("rk.{$mapKategoriCol}", $kategoriId)
+            ->groupBy("{$src['table']}.{$src['id']}, {$nameSel}, {$emailSel}")
+            ->orderBy($src['name'] ? $nameSel : "{$src['table']}.{$src['id']}", 'ASC')
+            ->get()->getResultArray();
+    }
+
     /* ========================= Pages ========================= */
 
     public function detail($id)
@@ -380,25 +574,29 @@ class FullPaper extends BaseController
         $submission['revisi_ke'] = (int)($submission['revisi_ke'] ?? 0);
 
         if ($this->db->tableExists('events') && $cols['event_id'] && !empty($submission[$cols['event_id']])) {
-            $ev = $this->db->table('events')->select('id, title')->where('id', $submission[$cols['event_id']])->get()->getRowArray();
-            if ($ev) { $submission['event_title'] = $ev['title']; $submission['event_id'] = (int)$ev['id']; }
+            $evPk = $this->tablePrimaryKeyFlexible('events', ['id','id_event','event_id']);
+            $ev   = $this->db->table('events')
+                     ->select("$evPk AS id, title")
+                     ->where($evPk, $submission[$cols['event_id']])
+                     ->get()->getRowArray();
+            if ($ev) { $submission['event_title'] = $ev['title']; $submission['event_id'] = (int)$submission[$cols['event_id']]; }
         }
 
-        // author
+        // author possible fields (from submission table)
         $author = ['name'=>null,'email'=>null];
         foreach (['penulis_nama','nama_lengkap','presenter_name','author_name','nama'] as $c)
             if ($this->columnExists($table,$c) && !empty($submission[$c])) { $author['name'] = $submission[$c]; break; }
         foreach (['penulis_email','email','presenter_email','author_email'] as $c)
             if ($this->columnExists($table,$c) && !empty($submission[$c])) { $author['email'] = $submission[$c]; break; }
 
-        // coauthors
+        // coauthors from submission
         $coauthors = [];
         if ($this->columnExists($table,'coauthors_json') && !empty($submission['coauthors_json'])) {
             $decoded = json_decode((string)$submission['coauthors_json'], true);
             if (is_array($decoded)) $coauthors = $decoded;
         }
 
-        // history (semua versi user+event sama)
+        // history (all rows of same user+event)
         $history = [];
         if ($cols['event_id'] && !empty($submission[$cols['event_id']]) && $cols['user_id'] && !empty($submission[$cols['user_id']])) {
             $select = [$cols['pk']." AS id"];
@@ -422,12 +620,33 @@ class FullPaper extends BaseController
         // abstrak: status global + reviewer2 (dengan status review abstrak)
         $userId  = $cols['user_id']  ? (int)($submission[$cols['user_id']]  ?? 0) : 0;
         $eventId = $cols['event_id'] ? (int)($submission[$cols['event_id']] ?? 0) : 0;
-        $abstractStatus   = $this->getAbstractStatus($userId, $eventId);
-        $abstractReviewers= $this->getAbstractReviewersDetailed($userId, $eventId);
+        $abstractStatus    = $this->getAbstractStatus($userId, $eventId);
+        $abstractReviewers = $this->getAbstractReviewersDetailed($userId, $eventId);
+
+        // Tambahan: kategori & people dari abstrak (fallback)
+        $absInfo = $this->getAbstractPeopleData($userId, $eventId);
+
+        // Fallback prioritas: data presenter (users/registrations)
+        $presenter = $this->getPresenterIdentity($userId, $eventId);
+
+        // Merge fallback → submission → abstrak → presenter
+        if (empty($author['name']) && !empty($absInfo['author']['name']))  $author['name']  = $absInfo['author']['name'];
+        if (empty($author['email']) && !empty($absInfo['author']['email'])) $author['email'] = $absInfo['author']['email'];
+        if (empty($author['name'])  && !empty($presenter['name']))          $author['name']  = $presenter['name'];
+        if (empty($author['email']) && !empty($presenter['email']))         $author['email'] = $presenter['email'];
+
+        if (empty($coauthors) && !empty($absInfo['coauthors'])) {
+            $coauthors = $absInfo['coauthors'];
+        }
+
+        $absKategoriId   = $absInfo['kategori_id'];
+        $absKategoriName = $absInfo['kategori_name'];
+        $absContributors = $absInfo['contributors'];
+        $absJudul        = $absInfo['judul'];
 
         $fpReviews = $this->getFullpaperReviews($id);
 
-        return view('role/admin/fullpaper/detail', [
+        return view('role/admin/kelola_paper/fullpaper_detail', [
             'submission'         => $submission,
             'author'             => $author,
             'coauthors'          => $coauthors,
@@ -437,31 +656,19 @@ class FullPaper extends BaseController
             'abstractReviewers'  => $abstractReviewers,
             'abstractStatus'     => $abstractStatus,
             'fpReviews'          => $fpReviews,
+
+            // tambahan untuk view
+            'absKategoriId'      => $absKategoriId,
+            'absKategoriName'    => $absKategoriName,
+            'absContributors'    => $absContributors,
+            'absJudul'           => $absJudul,
+
             'title'              => 'Detail Full Paper',
             'maxReviewer'        => 3,
         ]);
     }
 
-    /** Ambil identitas reviewer by IDs (dipertahankan untuk kompatibilitas lama) */
-    private function getReviewerIdentities(array $ids): array
-    {
-        $ids = array_values(array_unique(array_map('intval',$ids)));
-        if (!$ids) return [];
-        $src = $this->resolveReviewerSource();
-        if (!$src['table'] || !$src['id']) return [];
-
-        $nameCol  = $src['name']  ? "{$src['table']}.{$src['name']}"  : "NULL";
-        $emailCol = $src['email'] ? "{$src['table']}.{$src['email']}" : "NULL";
-
-        return $this->db->table($src['table'])
-            ->select("{$src['table']}.{$src['id']} AS id, {$nameCol} AS name, {$emailCol} AS email")
-            ->whereIn("{$src['table']}.{$src['id']}", $ids)
-            ->orderBy($src['name'] ? $nameCol : "{$src['table']}.{$src['id']}", 'ASC')
-            ->get()->getResultArray();
-    }
-
-    /* ========================= AJAX (optional) ========================= */
-
+    /** (opsional) API simple untuk dropdown reviewer by kategori */
     public function reviewersByCategory($kategoriId)
     {
         try {
@@ -494,13 +701,11 @@ class FullPaper extends BaseController
             $sub = $this->findSubmission($submissionId);
             if (!$sub) return redirect()->back()->with('error','Submission tidak ditemukan.');
 
-            // MAX 3
             $count = $this->db->table('fullpaper_reviewers')->where('submission_id',$submissionId)->countAllResults();
             if ($count >= 3) {
                 return redirect()->back()->with('error','Maksimum 3 reviewer sudah tercapai.');
             }
 
-            // Duplicates
             $dup = $this->db->table('fullpaper_reviewers')
                     ->where('submission_id',$submissionId)
                     ->where('reviewer_id',$reviewerId)
@@ -509,7 +714,6 @@ class FullPaper extends BaseController
                 return redirect()->back()->with('error','Reviewer ini sudah ditugaskan pada full paper.');
             }
 
-            // eligible kategori (jika modul tersedia)
             $table = $this->tableName(); $cols = $this->resolveColumns($table);
             $kategoriId = $this->resolveCategoryId($sub, $cols);
             if ($kategoriId && $this->revKatModel && method_exists($this->revKatModel,'isReviewerEligible')) {
@@ -552,11 +756,9 @@ class FullPaper extends BaseController
             $pk    = $this->primaryKey($table);
 
             $data = ['full_paper_status'=>$status];
-            // simpan komentar jika ada kolom yang cocok
             foreach (['review_notes','catatan_reviewer','admin_comment','admin_notes'] as $col) {
                 if ($komentar !== '' && $this->columnExists($table,$col)) { $data[$col] = $komentar; break; }
             }
-            // simpan decision_at bila kolom tersedia
             foreach (['decision_at','full_paper_decision_at'] as $col) {
                 if ($this->columnExists($table,$col)) { $data[$col] = date('Y-m-d H:i:s'); break; }
             }

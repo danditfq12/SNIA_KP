@@ -4,10 +4,7 @@
 // 'taskStatus'=> 'accepted'|'pending'|'declined'
 // 'taskReason'=> string|null (opsional)
 // 'myReview'  => ['keputusan','komentar','tanggal_review'] | null
-// 'reviewers' => [
-//   ['order'=>1,'id'=>int,'nama'=>string,'tugas_status'=>'pending|accepted|declined','keputusan'=>'menunggu|diterima|revisi|ditolak','tanggal'=>?,'is_me'=>bool],
-//   ...
-// ]
+// 'reviewers' => [ ... ]
 
 $title       = $title ?? 'Detail Abstrak';
 $A           = $abstrak ?? [];
@@ -59,6 +56,32 @@ $hasFile   = !empty($A['file_abstrak']);
         </div>
       </div>
 
+      <!-- BILAH AKSI (ACC/TOLAK) SAAT PENDING) -->
+      <?php if ($taskStatus === 'pending'): ?>
+        <div class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div class="me-2">
+            <i class="bi bi-hourglass-split me-1"></i>
+            Anda belum menerima penugasan ini. Silakan terima untuk mulai meninjau dan mengirim review.
+          </div>
+          <div class="d-flex gap-2">
+            <!-- ACC -->
+            <form method="post" action="<?= site_url('reviewer/abstrak/confirm/'.$idAbs) ?>">
+              <?= csrf_field() ?>
+              <input type="hidden" name="action" value="accept">
+              <button class="btn btn-success btn-sm">
+                <i class="bi bi-check-lg me-1"></i>Terima
+              </button>
+            </form>
+            <!-- DECLINE -->
+            <button class="btn btn-outline-danger btn-sm" id="btnOpenDecline"
+                    data-id="<?= $idAbs ?>"
+                    data-title="<?= esc($A['judul'] ?? '-', 'attr') ?>">
+              <i class="bi bi-x-lg me-1"></i>Tolak
+            </button>
+          </div>
+        </div>
+      <?php endif; ?>
+
       <!-- STATUS BAR -->
       <div class="card shadow-sm border-0 mb-3">
         <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
@@ -70,7 +93,7 @@ $hasFile   = !empty($A['file_abstrak']);
               <small class="text-muted">Alasan: <?= esc($taskReason) ?></small>
             <?php endif; ?>
 
-            <?php if ($my): // tampilkan ringkas keputusan saya jika ada ?>
+            <?php if ($my): ?>
               <span class="badge <?= $badgeMap($my['keputusan'] ?? '') ?>">
                 Review saya: <?= strtoupper((string)$my['keputusan'] ?: 'PENDING') ?>
               </span>
@@ -310,9 +333,35 @@ $hasFile   = !empty($A['file_abstrak']);
 
       <div class="modal-footer">
         <button class="btn btn-light" type="button" data-bs-dismiss="modal">Batal</button>
-        <button class="btn btn-primary" <?= !$canReview?'disabled':'' ?> id="btnSubmitReview">
+        <!-- FIX: WAJIB type="submit" -->
+        <button class="btn btn-primary" type="submit" <?= !$canReview?'disabled':'' ?> id="btnSubmitReview">
           <i class="bi bi-save me-1"></i><?= $my ? 'Perbarui' : 'Kirim' ?>
         </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Tolak Penugasan -->
+<div class="modal fade" id="declineModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" action="<?= site_url('reviewer/abstrak/confirm/'.$idAbs) ?>" class="modal-content" id="declineForm">
+      <?= csrf_field() ?>
+      <input type="hidden" name="action" value="decline">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-x-octagon text-danger me-2"></i>Tolak Penugasan</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small text-muted mb-2" id="declTitle"></div>
+        <label class="form-label">Alasan Penolakan <span class="text-danger">*</span></label>
+        <textarea name="reason" id="declReason" rows="4" class="form-control" required minlength="5"
+                  placeholder="Tuliskan alasan penolakan secara singkat dan jelas..."></textarea>
+        <div class="form-text">Penolakan tanpa alasan tidak diperbolehkan.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-light" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-danger" type="submit"><i class="bi bi-x-lg me-1"></i>Tolak</button>
       </div>
     </form>
   </div>
@@ -371,6 +420,7 @@ body{
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+  // Validasi form review
   const form   = document.getElementById('reviewForm');
   const select = form?.querySelector('select[name="keputusan"]');
   const text   = form?.querySelector('textarea[name="komentar"]');
@@ -384,5 +434,16 @@ document.addEventListener('DOMContentLoaded', () => {
       text?.focus();
     }
   });
+
+  // Modal Decline (ACC/Tolak tugas)
+  const declineBtn = document.getElementById('btnOpenDecline');
+  if (declineBtn) {
+    const modal = new bootstrap.Modal(document.getElementById('declineModal'));
+    declineBtn.addEventListener('click', () => {
+      document.getElementById('declTitle').textContent = 'Menolak penugasan: "' + (declineBtn.getAttribute('data-title')||'') + '"';
+      document.getElementById('declReason').value = '';
+      modal.show();
+    });
+  }
 });
 </script>
