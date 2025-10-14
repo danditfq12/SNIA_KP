@@ -82,45 +82,6 @@ $hasFile   = !empty($A['file_abstrak']);
         </div>
       <?php endif; ?>
 
-      <!-- STATUS BAR -->
-      <div class="card shadow-sm border-0 mb-3">
-        <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <div class="d-flex flex-wrap align-items-center gap-2">
-            <span class="badge <?= $taskBadge($taskStatus) ?>">
-              <i class="bi bi-person-check me-1"></i><?= ucfirst($taskStatus) ?> tugas
-            </span>
-            <?php if ($taskStatus==='declined' && $taskReason): ?>
-              <small class="text-muted">Alasan: <?= esc($taskReason) ?></small>
-            <?php endif; ?>
-
-            <?php if ($my): ?>
-              <span class="badge <?= $badgeMap($my['keputusan'] ?? '') ?>">
-                Review saya: <?= strtoupper((string)$my['keputusan'] ?: 'PENDING') ?>
-              </span>
-              <?php if (!empty($my['tanggal_review'])): ?>
-                <small class="text-muted">• <?= $fmt($my['tanggal_review'], true) ?></small>
-              <?php endif; ?>
-            <?php else: ?>
-              <span class="badge bg-secondary">Review saya: PENDING</span>
-            <?php endif; ?>
-          </div>
-
-          <div class="d-flex flex-wrap gap-2">
-            <?php if ($canReview && $hasFile): ?>
-              <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('reviewer/abstrak/download/'.$idAbs) ?>">
-                <i class="bi bi-download"></i> Unduh PDF
-              </a>
-              <a class="btn btn-outline-secondary btn-sm" target="_blank" href="<?= site_url('reviewer/abstrak/blob/'.$idAbs) ?>">
-                <i class="bi bi-box-arrow-up-right"></i> Buka di Tab Baru
-              </a>
-            <?php endif; ?>
-            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#reviewModal" <?= $canReview?'':'disabled' ?>>
-              <i class="bi bi-pencil-square me-1"></i><?= $my ? 'Ubah Review' : 'Kirim Review' ?>
-            </button>
-          </div>
-        </div>
-      </div>
-
       <div class="row g-3">
         <!-- KIRI -->
         <div class="col-12 col-xl-8">
@@ -333,7 +294,6 @@ $hasFile   = !empty($A['file_abstrak']);
 
       <div class="modal-footer">
         <button class="btn btn-light" type="button" data-bs-dismiss="modal">Batal</button>
-        <!-- FIX: WAJIB type="submit" -->
         <button class="btn btn-primary" type="submit" <?= !$canReview?'disabled':'' ?> id="btnSubmitReview">
           <i class="bi bi-save me-1"></i><?= $my ? 'Perbarui' : 'Kirim' ?>
         </button>
@@ -370,51 +330,144 @@ $hasFile   = !empty($A['file_abstrak']);
 <?= $this->include('partials/footer') ?>
 
 <style>
+/* ===== THEME TOKENS (patokan) ===== */
 :root{
-  --primary-color:#2563eb;
-  --success-color:#10b981;
-  --warning-color:#f59e0b;
-  --danger-color:#ef4444;
-  --info-color:#06b6d4;
-  --secondary-color:#6b7280;
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
+  --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+
+  --ink:#0f172a; --muted:#6b7280; --radius:16px;
+
+  --glass-bg: rgba(255,255,255,.92);
+  --glass-bd: rgba(30,64,175,.14);
+  --glass-shadow: 0 12px 28px rgba(30,64,175,.12);
+
+  --success:#10b981; --warn:#f59e0b; --danger:#ef4444; --secondary:#6b7280;
 }
+
+/* ===== BASE ===== */
+html,body{ height:100%; }
 body{
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
   font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size:15.5px; line-height:1.6; color:var(--ink);
+  background:
+    radial-gradient(1000px 380px at 10% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
+    radial-gradient(1000px 380px at 90% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
+
+.container-fluid{ max-width:min(100%, 1560px); margin-inline:auto; }
+
+/* ===== HEADER (hero) ===== */
 .header-section{
-  background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
-  color:#fff; padding:20px; border-radius:12px;
-  box-shadow:0 4px 20px rgba(37,99,235,.15);
+  background:linear-gradient(135deg,var(--blue-700),var(--blue-800));
+  color:#fff; padding:1.25rem 1rem; border-radius:var(--radius);
+  box-shadow:0 12px 28px rgba(30,64,175,.18);
 }
-.welcome-text{ color:#fff; font-weight:700; font-size:1.35rem; margin:0; }
+.welcome-text{ color:#fff; font-weight:800; font-size:1.32rem; margin:0; }
+.header-section small.text-muted{ color:rgba(255,255,255,.88)!important; }
 
-.card{ background:#fff; border:none; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.08); }
-.card-header{ background:#f8fafc; border-bottom:1px solid #e2e8f0; border-radius:12px 12px 0 0 !important; padding:14px 18px; }
+/* ===== CARDS ===== */
+.card{
+  background:var(--glass-bg); border:1px solid var(--glass-bd);
+  border-radius:14px; box-shadow:var(--glass-shadow);
+}
+.card-header{
+  background:#fff; border-bottom:1px solid rgba(30,64,175,.14);
+  border-radius:14px 14px 0 0 !important; padding:14px 18px;
+}
+.card-title{ font-weight:800; color:var(--blue-900); }
 
-.form-control, .form-select{ border:2px solid #e2e8f0; border-radius:8px; }
-.form-control:focus, .form-select:focus{ border-color:var(--primary-color); box-shadow:0 0 0 .2rem rgba(37,99,235,.1); }
-
-.badge{ border-radius:6px; font-weight:500; font-size:.8rem; }
-.bg-success{ background-color:var(--success-color) !important; }
-.bg-warning{ background-color:var(--warning-color) !important; }
-.bg-danger{ background-color:var(--danger-color) !important; }
-.bg-secondary{ background-color:var(--secondary-color) !important; }
-.bg-info-subtle{ background-color: rgba(6,182,212,.12) !important; }
-.text-primary{ color: var(--primary-color) !important; }
-
-.btn{ border-radius:8px; font-weight:500; }
-.btn-primary{ background-color:var(--primary-color); border-color:var(--primary-color); }
+/* ===== FORM / BUTTON ===== */
+.form-control, .form-select{
+  border:2px solid #e2e8f0; border-radius:10px; transition:border-color .15s, box-shadow .15s;
+}
+.form-control:focus, .form-select:focus{
+  border-color:var(--blue-600); box-shadow:0 0 0 .2rem rgba(37,99,235,.12);
+}
+.btn{ border-radius:10px; font-weight:800; }
+.btn-primary{
+  background:var(--blue-600); border-color:var(--blue-600);
+  box-shadow:0 4px 12px rgba(37,99,235,.20);
+}
+.btn-light{ background:#fff; border:1px solid rgba(2,6,23,.08); }
+.btn-outline-primary{ border-color:var(--blue-300); color:var(--blue-700); }
+.btn-outline-primary:hover{ background:var(--blue-50); border-color:var(--blue-400); color:var(--blue-800); }
 .btn-outline-secondary{ border-color:#d1d5db; color:#6b7280; }
 .btn-outline-secondary:hover{ background-color:#f9fafb; border-color:#9ca3af; color:#374151; }
-.btn-outline-primary{ color: var(--primary-color); border-color: var(--primary-color); }
+.btn-outline-danger{ border-color:#fecaca; color:#b91c1c; }
+.btn-outline-danger:hover{ background:#fff1f2; border-color:#fca5a5; color:#7f1d1d; }
 
-.pdf-wrap{height:70vh;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#f8fafc}
-.pdf-frame{width:100%;height:100%;border:0}
+/* ===== BADGE ===== */
+.badge{
+  border-radius:999px; font-weight:800; font-size:.82rem;
+  padding:.35rem .65rem; border:1px solid rgba(0,0,0,.05);
+}
+.bg-success{ background-color:rgba(16,185,129,.14)!important; color:#065f46; }
+.bg-warning{ background-color:rgba(245,158,11,.18)!important; color:#92400e; }
+.bg-danger{ background-color:rgba(239,68,68,.16)!important; color:#991b1b; }
+.bg-secondary{ background-color:#f3f4f6!important; color:#374151; }
 
+/* ===== PDF PREVIEW ===== */
+.pdf-wrap{
+  height:72vh; border:1px dashed rgba(30,64,175,.22);
+  border-radius:12px; overflow:hidden; background:#f8fafc;
+  box-shadow:inset 0 0 0 9999px rgba(59,130,246,.02);
+}
+.pdf-frame{ width:100%; height:100%; border:0; }
+
+/* ===== INFO NASKAH — versi "biasa", tanpa hover ===== */
+.card:has(.card-title .bi-info-circle) .card-body{
+  background:#fff;
+  padding: 1rem 1.1rem;
+}
+.card:has(.card-title .bi-info-circle) .card-body .row > [class^="col-"] > .d-flex.justify-content-between{
+  /* list style */
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed rgba(30,64,175,.18);
+  padding: .55rem 0;
+  box-shadow: none;
+}
+.card:has(.card-title .bi-info-circle) .card-body .row > [class^="col-"]:last-child > .d-flex.justify-content-between{
+  border-bottom: 0; /* baris terakhir */
+}
+.card:has(.card-title .bi-info-circle) .card-body .d-flex.justify-content-between > div:first-child{
+  color: var(--muted);
+  font-weight: 600;
+  min-width: 110px; /* label lebar tetap */
+  flex: 0 0 110px;
+}
+.card:has(.card-title .bi-info-circle) .card-body .d-flex.justify-content-between > div:last-child{
+  color: var(--ink);
+  font-weight: 700;
+  text-align: left;      /* nilai rata kiri */
+  margin-left: .8rem;
+  white-space: normal;   /* biar multi-baris */
+  word-break: break-word;
+}
+.card:has(.card-title .bi-info-circle) .card-body small.text-muted{
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-weight: 600;
+  color: var(--muted) !important;
+}
+
+/* ===== UTIL ===== */
+.text-muted{ color:var(--muted)!important; }
+.bg-light{ background:#f8fafc!important; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 991.98px){
+  .welcome-text{ font-size:1.2rem; }
+}
 @media (max-width: 575.98px){
   .container-fluid{ padding-left:.5rem!important; padding-right:.5rem!important; }
   .pdf-wrap{ height:60vh; }
+  /* label sedikit lebih sempit di mobile */
+  .card:has(.card-title .bi-info-circle) .card-body .d-flex.justify-content-between > div:first-child{
+    min-width: 92px; flex-basis: 92px;
+  }
 }
 </style>
 

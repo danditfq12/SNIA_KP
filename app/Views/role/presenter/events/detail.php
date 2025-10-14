@@ -20,7 +20,7 @@ $fmt = function($s, $withTime=false){
   return $withTime ? date('d M Y H:i', $ts) : date('d M Y', $ts);
 };
 
-/* label format (match view Abstrak) */
+/* label format */
 $formatLabel = function($f){
   $f = strtolower((string)$f);
   return $f === 'both' ? 'Hybrid' : ucfirst($f ?: '-');
@@ -42,17 +42,17 @@ $nice = function($v) {
   };
 };
 
-/* ====== Tentukan CTA utama/sekunder (seragam) ====== */
+/* ====== CTA ====== */
 $primaryBtn   = null;
 $secondaryBtn = null;
 
 $isReg = (bool)$reg;
 
-/* Kontributor selesai? (cover beragam field) */
+/* Kontributor selesai? */
 $kontributorDone = false;
 if ($reg) {
   foreach (['contributor_done','kontributor_done','profile_completed','is_profile_completed'] as $f) {
-    if (array_key_exists($f,$reg)) { $kontributorDone = (bool)$reg[$f]; break; }
+      if (array_key_exists($f,$reg)) { $kontributorDone = (bool)$reg[$f]; break; }
   }
 }
 
@@ -110,19 +110,20 @@ if (!$isReg) {
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- Hero (match palette & override seperti Abstrak) -->
-      <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
-        <div>
-          <h3 class="hero-title mb-1">
-            <i class="bi bi-info-circle me-2"></i><?= esc($event['title'] ?? 'Event') ?>
-          </h3>
-          <div class="text-white-75 small">Detail event & status pendaftaran</div>
-        </div>
-        <div class="d-none d-md-block text-end">
-          <div class="text-white-75 small">Tanggal Event</div>
-          <div class="fw-semibold text-white">
-            <?= esc($fmt($event['event_date'] ?? null)) ?>
-            <?= !empty($event['event_time']) ? ' • '.esc($event['event_time']) : '' ?>
+      <!-- HERO -->
+      <div class="card-hero mb-4">
+        <div class="hero-body">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+              <h3 class="hero-title mb-1">
+                <i class="bi bi-info-circle me-2"></i><?= esc($event['title'] ?? 'Event') ?>
+              </h3>
+              <div class="text-white-70 small">Detail event & status pendaftaran.</div>
+            </div>
+            <div class="d-none d-md-block text-end">
+              <div class="text-white-70 small">Tanggal Event</div>
+              <div class="fw-bold"><?= esc($fmt($event['event_date'] ?? null)) ?><?= !empty($event['event_time']) ? ' • '.esc($event['event_time']) : '' ?></div>
+            </div>
           </div>
         </div>
       </div>
@@ -141,8 +142,7 @@ if (!$isReg) {
                 <div class="col-12 col-md-6">
                   <div class="text-muted small">Tanggal</div>
                   <div class="fw-semibold text-blue-900">
-                    <?= esc($fmt($event['event_date'] ?? null)) ?>
-                    <?= !empty($event['event_time']) ? ' • '.esc($event['event_time']) : '' ?>
+                    <?= esc($fmt($event['event_date'] ?? null)) ?><?= !empty($event['event_time']) ? ' • '.esc($event['event_time']) : '' ?>
                   </div>
                 </div>
                 <div class="col-12 col-md-6">
@@ -311,73 +311,43 @@ if (!$isReg) {
 <?= $this->include('partials/footer') ?>
 
 <style>
-/* ===== Event Detail — diseragamkan dengan Abstrak/Index ===== */
 :root{
-  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
-  --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
-  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
-  --side-pad: 1rem;
-  --gutter:   1rem;
+  /* konsisten dengan patokan */
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
+  --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+  --muted:#6b7280; --ink:#0f172a; --radius:16px;
+  --side-pad: clamp(1rem, 2.3vw, 2.2rem);
 }
 
-body{
-  font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  font-size:14.6px;
-  line-height:1.5;
-}
+.container-xxl{ max-width:min(100%, 1560px); padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; margin-inline:auto; }
+body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.5px; line-height:1.6; color:var(--ink); }
 
-/* Layout */
+/* Background */
 .page-wrap-blue{
-  background:linear-gradient(180deg,var(--blue-50),#fff 40%);
-  min-height:100vh;
-  padding-top:72px;
+  min-height:100vh; padding-top:72px;
+  background:
+    radial-gradient(1000px 380px at 10% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
+    radial-gradient(1000px 380px at 90% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
-.container-xxl{
-  max-width:1400px;
-  padding-left:var(--side-pad) !important;
-  padding-right:var(--side-pad) !important;
-}
-.row.g-3{ --bs-gutter-x: var(--gutter); --bs-gutter-y: var(--gutter); }
 
-/* Hero (override efek glass sama seperti Abstrak) */
-.hero-blue{
-  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
-  color:#fff !important;
-  border-radius:16px;
-  border:1px solid rgba(255,255,255,.15);
-  box-shadow:0 12px 28px rgba(30,64,175,.10);
-  padding:1.6rem !important;
-  margin-bottom:1.25rem !important;
+/* HERO */
+.card-hero{ border:0; border-radius:var(--radius); overflow:hidden; box-shadow:0 12px 28px rgba(30,64,175,.18); }
+.card-hero .hero-body{
+  background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff;
+  padding:1.8rem 1.2rem; min-height:176px;
 }
-.hero-blue.card-glass,
-.hero-blue.card-glass-plain{
-  backdrop-filter:none !important;
-  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
-  border:1px solid rgba(255,255,255,.15) !important;
-  box-shadow:0 12px 28px rgba(30,64,175,.10) !important;
-}
-.hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.45rem; }
-.text-white-75{ color:rgba(255,255,255,.85)!important; }
+.hero-title{ font-weight:800; }
+.text-white-70{ color:rgba(255,255,255,.85)!important; }
 
-/* Card/Glass */
-.card-glass-plain{
-  backdrop-filter:blur(6px);
-  background:rgba(255,255,255,.94);
-  border-radius:14px;
-  border:1px solid rgba(30,64,175,.10);
-}
+/* Glass cards */
+.card-glass-plain{ backdrop-filter:blur(6px); background:rgba(255,255,255,.96); border-radius:14px; border:1px solid rgba(30,64,175,.10); }
 .shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
 .card-header{ padding:1rem 1rem .45rem 1rem !important; }
 .card-body{   padding:1.05rem !important; }
 
-/* Badges kecil */
-.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.4rem .6rem; font-weight:600; font-size:.85rem; }
-.bg-success-subtle{   background:#d1fae5!important; color:#065f46!important; }
-.bg-warning-subtle{   background:#fef3c7!important; color:#92400e!important; }
-.bg-danger-subtle{    background:#fee2e2!important; color:#991b1b!important; }
-.bg-info-subtle{      background:#e0f2fe!important; color:#0c4a6e!important; }
-.bg-secondary-subtle{ background:#f1f5f9!important; color:#475569!important; }
-.bg-primary-subtle{   background:#dbeafe!important; color:var(--blue-700)!important; }
+/* Badge kecil */
+.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.5rem .7rem; font-weight:600; font-size:.9rem; }
 .text-blue-900{ color:var(--blue-900)!important; }
 
 /* Table (kontributor) */
@@ -403,44 +373,22 @@ body{
 }
 .list-group-item:first-child{ border-top:none!important; }
 .list-group-item:last-child{  border-bottom:none!important; }
-.list-group-item strong{ font-weight:600; font-size:.95rem; }
 
 /* Buttons */
-.btn{
-  font-weight:600; letter-spacing:.25px;
-  border-radius:10px; font-size:.95rem; padding:.55rem 1rem;
-}
-.btn-sm{ padding:.42rem .8rem; font-size:.86rem; }
-.btn-lg{ padding:.85rem 1.5rem; font-size:1.06rem; }
+.btn{ font-weight:800; border-radius:10px; font-size:.98rem; padding:.6rem 1.05rem; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
-.btn-info{    background:#06b6d4; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,.2); }
 .btn-success{ background:#059669; border-color:#059669; box-shadow:0 4px 12px rgba(5,150,105,.2); }
 .btn-warning{ background:#d97706; border-color:#d97706; box-shadow:0 4px 12px rgba(217,119,6,.2); }
 .btn-danger{  background:#dc2626; border-color:#dc2626; box-shadow:0 4px 12px rgba(220,38,38,.2); }
+.btn-info{    background:#06b6d4; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,.2); }
 
 /* Responsive */
+@media (max-width:767.98px){
+  .card-hero .hero-body{ padding:1.4rem 1rem; min-height:165px; }
+}
 @media (max-width:575.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .hero-blue{ border-radius:14px; padding:1.25rem!important; margin-bottom:1rem!important; }
-  .hero-title{ font-size:1.25rem; }
-  .card-body{  padding:.9rem!important; }
-  .card-header{ padding:.9rem .9rem .4rem .9rem!important; }
+  .container-xxl{ padding-left: calc(var(--side-pad) - .25rem) !important; padding-right: calc(var(--side-pad) - .25rem) !important; }
   .table thead th, .table tbody td{ padding:.6rem .7rem; font-size:.85rem; }
-  .list-group-item{ font-size:.95rem; padding:.6rem 0; }
-  .badge{ padding:.35rem .55rem; font-size:.7rem; }
-}
-@media (min-width:576px) and (max-width:767.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .hero-title{ font-size:1.35rem; }
-  .card-body{  padding:1rem!important; }
-}
-@media (min-width:768px) and (max-width:991.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .hero-title{ font-size:1.45rem; }
-}
-@media (min-width:992px){
-  .hero-blue{ padding:1.7rem!important; }
-  .card-body{  padding:1.05rem!important; }
-  .card-header{ padding:1rem 1rem .45rem 1rem!important; }
+  .list-group-item{ padding:.6rem 0; }
 }
 </style>

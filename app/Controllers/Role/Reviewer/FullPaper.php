@@ -37,11 +37,11 @@ class FullPaper extends BaseController
         throw new \RuntimeException('Tabel submissions/abstrak tidak ditemukan.');
     }
 
-    private function fields(string $table): array
+    private function colExists(string $t, string $c): bool
     {
-        return $this->db->getFieldNames($table) ?: [];
+        $fields = $this->db->getFieldNames($t) ?: [];
+        return in_array($c, $fields, true);
     }
-    private function colExists(string $t, string $c): bool { return in_array($c, $this->fields($t), true); }
 
     private function primaryKey(string $table): string
     {
@@ -586,17 +586,15 @@ class FullPaper extends BaseController
             : redirect()->to($backUrl)->with($ok ? 'success' : 'error', $msg);
     }
 
-    /* ======================= File utils ======================= */
+    /* ======================= File utils & endpoints ======================= */
 
     private function resolvePdfAbsolutePath(?string $stored): ?string
     {
         if (!$stored) return null;
         $rel = trim(str_replace(['\\', '..'], ['/', ''], $stored), '/');
 
-        // absolute path langsung
         if (is_file($stored)) return $stored;
 
-        // candidate umum
         $candidates = [
             rtrim(WRITEPATH, '/\\') . DIRECTORY_SEPARATOR . $rel,
             rtrim(WRITEPATH, '/\\') . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . $rel,
@@ -606,7 +604,6 @@ class FullPaper extends BaseController
             rtrim(FCPATH,    '/\\') . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'fullpaper' . DIRECTORY_SEPARATOR . basename($rel),
         ];
 
-        // env opsional: fullpaper.storage_base
         $base = trim((string) env('fullpaper.storage_base', ''), '/\\');
         if ($base !== '') {
             $candidates[] = $base . DIRECTORY_SEPARATOR . $rel;
@@ -617,8 +614,6 @@ class FullPaper extends BaseController
         }
         return null;
     }
-
-    /* ======================= File endpoints ======================= */
 
     public function download($submissionId)
     {
@@ -641,10 +636,6 @@ class FullPaper extends BaseController
         return $this->response->download($absolute, null)->setFileName(basename($absolute));
     }
 
-    /**
-     * Endpoint untuk inline/iframe preview.
-     * Diset ringkas & aman agar tidak mengganggu rendering PDF di <iframe>.
-     */
     public function blob($submissionId)
     {
         if (!$this->requireReviewer()) return $this->response->setStatusCode(401, 'Unauthorized');
@@ -662,16 +653,13 @@ class FullPaper extends BaseController
             return $this->response->setStatusCode(404, 'File tidak ada di server');
         }
 
-        // Bersihkan buffer untuk menghindari extra output
         while (ob_get_level() > 0) { @ob_end_clean(); }
 
-        // Header “inline” yang ramah iframe
         $filename = basename($absolute);
         $this->response->setHeader('Content-Type', 'application/pdf');
         $this->response->setHeader('Content-Disposition', 'inline; filename="'.$filename.'"');
         $this->response->setHeader('Accept-Ranges', 'bytes');
         $this->response->setHeader('Cache-Control', 'no-store, max-age=0');
-        // Jangan set Content-Length manual: biarkan server/CI yang handle agar tidak konflik streaming
 
         return $this->response->setBody(file_get_contents($absolute));
     }

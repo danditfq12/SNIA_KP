@@ -126,11 +126,9 @@ class Fullpaper extends BaseController
     }
 
     /**
-     * AUTO-REJECTION logic:
-     * - Jika FP window sudah TUTUP (isFullPaperOpen == false) dan ada deadline,
-     *   lalu status: NONE atau REVISION -> tampilkan sebagai REJECTED (Auto)
-     *   (tanpa mengubah DB).
-     * Return: [effectiveStatus, reason|null]
+     * AUTO-REJECTION logic (hanya tampilan):
+     * - Jika window FP TUTUP & ada deadline:
+     *   status NONE/REVISION => tampil REJECTED (Auto)
      */
     private function autoRejectionStatus(array $event, string $current): array
     {
@@ -169,7 +167,6 @@ class Fullpaper extends BaseController
         return ['table'=>$table,'id'=>$idCol,'name'=>$nameCol,'email'=>$emailCol];
     }
 
-    /** Ambil reviewer yang ditugaskan + keputusan terakhir setelah upload FP terakhir */
     private function getAssignedReviewersWithLatestDecision(int $submissionId, ?string $uploadedAt): array
     {
         $db = \Config\Database::connect();
@@ -182,7 +179,6 @@ class Fullpaper extends BaseController
                  : (isset($fields['status_tugas']) ? 'status_tugas' : (isset($fields['tugas_status']) ? 'tugas_status' : (isset($fields['konfirmasi_status']) ? 'konfirmasi_status' : null)));
         if (!$colRel || !$colRev) return [];
 
-        // reviewer yang ditugaskan
         $assigned = $db->table('fullpaper_reviewers')
             ->select("$colRev AS reviewer_id, ".($colSt ? "$colSt AS assignment_status, " : "'' AS assignment_status, ")." assigned_at")
             ->where($colRel, $submissionId)
@@ -192,7 +188,6 @@ class Fullpaper extends BaseController
 
         $ids = array_values(array_unique(array_map(fn($r)=>(int)$r['reviewer_id'], $assigned)));
 
-        // identitas reviewer
         $src = $this->resolveReviewerSource();
         $idCol   = $src['id']; $nameCol = $src['name']; $emailCol = $src['email'];
         $ident = [];
@@ -205,7 +200,6 @@ class Fullpaper extends BaseController
             foreach ($q as $r) $ident[(int)$r['id']] = ['name'=>$r['name'] ?? 'Reviewer', 'email'=>$r['email'] ?? null];
         }
 
-        // keputusan terakhir per reviewer (round terbaru = >= uploadedAt)
         $latest = [];
         if ($db->tableExists('fullpaper_reviews')) {
             $qb = $db->table('fullpaper_reviews')
@@ -220,7 +214,6 @@ class Fullpaper extends BaseController
             }
         }
 
-        // gabungkan
         $out = [];
         foreach ($assigned as $a) {
             $rid   = (int)$a['reviewer_id'];
@@ -239,7 +232,7 @@ class Fullpaper extends BaseController
                 'name'              => $ident[$rid]['name']  ?? 'Reviewer',
                 'email'             => $ident[$rid]['email'] ?? null,
                 'assignment_status' => $st,
-                'keputusan'         => $dec,         // accepted | revision | rejected | null
+                'keputusan'         => $dec,
                 'komentar'          => $kom,
                 'tanggal_review'    => $ts,
             ];
@@ -247,13 +240,6 @@ class Fullpaper extends BaseController
         return $out;
     }
 
-    /**
-     * Agregasi panel **UNANIMOUS**:
-     * - Semua ACC   => ACCEPTED
-     * - Semua REJECT=> REJECTED
-     * - Ada kombinasi / ada minimal 1 REVISION/REJECT => REVISION
-     * - Kalau semua yang masuk ACC tapi belum lengkap => UPLOADED (belum final)
-     */
     private function computePanelUnanimous(array $reviewers): array
     {
         $total = count($reviewers);
@@ -295,7 +281,6 @@ class Fullpaper extends BaseController
         return null;
     }
 
-    /** Cari submission “carrier” (submissions|abstrak) */
     private function findCurrentSubmissionId(int $userId, int $eventId): ?int
     {
         $db = \Config\Database::connect();
@@ -346,7 +331,6 @@ class Fullpaper extends BaseController
             $isOpen     = $this->isFullPaperOpen($event);
             $isFinished = $this->isEventFinished($event);
 
-            // Terapkan AUTO-REJECT untuk display status
             $baseStatus = $absEligible ? $fpStatus : 'NONE';
             [$effStatus, $autoReason] = $this->autoRejectionStatus($event, $baseStatus);
 
@@ -356,7 +340,6 @@ class Fullpaper extends BaseController
                 $meta['hint']   = $autoReason;
             }
 
-            // Upload hanya boleh saat open dan status memungkinkan
             $canUpload = $isOpen && $absEligible && in_array($effStatus, ['NONE','REJECTED','REVISION'], true);
 
             $row = [
@@ -376,11 +359,17 @@ class Fullpaper extends BaseController
                 'can_upload'          => $canUpload,
             ];
 
-            // Masuk History jika window FP sudah TUTUP dan status final (ACCEPTED/REJECTED)
-            $isFinalForFp = (!$isOpen) && in_array($effStatus, ['ACCEPTED','REJECTED'], true);
+            /**
+             * >>> CHANGE: klasifikasi ke Riwayat
+             * - ACCEPTED  => SELALU masuk Riwayat (tanpa nunggu event selesai/window tutup)
+             * - REJECTED  => Riwayat jika window sudah TUTUP (display auto/final)
+             * - Lainnya   => tetap To-Do
+             */
+            $goHistory =
+                ($effStatus === 'ACCEPTED')                                   // langsung riwayat
+                || (!$isOpen && $effStatus === 'REJECTED');                   // reject final ketika window tutup
 
-            if ($isFinalForFp || $isFinished) {
-                // Final: pindah ke history
+            if ($goHistory) {
                 $history[] = $row;
             } else {
                 $todo[] = $row;
@@ -437,7 +426,6 @@ class Fullpaper extends BaseController
         $absEligible = $this->isAbstractEligible($abs);
         if (!$absEligible) { $status = 'NONE'; $path = ''; }
 
-        // Terapkan AUTO-REJECT di halaman detail (display)
         [$statusEff, $autoReason] = $this->autoRejectionStatus($event, $status);
 
         $statusMeta   = $this->mapFpStatusMeta($statusEff);
@@ -448,7 +436,6 @@ class Fullpaper extends BaseController
 
         $isOpen       = $this->isFullPaperOpen($event);
 
-        // reviewer + panel
         $submissionId = $this->findCurrentSubmissionId($userId, $eventId);
         $reviewers    = [];
         $panel        = ['panel'=>'PENDING','counts'=>['acc'=>0,'rev'=>0,'rej'=>0,'done'=>0,'total'=>0],'decided'=>false];
@@ -458,7 +445,6 @@ class Fullpaper extends BaseController
             $panel     = $this->computePanelUnanimous($reviewers);
         }
 
-        // Reupload hanya jika OPEN dan status final REVISION/REJECTED
         $canReupload  = $isOpen && $absEligible && in_array($statusEff, ['REVISION','REJECTED'], true);
         $canUploadNew = $isOpen && $absEligible && $statusEff === 'NONE';
 
@@ -479,7 +465,6 @@ class Fullpaper extends BaseController
             'can_upload'    => $canUploadNew,
             'event_id'      => $eventId,
 
-            // panel & reviewer list
             'submission_id' => $submissionId,
             'reviewers'     => $reviewers,
             'panel'         => $panel,
@@ -518,7 +503,6 @@ class Fullpaper extends BaseController
                 ->with('error', 'Upload Full Paper tersedia setelah Anda mengunggah abstrak (dan tidak ditolak).');
         }
 
-        // Gunakan status efektif (kalau sebelumnya auto-reject tapi sudah tutup, tetap tidak bisa upload)
         [$effStatus] = $this->autoRejectionStatus($event, $fpStatus);
         if ($effStatus !== 'NONE' && !in_array($effStatus, ['REVISION','REJECTED'], true)) {
             return redirect()->to('/presenter/fullpaper/detail/'.$eventId)
@@ -578,30 +562,24 @@ class Fullpaper extends BaseController
             return redirect()->back()->withInput()->with('error','Ukuran maksimal 20MB.');
         }
 
-        // Simpan submission id sebelumnya (jika ada)
         $before = method_exists($this->fpModel,'getLatestRowByUserEvent')
             ? $this->fpModel->getLatestRowByUserEvent($userId, $eventId) : null;
         $beforeId = $this->resolveSubmissionId($before);
 
         try {
-            // simpan file ke WRITEPATH/uploads/fullpaper/.... (return nama file)
             $stored = $this->fpModel->moveUploadedFile($file, $userId, $eventId);
 
-            // tempel path ke carrier (submissions/abstrak) dan status UPLOADED
             $ok = $this->fpModel->attachFullPaperByUserEvent(
                 $userId, $eventId, $stored, \App\Models\FullPaperModel::STATUS_UPLOADED
             );
             if (!$ok) return redirect()->back()->withInput()->with('error','Tidak ditemukan data abstrak/submission untuk ditempeli.');
 
-            // pastikan status UPLOADED di carrier
             $this->forceUploadedStatus($userId, $eventId);
 
-            // carrier terbaru
             $after  = method_exists($this->fpModel,'getLatestRowByUserEvent')
                 ? $this->fpModel->getLatestRowByUserEvent($userId, $eventId) : null;
             $newId  = $this->resolveSubmissionId($after);
 
-            // bump revisi_ke kalau ada
             $db = \Config\Database::connect();
             $table = $db->tableExists('submissions') ? 'submissions' : ($db->tableExists('abstrak') ? 'abstrak' : null);
             if ($table && in_array('revisi_ke', $db->getFieldNames($table), true) && $newId) {
@@ -609,12 +587,10 @@ class Fullpaper extends BaseController
                 $db->table($table)->where($pk, $newId)->set('revisi_ke','COALESCE(revisi_ke,0)+1', false)->update();
             }
 
-            // copy assignment reviewer dari submission sebelumnya (kalau berbeda)
             if ($newId && (!$beforeId || $newId !== $beforeId)) {
                 $this->propagateFullpaperAssignments($newId, $userId, $eventId, $beforeId);
             }
 
-            // === Notif revisi ke reviewer yang sebelumnya REVISION/REJECT ===
             try {
                 if ($beforeId && $newId && $db->tableExists('fullpaper_reviews') && $db->tableExists('fullpaper_reviewers')) {
                     $rids = array_column(
@@ -672,7 +648,7 @@ class Fullpaper extends BaseController
                 ->setHeader('Content-Disposition','inline; filename="'.basename($path).'"')
                 ->setBody(file_get_contents($path));
         }
-        return $this->response->download($path, null); // attachment
+        return $this->response->download($path, null);
     }
 
     public function delete($eventId)

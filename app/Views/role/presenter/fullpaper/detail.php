@@ -285,7 +285,7 @@ $absKategori = (trim((string)$absKategori) === '') ? '-' : $absKategori;
               <?php endif; ?>
 
               <div class="mt-3 p-2 rounded border bg-light">
-                <div class="mb-1 fw-semibold">Ringkasan Panel</div>
+                <div class="mb-1 fw-semibold">Hasil Akhir</div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                   <span class="badge bg-<?= $panelBadge($panel['panel']) ?>">Panel: <?= strtoupper($panel['panel']) ?></span>
                   <small class="text-muted">ACC <?= (int)$panel['counts']['acc'] ?> • Revisi <?= (int)$panel['counts']['rev'] ?> • Reject <?= (int)$panel['counts']['rej'] ?></small>

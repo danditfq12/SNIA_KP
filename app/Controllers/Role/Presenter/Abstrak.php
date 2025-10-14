@@ -56,109 +56,107 @@ class Abstrak extends BaseController
         };
     }
 
-public function index()
-{
-    $userId = (int) session()->get('id_user');
-    $regs   = $this->regModel->listByUser($userId) ?? [];
+    public function index()
+    {
+        $userId = (int) session()->get('id_user');
+        $regs   = $this->regModel->listByUser($userId) ?? [];
 
-    // Ambil semua abstrak user (dengan relasi) lalu pilih yang TERBARU per event
-    $allAbs = $this->abstrakModel->getByUserWithDetails($userId) ?? [];
-    $latestPerEvent = [];
-    foreach ($allAbs as $a) {
-        $eid = (int) ($a['event_id'] ?? 0);
-        if (!$eid) continue;
-        $ts  = !empty($a['tanggal_upload']) ? strtotime($a['tanggal_upload']) : 0;
-        $cur = !empty($latestPerEvent[$eid]['tanggal_upload']) ? strtotime($latestPerEvent[$eid]['tanggal_upload']) : -1;
-        if (!isset($latestPerEvent[$eid]) || $ts > $cur) $latestPerEvent[$eid] = $a;
-    }
-
-    $needsUpload = [];
-    $history     = [];
-
-    foreach ($regs as $r) {
-        $eid = (int) ($r['id_event'] ?? 0);
-        if (!$eid) continue;
-
-        $event = $this->eventModel->find($eid);
-        if (!$event) continue;
-
-        $regRow    = $this->regModel->findUserReg($eid, $userId);
-        $contribOK = $this->isContributorCompleted($regRow);
-
-        $isOpenSubmit = $this->eventModel->isAbstractSubmissionOpen($eid);
-        $isOpenRev    = method_exists($this->eventModel, 'isAbstractRevisionOpen')
-                      ? $this->eventModel->isAbstractRevisionOpen($eid)
-                      : $isOpenSubmit;
-
-        $last   = $latestPerEvent[$eid] ?? null;
-
-        // Tentukan apakah user boleh upload (baru/revisi/ulang)
-        $canUpload = false;
-        if ($contribOK) {
-            if (!$last) {
-                $canUpload = $isOpenSubmit; // belum pernah submit → boleh submit pertama
-            } else {
-                $ls = strtolower((string)($last['status'] ?? ''));
-                if ($ls === 'revisi')   $canUpload = $isOpenRev;     // upload revisi
-                if ($ls === 'ditolak')  $canUpload = $isOpenSubmit;  // upload ulang
-            }
+        // semua abstrak user → pilih TERBARU per event
+        $allAbs = $this->abstrakModel->getByUserWithDetails($userId) ?? [];
+        $latestPerEvent = [];
+        foreach ($allAbs as $a) {
+            $eid = (int) ($a['event_id'] ?? 0);
+            if (!$eid) continue;
+            $ts  = !empty($a['tanggal_upload']) ? strtotime($a['tanggal_upload']) : 0;
+            $cur = !empty($latestPerEvent[$eid]['tanggal_upload']) ? strtotime($latestPerEvent[$eid]['tanggal_upload']) : -1;
+            if (!isset($latestPerEvent[$eid]) || $ts > $cur) $latestPerEvent[$eid] = $a;
         }
 
-        // ==== TAMPIL: PRIORITAS di "Abstrak perlu upload" ====
-        if ($canUpload) {
-            $meta = $this->mapStatusMeta($last['status'] ?? null);
+        $needsUpload = []; // = To-Do
+        $history     = []; // hanya diterima
+
+        foreach ($regs as $r) {
+            $eid = (int) ($r['id_event'] ?? 0);
+            if (!$eid) continue;
+
+            $event = $this->eventModel->find($eid);
+            if (!$event) continue;
+
+            $regRow    = $this->regModel->findUserReg($eid, $userId);
+            $contribOK = $this->isContributorCompleted($regRow);
+
+            $isOpenSubmit = $this->eventModel->isAbstractSubmissionOpen($eid);
+            $isOpenRev    = method_exists($this->eventModel, 'isAbstractRevisionOpen')
+                          ? $this->eventModel->isAbstractRevisionOpen($eid)
+                          : $isOpenSubmit;
+
+            $last = $latestPerEvent[$eid] ?? null;
+            $lastStatus = strtolower((string)($last['status'] ?? '')); // '', menunggu, sedang_direview, revisi, ditolak, diterima
+
+            // === hitung apakah BOLEH upload tombolnya ===
+            $canUpload = false;
+            if ($contribOK) {
+                if (!$last) {
+                    // belum pernah upload → boleh kalau jendela submit open
+                    $canUpload = $isOpenSubmit;
+                } else {
+                    if ($lastStatus === 'revisi')  $canUpload = $isOpenRev;
+                    if ($lastStatus === 'ditolak') $canUpload = $isOpenSubmit;
+                }
+            }
+
+            // === klasifikasi To-Do vs Riwayat ===
+            if ($last && $lastStatus === 'diterima') {
+                // hanya accepted → Riwayat
+                $meta = $this->mapStatusMeta($lastStatus);
+                $history[] = [
+                    'id_abstrak'     => (int) ($last['id_abstrak'] ?? 0),
+                    'judul'          => $last['judul'] ?? '-',
+                    'nama_kategori'  => $last['nama_kategori'] ?? '-',
+                    'status'         => $lastStatus,
+                    'status_badge'   => $meta['badge'],
+                    'status_label'   => $meta['label'],
+                    'status_hint'    => $meta['hint'],
+                    'tanggal_upload' => $last['tanggal_upload'] ?? null,
+                    'event_id'       => $eid,
+                    'event_title'    => $event['title'] ?? '-',
+                    'event_date'     => $event['event_date'] ?? null,
+                    'revision_open'  => $isOpenRev,
+                ];
+                continue;
+            }
+
+            // selain accepted (termasuk belum upload) → To-Do
+            $meta = $this->mapStatusMeta($lastStatus ?: null);
             $needsUpload[] = [
                 'event_id'                   => $eid,
-                // ✅ gunakan judul ABSTRAK sebagai heading kartu
-                'title'                      => $last['judul'] ?? '-',          // <— ini yang ditampilkan besar
-                'event_title'                => $event['title'] ?? '-',         // <— tampilkan sebagai badge/info event
+                'title'                      => $last['judul'] ?? ($event['title'] ?? '-'),
+                'event_title'                => $event['title'] ?? '-',
                 'event_date'                 => $event['event_date'] ?? null,
                 'abstract_deadline'          => $event['abstract_deadline'] ?? null,
                 'abstract_revision_deadline' => $event['abstract_revision_deadline'] ?? null,
                 'abstract_submission_active' => $event['abstract_submission_active'] ?? null,
                 'revision_open'              => $isOpenRev,
                 'format'                     => strtolower($event['format'] ?? ''),
-                'status'                     => strtolower((string)($last['status'] ?? '')),
+                'status'                     => $lastStatus ?: 'belum_upload',
                 'status_badge'               => $meta['badge'],
                 'status_label'               => $meta['label'],
-                'hint'                       => $meta['hint'],
+                'status_hint'                => $meta['hint'],
                 'last_abs_id'                => $last['id_abstrak'] ?? null,
-            ];
-
-            // ⚠️ Supaya tidak dobel di "Riwayat", kita SKIP history saat canUpload = true
-            continue;
-        }
-
-        // ==== Jika tidak butuh upload → masuk Riwayat ====
-        if ($last) {
-            $meta = $this->mapStatusMeta($last['status'] ?? null);
-            $history[] = [
-                'id_abstrak'     => (int) ($last['id_abstrak'] ?? 0),
-                'judul'          => $last['judul'] ?? '-',
-                'nama_kategori'  => $last['nama_kategori'] ?? '-',
-                'status'         => strtolower((string)($last['status'] ?? '')),
-                'status_badge'   => $meta['badge'],
-                'status_label'   => $meta['label'],
-                'status_hint'    => $meta['hint'],
-                'tanggal_upload' => $last['tanggal_upload'] ?? null,
-                'event_id'       => $eid,
-                'event_title'    => $event['title'] ?? '-',
-                'event_date'     => $event['event_date'] ?? null,
-                'revision_open'  => $isOpenRev,
+                // ➜ dipakai view untuk tampilkan/hilangkan tombol upload
+                'can_upload'                 => $canUpload,
             ];
         }
+
+        // urutkan Riwayat dari terbaru
+        usort($history, fn($a,$b) => strtotime($b['tanggal_upload'] ?? '1970-01-01') <=> strtotime($a['tanggal_upload'] ?? '1970-01-01'));
+
+        return view('role/presenter/abstrak/index', [
+            'title'        => 'Abstrak',
+            'uploadEvents' => $needsUpload, // = To-Do
+            'history'      => $history,
+        ]);
     }
-
-    // Riwayat urut dari yang terbaru
-    usort($history, fn($a,$b) => strtotime($b['tanggal_upload'] ?? '1970-01-01') <=> strtotime($a['tanggal_upload'] ?? '1970-01-01'));
-
-    return view('role/presenter/abstrak/index', [
-        'title'        => 'Abstrak',
-        'uploadEvents' => $needsUpload,
-        'history'      => $history,
-    ]);
-}
-
 
     public function create($eventId)
     {
@@ -412,17 +410,17 @@ public function index()
         $status = strtolower((string)($row['status'] ?? 'menunggu'));
         $badge  = $this->mapStatusMeta($status)['badge'] ?? 'secondary';
 
-        // Semua review (sudah include reviewer_name & reviewer_email)
+        // Semua review
         $reviews = $this->reviewModel->getReviewsForDisplay((int)$idAbstrak);
 
-        // Fallback lama: list komentar saja
+        // Fallback lama: list komentar
         $reviewComments = [];
         foreach ($reviews as $rv) {
             if (!empty($rv['display_comment'])) $reviewComments[] = trim((string)$rv['display_comment']);
         }
         $reviewComments = array_values(array_unique(array_filter($reviewComments, fn($v)=>$v!=='')));
 
-        // NEW: structured list untuk timeline
+        // NEW: structured list
         $reviewList = [];
         foreach ($reviews as $rv) {
             $komentar = trim((string)($rv['display_comment'] ?? $rv['komentar'] ?? ''));
@@ -472,13 +470,6 @@ public function index()
         ]);
     }
 
-    /**
-     * REVISI:
-     * - upload PDF ≤5MB
-     * - update file + revisi_ke + status='sedang_direview'
-     * - re-queue reviewer yang sama (decision→pending, tugas→accepted)
-     * - dibatasi oleh isAbstractRevisionOpen(event) (fallback: isAbstractSubmissionOpen)
-     */
     public function revisi($idAbstrak)
     {
         if (strtoupper($this->request->getMethod()) !== 'POST') {
@@ -565,7 +556,7 @@ public function index()
             'tanggal_upload' => date('Y-m-d H:i:s'),
         ]);
 
-        // re-queue reviewer → SET tugas langsung accepted (tanpa perlu ACC ulang)
+        // re-queue reviewer → SET tugas langsung accepted
         $this->requeueAbstractReviewers((int)$idAbstrak);
 
         return redirect()->to('/presenter/abstrak/detail/'.$idAbstrak)
@@ -575,20 +566,10 @@ public function index()
 
     public function uploadRevisi($idAbstrak) { return $this->revisi($idAbstrak); }
 
-    /**
-     * Requeue reviewers supaya:
-     * - keputusan = pending
-     * - status tugas = accepted (jika kolom ada)
-     * - accepted_at/confirmed_at/konfirmasi_at = NOW() (jika kolom ada)
-     * - type = 'abstrak' (jika kolom ada)
-     * - revisi_ke/revision_no = revisi terbaru (jika kolom ada)
-     * Bekerja walau tidak ada tabel pivot (ambil reviewer dari tabel review langsung).
-     */
     private function requeueAbstractReviewers(int $idAbstrak): int
     {
         $db = \Config\Database::connect();
 
-        // Tabel review yang dipakai
         $tblReview = null;
         foreach (['reviews','abstrak_reviews','review'] as $t) {
             if ($db->tableExists($t)) { $tblReview = $t; break; }
@@ -615,7 +596,7 @@ public function index()
         $now = date('Y-m-d H:i:s');
         $revNow = (int)($db->table('abstrak')->select('revisi_ke')->where('id_abstrak',$idAbstrak)->get()->getRowArray()['revisi_ke'] ?? 0);
 
-        // 1) ambil reviewer dari pivot (kalau ada)
+        // ambil reviewer dari pivot bila ada
         $reviewerIds = [];
         $pivot = null; foreach (['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak'] as $t) if ($db->tableExists($t)) { $pivot = $t; break; }
         if ($pivot) {
@@ -628,7 +609,7 @@ public function index()
                 );
             }
         }
-        // 2) jika pivot kosong/tidak ada → ambil dari tabel review langsung
+        // fallback: dari tabel review langsung
         if (!$reviewerIds) {
             $reviewerIds = array_map(fn($r)=>(int)$r['reviewer_id'],
                 $db->table($tblReview)->select("$fRev AS reviewer_id")->where($fAbs, $idAbstrak)->groupBy($fRev)->get()->getResultArray()
@@ -654,7 +635,7 @@ public function index()
             if ($fAcc)     $payload[$fAcc]   = $now;
             if ($fDecAt)   $payload[$fDecAt] = null;
             if ($fRevNo)   $payload[$fRevNo] = $revNow;
-            if ($fComment && !$row) $payload[$fComment] = ''; // antisipasi NOT NULL
+            if ($fComment && !$row) $payload[$fComment] = '';
 
             if ($row) {
                 $ok = (bool)$db->table($tblReview)->where($pk, $row[$pk])->update($payload);

@@ -4,7 +4,7 @@ $eventsNeedingPayment = $eventsNeedingPayment ?? []; // TAGIHAN
 $dueStats             = $dueStats ?? ['count'=>0,'total'=>0,'total_formatted'=>'Rp 0'];
 $allPayments          = $allPayments ?? []; // RIWAYAT (SEMUA STATUS)
 
-/* helper kecil untuk label partisipasi (seragam palette subtle) */
+/* helper kecil untuk label partisipasi */
 function participation_badge(?string $type): string {
   $t = strtolower((string)$type);
   if ($t === 'offline') return '<span class="badge bg-primary-subtle text-primary">Offline</span>';
@@ -21,19 +21,23 @@ function participation_badge(?string $type): string {
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- HERO (seragam seperti halaman lain) -->
-      <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
-        <div>
-          <h3 class="hero-title mb-1"><i class="bi bi-wallet2 me-2"></i>Pembayaran Saya</h3>
-          <div class="text-white-75 small">Tagihan & riwayat pembayaran event</div>
-        </div>
-        <div class="d-none d-md-block text-end">
-          <div class="text-white-75 small">Total Tagihan</div>
-          <div class="fw-semibold text-white"><?= esc($dueStats['total_formatted'] ?? 'Rp 0') ?> • <?= (int)($dueStats['count'] ?? 0) ?> item</div>
+      <!-- HERO: seragam card-hero + hero-body -->
+      <div class="card-hero mb-4">
+        <div class="hero-body">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+              <h3 class="hero-title mb-1"><i class="bi bi-wallet2 me-2"></i>Pembayaran Saya</h3>
+              <div class="text-white-70 small">Tagihan & riwayat pembayaran event.</div>
+            </div>
+            <div class="text-end">
+              <div class="text-white-70 small">Total Tagihan</div>
+              <div class="fw-bold"><?= esc($dueStats['total_formatted'] ?? 'Rp 0') ?> • <?= (int)($dueStats['count'] ?? 0) ?> item</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- ===================== RINGKASAN TAGIHAN ===================== -->
+      <!-- RINGKASAN TAGIHAN -->
       <div class="card shadow-soft card-glass-plain mb-3">
         <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
           <div class="d-flex align-items-center gap-3">
@@ -49,7 +53,7 @@ function participation_badge(?string $type): string {
         </div>
       </div>
 
-      <!-- ===================== DAFTAR TAGIHAN ===================== -->
+      <!-- DAFTAR TAGIHAN -->
       <div class="card shadow-soft card-glass-plain mb-4">
         <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
           <div class="d-flex align-items-center gap-2">
@@ -61,14 +65,14 @@ function participation_badge(?string $type): string {
 
         <div class="card-body">
           <?php if (empty($eventsNeedingPayment)): ?>
-            <div class="text-muted text-center py-4">
-              Tidak ada tagihan saat ini. Tagihan akan muncul otomatis setelah <strong>Full Paper</strong> Anda diterima.
+            <div class="empty-hint text-center">
+              <i class="bi bi-check2-circle me-1"></i>Tidak ada tagihan saat ini. Tagihan akan muncul otomatis setelah <strong>Full Paper</strong> Anda diterima.
             </div>
           <?php else: ?>
             <div class="row g-3">
               <?php foreach ($eventsNeedingPayment as $bill): ?>
               <div class="col-12 col-md-6 col-xl-4">
-                <div class="bill-card event-card h-100 p-3">
+                <div class="event-card h-100 p-3">
                   <div class="d-flex align-items-start justify-content-between mb-2">
                     <div class="me-2">
                       <h6 class="mb-1 text-blue-900"><?= esc($bill['title'] ?? '-') ?></h6>
@@ -94,7 +98,7 @@ function participation_badge(?string $type): string {
         </div>
       </div>
 
-      <!-- ===================== RIWAYAT PEMBAYARAN ===================== -->
+      <!-- RIWAYAT PEMBAYARAN -->
       <div class="card shadow-soft card-glass-plain">
         <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
           <div class="d-flex align-items-center gap-2">
@@ -106,7 +110,7 @@ function participation_badge(?string $type): string {
 
         <?php if (empty($allPayments)): ?>
           <div class="card-body">
-            <div class="text-muted text-center py-4">Belum ada riwayat pembayaran.</div>
+            <div class="empty-hint text-center"><i class="bi bi-inboxes me-1"></i>Belum ada riwayat pembayaran.</div>
           </div>
         <?php else: ?>
           <div class="card-body p-0">
@@ -142,16 +146,10 @@ function participation_badge(?string $type): string {
                     <tr>
                       <td><?= (int)$i + 1 ?></td>
                       <td>
-                        <div class="fw-semibold text-truncate" style="max-width:340px;">
-                          <?= esc($eventTitle) ?>
-                        </div>
+                        <div class="fw-semibold text-truncate" style="max-width:340px;"><?= esc($eventTitle) ?></div>
                         <div class="mt-1"><?= participation_badge($participType) ?></div>
                       </td>
-                      <td>
-                        <span class="badge <?= esc($methodBadge) ?>">
-                          <i class="<?= esc($methodIcon) ?>"></i> <?= esc($methodLabel) ?>
-                        </span>
-                      </td>
+                      <td><span class="badge <?= esc($methodBadge) ?>"><i class="<?= esc($methodIcon) ?>"></i> <?= esc($methodLabel) ?></span></td>
                       <td class="fw-semibold text-blue-900"><?= esc($amountFmt) ?></td>
                       <td>
                         <div><?= esc($dateStr) ?></div>
@@ -240,159 +238,95 @@ function participation_badge(?string $type): string {
 <?= $this->include('partials/footer') ?>
 
 <style>
-/* ===== Palette & scale — sama dengan halaman lain ===== */
+/* ===== Palette & scale — match patokan (Full Paper/Abstrak) ===== */
 :root{
-  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
-  --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
-  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
-
-  --side-pad: 1rem;
-  --gutter:   1rem;
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
+  --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+  --muted:#6b7280; --ink:#0f172a; --radius:16px;
+  --side-pad: clamp(1rem, 2.3vw, 2.2rem);
 }
 
-body{
-  font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  font-size:14.6px;
-  line-height:1.5;
-}
+body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.5px; line-height:1.6; color:var(--ink); }
 
-/* ===== Layout ===== */
+/* Layout bg */
 .page-wrap-blue{
-  background:linear-gradient(180deg,var(--blue-50),#fff 40%);
-  min-height:100vh;
-  padding-top:72px;
+  min-height:100vh; padding-top:72px;
+  background:
+    radial-gradient(1000px 380px at 10% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
+    radial-gradient(1000px 380px at 90% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
-.container-xxl{
-  max-width:1400px;
-  padding-left:var(--side-pad) !important;
-  padding-right:var(--side-pad) !important;
-}
-.row.g-3{ --bs-gutter-x: var(--gutter); --bs-gutter-y: var(--gutter); }
+.container-xxl{ max-width:min(100%, 1560px); padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; margin-inline:auto; }
 
-/* ===== Hero (non-glass override sama seperti lain) ===== */
-.hero-blue{
-  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
-  color:#fff !important;
-  border-radius:16px;
-  border:1px solid rgba(255,255,255,.15);
-  box-shadow:0 12px 28px rgba(30,64,175,.10);
-  padding:1.6rem !important;
-  margin-bottom:1.25rem !important;
+/* HERO */
+.card-hero{ border:0; border-radius:var(--radius); overflow:hidden; box-shadow:0 12px 28px rgba(30,64,175,.18); }
+.card-hero .hero-body{
+  background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff;
+  padding:1.8rem 1.2rem; min-height:176px;
 }
-.hero-blue.card-glass,
-.hero-blue.card-glass-plain{
-  backdrop-filter:none !important;
-  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
-  border:1px solid rgba(255,255,255,.15) !important;
-  box-shadow:0 12px 28px rgba(30,64,175,.10) !important;
-}
-.hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.45rem; }
-.text-white-75{ color:rgba(255,255,255,.85)!important; }
+.hero-title{ font-weight:800; }
+.text-white-70{ color:rgba(255,255,255,.85)!important; }
 
-/* ===== Cards ===== */
-.card-glass-plain{
-  backdrop-filter:blur(6px);
-  background:rgba(255,255,255,.94);
-  border-radius:14px;
-  border:1px solid rgba(30,64,175,.10);
-}
+/* Cards / glass */
+.card-glass-plain{ backdrop-filter:blur(6px); background:rgba(255,255,255,.96); border-radius:14px; border:1px solid rgba(30,64,175,.10); }
 .shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
+.card-header{ padding:1rem 1rem .45rem 1rem!important; }
+.card-body{   padding:1.05rem!important; }
 
-.card-header{ padding:1rem 1rem .45rem 1rem !important; }
-.card-body{   padding:1.05rem !important; }
-
-/* ===== Badges & text ===== */
-.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.4rem .6rem; font-weight:600; font-size:.85rem; }
-.bg-success-subtle{   background:#d1fae5!important; color:#065f46!important; }
-.bg-warning-subtle{   background:#fef3c7!important; color:#92400e!important; }
-.bg-danger-subtle{    background:#fee2e2!important; color:#991b1b!important; }
-.bg-info-subtle{      background:#e0f2fe!important; color:#0c4a6e!important; }
-.bg-secondary-subtle{ background:#f1f5f9!important; color:#475569!important; }
-.bg-primary-subtle{   background:#dbeafe!important; color:var(--blue-700)!important; }
+/* Helpers */
 .text-blue-900{ color:var(--blue-900)!important; }
+.empty-hint{ color:#567; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.8rem 1rem; font-weight:600; }
+.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.5rem .7rem; font-weight:600; font-size:.9rem; }
 
-/* ===== Event/bill cards ===== */
+/* Event/bill cards */
 .event-card{
   background:linear-gradient(180deg,#fff,rgba(255,255,255,.96));
-  border:1px solid rgba(30,64,175,.10);
-  border-radius:14px;
-  box-shadow:0 10px 22px rgba(30,64,175,.08);
+  border:1px solid rgba(30,64,175,.12); border-radius:14px; box-shadow:0 10px 22px rgba(30,64,175,.06);
+  transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
-.bill-card .btn{ border-radius:10px; }
+.event-card:hover{ transform: translateY(-2px); box-shadow:0 16px 28px rgba(30,64,175,.12); border-color: rgba(30,64,175,.22); }
 
-/* ===== Table ===== */
+/* Table */
 .table{ font-size:.95rem; margin-bottom:0; }
 .table thead th{
-  background-color:var(--blue-50)!important;
-  border-bottom:1px solid var(--blue-200);
-  font-weight:600; color:var(--blue-900);
-  font-size:.85rem; text-transform:uppercase; letter-spacing:.4px;
-  padding:.75rem 1rem;
+  background-color:var(--blue-50)!important; border-bottom:1px solid var(--blue-200);
+  font-weight:600; color:var(--blue-900); font-size:.85rem; text-transform:uppercase; letter-spacing:.4px; padding:.75rem 1rem;
 }
 .table tbody tr{ border-bottom:1px solid rgba(30,64,175,.08); }
-.table tbody td{
-  padding:.8rem 1rem; vertical-align:middle; border-top:none; font-size:.95rem;
-}
+.table tbody td{ padding:.8rem 1rem; vertical-align:middle; border-top:none; font-size:.95rem; }
 .table-responsive{ border:1px solid rgba(30,64,175,.08); border-radius:12px; overflow:hidden; }
 
-/* ===== Payment cards (mobile) ===== */
+/* Payment cards (mobile) */
 .payment-card{ background:#fff; border-radius:12px; border:1px solid rgba(30,64,175,.12); overflow:hidden; transition:.2s; }
 .payment-card:hover{ box-shadow:0 4px 12px rgba(30,64,175,.12); transform: translateY(-1px); }
 .payment-card-header{ padding:16px 16px 0; }
 .payment-card-body{ padding:0 16px 16px; }
 .payment-event-title{ font-weight:600; color:#1f2937; line-height:1.3; margin:0; }
 .payment-meta{ margin-top:8px; }
-.payment-pending  { border-left:4px solid #d97706; }  /* warning */
-.payment-verified { border-left:4px solid #059669; }  /* success */
-.payment-canceled { border-left:4px solid #94a3b8; }  /* secondary */
+.payment-pending  { border-left:4px solid #d97706; }
+.payment-verified { border-left:4px solid #059669; }
+.payment-canceled { border-left:4px solid #94a3b8; }
 .payment-other    { border-left:4px solid #cbd5e1; }
 
-/* ===== Stats ===== */
+/* Stats */
 .stat-icon{ width:48px; height:48px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.4rem; }
 .stat-due{ background:var(--blue-200); color:var(--blue-800); }
 .stat-number{ font-size:1.6rem; font-weight:800; color:#111827; }
 
-/* ===== Buttons ===== */
-.btn{
-  font-weight:600; letter-spacing:.25px;
-  border-radius:10px; font-size:.95rem; padding:.55rem 1rem;
-}
-.btn-sm{ padding:.42rem .8rem; font-size:.86rem; }
-.btn-lg{ padding:.85rem 1.5rem; font-size:1.06rem; }
+/* Buttons */
+.btn{ font-weight:800; border-radius:10px; font-size:.98rem; padding:.6rem 1.05rem; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
-.btn-info{    background:#06b6d4; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,.2); }
 .btn-success{ background:#059669; border-color:#059669; box-shadow:0 4px 12px rgba(5,150,105,.2); }
 .btn-warning{ background:#d97706; border-color:#d97706; box-shadow:0 4px 12px rgba(217,119,6,.2); }
 .btn-danger{  background:#dc2626; border-color:#dc2626; box-shadow:0 4px 12px rgba(220,38,38,.2); }
+.btn-info{    background:#06b6d4; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,.2); }
 
-/* ===== Helpers ===== */
-.text-muted{ color:#6b7280!important; font-weight:500; font-size:.9rem; }
-.text-muted.small{ font-size:.84rem!important; }
-.fw-semibold{ font-weight:600!important; }
-.fw-medium{   font-weight:500!important; }
-a{ text-decoration:none; }
-
-/* ===== Responsive ===== */
+/* Responsive */
+@media (max-width:767.98px){
+  .card-hero .hero-body{ padding:1.4rem 1rem; min-height:165px; }
+}
 @media (max-width:575.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .hero-blue{ border-radius:14px; padding:1.25rem!important; margin-bottom:1rem!important; }
-  .hero-title{ font-size:1.25rem; }
-  .card-body{  padding:.9rem!important; }
-  .card-header{ padding:.9rem .9rem .4rem .9rem!important; }
-  .badge{ padding:.35rem .55rem; font-size:.7rem; }
-}
-@media (min-width:576px) and (max-width:767.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .hero-title{ font-size:1.35rem; }
-  .card-body{  padding:1rem!important; }
-}
-@media (min-width:768px) and (max-width:991.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .hero-title{ font-size:1.45rem; }
-}
-@media (min-width:992px){
-  .hero-blue{ padding:1.7rem!important; }
-  .card-body{  padding:1.05rem!important; }
-  .card-header{ padding:1rem 1rem .45rem 1rem!important; }
+  .container-xxl{ padding-left: calc(var(--side-pad) - .25rem) !important; padding-right: calc(var(--side-pad) - .25rem) !important; }
+  .table thead th, .table tbody td{ padding:.6rem .7rem; font-size:.85rem; }
 }
 </style>

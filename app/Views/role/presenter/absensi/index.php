@@ -151,48 +151,50 @@ $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
 <?= $this->include('partials/footer') ?>
 
 <style>
-/* ===== Presenter Blue UI (seragam) ===== */
+/* ===== Presenter Blue UI (patokan seragam) ===== */
 :root{
-  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
-  --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
-  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
-
-  --side-pad: 1rem; --gutter: 1rem;
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
+  --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+  --side-pad: clamp(1rem, 2.3vw, 2.2rem);
+  --gutter: 1rem;
+  --ink:#0f172a;
 }
-body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:14.6px; line-height:1.5; }
 
-/* Layout */
-.page-wrap-blue{ background:linear-gradient(180deg,var(--blue-50),#fff 40%); min-height:100vh; padding-top:72px; }
-.container-xxl{ max-width:1400px; padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; }
+body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.5px; line-height:1.6; color:var(--ink); }
+
+/* Layout background seperti patokan */
+.page-wrap-blue{
+  min-height:100vh; padding-top:72px;
+  background:
+    radial-gradient(1000px 380px at 10% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
+    radial-gradient(1000px 380px at 90% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--blue-50), #fff 40%);
+}
+.container-xxl{ max-width:min(100%, 1560px); padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; margin-inline:auto; }
 .row.g-3{ --bs-gutter-x: var(--gutter); --bs-gutter-y: var(--gutter); }
 
-/* Hero */
+/* Hero (override glass) */
 .hero-blue{
   background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
   color:#fff !important; border-radius:16px;
-  border:1px solid rgba(255,255,255,.15);
-  box-shadow:0 12px 28px rgba(30,64,175,.10);
+  border:1px solid rgba(255,255,255,.15); box-shadow:0 12px 28px rgba(30,64,175,.10);
 }
 .hero-blue.card-glass,.hero-blue.card-glass-plain{ backdrop-filter:none !important; }
 .hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.45rem; }
 .text-white-75{ color:rgba(255,255,255,.85)!important; }
 
 /* Cards */
-.card-glass-plain{
-  backdrop-filter:blur(6px);
-  background:#fff;
-  border-radius:14px;
-  border:1px solid rgba(30,64,175,.10);
-}
+.card-glass-plain{ backdrop-filter:blur(6px); background:rgba(255,255,255,.96); border-radius:14px; border:1px solid rgba(30,64,175,.10); }
 .shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
 .card-header{ padding:1rem 1rem .45rem 1rem !important; }
 .card-body{   padding:1.05rem !important; }
 
 /* Badges subtle */
-.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.38rem .6rem; font-weight:600; font-size:.85rem; }
+.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.4rem .6rem; font-weight:600; font-size:.85rem; }
 .bg-success-subtle{   background:#d1fae5!important; color:#065f46!important; }
 .bg-warning-subtle{   background:#fef3c7!important; color:#92400e!important; }
 .bg-secondary-subtle{ background:#f1f5f9!important; color:#475569!important; }
+.bg-primary-subtle{   background:#dbeafe!important; color:var(--blue-700)!important; }
 .text-blue-900{ color:var(--blue-900)!important; }
 
 /* Event card */
@@ -211,17 +213,19 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:14.
   width:52px; height:52px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center;
   font-size:1.35rem; margin-bottom:.5rem;
 }
-.empty-text{ font-weight:600; }
+.empty-text{ font-weight:700; }
 
 /* Buttons */
-.btn{ font-weight:600; letter-spacing:.25px; border-radius:10px; font-size:.95rem; padding:.55rem 1rem; }
+.btn{ font-weight:800; border-radius:10px; font-size:.98rem; padding:.6rem 1.05rem; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
 .btn-outline-secondary{ border-color:#cbd5e1; }
 
 /* Responsive */
 @media (max-width:575.98px){
-  .container-xxl{ padding-left:1rem!important; padding-right:1rem!important; }
+  .container-xxl{ padding-left: calc(var(--side-pad) - .25rem) !important; padding-right: calc(var(--side-pad) - .25rem) !important; }
   .hero-blue{ border-radius:14px; padding:1.25rem!important; margin-bottom:1rem!important; }
   .hero-title{ font-size:1.25rem; }
+  .card-header{ padding:.9rem .9rem .4rem .9rem!important; }
+  .card-body{ padding:.9rem!important; }
 }
 </style>
