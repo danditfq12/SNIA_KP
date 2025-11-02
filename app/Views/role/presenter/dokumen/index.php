@@ -34,7 +34,7 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
         <div class="card-body">
 
           <!-- Tabs -->
-          <ul class="nav nav-pills mb-3 gap-2" id="docTabs" role="tablist">
+          <ul class="nav nav-pills mb-3 gap-2 doc-tabs" id="docTabs" role="tablist">
             <li class="nav-item" role="presentation">
               <button class="nav-link active" id="loa-tab" data-bs-toggle="pill" data-bs-target="#loa-pane" type="button" role="tab">
                 <i class="bi bi-journal-text me-1"></i> LOA
@@ -125,59 +125,108 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
 <?= $this->include('partials/footer') ?>
 
 <style>
-/* ===== Palette & layout seragam ===== */
+/* ===== Global palette & layout — sesuai patokan terbaru ===== */
 :root{
   --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
   --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
   --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
 
-  --side-pad:1rem; --gutter:1rem;
+  --side-pad: clamp(1rem, 2.3vw, 2.2rem);
+  --gutter:   1rem;
+  --ink:#0f172a;
 }
-body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:14.6px; line-height:1.5; }
 
-.page-wrap-blue{ background:linear-gradient(180deg,var(--blue-50),#fff 40%); min-height:100vh; padding-top:72px; }
-.container-xxl{ max-width:1400px; padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; }
-.row.g-3{ --bs-gutter-x:var(--gutter); --bs-gutter-y:var(--gutter); }
+body{
+  font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size:15.5px;           /* seragam dengan halaman lain */
+  line-height:1.6;
+  color:var(--ink);
+}
+
+/* Background gradient (radial + linear) sesuai patokan */
+.page-wrap-blue{
+  min-height:100vh; padding-top:72px;
+  background:
+    radial-gradient(1000px 380px at 10% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
+    radial-gradient(1000px 380px at 90% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--blue-50), #fff 40%);
+}
+.container-xxl{
+  max-width:min(100%, 1560px);
+  padding-left:var(--side-pad)!important;
+  padding-right:var(--side-pad)!important;
+  margin-inline:auto;
+}
+.row.g-3{ --bs-gutter-x: var(--gutter); --bs-gutter-y: var(--gutter); }
 
 /* ===== Hero ===== */
 .hero-blue{
   background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
-  color:#fff !important; border-radius:16px; border:1px solid rgba(255,255,255,.15);
-  box-shadow:0 12px 28px rgba(30,64,175,.10); padding:1.6rem !important; margin-bottom:1.25rem !important;
+  color:#fff !important; border-radius:16px;
+  border:1px solid rgba(255,255,255,.15);
+  box-shadow:0 12px 28px rgba(30,64,175,.10);
 }
 .hero-blue.card-glass,.hero-blue.card-glass-plain{ backdrop-filter:none !important; }
 .hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.45rem; }
 .text-white-75{ color:rgba(255,255,255,.85)!important; }
 
 /* ===== Cards & badges ===== */
-.card-glass-plain{ backdrop-filter:blur(6px); background:#fff; border-radius:14px; border:1px solid rgba(30,64,175,.10); }
+.card-glass-plain{
+  backdrop-filter:blur(6px);
+  background:rgba(255,255,255,.96);
+  border-radius:14px;
+  border:1px solid rgba(30,64,175,.10);
+}
 .shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
+
 .card-header{ padding:1rem 1rem .45rem 1rem !important; }
 .card-body{   padding:1.05rem !important; }
-.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.45rem .7rem; font-weight:600; font-size:.85rem; }
-.bg-danger-subtle{ background:#fee2e2!important; color:#991b1b!important; }
+
+.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.45rem .7rem; font-weight:700; font-size:.85rem; }
+.bg-danger-subtle{  background:#fee2e2!important; color:#991b1b!important; }
 .bg-primary-subtle{ background:#dbeafe!important; color:var(--blue-700)!important; }
 .text-blue-900{ color:var(--blue-900)!important; }
 
+/* ===== Tabs (nav-pills) ===== */
+.doc-tabs .nav-link{
+  border-radius:999px;
+  font-weight:800;
+  padding:.45rem 1rem;
+  color:#1e3a8a;
+  background:#eef3ff;
+  border:1px solid rgba(30,64,175,.15);
+}
+.doc-tabs .nav-link.active{
+  background:var(--blue-600);
+  color:#fff;
+  border-color:var(--blue-600);
+  box-shadow:0 4px 12px rgba(37,99,235,.18);
+}
+
 /* ===== List group look ===== */
-.list-group-item{ padding: .9rem 0; }
-.list-group-item + .list-group-item{ border-top:1px solid rgba(30,64,175,.08); }
+.list-group-item{
+  padding:.9rem 0;
+  background:transparent;
+  border:0;
+}
+.list-group-item + .list-group-item{ border-top:1px solid rgba(30,64,175,.10); }
 
 /* ===== Empty state ===== */
 .empty-state{ padding:2rem 1rem; text-align:center; color:#64748b; }
 .empty-icon{
   width:52px; height:52px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center;
-  font-size:1.4rem; margin-bottom:.5rem;
+  font-size:1.35rem; margin-bottom:.55rem;
+  border:1px solid rgba(30,64,175,.15);
 }
-.empty-text{ font-weight:600; }
+.empty-text{ font-weight:700; letter-spacing:.2px; }
 
 /* ===== Buttons ===== */
-.btn{ border-radius:10px; font-weight:600; }
+.btn{ border-radius:10px; font-weight:800; font-size:.98rem; padding:.6rem 1.05rem; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
 
 /* ===== Responsive ===== */
 @media (max-width:575.98px){
-  .container-xxl{ padding-left:1rem!important; padding-right:1rem!important; }
+  .container-xxl{ padding-left: calc(var(--side-pad) - .25rem) !important; padding-right: calc(var(--side-pad) - .25rem) !important; }
   .hero-blue{ border-radius:14px; padding:1.25rem!important; margin-bottom:1rem!important; }
   .hero-title{ font-size:1.25rem; }
   .list-group-item{ padding:.85rem 0; }
@@ -185,7 +234,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:14.
 </style>
 
 <script>
-  // aktifkan tab berdasar hash (#loa / #sertifikat)
+  // aktifkan tab berdasar hash (#loa / #sertifikat) tanpa mengubah fungsi yang ada
   (function(){
     const hash = (location.hash||'').toLowerCase();
     const loaBtn   = document.getElementById('loa-tab');

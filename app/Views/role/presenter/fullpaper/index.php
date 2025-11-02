@@ -1,13 +1,22 @@
 <?php
-$title      = $title      ?? 'Full Paper';
-$needUpload = $needUpload ?? [];
-$history    = $history    ?? [];
+/** @var array $todo @var array $history */
+$title   = $title   ?? 'Full Paper';
+$todo    = $todo    ?? [];
+$history = $history ?? [];
 
 $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
 $fmtDT   = fn($s)=> $s ? date('d M Y H:i', strtotime($s)) : '-';
 $formatLabel = function($f){
   $f = strtolower((string)$f);
   return $f === 'both' ? 'Hybrid' : ucfirst($f ?: '-');
+};
+// map badge -> pill class
+$badgeToPill = function($badge){
+  $key = strtolower((string)($badge ?? 'secondary'));
+  return [
+    'success'=>'pill-success','danger'=>'pill-danger',
+    'warning'=>'pill-warn','info'=>'pill-info','secondary'=>'pill-muted'
+  ][$key] ?? 'pill-muted';
 };
 ?>
 <?= $this->include('partials/header') ?>
@@ -18,122 +27,171 @@ $formatLabel = function($f){
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- Hero -->
-      <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
-        <div>
-          <h3 class="hero-title mb-1"><i class="bi bi-file-earmark-text me-2"></i>Full Paper</h3>
-          <div class="text-white-75 small">Upload & pantau status full paper</div>
-        </div>
-        <div class="d-none d-md-block text-end">
-          <div class="text-white-75 small">Hari ini</div>
-          <div class="fw-semibold text-white"><?= date('d M Y') ?></div>
-        </div>
-      </div>
-
-      <!-- Perlu Upload -->
-      <div class="card shadow-soft card-glass-plain mb-4">
-        <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
-          <span class="badge bg-blue-soft"><i class="bi bi-upload"></i></span>
-          <h5 class="mb-0 fw-semibold text-blue-900">Full Paper perlu upload</h5>
-        </div>
-        <div class="card-body">
-          <?php if (empty($needUpload)): ?>
-            <div class="text-muted">Tidak ada event yang membutuhkan upload Full Paper saat ini.</div>
-          <?php else: ?>
-            <div class="row g-3">
-              <?php foreach ($needUpload as $row): ?>
-              <div class="col-12 col-md-6 col-xl-4">
-                <div class="event-card h-100 p-3">
-                  <div class="d-flex align-items-start justify-content-between mb-2">
-                    <h6 class="mb-0 text-blue-900"><?= esc($row['title'] ?? '-') ?></h6>
-                    <span class="badge bg-<?= esc($row['status_badge']) ?>-subtle text-<?= esc($row['status_badge']) ?>">
-                      <?= esc($row['status_label']) ?>
-                    </span>
-                  </div>
-
-                  <div class="small text-muted mb-2">
-                    Tanggal Event: <strong class="text-blue-900"><?= esc($fmtDate($row['event_date'] ?? null)) ?></strong><br>
-                    Deadline FP: <strong class="text-blue-900"><?= esc($fmtDT($row['full_paper_deadline'] ?? null)) ?></strong><br>
-                    Format: <strong class="text-blue-900"><?= esc($formatLabel($row['format'] ?? '')) ?></strong>
-                  </div>
-
-                  <?php if (!empty($row['hint'])): ?>
-                    <div class="text-muted small mb-2"><?= esc($row['hint']) ?></div>
-                  <?php endif; ?>
-
-                  <?php
-                    $label = 'Upload Full Paper';
-                    if (($row['fp_status'] ?? '') === 'REVISION' || ($row['fp_status'] ?? '') === 'REJECTED') {
-                      $label = 'Upload Ulang (Revisi)';
-                    }
-                  ?>
-                  <div class="d-flex gap-2">
-                    <a class="btn btn-primary flex-fill" href="<?= site_url('presenter/fullpaper/create/'.(int)$row['event_id']) ?>">
-                      <i class="bi bi-upload"></i> <?= esc($label) ?>
-                    </a>
-                    <a class="btn btn-outline-secondary flex-fill" href="<?= site_url('presenter/fullpaper/detail/'.(int)$row['event_id']) ?>">
-                      <i class="bi bi-eye"></i> Detail
-                    </a>
-                  </div>
-                </div>
-              </div>
-              <?php endforeach; ?>
+      <!-- HERO -->
+      <div class="card-hero mb-4">
+        <div class="hero-body">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+              <h3 class="hero-title mb-1"><i class="bi bi-file-earmark-text me-2"></i>Full Paper</h3>
+              <div class="text-white-70 small">Kelola unggahan & pantau progres penilaian.</div>
             </div>
-          <?php endif; ?>
+            <div class="hero-tools flex-grow-1" style="max-width:620px;">
+              <div class="input-group input-group-lg hero-search">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input id="searchInput" type="text" class="form-control" placeholder="Cari event, status, format…">
+                <button id="clearSearch" type="button" class="btn btn-light d-none"><i class="bi bi-x-circle"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="hero-tabs">
+          <ul class="nav nav-pills" id="fpTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="tab-todo" data-bs-toggle="pill" data-bs-target="#pane-todo" type="button" role="tab">
+                To-Do <span class="badge bg-light text-primary ms-1"><?= count($todo) ?></span>
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="tab-history" data-bs-toggle="pill" data-bs-target="#pane-history" type="button" role="tab">
+                Riwayat <span class="badge bg-light text-secondary ms-1"><?= count($history) ?></span>
+              </button>
+            </li>
+          </ul>
         </div>
       </div>
 
-      <!-- Riwayat -->
-      <div class="card shadow-soft card-glass-plain mb-4">
-        <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
-          <span class="badge bg-blue-soft"><i class="bi bi-clock-history"></i></span>
-          <h5 class="mb-0 fw-semibold text-blue-900">Riwayat Full Paper</h5>
-        </div>
-        <div class="card-body">
-          <?php if (empty($history)): ?>
-            <div class="text-muted">Belum ada riwayat full paper.</div>
-          <?php else: ?>
-            <div class="row g-3">
-              <?php foreach ($history as $h): ?>
-              <div class="col-12 col-md-6 col-xl-4">
-                <div class="event-card h-100 p-3">
-                  <div class="d-flex align-items-start justify-content-between mb-1">
-                    <h6 class="mb-0 text-blue-900"><?= esc($h['event_title'] ?? '-') ?></h6>
-                    <span class="badge bg-<?= esc($h['status_badge']) ?>-subtle text-<?= esc($h['status_badge']) ?>">
-                      <?= esc($h['status_label']) ?>
+      <div class="tab-content">
+        <!-- TO-DO -->
+        <div class="tab-pane fade show active" id="pane-todo" role="tabpanel" aria-labelledby="tab-todo">
+          <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3 row-cols-xxl-4 js-grid">
+            <?php if (empty($todo)): ?>
+              <div class="col">
+                <div class="empty-hint"><i class="bi bi-check2-circle me-1"></i>Tidak ada pekerjaan. Mantap!</div>
+              </div>
+            <?php else: foreach ($todo as $row): ?>
+              <?php
+                $autoRejected = (strtoupper($row['fp_status'] ?? '') === 'REJECTED')
+                                && (empty($row['is_open']))
+                                && !empty($row['full_paper_deadline']);
+                $pill = $badgeToPill($row['status_badge'] ?? 'secondary');
+              ?>
+              <div class="col js-col">
+                <div class="fp-card js-card"
+                     data-search="<?= esc(strtolower(
+                       ($row['title'] ?? '') . ' ' .
+                       ($row['status_label'] ?? '') . ' ' .
+                       ($row['format'] ?? '') . ' ' .
+                       ($fmtDate($row['event_date'] ?? null)) . ' ' .
+                       ($fmtDT($row['full_paper_deadline'] ?? null))
+                     )) ?>">
+                  <div class="fp-head">
+                    <h6 class="mb-0 fp-title"><?= esc($row['title'] ?? '-') ?></h6>
+                    <span class="status-pill <?= $pill ?>">
+                      <?= esc(($row['status_label'] ?? '-') . ($autoRejected ? ' (Auto)' : '')) ?>
                     </span>
                   </div>
 
-                  <div class="small text-muted mb-2">Tanggal Event:
-                    <strong class="text-blue-900"><?= esc($fmtDate($h['event_date'] ?? null)) ?></strong>
+                  <div class="chip-row mb-2">
+                    <span class="chip"><i class="bi bi-laptop me-1"></i><?= esc($formatLabel($row['format'] ?? '')) ?></span>
+                    <?php if (!empty($row['full_paper_deadline'])): ?>
+                      <span class="chip alt"><i class="bi bi-clock-history me-1"></i><?= esc($fmtDT($row['full_paper_deadline'])) ?></span>
+                    <?php endif; ?>
+                    <span class="chip <?= $row['is_open'] ? 'chip-open' : 'chip-closed' ?>">
+                      <i class="bi <?= $row['is_open'] ? 'bi-unlock' : 'bi-lock' ?> me-1"></i><?= $row['is_open'] ? 'Open' : 'Closed' ?>
+                    </span>
                   </div>
 
-                  <?php if (!empty($h['status_hint'])): ?>
-                    <div class="small mb-2 
-                      <?= ($h['fp_status'] ?? '') === 'ACCEPTED' ? 'text-success' : (($h['fp_status'] ?? '') === 'REJECTED' ? 'text-danger' : 'text-muted') ?>">
-                      <?= esc($h['status_hint']) ?>
+                  <ul class="meta-list">
+                    <li><span>Tanggal Event</span><strong><?= esc($fmtDate($row['event_date'] ?? null)) ?></strong></li>
+                    <li><span>Deadline FP</span><strong><?= esc($fmtDT($row['full_paper_deadline'] ?? null)) ?></strong></li>
+                  </ul>
+
+                  <?php if ($autoRejected): ?>
+                    <div class="mini-alert mini-alert-danger mt-2">
+                      <i class="bi bi-x-octagon me-1"></i>Lewat batas waktu revisi — ditolak otomatis.
                     </div>
+                  <?php elseif (!empty($row['status_hint']) && (strtoupper($row['fp_status'] ?? '') !== 'ACCEPTED')): ?>
+                    <div class="mini-hint mt-2"><i class="bi bi-info-circle me-1"></i><?= esc($row['status_hint']) ?></div>
                   <?php endif; ?>
 
-                  <div class="small text-muted">Unggah terakhir:
-                    <strong class="text-blue-900"><?= !empty($h['uploaded_at']) ? esc($fmtDT($h['uploaded_at'])) : '-' ?></strong>
-                  </div>
-
-                  <div class="mt-2 d-grid gap-2">
-                    <a class="btn btn-outline-primary btn-sm" href="<?= site_url('presenter/fullpaper/detail/'.(int)$h['event_id']) ?>">
-                      <i class="bi bi-eye"></i> Detail
-                    </a>
-                    <?php if (!empty($h['fp_path'])): ?>
-                      <a class="btn btn-outline-secondary btn-sm" href="<?= site_url('presenter/fullpaper/download/'.rawurlencode($h['fp_path'])) ?>">
-                        <i class="bi bi-download"></i> Unduh
+                  <div class="fp-foot">
+                    <?php if (!empty($row['can_upload'])): ?>
+                      <?php
+                        $btnLabel = in_array(strtoupper($row['fp_status'] ?? ''), ['REVISION','REJECTED'], true)
+                          ? 'Upload Revisi'
+                          : 'Upload Full Paper';
+                      ?>
+                      <a class="btn btn-primary flex-fill" href="<?= site_url('presenter/fullpaper/create/'.(int)$row['event_id']) ?>">
+                        <i class="bi bi-upload me-1"></i><?= esc($btnLabel) ?>
                       </a>
                     <?php endif; ?>
+                    <a class="btn btn-outline-secondary flex-fill" href="<?= site_url('presenter/fullpaper/detail/'.(int)$row['event_id']) ?>">
+                      <i class="bi bi-eye me-1"></i>Detail
+                    </a>
                   </div>
                 </div>
               </div>
-              <?php endforeach; ?>
-            </div>
-          <?php endif; ?>
+            <?php endforeach; endif; ?>
+          </div>
+        </div>
+
+        <!-- RIWAYAT -->
+        <div class="tab-pane fade" id="pane-history" role="tabpanel" aria-labelledby="tab-history">
+          <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3 row-cols-xxl-4 js-grid">
+            <?php if (empty($history)): ?>
+              <div class="col">
+                <div class="empty-hint"><i class="bi bi-inboxes me-1"></i>Belum ada riwayat final.</div>
+              </div>
+            <?php else: foreach ($history as $h): ?>
+              <?php
+                $autoRejectedH = (strtoupper($h['fp_status'] ?? '') === 'REJECTED')
+                                 && (empty($h['is_open']))
+                                 && !empty($h['full_paper_deadline']);
+                $pillH = $badgeToPill($h['status_badge'] ?? 'secondary');
+              ?>
+              <div class="col js-col">
+                <div class="fp-card js-card"
+                     data-search="<?= esc(strtolower(
+                       ($h['title'] ?? $h['event_title'] ?? '') . ' ' .
+                       ($h['status_label'] ?? '') . ' ' .
+                       ($h['format'] ?? '') . ' ' .
+                       ($fmtDate($h['event_date'] ?? null)) . ' ' .
+                       ($fmtDT($h['uploaded_at'] ?? null))
+                     )) ?>">
+                  <div class="fp-head">
+                    <h6 class="mb-0 fp-title"><?= esc($h['title'] ?? $h['event_title'] ?? '-') ?></h6>
+                    <span class="status-pill <?= $pillH ?>">
+                      <?= esc(($h['status_label'] ?? '-') . ($autoRejectedH ? ' (Auto)' : '')) ?>
+                    </span>
+                  </div>
+
+                  <div class="chip-row mb-2">
+                    <span class="chip alt"><i class="bi bi-laptop me-1"></i><?= esc($formatLabel($h['format'] ?? '')) ?></span>
+                    <?php if (!empty($h['uploaded_at'])): ?>
+                      <span class="chip"><i class="bi bi-cloud-arrow-up me-1"></i><?= esc($fmtDT($h['uploaded_at'])) ?></span>
+                    <?php endif; ?>
+                  </div>
+
+                  <ul class="meta-list">
+                    <li><span>Tanggal Event</span><strong><?= esc($fmtDate($h['event_date'] ?? null)) ?></strong></li>
+                    <li><span>Deadline FP</span><strong><?= esc($fmtDT($h['full_paper_deadline'] ?? null)) ?></strong></li>
+                  </ul>
+
+                  <?php if ($autoRejectedH): ?>
+                    <div class="mini-alert mini-alert-danger mt-2"><i class="bi bi-x-octagon me-1"></i>Lewat batas waktu revisi — ditolak otomatis.</div>
+                  <?php endif; ?>
+
+                  <div class="fp-foot">
+                    <a class="btn btn-outline-primary btn-sm w-100" href="<?= site_url('presenter/fullpaper/detail/'.(int)$h['event_id']) ?>">
+                      <i class="bi bi-eye me-1"></i>Detail
+                    </a>
+                  </div>
+                </div>
+              </div>
+            <?php endforeach; endif; ?>
+          </div>
         </div>
       </div>
 
@@ -145,164 +203,90 @@ $formatLabel = function($f){
 
 <style>
 :root{
-  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
-  --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
-  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
-
-  --side-pad: 1rem;   /* padding kiri–kanan minimum */
-  --gutter-x: 1rem;   /* jarak antar kolom */
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
+  --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+  --muted:#6b7280; --ink:#0f172a; --radius:16px;
+  --card-min-h: 320px;
+  --side-pad: clamp(1rem, 2.3vw, 2.2rem);
 }
-
-body{
-  font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  font-size:14.6px;
-  line-height:1.5;
-}
-
-/* ===== Layout wrapper ===== */
+.container-xxl{ max-width:min(100%, 1560px); padding-left: var(--side-pad) !important; padding-right: var(--side-pad) !important; margin-inline:auto; }
+body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.5px; line-height:1.6; color:var(--ink); }
 .page-wrap-blue{
-  background:linear-gradient(180deg,var(--blue-50),#fff 40%);
-  min-height:100vh;
-  padding-top:72px; /* seragam */
+  min-height:100vh; padding-top:72px;
+  background:
+    radial-gradient(1000px 380px at 10% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
+    radial-gradient(1000px 380px at 90% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
+.card-hero{ border:0; border-radius:var(--radius); overflow:hidden; box-shadow:0 12px 28px rgba(30,64,175,.18); }
+.card-hero .hero-body{ background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff; padding:1.8rem 1.2rem; min-height:176px; }
+.hero-title{ font-weight:800; }
+.text-white-70{ color:rgba(255,255,255,.85)!important; }
+.hero-tools .input-group .input-group-text{ background:#fff; border:0; }
+.hero-tools .form-control{ border:0; }
+.hero-tools .btn{ border:0; }
+.hero-search{ border-radius:12px; overflow:hidden; }
+.hero-tabs{ background:#fff; padding:.6rem .8rem; border:1px solid rgba(30,64,175,.18); border-top:0; }
+.hero-tabs .nav-link.active{ background:var(--blue-600); color:#fff; }
+.hero-tabs .nav-link{ font-weight:700; border-radius:999px; padding:.45rem 1rem; }
 
-/* ===== Container — lebar tetap, padding kiri–kanan 1rem ===== */
-.container-xxl{
-  max-width:1400px;
-  padding-left:var(--side-pad) !important;
-  padding-right:var(--side-pad) !important;
-}
+.fp-card{ border:1px solid rgba(30,64,175,.12); border-radius:14px; background:#fff; box-shadow:0 10px 22px rgba(30,64,175,.10);
+  padding:0.9rem; display:flex; flex-direction:column; min-height:var(--card-min-h);
+  transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.fp-card:hover{ transform: translateY(-2px); box-shadow:0 16px 28px rgba(30,64,175,.16); border-color: rgba(30,64,175,.22); }
+.fp-head{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:.25rem; }
+.fp-title{ line-height:1.35; max-width:72%; color:var(--blue-900); }
 
-/* ===== Gutter grid (seragam) ===== */
-.row.g-3, .row.g-4{ --bs-gutter-x: var(--gutter-x); --bs-gutter-y: var(--gutter-x); }
+.status-pill{ font-weight:800; font-size:.82rem; padding:.28rem .6rem; border-radius:999px; border:1px solid rgba(0,0,0,.06); white-space:nowrap; }
+.pill-info{ background:#e0f2fe; color:#075985; }
+.pill-warn{ background:#fef3c7; color:#92400e; }
+.pill-success{ background:#d1fae5; color:#065f46; }
+.pill-danger{ background:#fee2e2; color:#991b1b; }
+.pill-muted{ background:#f3f4f6; color:#374151; }
 
-/* ===== HERO (header biru) ===== */
-.hero-blue{
-  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
-  color:#fff !important;
-  border-radius:16px;
-  border:1px solid rgba(255,255,255,.15);
-  box-shadow:0 12px 28px rgba(30,64,175,.10);
-  padding:1.6rem !important;
-  margin-bottom:1.25rem !important;
-}
-/* Matikan efek glass jika hero terlanjur diberi .card-glass / .card-glass-plain */
-.hero-blue.card-glass,
-.hero-blue.card-glass-plain{
-  backdrop-filter:none !important;
-  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
-  border:1px solid rgba(255,255,255,.15) !important;
-  box-shadow:0 12px 28px rgba(30,64,175,.10) !important;
-}
-.hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.45rem; }
-.text-white-75{ color:rgba(255,255,255,.85)!important; }
+.chip-row{ display:flex; flex-wrap:wrap; gap:.5rem; }
+.chip{ display:inline-flex; align-items:center; padding:.26rem .55rem; font-size:.86rem; border-radius:999px; background:#eef3ff; color:#1e3a8a; border:1px solid rgba(30,64,175,.15); font-weight:700; }
+.chip.alt{ background:#f1f5ff; color:#244aa4; }
+.chip-open{ background:#e8faf1; color:#0f5132; border-color:#b6e4c7; }
+.chip-closed{ background:#f9eaea; color:#7f1d1d; border-color:#f1c9c9; }
 
-/* ===== Card / Glass ===== */
-.card-glass{
-  backdrop-filter: blur(2px);
-  background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.10));
-  border-radius:16px; border:1px solid rgba(255,255,255,.28);
-}
-.card-glass-plain{
-  backdrop-filter:blur(6px);
-  background:rgba(255,255,255,.94);
-  border-radius:14px;
-  border:1px solid rgba(30,64,175,.10);
-}
-.shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
+.meta-list{ list-style:none; padding-left:0; margin:.4rem 0 .2rem 0; }
+.meta-list li{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.36rem 0; }
+.meta-list li span{ color:var(--muted); }
 
-.card-header{ padding:1rem 1rem .45rem 1rem !important; }
-.card-body{   padding:1.05rem !important; }
+.mini-hint{ color:#3a2a6a; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:10px; padding:.5rem .6rem; font-weight:600; font-size:.86rem; }
+.mini-alert{ border-radius:10px; padding:.5rem .6rem; font-weight:700; font-size:.86rem; }
+.mini-alert-danger{ background:#fff1f2; color:#7f1d1d; border:1px solid #fecaca; }
 
-/* ===== Badge lembut ===== */
-.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.4rem .6rem; font-weight:600; font-size:.85rem; }
-.bg-success-subtle{   background:#d1fae5!important; color:#065f46!important; }
-.bg-warning-subtle{   background:#fef3c7!important; color:#92400e!important; }
-.bg-danger-subtle{    background:#fee2e2!important; color:#991b1b!important; }
-.bg-info-subtle{      background:#e0f2fe!important; color:#0c4a6e!important; }
-.bg-secondary-subtle{ background:#f1f5f9!important; color:#475569!important; }
-.bg-primary-subtle{   background:#dbeafe!important; color:var(--blue-700)!important; }
-.text-blue-900{ color:var(--blue-900)!important; }
-
-/* ===== Event card (box on + compact) ===== */
-.event-card{
-  background:linear-gradient(180deg,#fff,rgba(255,255,255,.96));
-  border:1px solid rgba(30,64,175,.10);
-  border-radius:14px;
-  box-shadow:0 10px 22px rgba(30,64,175,.08);
-  padding:14px;
-}
-.event-card h6{ font-size:1.05rem; margin-bottom:.25rem; }
-.event-card .small{ font-size:.92rem; }
-.event-card .badge{ padding:.35rem .6rem; font-size:.78rem; border-radius:10px; }
-.event-card .btn{ border-radius:10px; padding:.58rem 1rem; font-size:.95rem; }
-.opacity-90{ opacity:.92; }
-
-/* ===== Table (kalau nanti dipakai) ===== */
-.table{ font-size:.95rem; margin-bottom:0; }
-.table thead th{
-  background-color:var(--blue-50)!important;
-  border-bottom:1px solid var(--blue-200);
-  font-weight:600; color:var(--blue-900);
-  font-size:.85rem; text-transform:uppercase; letter-spacing:.4px;
-  padding:.75rem 1rem;
-}
-.table tbody tr{ border-bottom:1px solid rgba(30,64,175,.08); }
-.table tbody td{
-  padding:.8rem 1rem; vertical-align:middle; border-top:none; font-size:.95rem;
-}
-.table-responsive{ border:1px solid rgba(30,64,175,.08); border-radius:12px; overflow:hidden; }
-
-/* ===== Buttons ===== */
-.btn{
-  font-weight:600; letter-spacing:.25px;
-  border-radius:10px; font-size:.95rem; padding:.55rem 1rem;
-}
-.btn-sm{ padding:.42rem .8rem; font-size:.86rem; }
-.btn-lg{ padding:.85rem 1.5rem; font-size:1.06rem; }
+.fp-foot{ display:flex; gap:.6rem; margin-top:auto; padding-top:.6rem; border-top:1px dashed rgba(30,64,175,.16); }
+.btn{ font-weight:800; border-radius:10px; font-size:.98rem; padding:.6rem 1.05rem; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
-.btn-info{    background:#06b6d4; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,.2); }
-.btn-success{ background:#059669; border-color:#059669; box-shadow:0 4px 12px rgba(5,150,105,.2); }
-.btn-warning{ background:#d97706; border-color:#d97706; box-shadow:0 4px 12px rgba(217,119,6,.2); }
-.btn-danger{  background:#dc2626; border-color:#dc2626; box-shadow:0 4px 12px rgba(220,38,38,.2); }
 
-.d-grid.gap-2{ gap:1rem !important; }
-
-/* ===== Helpers ===== */
-.text-muted{ color:#6b7280!important; font-weight:500; font-size:.9rem; }
-.text-muted.small{ font-size:.84rem!important; }
-.fw-semibold{ font-weight:600!important; }
-.fw-medium{   font-weight:500!important; }
-a{ text-decoration:none; }
-a.text-primary{ color:var(--blue-600)!important; font-weight:500; }
-
-/* ===== Card glow (notif sukses) ===== */
-.card-glow{ box-shadow:0 8px 24px rgba(16,185,129,.18); border:1px solid rgba(16,185,129,.2); }
-
-/* ===== Responsive ===== */
+@media (max-width:767.98px){
+  .hero-tools{ width:100%; max-width:none; }
+  .card-hero .hero-body{ padding:1.4rem 1rem; min-height:165px; }
+  .fp-title{ max-width:68%; }
+  :root{ --card-min-h: 300px; }
+}
 @media (max-width:575.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .hero-blue{ border-radius:14px; padding:1.25rem!important; margin-bottom:1rem!important; }
-  .hero-title{ font-size:1.25rem; }
-  .card-body{  padding:.9rem!important; }
-  .card-header{ padding:.9rem .9rem .4rem .9rem!important; }
-  .badge{ padding:.38rem .6rem; font-size:.74rem; }
-  .event-card{ padding:12px; }
-  .event-card h6{ font-size:1rem; }
-  .event-card .small{ font-size:.9rem; }
-}
-@media (min-width:576px) and (max-width:767.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .hero-title{ font-size:1.35rem; }
-  .card-body{  padding:1rem!important; }
-}
-@media (min-width:768px) and (max-width:991.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .hero-title{ font-size:1.45rem; }
-}
-@media (min-width:992px){
-  .hero-blue{ padding:1.7rem!important; }
-  .card-body{  padding:1.05rem!important; }
-  .card-header{ padding:1rem 1rem .45rem 1rem!important; }
+  .container-xxl{ padding-left: calc(var(--side-pad) - .25rem) !important; padding-right: calc(var(--side-pad) - .25rem) !important; }
 }
 </style>
+
+<script>
+(function(){
+  const input = document.getElementById('searchInput');
+  const clearBtn = document.getElementById('clearSearch');
+  const cards = Array.from(document.querySelectorAll('.js-card'));
+  function applyFilter(q){
+    const query = (q||'').trim().toLowerCase();
+    cards.forEach(card=>{
+      const hay = (card.dataset.search || card.textContent).toLowerCase();
+      card.closest('.js-col').style.display = (!query || hay.includes(query)) ? '' : 'none';
+    });
+    if(clearBtn) clearBtn.classList.toggle('d-none', !query);
+  }
+  if(input){ input.addEventListener('input', e=>applyFilter(e.target.value)); }
+  if(clearBtn){ clearBtn.addEventListener('click', ()=>{ input.value=''; applyFilter(''); input.focus(); }); }
+})();
+</script>

@@ -20,7 +20,7 @@ $isUpdate  = !empty($is_update);
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl py-4">
 
-      <!-- Form Card (tanpa headbar/hero) -->
+      <!-- Form Card (tanpa hero) -->
       <div class="card shadow-soft card-glass-plain">
         <div class="card-body">
           <div class="mb-3">
@@ -41,22 +41,22 @@ $isUpdate  = !empty($is_update);
             <div class="row g-3">
               <div class="col-12 col-md-6">
                 <label class="form-label">Nama Koresponden (Presenter Utama)</label>
-                <input type="text" class="form-control" value="<?= esc($presenterName) ?>" disabled>
+                <input type="text" class="form-control form-control-soft" value="<?= esc($presenterName) ?>" disabled>
                 <input type="hidden" name="corresponding_name" value="<?= esc($presenterName) ?>">
               </div>
               <div class="col-12 col-md-6">
                 <label class="form-label">Email Koresponden</label>
-                <input type="text" class="form-control" value="<?= esc($presenterEmail) ?>" disabled>
+                <input type="text" class="form-control form-control-soft" value="<?= esc($presenterEmail) ?>" disabled>
                 <input type="hidden" name="corresponding_email" value="<?= esc($presenterEmail) ?>">
               </div>
 
               <div class="col-12 col-md-6">
                 <label class="form-label">No. HP (opsional)</label>
-                <input type="text" name="phone" class="form-control" value="<?= esc($phone) ?>">
+                <input type="text" name="phone" class="form-control form-control-soft" value="<?= esc($phone) ?>">
               </div>
               <div class="col-12 col-md-6">
                 <label class="form-label">Afiliasi/Institusi <span class="text-danger">*</span></label>
-                <input type="text" name="afiliasi" class="form-control" value="<?= esc($afiliasi) ?>" required>
+                <input type="text" name="afiliasi" class="form-control form-control-soft" value="<?= esc($afiliasi) ?>" required>
               </div>
             </div>
 
@@ -83,11 +83,11 @@ $isUpdate  = !empty($is_update);
                 <?php if (!empty($coAuthors)): ?>
                   <?php foreach ($coAuthors as $ca): ?>
                     <tr>
-                      <td><input type="text"  name="co_name[]"     class="form-control" value="<?= esc($ca['nama'] ?? '') ?>"></td>
-                      <td><input type="email" name="co_email[]"    class="form-control" value="<?= esc($ca['email'] ?? '') ?>"></td>
-                      <td><input type="text"  name="co_afiliasi[]" class="form-control" value="<?= esc($ca['afiliasi'] ?? '') ?>"></td>
+                      <td><input type="text"  name="co_name[]"     class="form-control form-control-soft" value="<?= esc($ca['nama'] ?? '') ?>"></td>
+                      <td><input type="email" name="co_email[]"    class="form-control form-control-soft" value="<?= esc($ca['email'] ?? '') ?>"></td>
+                      <td><input type="text"  name="co_afiliasi[]" class="form-control form-control-soft" value="<?= esc($ca['afiliasi'] ?? '') ?>"></td>
                       <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-outline-danger delRowBtn"><i class="bi bi-x"></i></button>
+                        <button type="button" class="btn btn-sm btn-outline-danger delRowBtn" aria-label="Hapus baris"><i class="bi bi-x"></i></button>
                       </td>
                     </tr>
                   <?php endforeach; ?>
@@ -119,86 +119,91 @@ $isUpdate  = !empty($is_update);
 <?= $this->include('partials/footer') ?>
 
 <style>
-/* ===== Kontributor — compact, tanpa headbar, lebar sama ===== */
+/* ===== Kontributor — seragam dengan Abstrak/Full Paper ===== */
 :root{
-  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
-  --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
-  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
-  --side-pad: 1rem;   /* kiri–kanan minimum */
-  --gutter:   1rem;   /* jarak antar kolom */
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
+  --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+  --ink:#0f172a; --muted:#6b7280;
+  --radius:14px;
+  --side-pad: clamp(1rem, 2.3vw, 2.2rem); /* kiri–kanan sama seperti halaman lain */
+  --gutter:   1rem;
 }
 
-body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:14.5px; line-height:1.5; }
+body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.5px; line-height:1.6; color:var(--ink); }
 
 .page-wrap-blue{
-  background:linear-gradient(180deg,var(--blue-50),#fff 40%);
-  min-height:100vh;
-  padding-top:72px;        /* lebih pendek krn tidak ada headbar */
+  min-height:100vh; padding-top:72px;
+  background:
+    radial-gradient(1000px 380px at 10% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
+    radial-gradient(1000px 380px at 90% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
 
 .container-xxl{
-  max-width:1400px;
-  padding-left:var(--side-pad) !important;
-  padding-right:var(--side-pad) !important;
+  max-width: min(100%, 1560px);
+  padding-left: var(--side-pad) !important;
+  padding-right: var(--side-pad) !important;
+  margin-inline:auto;
 }
 
+/* Card & heading */
 .card-glass-plain{
-  backdrop-filter:blur(6px);
-  background:rgba(255,255,255,.95);
-  border-radius:14px;
-  border:1px solid rgba(30,64,175,.10);
+  backdrop-filter: blur(6px);
+  background: rgba(255,255,255,.96);
+  border-radius: var(--radius);
+  border: 1px solid rgba(30,64,175,.10);
 }
 .shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
 
-.hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.35rem; }
+.hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.4rem; }
 .text-blue-900{ color:var(--blue-900)!important; }
-.text-muted{ color:#6b7280!important; font-weight:500; font-size:.88rem; }
 
-.card-header{ padding:.9rem 1rem .4rem 1rem !important; }
-.card-body{   padding:1rem !important; }
-
+/* Grid spacing */
 .row.g-3{ --bs-gutter-x: var(--gutter); --bs-gutter-y: var(--gutter); }
 
-.form-label{ font-weight:600; color:#334155; }
-.form-control{ border-radius:10px; height:40px; font-size:.95rem; }
+/* Inputs */
+.form-label{ font-weight:700; color:#334155; }
+.form-control{ border-radius:10px; font-size:.98rem; }
+.form-control-soft{
+  border:1px solid rgba(2,6,23,.12);
+  background:#fff;
+  height:44px;
+}
+.form-control:focus{
+  border-color: var(--blue-400);
+  box-shadow:0 0 0 .2rem rgba(59,130,246,.12);
+}
 
 /* Table */
-.table{ font-size:.95rem; }
+.table{ font-size:.95rem; margin-bottom:0; }
 .table thead th{
-  background-color:var(--blue-50)!important;
-  border-bottom:1px solid var(--blue-200);
-  font-weight:600; color:var(--blue-900);
-  font-size:.85rem; text-transform:uppercase; letter-spacing:.4px;
-  padding:.75rem 1rem;
+  background:#f8fbff!important;
+  border-bottom:1px solid rgba(30,64,175,.18);
+  font-weight:800; color:#1e3a8a;
+  font-size:.84rem; text-transform:uppercase; letter-spacing:.4px;
+  padding:.7rem .9rem;
 }
 .table tbody tr{ border-bottom:1px solid rgba(30,64,175,.08); }
-.table tbody td{ padding:.75rem 1rem; vertical-align:middle; border-top:none; }
-.table-responsive{ border:1px solid rgba(30,64,175,.08); border-radius:10px; overflow:hidden; }
+.table tbody td{ padding:.7rem .9rem; vertical-align:middle; border-top:none; }
+.table-responsive{
+  border:1px solid rgba(30,64,175,.10);
+  border-radius:12px; overflow:hidden;
+  background:#fff;
+}
 
 /* Buttons */
-.btn{ font-weight:600; letter-spacing:.25px; border-radius:10px; font-size:.95rem; padding:.55rem 1rem; }
-.btn-sm{ padding:.4rem .75rem; font-size:.85rem; }
-.btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 3px 10px rgba(37,99,235,.18); }
+.btn{ font-weight:800; letter-spacing:.2px; border-radius:10px; }
+.btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.18); }
 .btn-outline-danger{ border-color:#fecaca; color:#b91c1c; }
 .btn-outline-danger:hover{ background:#fee2e2; border-color:#fca5a5; color:#7f1d1d; }
 .btn-outline-secondary{ color:#334155; border-color:#e2e8f0; }
 .btn-outline-secondary:hover{ background:#f8fafc; border-color:#cbd5e1; color:#0f172a; }
+.btn-sm{ padding:.38rem .7rem; font-size:.84rem; }
 
 /* Responsive */
 @media (max-width:575.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .card-body{ padding:.9rem !important; }
-  .table thead th, .table tbody td{ padding:.6rem .75rem; font-size:.85rem; }
-}
-@media (min-width:576px) and (max-width:767.98px){
-  .container-xxl{ padding-left:1.1rem !important; padding-right:1.1rem !important; }
-}
-@media (min-width:768px) and (max-width:991.98px){
-  .container-xxl{ padding-left:1.2rem !important; padding-right:1.2rem !important; }
-}
-@media (min-width:992px){
-  .card-body{ padding:1.05rem !important; }
-  .card-header{ padding:1.05rem 1.05rem .45rem 1.05rem !important; }
+  .container-xxl{ padding-left: calc(var(--side-pad) - .25rem) !important; padding-right: calc(var(--side-pad) - .25rem) !important; }
+  .table thead th, .table tbody td{ padding:.6rem .75rem; font-size:.86rem; }
 }
 </style>
 
@@ -218,11 +223,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (emptyRow) emptyRow.remove();
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><input type="text"  name="co_name[]"     class="form-control" value="${escapeHtml(name)}"></td>
-      <td><input type="email" name="co_email[]"    class="form-control" value="${escapeHtml(email)}"></td>
-      <td><input type="text"  name="co_afiliasi[]" class="form-control" value="${escapeHtml(aff)}"></td>
+      <td><input type="text"  name="co_name[]"     class="form-control form-control-soft" value="${escapeHtml(name)}"></td>
+      <td><input type="email" name="co_email[]"    class="form-control form-control-soft" value="${escapeHtml(email)}"></td>
+      <td><input type="text"  name="co_afiliasi[]" class="form-control form-control-soft" value="${escapeHtml(aff)}"></td>
       <td class="text-center">
-        <button type="button" class="btn btn-sm btn-outline-danger delRowBtn"><i class="bi bi-x"></i></button>
+        <button type="button" class="btn btn-sm btn-outline-danger delRowBtn" aria-label="Hapus baris"><i class="bi bi-x"></i></button>
       </td>`;
     tbody.appendChild(tr);
   }

@@ -29,6 +29,9 @@ class EventModel extends Model
         'abstract_deadline',
 
         // ✅ wajib ditambah:
+        'abstract_revision_deadline',   // NEW
+        'abstract_revision_active',     // NEW
+
         'full_paper_deadline',
         'full_paper_submission_active',
 
@@ -62,7 +65,11 @@ class EventModel extends Model
         'registration_deadline' => 'permit_empty|valid_date',
         'abstract_deadline'     => 'permit_empty|valid_date',
 
-        // ✅ tambahkan rule untuk field full paper:
+        // ✅ field revisi abstrak:
+        'abstract_revision_deadline' => 'permit_empty|valid_date',
+        'abstract_revision_active'   => 'permit_empty|in_list[0,1,true,false,on,off]',
+
+        // ✅ field full paper:
         'full_paper_deadline'          => 'permit_empty|valid_date',
         'full_paper_submission_active' => 'permit_empty|in_list[0,1,true,false,on,off]',
     ];
@@ -251,6 +258,28 @@ class EventModel extends Model
         if (!$event || !$event['abstract_submission_active'] || !$event['is_active']) return false;
 
         if ($event['abstract_deadline']) return strtotime($event['abstract_deadline']) > time();
+        return strtotime($event['event_date']) > time();
+    }
+
+    // ✅ NEW: Jendela revisi abstrak (fallback ke pengumpulan abstrak kalau kolom revisi kosong)
+    public function isAbstractRevisionOpen($eventId)
+    {
+        $event = $this->find($eventId);
+        if (!$event || !$event['is_active']) return false;
+
+        // aktifkan revisi berdasarkan flag khusus; jika kosong → ikut abstract_submission_active
+        $active = array_key_exists('abstract_revision_active', $event)
+            ? (bool)$event['abstract_revision_active']
+            : (bool)$event['abstract_submission_active'];
+
+        if (!$active) return false;
+
+        // deadline revisi; jika kosong → ikut abstract_deadline
+        $deadline = $event['abstract_revision_deadline'] ?? $event['abstract_deadline'] ?? null;
+
+        if ($deadline) return strtotime($deadline) > time();
+
+        // jika tanpa deadline, pakai event_date sebagai pagar terakhir
         return strtotime($event['event_date']) > time();
     }
 

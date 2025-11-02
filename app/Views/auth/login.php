@@ -51,6 +51,12 @@
           </div>
 
           <button type="submit" class="btn btn-primary">Masuk</button>
+
+          <?php if ((int) session()->get('login_fail_count') >= 1): ?>
+            <p class="redirect" style="margin-top:10px;">
+              <a href="<?= site_url('auth/forgot-password') ?>">Lupa password?</a>
+            </p>
+          <?php endif; ?>
         </form>
 
         <p class="redirect">Belum punya akun? <a href="<?= site_url('auth/register') ?>">Daftar</a></p>

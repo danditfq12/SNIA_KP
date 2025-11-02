@@ -20,34 +20,47 @@ $amountF = number_format($basePrice, 0, ',', '.');
     <div class="container-xxl px-3 px-md-4 py-4">
 
       <!-- HERO seragam -->
-      <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
-        <div>
-          <h3 class="hero-title mb-1"><i class="bi bi-info-circle me-2"></i>Instruksi Pembayaran</h3>
-          <div class="text-white-75 small"><?= esc($evTitle) ?></div>
+      <div class="card-hero mb-3">
+        <div class="hero-body">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+              <h3 class="hero-title mb-1">
+                <i class="bi bi-info-circle me-2"></i>Instruksi Pembayaran
+              </h3>
+              <div class="text-white-70 small"><?= esc($evTitle) ?></div>
+            </div>
+            <div class="text-start text-md-end">
+              <small class="text-white-70 d-block">Total Saat Ini</small>
+              <div class="price-bubble" id="priceTop">Rp <?= $amountF ?></div>
+            </div>
+          </div>
         </div>
-        <div class="text-start text-md-end">
-          <small class="text-white-75 d-block">Total Saat Ini</small>
-          <div class="price-bubble" id="priceTop">Rp <?= $amountF ?></div>
+        <div class="hero-tabs">
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="badge bg-info-subtle text-info px-3 py-2"><i class="bi bi-calendar-event me-1"></i><?= esc($evDate) ?></span>
+            <span class="badge bg-primary-subtle text-primary px-3 py-2"><i class="bi bi-clock me-1"></i><?= esc($evTime) ?></span>
+            <span class="badge bg-success-subtle text-success px-3 py-2"><i class="bi bi-person-video3 me-1"></i>Presenter • Offline</span>
+          </div>
         </div>
       </div>
 
       <div class="row g-3">
         <!-- Kiri: Informasi -->
         <div class="col-12 col-lg-7">
-          <div class="card shadow-soft card-glass-plain mb-3">
-            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+          <div class="card card-glass border-0 mb-3">
+            <div class="card-header d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-calendar-event"></i></span>
-              <h5 class="mb-0 fw-semibold text-blue-900">Informasi Event</h5>
+              <h5 class="mb-0 fw-semibold text-ink">Informasi Event</h5>
             </div>
             <div class="card-body">
               <div class="row g-3">
                 <div class="col-md-6">
                   <div class="mini-label text-muted">Tanggal Event</div>
-                  <div class="fw-semibold text-blue-900"><?= esc($evDate) ?></div>
+                  <div class="fw-semibold text-ink"><?= esc($evDate) ?></div>
                 </div>
                 <div class="col-md-6">
                   <div class="mini-label text-muted">Waktu</div>
-                  <div class="fw-semibold text-blue-900"><?= esc($evTime) ?></div>
+                  <div class="fw-semibold text-ink"><?= esc($evTime) ?></div>
                 </div>
                 <div class="col-md-6">
                   <div class="mini-label text-muted">Mode Kehadiran</div>
@@ -62,10 +75,10 @@ $amountF = number_format($basePrice, 0, ',', '.');
           </div>
 
           <!-- Voucher (auto-hide saat total 0) -->
-          <div class="card card-glass-plain shadow-soft mb-4" id="voucherSection" <?= $basePrice <= 0 ? 'style="display:none;"' : '' ?>>
-            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+          <div class="card card-glass border-0 mb-4" id="voucherSection" <?= $basePrice <= 0 ? 'style="display:none;"' : '' ?>>
+            <div class="card-header d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-tag"></i></span>
-              <h6 class="mb-0 fw-semibold text-blue-900">Punya Kode Voucher?</h6>
+              <h6 class="mb-0 fw-semibold text-ink">Punya Kode Voucher?</h6>
             </div>
             <div class="card-body">
               <div class="row align-items-end g-2">
@@ -89,15 +102,15 @@ $amountF = number_format($basePrice, 0, ',', '.');
 
         <!-- Kanan: CTA -->
         <div class="col-12 col-lg-5">
-          <div class="card shadow-soft card-glass-plain sticky-lg-top" style="top:88px;">
-            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+          <div class="card card-glass border-0 sticky-lg-top" style="top:88px;">
+            <div class="card-header d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-wallet2"></i></span>
-              <strong class="text-blue-900">Ringkasan Pembayaran</strong>
+              <strong class="text-ink">Ringkasan Pembayaran</strong>
             </div>
             <div class="card-body">
               <div class="mb-2 d-flex justify-content-between">
                 <span>Harga Presenter (Offline)</span>
-                <span class="fw-semibold text-blue-900" id="basePrice">Rp <?= $amountF ?></span>
+                <span class="fw-semibold text-ink" id="basePrice">Rp <?= $amountF ?></span>
               </div>
 
               <div class="mb-2 d-flex justify-content-between text-success" id="discountRow" style="display:none;">
@@ -108,11 +121,11 @@ $amountF = number_format($basePrice, 0, ',', '.');
               <hr class="my-2">
               <div class="d-flex justify-content-between align-items-center">
                 <div class="mini-label text-muted">Total Dibayar</div>
-                <div class="fs-4 fw-bold text-blue-900" id="boxTotal">Rp <?= $amountF ?></div>
+                <div class="fs-4 fw-bold text-ink" id="boxTotal">Rp <?= $amountF ?></div>
               </div>
 
               <p class="text-muted small mt-3 mb-3">
-                Pembayaran menggunakan sistem digital Midtrans untuk verifikasi otomatis.
+                Pembayaran menggunakan Midtrans untuk verifikasi otomatis.
               </p>
 
               <div class="d-flex flex-wrap gap-2">
@@ -142,9 +155,9 @@ $amountF = number_format($basePrice, 0, ',', '.');
         </div>
       </div>
 
-      <div class="alert alert-info mt-3 card-glass-plain border-0">
+      <div class="alert alert-info mt-3 card-glass border-0">
         <i class="bi bi-info-circle me-2"></i>
-        <strong>Pembayaran Digital:</strong> Menggunakan Midtrans (aman & otomatis). Mendukung Kartu, E-Wallet, Transfer Bank, & QRIS.
+        <strong>Pembayaran Digital:</strong> Midtrans (aman & otomatis) — Kartu, E-Wallet, Transfer Bank, & QRIS.
       </div>
 
     </div>
@@ -165,55 +178,70 @@ $amountF = number_format($basePrice, 0, ',', '.');
 <?= $this->include('partials/footer') ?>
 
 <style>
-/* ===== Presenter Blue UI (seragam) ===== */
 :root{
-  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
-  --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
-  --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+  /* Blue scale & ink (selaras halaman lain) */
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
+  --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+  --ink:#0f172a; --muted:#6b7280;
 
-  --side-pad:1rem; --gutter-x:1rem;
-  --success:#10b981; --warning:#f59e0b; --danger:#ef4444; --secondary:#64748b;
+  /* Glass & radius */
+  --radius:16px;
+  --glass-bg: rgba(255,255,255,.94);
+  --glass-bd: rgba(30,64,175,.14);
+  --glass-shadow: 0 12px 28px rgba(2,6,23,.08);
+
+  /* Subtle badges */
+  --success:#10b981; --warning:#f59e0b; --danger:#ef4444;
 }
 
-body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:14.6px; line-height:1.5; }
+body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15px; color:var(--ink); }
 
-.page-wrap-blue{ background:linear-gradient(180deg,var(--blue-50),#fff 40%); min-height:100vh; padding-top:72px; }
-.container-xxl{ max-width:1400px; padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; }
-.row.g-3{ --bs-gutter-x:var(--gutter-x); --bs-gutter-y:var(--gutter-x); }
-
-/* HERO (non-glass override seperti halaman lain) */
-.hero-blue{
-  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
-  color:#fff !important; border-radius:16px; border:1px solid rgba(255,255,255,.15);
-  box-shadow:0 12px 28px rgba(30,64,175,.10); padding:1.6rem !important; margin-bottom:1.25rem !important;
+/* Page wrap (seragam) */
+.page-wrap-blue{
+  min-height:100vh; padding-top:72px;
+  background:
+    radial-gradient(1000px 380px at 10% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
+    radial-gradient(1000px 380px at 90% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
-.hero-blue.card-glass,.hero-blue.card-glass-plain{ backdrop-filter:none !important; }
-.hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.45rem; }
-.text-white-75{ color:rgba(255,255,255,.85)!important; }
+.container-xxl{ max-width:min(100%, 1560px); }
 
-/* Card & glass */
-.card-glass-plain{ backdrop-filter:blur(6px); background:#fff; border-radius:14px; border:1px solid rgba(30,64,175,.10); }
-.shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
-.card-header{ padding:1rem 1rem .45rem 1rem !important; }
-.card-body{   padding:1.05rem !important; }
+/* HERO */
+.card-hero{ border:0; border-radius:var(--radius); overflow:hidden; box-shadow:0 12px 28px rgba(30,64,175,.18); }
+.card-hero .hero-body{ background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff; padding:1.8rem 1.2rem; min-height:164px; }
+.hero-title{ font-weight:800; }
+.text-white-70{ color:rgba(255,255,255,.85)!important; }
+.hero-tabs{ background:#fff; padding:.6rem .8rem; border:1px solid rgba(30,64,175,.18); border-top:0; }
 
-/* Badges subtle & helpers */
+/* GLASS card */
+.card-glass{
+  backdrop-filter: blur(6px);
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-bd) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--glass-shadow);
+}
+.card-header{ background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+
+/* Helpers */
+.text-ink{ color:var(--ink)!important; }
 .bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.45rem .7rem; font-weight:600; font-size:.85rem; }
 .bg-success-subtle{ background:#d1fae5!important; color:#065f46!important; }
 .bg-primary-subtle{ background:#dbeafe!important; color:var(--blue-700)!important; }
-.text-blue-900{ color:var(--blue-900)!important; }
 
 /* Inputs & buttons */
-.form-control-soft{ border-radius:12px; border:1px solid rgba(30,64,175,.12); background:#fff; }
-.form-control-soft:focus{ border-color:var(--blue-400); box-shadow:0 0 0 .2rem rgba(59,130,246,.12); }
-
-.btn{ border-radius:12px; font-weight:600; }
+.form-control-soft{ border:2px solid #e2e8f0; border-radius:10px; }
+.form-control-soft:focus{ border-color:var(--blue-600); box-shadow:0 0 0 .2rem rgba(37,99,235,.12); }
+.btn{ border-radius:10px; font-weight:700; }
 .btn-success{ box-shadow:0 6px 18px rgba(16,185,129,.18); }
 .btn-outline-primary{ border-color:var(--blue-400); color:var(--blue-700); }
 .btn-outline-primary:hover{ background:var(--blue-600); color:#fff; border-color:var(--blue-600); }
 
-/* Price bubble */
-.price-bubble{ display:inline-block; padding:.35rem .75rem; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); border-radius:999px; font-weight:700; }
+/* Price bubble + amount animation */
+.price-bubble{ display:inline-block; padding:.35rem .75rem; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); border-radius:999px; font-weight:800; }
+#boxTotal,#mobTotal,.price-bubble{ transition:all .3s ease; }
+.amount-changed{ animation:amountPulse .6s ease-in-out; }
+@keyframes amountPulse{ 0%{transform:scale(1);} 50%{transform:scale(1.05); color:#10b981;} 100%{transform:scale(1);} }
 
 /* Mobile sticky CTA */
 .mobile-sticky{ position:sticky; bottom:0; left:0; right:0; margin-top:12px; z-index:1030; }
@@ -230,15 +258,9 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:14.
 .alert-warning{ background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%); color:#fff; }
 .alert-info{    background:#e0f2fe; color:#0c4a6e; }
 
-/* Animasi jumlah */
-.price-bubble,#boxTotal,#mobTotal{ transition:all .3s ease; }
-.amount-changed{ animation:amountPulse .6s ease-in-out; }
-@keyframes amountPulse{ 0%{transform:scale(1);} 50%{transform:scale(1.05); color:#10b981;} 100%{transform:scale(1);} }
-
-/* Responsive tweak */
+/* Compact on mobile */
 @media (max-width:575.98px){
-  .container-xxl{ padding-left:1rem!important; padding-right:1rem!important; }
-  .hero-blue{ border-radius:14px; padding:1.25rem!important; margin-bottom:1rem!important; }
+  .card-hero .hero-body{ padding:1.4rem 1rem; min-height:150px; }
   .hero-title{ font-size:1.25rem; }
 }
 </style>
@@ -313,7 +335,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:14.
     [els.btnProceed, els.btnProceedMobile].forEach(b=>{
       if(!b) return;
       b.disabled = on;
-      if(on){ b.classList.add('disabled'); } else { b.classList.remove('disabled'); }
+      b.classList.toggle('disabled', on);
     });
   }
 

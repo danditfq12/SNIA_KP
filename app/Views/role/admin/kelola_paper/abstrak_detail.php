@@ -1,12 +1,13 @@
 <?php
 /**
  * File: app/Views/role/admin/abstrak/detail.php
- * Expect: $abstrak (array), $reviews (array), $assigned (array)
+ * Expect: $abstrak (array), $reviews (array - aktif), $assigned (array - aktif), $declined (array - yang menolak)
  */
-$abstrak  = $abstrak ?? [];
-$reviews  = $reviews ?? [];
-$assigned = $assigned ?? [];
-$title    = 'Detail Abstrak';
+$abstrak   = $abstrak   ?? [];
+$reviews   = $reviews   ?? [];
+$assigned  = $assigned  ?? [];
+$declined  = $declined  ?? [];
+$title     = 'Detail Abstrak';
 $activeMenu = 'kelola_paper';
 
 $badgeMap = [
@@ -25,7 +26,16 @@ $fmtDT = function($dt){
   $t = strtotime((string)$dt);
   return date('d M Y H:i', $t);
 };
+
 $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
+
+// RULE tombol Tugaskan:
+// controller sudah hanya mengisi $assigned dengan reviewer aktif,
+// jadi cukup cek kosong/tidak.
+$canAssign = empty($assigned);
+
+$eventId   = (int)($abstrak['event_id'] ?? 0);
+$backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_url('admin/kelola-paper');
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
@@ -35,25 +45,11 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
 
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <div class="d-flex align-items-center gap-2">
-          <a href="<?= site_url('admin/kelola-paper') ?>" class="btn btn-soft-dark btn-xs">
-            <i class="bi bi-arrow-left"></i><span class="ms-1">Kembali</span>
-          </a>
-          <nav aria-label="breadcrumb" class="small">
-            <ol class="breadcrumb mb-0">
-              <li class="breadcrumb-item"><a href="<?= site_url('admin/kelola-paper') ?>">Kelola Paper</a></li>
-              <?php if (!empty($abstrak['event_id'])): ?>
-                <li class="breadcrumb-item">
-                  <a href="<?= site_url('admin/kelola-paper/event/'.(int)$abstrak['event_id']) ?>">
-                    <?= esc($abstrak['event_title'] ?? 'Event') ?>
-                  </a>
-                </li>
-              <?php endif; ?>
-              <li class="breadcrumb-item active" aria-current="page">Detail Abstrak</li>
-            </ol>
-          </nav>
-        </div>
+      <!-- Kembali ke detail event -->
+      <div class="mb-2">
+        <a href="<?= esc($backUrl) ?>" class="btn btn-soft-dark btn-xs">
+          <i class="bi bi-arrow-left"></i><span class="ms-1">Kembali</span>
+        </a>
       </div>
 
       <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
@@ -116,7 +112,7 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
             </div>
           </div>
 
-          <!-- PREVIEW PDF + Aksi -->
+          <!-- PREVIEW PDF + Aksi header dokumen -->
           <div class="card shadow-soft card-glass-plain mb-3">
             <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
               <div class="d-flex align-items-center gap-2">
@@ -157,7 +153,7 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
             </div>
           </div>
 
-          <!-- Riwayat Penilaian -->
+          <!-- Riwayat Penilaian (AKTIF) -->
           <div class="card shadow-soft card-glass-plain">
             <div class="card-header bg-transparent border-0 d-flex align-items-center gap-2 pb-0">
               <span class="badge bg-blue-soft"><i class="bi bi-clock-history"></i></span>
@@ -173,7 +169,7 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
                 <div class="vstack gap-2">
                   <?php foreach ($reviews as $r):
                     $dKey = strtolower($r['keputusan'] ?? 'pending');
-                    $dMap = ['diterima'=>'success','ditolak'=>'danger','revisi'=>'warning','pending'=>'secondary'];
+                    $dMap = ['diterima'=>'success','ditolak'=>'danger','revisi'=>'warning','pending'=>'secondary','sedang_direview'=>'info'];
                     $dCls = $dMap[$dKey] ?? 'secondary';
                   ?>
                     <div class="p-3 border rounded-3 bg-white">
@@ -196,6 +192,39 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
               <?php endif; ?>
             </div>
           </div>
+
+          <!-- Riwayat Penugasan (DITOLAK) -->
+          <div class="card shadow-soft card-glass-plain mt-3">
+            <div class="card-header bg-transparent border-0 d-flex align-items-center gap-2 pb-0">
+              <span class="badge bg-blue-soft"><i class="bi bi-x-circle"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Riwayat Penugasan (Ditolak)</h6>
+            </div>
+            <div class="card-body">
+              <?php if (empty($declined)): ?>
+                <div class="text-muted">Belum ada penolakan penugasan.</div>
+              <?php else: ?>
+                <div class="vstack gap-2">
+                  <?php foreach($declined as $d): ?>
+                    <div class="p-3 border rounded-3 bg-white">
+                      <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                          <div class="fw-semibold">
+                            <?= esc($d['reviewer_name'] ?? '-') ?>
+                            <span class="text-muted fw-normal"> — <?= esc($d['reviewer_email'] ?? '') ?></span>
+                          </div>
+                          <div class="small text-muted"><?= esc($fmtDT($d['declined_at'] ?? null)) ?></div>
+                        </div>
+                        <span class="badge bg-danger">Ditolak</span>
+                      </div>
+                      <?php if(!empty($d['alasan'])): ?>
+                        <div class="mt-2 text-secondary"><strong>Alasan:</strong> <?= nl2br(esc($d['alasan'])) ?></div>
+                      <?php endif; ?>
+                    </div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
         </div>
 
         <!-- RIGHT -->
@@ -211,22 +240,17 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
                   <i class="bi bi-pencil-square me-1"></i>Perbarui Status
                 </button>
 
-                <button class="btn btn-soft-primary"
-                        onclick="openAssign(<?= $idAbstrak ?>,'<?= esc(addslashes($abstrak['judul'] ?? '-')) ?>',<?= (int)($abstrak['id_kategori'] ?? 0) ?>)">
-                  <i class="bi bi-person-plus me-1"></i>Tugaskan Reviewer
-                </button>
-
-                <a class="btn btn-soft-dark" href="<?= site_url('admin/abstrak/download/'.$idAbstrak) ?>">
-                  <i class="bi bi-download me-1"></i>Unduh Berkas
-                </a>
-
-                <hr class="my-2">
-                <button class="btn btn-danger" onclick="deleteAbstrak(<?= $idAbstrak ?>)"><i class="bi bi-trash me-1"></i>Hapus</button>
+                <?php if ($canAssign): ?>
+                  <button class="btn btn-soft-primary"
+                          onclick="openAssign(<?= $idAbstrak ?>,'<?= esc(addslashes($abstrak['judul'] ?? '-')) ?>',<?= (int)($abstrak['id_kategori'] ?? 0) ?>)">
+                    <i class="bi bi-person-plus me-1"></i>Tugaskan Reviewer
+                  </button>
+                <?php endif; ?>
               </div>
             </div>
           </div>
 
-          <!-- Reviewer Ditugaskan -->
+          <!-- Reviewer Ditugaskan (AKTIF) -->
           <div class="card shadow-soft card-glass-plain">
             <div class="card-header bg-transparent border-0 d-flex align-items-center gap-2 pb-0">
               <span class="badge bg-blue-soft"><i class="bi bi-people"></i></span>
@@ -234,12 +258,15 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
             </div>
             <div class="card-body">
               <?php if (empty($assigned)): ?>
-                <div class="text-muted">Belum ada reviewer yang ditugaskan.</div>
+                <div class="text-muted">Tidak ada reviewer aktif.</div>
               <?php else: ?>
                 <div class="vstack gap-2">
                   <?php foreach ($assigned as $a):
-                    $k = strtolower($a['status'] ?? 'pending');
-                    $cls = ['pending'=>'secondary','diterima'=>'success','ditolak'=>'danger','revisi'=>'warning'][$k] ?? 'secondary';
+                    $k  = strtolower($a['status'] ?? 'pending'); // status review
+                    $ts = strtolower($a['task_status'] ?? 'pending'); // status tugas (pending/accepted)
+                    $cls = ['pending'=>'secondary','diterima'=>'success','ditolak'=>'danger','revisi'=>'warning','sedang_direview'=>'info'][$k] ?? 'secondary';
+                    $chipText = ($ts === 'accepted') ? 'Aktif' : 'Menunggu konfirmasi';
+                    $chipCls  = ($ts === 'accepted') ? 'success' : 'secondary';
                   ?>
                   <div class="p-2 rounded border bg-white d-flex justify-content-between align-items-start">
                     <div>
@@ -249,7 +276,10 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
                         <div class="small text-muted"><?= esc($fmtDT($a['tanggal'])) ?></div>
                       <?php endif; ?>
                     </div>
-                    <span class="badge bg-<?= $cls ?>"><?= ucfirst($k) ?></span>
+                    <div class="text-end">
+                      <div><span class="badge bg-<?= $chipCls ?>"><?= esc($chipText) ?></span></div>
+                      <div class="mt-1"><span class="badge bg-<?= $cls ?>"><?= ucfirst($k) ?></span></div>
+                    </div>
                   </div>
                   <?php endforeach; ?>
                 </div>
@@ -307,8 +337,11 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
         <div class="mb-3">
           <label class="form-label">Status</label>
           <select class="form-select" id="statusSelect" name="status" required>
-            <option value="diterima" <?= $stKey==='diterima'?'selected':'' ?>>Diterima</option>
-            <option value="ditolak"  <?= $stKey==='ditolak'?'selected':''  ?>>Ditolak</option>
+            <option value="diterima"        <?= $stKey==='diterima'?'selected':''        ?>>Diterima</option>
+            <option value="ditolak"         <?= $stKey==='ditolak'?'selected':''         ?>>Ditolak</option>
+            <option value="revisi"          <?= $stKey==='revisi'?'selected':''          ?>>Revisi</option>
+            <option value="sedang_direview" <?= $stKey==='sedang_direview'?'selected':'' ?>>Sedang Ditinjau</option>
+            <option value="menunggu"        <?= $stKey==='menunggu'?'selected':''        ?>>Menunggu</option>
           </select>
         </div>
         <div class="mb-3">
@@ -328,10 +361,13 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
 
 <style>
 :root{
+  --side-pad: clamp(.75rem, 1.2vw, 1.25rem);
+  --container-max: 1680px;
   --blue-50:#eff6ff; --blue-200:#bfdbfe; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
 }
 .page-wrap-blue{ background:linear-gradient(180deg,var(--blue-50),#fff 40%); min-height:100vh; padding-top:72px; }
-.container-xxl{ max-width:1400px; }
+.container-xxl{ max-width:min(100%, var(--container-max)); padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; }
+
 .hero-blue{
   background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%)!important;
   color:#fff!important; border-radius:16px; border:1px solid rgba(255,255,255,.15);
@@ -346,7 +382,6 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
 .text-blue-900{ color:var(--blue-900)!important; }
 .line-clip-2{ display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 
-/* Buttons – samakan ukuran global */
 .btn{ border-radius:10px; font-weight:600; letter-spacing:.25px; font-size:.95rem; padding:.55rem 1rem; }
 .btn-xs{ padding:.42rem .75rem; font-size:.85rem; line-height:1.2; border-radius:8px; }
 .btn-soft-dark{ background:#f1f5f9; color:#111827; border:1px solid #e2e8f0; }
@@ -354,12 +389,19 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
 .btn-soft-primary{ background:#e0ecff; color:#123; border:1px solid rgba(37,99,235,.25); }
 .btn-soft-primary:hover{ background:#2563eb; color:#fff; border-color:#2563eb; }
 
+.table{ width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; }
+.table thead th{
+  background-color:#f8fafc!important; border-bottom:1px solid #e5e7eb;
+  font-weight:600; color:var(--blue-900); font-size:.82rem; text-transform:uppercase; letter-spacing:.3px;
+  padding:.55rem .5rem; white-space:nowrap;
+}
+.table tbody td{ padding:.55rem .5rem; vertical-align:middle; border-top:none; word-break:break-word; white-space:normal; }
+
 .pdf-frame-wrap{ height:72vh; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; }
 .pdf-frame{ width:100%; height:100%; border:0; }
-.breadcrumb .breadcrumb-item + .breadcrumb-item::before{ content: ">"; }
-@media (max-width: 768px){
-  .pdf-frame-wrap{ height:60vh; }
-}
+
+@media (min-width: 1200px){ .row.g-3{ --bs-gutter-x: 1.25rem; } }
+@media (max-width: 768px){ .pdf-frame-wrap{ height:60vh; } }
 </style>
 
 <script>
@@ -368,74 +410,70 @@ $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
   let   csrfHash = '<?= csrf_hash() ?>';
 
   function openStatusModal(){
-    new bootstrap.Modal(document.getElementById('statusModal')).show();
+    const el = document.getElementById('statusModal');
+    if (!el) return;
+    new bootstrap.Modal(el).show();
   }
 
-  document.getElementById('statusForm')?.addEventListener('submit', function(e){
-    e.preventDefault();
-    const statusVal = document.getElementById('statusSelect').value;
-    if (!['diterima','ditolak'].includes(statusVal)) {
-      return Swal?.fire('Tidak valid','Pilih status yang tersedia','warning');
-    }
-    const data = new URLSearchParams();
-    data.append('id_abstrak', document.getElementById('statusAbstrakId').value);
-    data.append('status',     statusVal);
-    data.append('komentar',   document.getElementById('statusKomentar').value || '');
-    data.append(csrfName, csrfHash);
+  (function(){
+    const form = document.getElementById('statusForm');
+    if(!form) return;
 
-    fetch('<?= site_url('admin/abstrak/update-status') ?>', {
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
-      body:data.toString()
-    }).then(r=>r.json()).then(res=>{
-      if(res && res.success){
-        Swal?.fire('Tersimpan', res.message || 'Status diperbarui', 'success').then(()=>location.reload());
-      }else{
-        Swal?.fire('Gagal', (res && res.message) || 'Terjadi kesalahan', 'error');
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      const sel = document.getElementById('statusSelect');
+      const statusVal = sel ? sel.value : '';
+      if (!['diterima','ditolak','revisi','sedang_direview','menunggu'].includes(statusVal)) {
+        return Swal?.fire('Tidak valid','Pilih status yang tersedia','warning');
       }
-      if(res && res[csrfName]) csrfHash = res[csrfName];
-    }).catch(()=> Swal?.fire('Error','Tidak dapat menghubungi server','error'));
-  });
+      const data = new URLSearchParams();
+      data.append('id_abstrak', document.getElementById('statusAbstrakId').value);
+      data.append('status',     statusVal);
+      data.append('komentar',   document.getElementById('statusKomentar').value || '');
+      data.append(csrfName, csrfHash);
+
+      fetch('<?= site_url('admin/abstrak/update-status') ?>', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
+        body:data.toString()
+      }).then(r=>r.json()).then(res=>{
+        if(res && res.success){
+          Swal?.fire('Tersimpan', res.message || 'Status diperbarui', 'success').then(()=>location.reload());
+        }else{
+          Swal?.fire('Gagal', (res && res.message) || 'Terjadi kesalahan', 'error');
+        }
+        if(res && res[csrfName]) csrfHash = res[csrfName];
+      }).catch(()=> Swal?.fire('Error','Tidak dapat menghubungi server','error'));
+    });
+  })();
 
   function openAssign(idAbstrak, judul, idKategori){
-    document.getElementById('assignTitle').value = judul;
-    document.getElementById('assignForm').action = '<?= site_url('admin/abstrak/assign') ?>/'+idAbstrak;
+    const title  = document.getElementById('assignTitle');
+    const form   = document.getElementById('assignForm');
+    const select = document.getElementById('reviewerSelect');
+    if(!title || !form || !select) return;
+
+    title.value       = judul;
+    form.action       = '<?= site_url('admin/abstrak/assign') ?>/'+idAbstrak;
+    select.innerHTML  = '<option value="">Memuat…</option>';
 
     fetch('<?= site_url('admin/abstrak/reviewers-by-category') ?>/'+idKategori, {
       headers:{'X-Requested-With':'XMLHttpRequest'}
     }).then(r=>r.json())
       .then(res=>{
-        // Support response: {success:true, data:[...]} atau array langsung
         const items = Array.isArray(res) ? res : (res.data || []);
         if (!items || items.length === 0) {
           throw new Error('Daftar reviewer kosong');
         }
-        const sel = document.getElementById('reviewerSelect');
-        sel.innerHTML = '<option value="">Pilih reviewer…</option>';
+        select.innerHTML = '<option value="">Pilih reviewer…</option>';
         items.forEach(rv=>{
           const opt = document.createElement('option');
           opt.value = rv.id_user || rv.id || rv.id_reviewer;
           opt.textContent = (rv.nama || rv.nama_lengkap || '—') + (rv.email ? ' — ' + rv.email : '');
-          sel.appendChild(opt);
+          select.appendChild(opt);
         });
         new bootstrap.Modal(document.getElementById('assignModal')).show();
       })
-      .catch((err)=> Swal?.fire('Error','Gagal memuat reviewer','error'));
-  }
-
-  function deleteAbstrak(id){
-    Swal?.fire({
-      title:'Hapus Abstrak?',
-      text:'Tindakan ini tidak dapat dibatalkan.',
-      icon:'warning', showCancelButton:true,
-      confirmButtonColor:'#d33', cancelButtonColor:'#6b7280',
-      confirmButtonText:'Ya, hapus', cancelButtonText:'Batal'
-    }).then(r=>{
-      if(!r.isConfirmed) return;
-      const f = document.createElement('form');
-      f.method='POST'; f.action='<?= site_url('admin/abstrak/delete') ?>/'+id;
-      const i = document.createElement('input'); i.type='hidden'; i.name=csrfName; i.value=csrfHash; f.appendChild(i);
-      document.body.appendChild(f); f.submit();
-    });
+      .catch(()=> Swal?.fire('Error','Gagal memuat reviewer','error'));
   }
 </script>

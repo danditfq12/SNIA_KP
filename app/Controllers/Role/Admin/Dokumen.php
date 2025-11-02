@@ -12,628 +12,695 @@ use Mpdf\Mpdf;
 
 class Dokumen extends BaseController
 {
-    protected $dokumenModel;
-    protected $eventModel;
-    protected $userModel;
-    protected $pembayaranModel;
-    protected $absensiModel;
-    protected $db;
+    protected DokumenModel $dokumenModel;
+    protected EventModel $eventModel;
+    protected UserModel $userModel;
+    protected PembayaranModel $pembayaranModel;
+    protected AbsensiModel $absensiModel;
+    protected \CodeIgniter\Database\BaseConnection $db;
 
     public function __construct()
     {
-        $this->dokumenModel = new DokumenModel();
-        $this->eventModel = new EventModel();
-        $this->userModel = new UserModel();
-        $this->pembayaranModel = new PembayaranModel();
-        $this->absensiModel = new AbsensiModel();
-        $this->db = \Config\Database::connect();
+        $this->dokumenModel     = new DokumenModel();
+        $this->eventModel       = new EventModel();
+        $this->userModel        = new UserModel();
+        $this->pembayaranModel  = new PembayaranModel();
+        $this->absensiModel     = new AbsensiModel();
+        $this->db               = \Config\Database::connect();
     }
-
+    
     public function index()
     {
-        // Get filter parameters
-        $eventId = $this->request->getGet('event_id');
-        $tipe = $this->request->getGet('tipe');
+        $eventId = (int) $this->request->getGet('event_id');
+        $tipe    = $this->request->getGet('tipe');
 
-        // Get all documents with filters
-        $documents = $this->dokumenModel->getDokumenWithUser($tipe, $eventId);
+        $documents = $this->dokumenModel->getDokumenWithUser($tipe, $eventId ?: null);
+        $events    = $this->eventModel->where('is_active', true)->orderBy('event_date', 'DESC')->findAll();
+        $stats     = $this->getDocumentStatistics();
 
-        // Get all events for filter dropdown
-        $events = $this->eventModel->where('is_active', true)
-                                  ->orderBy('event_date', 'DESC')
-                                  ->findAll();
+        $completion = null;
+        if ($eventId) {
+            $completion = $this->getCompletionPerEvent($eventId);
+            if ($completion['all_loa_completed']) {
+                session()->setFlashdata('success', 'Semua LOA untuk event ini sudah diberikan.');
+            }
+            if ($completion['all_cert_completed']) {
+                session()->setFlashdata('success', 'Semua sertifikat untuk event ini sudah diberikan.');
+            }
+        }
 
-        // Calculate statistics
-        $stats = $this->getDocumentStatistics();
-
-        $data = [
-            'title' => 'Manajemen Dokumen',
-            'documents' => $documents,
-            'events' => $events,
-            'current_event' => $eventId,
-            'current_tipe' => $tipe,
-            'stats' => $stats
-        ];
-
-        return view('role/admin/dokumen/index', $data);
+        return view('role/admin/dokumen/index', [
+            'title'         => 'Manajemen Dokumen',
+            'documents'     => $documents,
+            'events'        => $events,
+            'current_event' => $eventId ?: '',
+            'current_tipe'  => $tipe,
+            'stats'         => $stats,
+            'completion'    => $completion,
+        ]);
     }
 
-    public function uploadLoa($eventId)
+    // ================== AJAX (Dropdown / List) ==================
+
+    /** Presenter yang PEMBAYARANNYA verified pada event. */
+    public function getVerifiedPresenters(int $eventId = 0)
     {
-        $validation = \Config\Services::validation();
-        
+        if ($eventId <= 0) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'event_id tidak valid'])->setStatusCode(400);
+        }
+
+        $rows = $this->db->table('pembayaran p')
+            ->distinct()
+            ->select('u.id_user, u.nama_lengkap, u.email, u.role')
+            ->join('users u', 'u.id_user = p.id_user', 'left')
+            ->where('p.event_id', $eventId)
+            ->where('p.status', 'verified')
+            ->groupStart()
+                ->where("u.role =", 'presenter', false) // <= gunakan role murni dari users
+                ->orWhere('u.role', 'presenter')
+            ->groupEnd()
+            ->orderBy('u.nama_lengkap', 'ASC')
+            ->get()->getResultArray();
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'data'   => array_map(static function ($r) {
+                return [
+                    'id_user'      => (int) $r['id_user'],
+                    'nama_lengkap' => (string) ($r['nama_lengkap'] ?? ''),
+                    'email'        => (string) ($r['email'] ?? ''),
+                    'role'         => (string) ($r['role'] ?? 'presenter'),
+                ];
+            }, $rows),
+        ]);
+    }
+
+    /** Pencarian verified presenter (untuk LOA). */
+    public function searchEligibleLoa()
+    {
+        $eventId = (int) $this->request->getGet('event_id');
+        $q       = trim((string) $this->request->getGet('q'));
+
+        if ($eventId <= 0) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'event_id tidak valid'])->setStatusCode(400);
+        }
+
+        $builder = $this->db->table('pembayaran p')
+            ->distinct()
+            ->select('u.id_user, u.nama_lengkap, u.email, u.role')
+            ->join('users u', 'u.id_user = p.id_user', 'left')
+            ->where('p.event_id', $eventId)
+            ->where('p.status', 'verified')
+            ->groupStart()
+                ->where("u.role =", 'presenter', false)
+                ->orWhere('u.role', 'presenter')
+            ->groupEnd();
+
+        if ($q !== '' && $q !== '*') {
+            $builder->groupStart()
+                ->like('u.nama_lengkap', $q, 'both')
+                ->orLike('u.email', $q, 'both')
+                ->groupEnd();
+        }
+
+        $rows = $builder->orderBy('u.nama_lengkap', 'ASC')->get()->getResultArray();
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'data'   => array_map(static function ($r) {
+                return [
+                    'id_user'      => (int) $r['id_user'],
+                    'nama_lengkap' => (string) ($r['nama_lengkap'] ?? ''),
+                    'email'        => (string) ($r['email'] ?? ''),
+                    'role'         => (string) ($r['role'] ?? 'presenter'),
+                ];
+            }, $rows),
+        ]);
+    }
+
+    /**
+     * BARU (disesuaikan route): Ambil SEMUA user yang punya pembayaran pada event,
+     * lengkap dengan status pembayaran, has_loa, dan flag eligible (presenter + verified).
+     * Endpoint: GET dokumen/users-for-loa/{eventId}
+     */
+    public function getUsersForLoa(int $eventId = 0)
+    {
+        if ($eventId <= 0) {
+            return $this->response->setJSON(['status'=>'error','message'=>'event_id tidak valid'])->setStatusCode(400);
+        }
+
+        $rows = $this->db->table('pembayaran p')
+            ->distinct()
+            ->select("
+                u.id_user,
+                u.nama_lengkap,
+                u.email,
+                u.role AS role_user,
+                p.status AS pay_status,
+                CASE WHEN d.id_dokumen IS NULL THEN 0 ELSE 1 END AS has_loa
+            ", false)
+            ->join('users u', 'u.id_user = p.id_user', 'left')
+            ->join('dokumen d', "d.id_user = u.id_user AND d.event_id = p.event_id AND d.tipe = 'loa'", 'left')
+            ->where('p.event_id', $eventId)
+            ->orderBy('u.nama_lengkap', 'ASC')
+            ->get()->getResultArray();
+
+        $data = array_map(static function($r){
+            $roleFinal  = strtolower($r['role_user'] ?? '');
+            $payStatus  = strtolower($r['pay_status'] ?? '');
+            $eligible   = ($roleFinal === 'presenter' && $payStatus === 'verified');
+
+            return [
+                'id_user'      => (int) $r['id_user'],
+                'nama_lengkap' => (string) ($r['nama_lengkap'] ?? ''),
+                'email'        => (string) ($r['email'] ?? ''),
+                'role'         => $roleFinal ?: 'audience',
+                'pay_status'   => $payStatus ?: '',
+                'has_loa'      => (bool)   ($r['has_loa'] ?? false),
+                'eligible'     => (bool)   $eligible,
+                'note'         => $eligible ? '' : 'LOA khusus presenter & pembayaran harus verified',
+            ];
+        }, $rows);
+
+        return $this->response->setJSON(['status' => 'success', 'data' => $data]);
+    }
+
+    /**
+     * BARU (disesuaikan route): Ambil SEMUA user yang punya pembayaran pada event,
+     * lengkap dengan attended (absen hadir), has_cert, dan flag eligible (harus hadir).
+     * Endpoint: GET dokumen/users-for-certificate/{eventId}
+     */
+    public function getUsersForCertificate(int $eventId = 0)
+    {
+        if ($eventId <= 0) {
+            return $this->response->setJSON(['status'=>'error','message'=>'event_id tidak valid'])->setStatusCode(400);
+        }
+
+        $rows = $this->db->table('pembayaran p')
+            ->distinct()
+            ->select("
+                u.id_user,
+                u.nama_lengkap,
+                u.email,
+                u.role AS role_user,
+                CASE WHEN a.id_user IS NULL THEN 0 ELSE 1 END AS attended,
+                COALESCE(a.status, '') AS attend_status,
+                CASE WHEN d.id_dokumen IS NULL THEN 0 ELSE 1 END AS has_cert
+            ", false)
+            ->join('users u', 'u.id_user = p.id_user', 'left')
+            ->join('absensi a', "a.id_user = u.id_user AND a.event_id = p.event_id AND a.status = 'hadir'", 'left')
+            ->join('dokumen d', "d.id_user = u.id_user AND d.event_id = p.event_id AND d.tipe = 'sertifikat'", 'left')
+            ->where('p.event_id', $eventId)
+            ->orderBy('u.nama_lengkap', 'ASC')
+            ->get()->getResultArray();
+
+        $data = array_map(static function($r){
+            $roleFinal = strtolower($r['role_user'] ?? '');
+            $attended  = (bool) ($r['attended'] ?? false);
+
+            return [
+                'id_user'       => (int) $r['id_user'],
+                'nama_lengkap'  => (string) ($r['nama_lengkap'] ?? ''),
+                'email'         => (string) ($r['email'] ?? ''),
+                'role'          => $roleFinal ?: '',
+                'attended'      => $attended,
+                'attend_status' => (string) ($r['attend_status'] ?? ''),
+                'has_cert'      => (bool)   ($r['has_cert'] ?? false),
+                'eligible'      => $attended,
+                'note'          => $attended ? '' : 'Belum absen',
+            ];
+        }, $rows);
+
+        return $this->response->setJSON(['status' => 'success', 'data' => $data]);
+    }
+
+    /** Semua peserta yang HADIR (legacy, tetap untuk kompatibilitas lama). */
+    public function getAttendees(int $eventId = 0)
+    {
+        if ($eventId <= 0) {
+            return $this->response->setJSON(['status' => 'error', 'message' => 'event_id tidak valid'])->setStatusCode(400);
+        }
+
+        $rows = $this->db->table('absensi a')
+            ->distinct()
+            ->select('u.id_user, u.nama_lengkap, u.email, u.role')
+            ->join('users u', 'u.id_user = a.id_user', 'left')
+            ->where('a.event_id', $eventId)
+            ->where('a.status', 'hadir')
+            ->orderBy('u.nama_lengkap', 'ASC')
+            ->get()->getResultArray();
+
+        return $this->response->setJSON([
+            'status' => 'success',
+            'data'   => array_map(static function ($r) {
+                return [
+                    'id_user'      => (int) $r['id_user'],
+                    'nama_lengkap' => (string) ($r['nama_lengkap'] ?? ''),
+                    'email'        => (string) ($r['email'] ?? ''),
+                    'role'         => (string) ($r['role'] ?? ''),
+                ];
+            }, $rows),
+        ]);
+    }
+
+    // ================== UPLOAD ==================
+
+    public function uploadLoa()
+    {
         $rules = [
-            'user_id' => 'required|integer',
-            'loa_file' => [
-                'uploaded[loa_file]',
-                'max_size[loa_file,5120]', // 5MB
-                'ext_in[loa_file,pdf,doc,docx]'
-            ]
+            'event_id' => 'required|integer',
+            'user_id'  => 'required|integer',
+            'loa_file' => ['uploaded[loa_file]', 'max_size[loa_file,5120]', 'ext_in[loa_file,pdf,doc,docx]'],
         ];
-
         if (!$this->validate($rules)) {
-            return redirect()->back()->with('error', 'Validasi gagal: ' . implode(', ', $validation->getErrors()));
+            return redirect()->to(site_url('admin/dokumen'))
+                ->with('error', 'Validasi gagal: ' . implode(', ', $this->validator->getErrors()));
         }
 
-        $userId = $this->request->getPost('user_id');
-        $file = $this->request->getFile('loa_file');
+        $eventId = (int) $this->request->getPost('event_id');
+        $userId  = (int) $this->request->getPost('user_id');
+        $file    = $this->request->getFile('loa_file');
 
-        // Validate event exists
         $event = $this->eventModel->find($eventId);
-        if (!$event) {
-            return redirect()->back()->with('error', 'Event tidak ditemukan.');
-        }
+        if (!$event) return redirect()->to(site_url('admin/dokumen'))->with('error', 'Event tidak ditemukan.');
+        $user  = $this->userModel->find($userId);
+        if (!$user)  return redirect()->to(site_url('admin/dokumen'))->with('error', 'User tidak ditemukan.');
 
-        // Validate user exists and has verified payment
-        $user = $this->userModel->find($userId);
-        if (!$user) {
-            return redirect()->back()->with('error', 'User tidak ditemukan.');
-        }
-
+        // wajib verified payment & role presenter
         $verifiedPayment = $this->pembayaranModel
-            ->where('id_user', $userId)
-            ->where('event_id', $eventId)
-            ->where('status', 'verified')
-            ->first();
-
-        if (!$verifiedPayment) {
-            return redirect()->back()->with('error', 'User belum memiliki pembayaran yang terverifikasi untuk event ini.');
+            ->where('id_user', $userId)->where('event_id', $eventId)->where('status', 'verified')->first();
+        if (!$verifiedPayment || strtolower($user['role'] ?? '') !== 'presenter') {
+            return redirect()->to(site_url('admin/dokumen'))->with('error', 'LOA hanya untuk Presenter dengan pembayaran terverifikasi.');
         }
 
-        // Check if LOA already exists
-        $existingLoa = $this->dokumenModel->hasUserDocument($userId, $eventId, 'loa');
-        if ($existingLoa) {
-            return redirect()->back()->with('error', 'LOA untuk user ini sudah ada.');
+        // tidak boleh dobel
+        if ($this->dokumenModel->hasUserDocument($userId, $eventId, 'loa')) {
+            return redirect()->to(site_url('admin/dokumen'))->with('error', 'LOA untuk user ini sudah ada.');
         }
 
         $this->db->transStart();
-
         try {
-            // Create upload directory
+            if (!$file || !$file->isValid()) {
+                throw new \RuntimeException('File LOA tidak valid: [' . $file?->getError() . '] ' . $file?->getErrorString());
+            }
+
             $uploadPath = WRITEPATH . 'uploads/loa/';
-            if (!is_dir($uploadPath)) {
-                mkdir($uploadPath, 0755, true);
-            }
+            if (!is_dir($uploadPath)) mkdir($uploadPath, 0775, true);
 
-            // Generate unique filename
-            $fileName = 'LOA_' . $eventId . '_' . $userId . '_' . time() . '.' . $file->getExtension();
-            
-            // Move file
+            $ext      = strtolower($file->getClientExtension());
+            $fileName = 'LOA_' . $eventId . '_' . $userId . '_' . time() . '.' . $ext;
+
             if (!$file->move($uploadPath, $fileName)) {
-                throw new \Exception('Gagal menyimpan file: ' . $file->getErrorString());
+                throw new \RuntimeException('Gagal menyimpan file: ' . $file->getErrorString());
             }
 
-            // Save to database
-            $documentData = [
-                'id_user' => $userId,
-                'event_id' => $eventId,
-                'tipe' => 'loa',
-                'file_path' => $fileName,
-                'syarat' => 'Letter of Acceptance',
-                'uploaded_at' => date('Y-m-d H:i:s')
-            ];
+            $this->dokumenModel->insert([
+                'id_user'     => $userId,
+                'event_id'    => $eventId,
+                'tipe'        => 'loa',
+                'file_path'   => $fileName,
+                'syarat'      => 'Letter of Acceptance',
+                'uploaded_at' => date('Y-m-d H:i:s'),
+            ]);
 
-            if (!$this->dokumenModel->insert($documentData)) {
-                throw new \Exception('Gagal menyimpan data dokumen: ' . implode(', ', $this->dokumenModel->errors()));
-            }
-
-            // Log activity
-            $eventTitle = $event['title'] ?? 'Unknown Event';
-            $this->logActivity(session('id_user'), "Uploaded LOA for {$user['nama_lengkap']} in event: {$eventTitle}");
-
+            $this->logActivity(session('id_user'), "Uploaded LOA for {$user['nama_lengkap']} (Event: " . ($event['title'] ?? 'Unknown') . ")");
             $this->db->transComplete();
+            if (!$this->db->transStatus()) throw new \RuntimeException('Transaction failed');
 
-            if ($this->db->transStatus() === FALSE) {
-                throw new \Exception('Transaction failed');
-            }
-
-            return redirect()->to('admin/dokumen')->with('success', 'LOA berhasil diupload!');
-
-        } catch (\Exception $e) {
+            return redirect()->to(site_url('admin/dokumen'))->with('success', 'LOA berhasil diupload!');
+        } catch (\Throwable $e) {
             $this->db->transRollback();
-            
-            // Clean up uploaded file if exists
-            if (isset($fileName) && file_exists($uploadPath . $fileName)) {
-                unlink($uploadPath . $fileName);
-            }
-            
+            if (isset($fileName) && is_file(($uploadPath ?? '') . $fileName)) @unlink(($uploadPath ?? '') . $fileName);
             log_message('error', 'LOA upload error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+            return redirect()->to(site_url('admin/dokumen'))->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
-    public function uploadSertifikat($eventId)
+    public function uploadSertifikat()
     {
-        $validation = \Config\Services::validation();
-        
         $rules = [
-            'user_id' => 'required|integer',
-            'sertifikat_file' => [
-                'uploaded[sertifikat_file]',
-                'max_size[sertifikat_file,5120]', // 5MB
-                'ext_in[sertifikat_file,pdf,jpg,jpeg,png]'
-            ]
+            'event_id'        => 'required|integer',
+            'user_id'         => 'required|integer',
+            'sertifikat_file' => ['uploaded[sertifikat_file]', 'max_size[sertifikat_file,5120]', 'ext_in[sertifikat_file,pdf,jpg,jpeg,png]'],
         ];
-
         if (!$this->validate($rules)) {
-            return redirect()->back()->with('error', 'Validasi gagal: ' . implode(', ', $validation->getErrors()));
+            return redirect()->to(site_url('admin/dokumen'))
+                ->with('error', 'Validasi gagal: ' . implode(', ', $this->validator->getErrors()));
         }
 
-        $userId = $this->request->getPost('user_id');
-        $file = $this->request->getFile('sertifikat_file');
+        $eventId = (int) $this->request->getPost('event_id');
+        $userId  = (int) $this->request->getPost('user_id');
+        $file    = $this->request->getFile('sertifikat_file');
 
-        // Validate event exists
         $event = $this->eventModel->find($eventId);
-        if (!$event) {
-            return redirect()->back()->with('error', 'Event tidak ditemukan.');
-        }
+        if (!$event) return redirect()->to(site_url('admin/dokumen'))->with('error', 'Event tidak ditemukan.');
+        $user  = $this->userModel->find($userId);
+        if (!$user)  return redirect()->to(site_url('admin/dokumen'))->with('error', 'User tidak ditemukan.');
 
-        // Validate user exists and has attended
-        $user = $this->userModel->find($userId);
-        if (!$user) {
-            return redirect()->back()->with('error', 'User tidak ditemukan.');
-        }
-
-        $attendance = $this->absensiModel
-            ->where('id_user', $userId)
-            ->where('event_id', $eventId)
-            ->where('status', 'hadir')
-            ->first();
-
+        // wajib hadir
+        $attendance = $this->absensiModel->where([
+            'id_user'  => $userId,
+            'event_id' => $eventId,
+            'status'   => 'hadir',
+        ])->first();
         if (!$attendance) {
-            return redirect()->back()->with('error', 'User belum hadir pada event ini.');
+            return redirect()->to(site_url('admin/dokumen'))->with('error', 'User belum tercatat hadir pada event ini.');
         }
 
-        // Check if certificate already exists
-        $existingCert = $this->dokumenModel->hasUserDocument($userId, $eventId, 'sertifikat');
-        if ($existingCert) {
-            return redirect()->back()->with('error', 'Sertifikat untuk user ini sudah ada.');
+        if ($this->dokumenModel->hasUserDocument($userId, $eventId, 'sertifikat')) {
+            return redirect()->to(site_url('admin/dokumen'))->with('error', 'Sertifikat untuk user ini sudah ada.');
         }
 
         $this->db->transStart();
-
         try {
-            // Create upload directory
+            if (!$file || !$file->isValid()) {
+                throw new \RuntimeException('File sertifikat tidak valid: [' . $file?->getError() . '] ' . $file?->getErrorString());
+            }
+
             $uploadPath = WRITEPATH . 'uploads/sertifikat/';
-            if (!is_dir($uploadPath)) {
-                mkdir($uploadPath, 0755, true);
-            }
+            if (!is_dir($uploadPath)) mkdir($uploadPath, 0775, true);
 
-            // Generate unique filename
-            $fileName = 'SERTIFIKAT_' . $eventId . '_' . $userId . '_' . time() . '.' . $file->getExtension();
-            
-            // Move file
+            $ext      = strtolower($file->getClientExtension());
+            $fileName = 'SERTIFIKAT_' . $eventId . '_' . $userId . '_' . time() . '.' . $ext;
+
             if (!$file->move($uploadPath, $fileName)) {
-                throw new \Exception('Gagal menyimpan file: ' . $file->getErrorString());
+                throw new \RuntimeException('Gagal menyimpan file: ' . $file->getErrorString());
             }
 
-            // Save to database
-            $documentData = [
-                'id_user' => $userId,
-                'event_id' => $eventId,
-                'tipe' => 'sertifikat',
-                'file_path' => $fileName,
-                'syarat' => 'Certificate of Participation',
-                'uploaded_at' => date('Y-m-d H:i:s')
-            ];
+            $this->dokumenModel->insert([
+                'id_user'     => $userId,
+                'event_id'    => $eventId,
+                'tipe'        => 'sertifikat',
+                'file_path'   => $fileName,
+                'syarat'      => 'Certificate of Participation',
+                'uploaded_at' => date('Y-m-d H:i:s'),
+            ]);
 
-            if (!$this->dokumenModel->insert($documentData)) {
-                throw new \Exception('Gagal menyimpan data dokumen: ' . implode(', ', $this->dokumenModel->errors()));
-            }
-
-            // Log activity
-            $eventTitle = $event['title'] ?? 'Unknown Event';
-            $this->logActivity(session('id_user'), "Uploaded Certificate for {$user['nama_lengkap']} in event: {$eventTitle}");
-
+            $this->logActivity(session('id_user'), "Uploaded Certificate for {$user['nama_lengkap']} (Event: " . ($event['title'] ?? 'Unknown') . ")");
             $this->db->transComplete();
+            if (!$this->db->transStatus()) throw new \RuntimeException('Transaction failed');
 
-            if ($this->db->transStatus() === FALSE) {
-                throw new \Exception('Transaction failed');
-            }
-
-            return redirect()->to('admin/dokumen')->with('success', 'Sertifikat berhasil diupload!');
-
-        } catch (\Exception $e) {
+            return redirect()->to(site_url('admin/dokumen'))->with('success', 'Sertifikat berhasil diupload!');
+        } catch (\Throwable $e) {
             $this->db->transRollback();
-            
-            // Clean up uploaded file if exists
-            if (isset($fileName) && file_exists($uploadPath . $fileName)) {
-                unlink($uploadPath . $fileName);
-            }
-            
+            if (isset($fileName) && is_file(($uploadPath ?? '') . $fileName)) @unlink(($uploadPath ?? '') . $fileName);
             log_message('error', 'Certificate upload error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+            return redirect()->to(site_url('admin/dokumen'))->with('error', 'Error: ' . $e->getMessage());
         }
     }
+
+    // ================== DOWNLOAD & DELETE ==================
 
     public function download($idDokumen)
     {
         $document = $this->dokumenModel->getOneWithDetails($idDokumen);
-        
-        if (!$document) {
-            throw new \CodeIgniter\Exceptions\PageNotFoundException('Dokumen tidak ditemukan.');
-        }
+        if (!$document) throw new \CodeIgniter\Exceptions\PageNotFoundException('Dokumen tidak ditemukan.');
 
-        // Determine file path based on document type
         $basePath = WRITEPATH . 'uploads/' . $document['tipe'] . '/';
         $filePath = $basePath . $document['file_path'];
+        if (!is_file($filePath)) throw new \CodeIgniter\Exceptions\PageNotFoundException('File tidak ditemukan: ' . $filePath);
 
-        if (!file_exists($filePath)) {
-            throw new \CodeIgniter\Exceptions\PageNotFoundException('File tidak ditemukan: ' . $filePath);
-        }
+        $eventTitle   = $document['event_title'] ? preg_replace('/[^A-Za-z0-9_-]/', '_', $document['event_title']) : 'Event';
+        $userName     = preg_replace('/[^A-Za-z0-9_-]/', '_', $document['nama_lengkap'] ?? 'Unknown');
+        $extension    = pathinfo($document['file_path'], PATHINFO_EXTENSION);
+        $downloadName = strtoupper($document['tipe']) . '_' . mb_substr($eventTitle, 0, 60) . '_' . mb_substr($userName, 0, 60) . '.' . $extension;
 
-        // Generate download filename
-        $eventTitle = $document['event_title'] ? preg_replace('/[^A-Za-z0-9_-]/', '_', $document['event_title']) : 'Event';
-        $userName = preg_replace('/[^A-Za-z0-9_-]/', '_', $document['nama_lengkap'] ?? 'Unknown');
-        $extension = pathinfo($document['file_path'], PATHINFO_EXTENSION);
-        
-        $downloadName = strtoupper($document['tipe']) . '_' . $eventTitle . '_' . $userName . '.' . $extension;
-        
-        // Log download activity
-        $eventTitleForLog = $document['event_title'] ?? 'Unknown Event';
-        $userNameForLog = $document['nama_lengkap'] ?? 'Unknown User';
-        $this->logActivity(session('id_user'), "Downloaded {$document['tipe']} for {$userNameForLog} from event: {$eventTitleForLog}");
-
+        $this->logActivity(session('id_user'), "Downloaded {$document['tipe']} for " . ($document['nama_lengkap'] ?? 'Unknown') . " (Event: " . ($document['event_title'] ?? 'Unknown') . ")");
         return $this->response->download($filePath, null)->setFileName($downloadName);
     }
 
     public function delete($idDokumen)
     {
         $document = $this->dokumenModel->find($idDokumen);
-        
-        if (!$document) {
-            return redirect()->back()->with('error', 'Dokumen tidak ditemukan.');
-        }
+        if (!$document) return redirect()->to(site_url('admin/dokumen'))->with('error', 'Dokumen tidak ditemukan.');
 
         $this->db->transStart();
-
         try {
-            // Get user info for logging
-            $user = $this->userModel->find($document['id_user']);
+            $user  = $this->userModel->find($document['id_user']);
             $event = $this->eventModel->find($document['event_id']);
 
-            // Delete file from filesystem
             $filePath = WRITEPATH . 'uploads/' . $document['tipe'] . '/' . $document['file_path'];
-            if (file_exists($filePath)) {
-                unlink($filePath);
-            }
+            if (is_file($filePath)) @unlink($filePath);
 
-            // Delete from database
-            if (!$this->dokumenModel->delete($idDokumen)) {
-                throw new \Exception('Gagal menghapus data dokumen');
-            }
+            $this->dokumenModel->delete($idDokumen);
 
-            // Log activity
-            $userName = $user ? $user['nama_lengkap'] : 'Unknown User';
-            $eventTitle = $event ? ($event['title'] ?? 'Unknown Event') : 'Unknown Event';
-            $this->logActivity(session('id_user'), "Deleted {$document['tipe']} for {$userName} from event: {$eventTitle}");
-
+            $this->logActivity(session('id_user'), "Deleted {$document['tipe']} for " . ($user['nama_lengkap'] ?? 'Unknown') . " (Event: " . ($event['title'] ?? 'Unknown') . ")");
             $this->db->transComplete();
+            if (!$this->db->transStatus()) throw new \RuntimeException('Transaction failed');
 
-            if ($this->db->transStatus() === FALSE) {
-                throw new \Exception('Transaction failed');
-            }
-
-            return redirect()->back()->with('success', 'Dokumen berhasil dihapus!');
-
-        } catch (\Exception $e) {
+            return redirect()->to(site_url('admin/dokumen'))->with('success', 'Dokumen berhasil dihapus!');
+        } catch (\Throwable $e) {
             $this->db->transRollback();
             log_message('error', 'Document deletion error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+            return redirect()->to(site_url('admin/dokumen'))->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
+    // ================== GENERATE (BULK / SINGLE) ==================
+
     public function generateBulkLOA()
     {
-        $eventId = $this->request->getPost('event_id');
-        
-        if (!$eventId) {
-            return redirect()->back()->with('error', 'Event ID diperlukan.');
-        }
+        $eventId = (int)$this->request->getPost('event_id');
+        $userId  = (int)$this->request->getPost('user_id'); // optional
 
+        if (!$eventId) return redirect()->to(site_url('admin/dokumen'))->with('error', 'Event ID diperlukan.');
         $event = $this->eventModel->find($eventId);
-        if (!$event) {
-            return redirect()->back()->with('error', 'Event tidak ditemukan.');
-        }
+        if (!$event) return redirect()->to(site_url('admin/dokumen'))->with('error', 'Event tidak ditemukan.');
 
-        // Get eligible presenters for LOA
-        $eligiblePresenters = $this->dokumenModel->getEligiblePresentersForLOA($eventId);
-        
-        if (empty($eligiblePresenters)) {
-            return redirect()->back()->with('error', 'Tidak ada presenter yang memenuhi syarat untuk LOA.');
+        if ($userId > 0) {
+            $presenter = $this->db->table('pembayaran p')
+                ->select('u.id_user, u.nama_lengkap, u.email')
+                ->join('users u', 'u.id_user = p.id_user', 'left')
+                ->where('p.event_id', $eventId)
+                ->where('p.id_user', $userId)
+                ->where('p.status', 'verified')
+                ->groupStart()
+                    ->where("u.role =", 'presenter', false)
+                    ->orWhere('u.role', 'presenter')
+                ->groupEnd()
+                ->get()->getRowArray();
+
+            if (!$presenter) {
+                return redirect()->to(site_url('admin/dokumen'))->with('error', 'User tidak memenuhi syarat LOA (belum verified/presenter).');
+            }
+            if ($this->dokumenModel->hasUserDocument($userId, $eventId, 'loa')) {
+                return redirect()->to(site_url('admin/dokumen'))->with('error', 'LOA untuk user ini sudah ada.');
+            }
+            $eligiblePresenters = [$presenter];
+        } else {
+            // gunakan method model yang sudah ada
+            $eligiblePresenters = $this->dokumenModel->getEligiblePresentersForLOA($eventId);
+            if (empty($eligiblePresenters)) {
+                return redirect()->to(site_url('admin/dokumen'))->with('error', 'Tidak ada presenter yang memenuhi syarat untuk LOA.');
+            }
         }
 
         $this->db->transStart();
-
         try {
             $successCount = 0;
-            $uploadPath = WRITEPATH . 'uploads/loa/';
-            
-            // Ensure directory exists
-            if (!is_dir($uploadPath)) {
-                mkdir($uploadPath, 0755, true);
-            }
+            $uploadPath   = WRITEPATH . 'uploads/loa/';
+            if (!is_dir($uploadPath)) mkdir($uploadPath, 0775, true);
 
             foreach ($eligiblePresenters as $presenter) {
-                // Generate PDF LOA
+                $uid = (int)$presenter['id_user'];
+                if ($this->dokumenModel->hasUserDocument($uid, $eventId, 'loa')) continue;
+
                 $pdfPath = $this->generateLOAPDF($presenter, $event, $uploadPath);
-                
-                if ($pdfPath) {
-                    // Save to database
-                    $documentData = [
-                        'id_user' => $presenter['id_user'],
-                        'event_id' => $eventId,
-                        'tipe' => 'loa',
-                        'file_path' => basename($pdfPath),
-                        'syarat' => 'Letter of Acceptance - Generated',
-                        'uploaded_at' => date('Y-m-d H:i:s')
-                    ];
+                if (!$pdfPath) continue;
 
-                    if ($this->dokumenModel->insert($documentData)) {
-                        $successCount++;
-                    }
-                }
+                $this->dokumenModel->insert([
+                    'id_user'     => $uid,
+                    'event_id'    => $eventId,
+                    'tipe'        => 'loa',
+                    'file_path'   => basename($pdfPath),
+                    'syarat'      => 'Letter of Acceptance - Generated',
+                    'uploaded_at' => date('Y-m-d H:i:s'),
+                ]);
+                $successCount++;
             }
 
-            // Log activity
-            $eventTitle = $event['title'] ?? 'Unknown Event';
-            $this->logActivity(session('id_user'), "Generated {$successCount} LOA documents for event: {$eventTitle}");
-
+            $this->logActivity(session('id_user'), 'Generated ' . $successCount . ' LOA (Event: ' . ($event['title'] ?? 'Unknown') . ')');
             $this->db->transComplete();
+            if (!$this->db->transStatus()) throw new \RuntimeException('Transaction failed');
 
-            if ($this->db->transStatus() === FALSE) {
-                throw new \Exception('Transaction failed');
-            }
-
-            return redirect()->back()->with('success', "Berhasil generate {$successCount} LOA dari " . count($eligiblePresenters) . " presenter!");
-
-        } catch (\Exception $e) {
+            $msg = $userId ? 'LOA untuk user berhasil digenerate.' : ('Berhasil generate ' . $successCount . ' LOA.');
+            return redirect()->to(site_url('admin/dokumen'))->with('success', $msg);
+        } catch (\Throwable $e) {
             $this->db->transRollback();
             log_message('error', 'Bulk LOA generation error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+            return redirect()->to(site_url('admin/dokumen'))->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
     public function generateBulkSertifikat()
     {
-        $eventId = $this->request->getPost('event_id');
-        
-        if (!$eventId) {
-            return redirect()->back()->with('error', 'Event ID diperlukan.');
-        }
+        $eventId = (int)$this->request->getPost('event_id');
+        $userId  = (int)$this->request->getPost('user_id'); // optional
 
+        if (!$eventId) return redirect()->to(site_url('admin/dokumen'))->with('error', 'Event ID diperlukan.');
         $event = $this->eventModel->find($eventId);
-        if (!$event) {
-            return redirect()->back()->with('error', 'Event tidak ditemukan.');
-        }
+        if (!$event) return redirect()->to(site_url('admin/dokumen'))->with('error', 'Event tidak ditemukan.');
 
-        // Get eligible users for certificate
-        $eligibleUsers = $this->dokumenModel->getEligibleUsersForCertificate($eventId);
-        
-        if (empty($eligibleUsers)) {
-            return redirect()->back()->with('error', 'Tidak ada peserta yang memenuhi syarat untuk sertifikat.');
+        if ($userId > 0) {
+            $user = $this->db->table('absensi a')
+                ->select('u.id_user, u.nama_lengkap, u.email, u.role')
+                ->join('users u', 'u.id_user = a.id_user', 'left')
+                ->where('a.event_id', $eventId)
+                ->where('a.id_user', $userId)
+                ->where('a.status', 'hadir')
+                ->get()->getRowArray();
+
+            if (!$user) {
+                return redirect()->to(site_url('admin/dokumen'))->with('error', 'User belum tercatat hadir.');
+            }
+            if ($this->dokumenModel->hasUserDocument($userId, $eventId, 'sertifikat')) {
+                return redirect()->to(site_url('admin/dokumen'))->with('error', 'Sertifikat untuk user ini sudah ada.');
+            }
+            $eligibleUsers = [$user];
+        } else {
+            $eligibleUsers = $this->dokumenModel->getEligibleUsersForCertificate($eventId);
+            if (empty($eligibleUsers)) {
+                return redirect()->to(site_url('admin/dokumen'))->with('error', 'Tidak ada peserta yang memenuhi syarat untuk sertifikat.');
+            }
         }
 
         $this->db->transStart();
-
         try {
             $successCount = 0;
-            $uploadPath = WRITEPATH . 'uploads/sertifikat/';
-            
-            // Ensure directory exists
-            if (!is_dir($uploadPath)) {
-                mkdir($uploadPath, 0755, true);
-            }
+            $uploadPath   = WRITEPATH . 'uploads/sertifikat/';
+            if (!is_dir($uploadPath)) mkdir($uploadPath, 0775, true);
 
             foreach ($eligibleUsers as $user) {
-                // Generate PDF Certificate
+                $uid = (int)$user['id_user'];
+                if ($this->dokumenModel->hasUserDocument($uid, $eventId, 'sertifikat')) continue;
+
                 $pdfPath = $this->generateCertificatePDF($user, $event, $uploadPath);
-                
-                if ($pdfPath) {
-                    // Save to database
-                    $documentData = [
-                        'id_user' => $user['id_user'],
-                        'event_id' => $eventId,
-                        'tipe' => 'sertifikat',
-                        'file_path' => basename($pdfPath),
-                        'syarat' => 'Certificate of Participation - Generated',
-                        'uploaded_at' => date('Y-m-d H:i:s')
-                    ];
+                if (!$pdfPath) continue;
 
-                    if ($this->dokumenModel->insert($documentData)) {
-                        $successCount++;
-                    }
-                }
+                $this->dokumenModel->insert([
+                    'id_user'     => $uid,
+                    'event_id'    => $eventId,
+                    'tipe'        => 'sertifikat',
+                    'file_path'   => basename($pdfPath),
+                    'syarat'      => 'Certificate of Participation - Generated',
+                    'uploaded_at' => date('Y-m-d H:i:s'),
+                ]);
+                $successCount++;
             }
 
-            // Log activity
-            $eventTitle = $event['title'] ?? 'Unknown Event';
-            $this->logActivity(session('id_user'), "Generated {$successCount} certificates for event: {$eventTitle}");
-
+            $this->logActivity(session('id_user'), 'Generated ' . $successCount . ' Sertifikat (Event: ' . ($event['title'] ?? 'Unknown') . ')');
             $this->db->transComplete();
+            if (!$this->db->transStatus()) throw new \RuntimeException('Transaction failed');
 
-            if ($this->db->transStatus() === FALSE) {
-                throw new \Exception('Transaction failed');
-            }
-
-            return redirect()->back()->with('success', "Berhasil generate {$successCount} sertifikat dari " . count($eligibleUsers) . " peserta!");
-
-        } catch (\Exception $e) {
+            $msg = $userId ? 'Sertifikat untuk user berhasil digenerate.' : ('Berhasil generate ' . $successCount . ' sertifikat.');
+            return redirect()->to(site_url('admin/dokumen'))->with('success', $msg);
+        } catch (\Throwable $e) {
             $this->db->transRollback();
             log_message('error', 'Bulk certificate generation error: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
+            return redirect()->to(site_url('admin/dokumen'))->with('error', 'Error: ' . $e->getMessage());
         }
     }
 
-    // AJAX endpoints for modals
-    public function getVerifiedPresenters($eventId)
-    {
-        try {
-            $presenters = $this->dokumenModel->getEligiblePresentersForLOA($eventId);
-            return $this->response->setJSON([
-                'status' => 'success',
-                'data' => $presenters
-            ]);
-        } catch (\Exception $e) {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => $e->getMessage()
-            ])->setStatusCode(500);
-        }
-    }
+    // ================== UTIL ==================
 
-    public function getAttendees($eventId)
+    private function getDocumentStatistics(): array
     {
-        try {
-            $attendees = $this->dokumenModel->getEligibleUsersForCertificate($eventId);
-            return $this->response->setJSON([
-                'status' => 'success',
-                'data' => $attendees
-            ]);
-        } catch (\Exception $e) {
-            return $this->response->setJSON([
-                'status' => 'error',
-                'message' => $e->getMessage()
-            ])->setStatusCode(500);
-        }
-    }
-
-    // Private helper methods
-    private function getDocumentStatistics()
-    {
-        $totalDocuments = $this->dokumenModel->countAll();
-        $loaCount = $this->dokumenModel->where('tipe', 'loa')->countAllResults();
-        $sertifikatCount = $this->dokumenModel->where('tipe', 'sertifikat')->countAllResults();
-        
-        // Recent uploads (this week)
-        $weekAgo = date('Y-m-d H:i:s', strtotime('-1 week'));
-        $recentUploads = $this->dokumenModel
-            ->where('uploaded_at >=', $weekAgo)
-            ->countAllResults();
+        $totalDocuments  = $this->dokumenModel->countAll();
+        $loaCount        = $this->dokumenModel->where('tipe', 'loa')->countAllResults(true);
+        $sertifikatCount = $this->dokumenModel->where('tipe', 'sertifikat')->countAllResults(true);
+        $weekAgo         = date('Y-m-d H:i:s', strtotime('-1 week'));
+        $recentUploads   = $this->dokumenModel->where('uploaded_at >=', $weekAgo)->countAllResults(true);
 
         return [
-            'total_documents' => $totalDocuments,
-            'loa_count' => $loaCount,
-            'sertifikat_count' => $sertifikatCount,
-            'recent_uploads' => $recentUploads
+            'total_documents'  => (int) $totalDocuments,
+            'loa_count'        => (int) $loaCount,
+            'sertifikat_count' => (int) $sertifikatCount,
+            'recent_uploads'   => (int) $recentUploads,
         ];
     }
 
-    private function generateLOAPDF($presenter, $event, $uploadPath)
+    private function getCompletionPerEvent(int $eventId): array
+    {
+        // Eligible LOA: Presenter + pembayaran verified
+        $eligibleLoa = $this->db->table('pembayaran p')
+            ->join('users u', 'u.id_user = p.id_user', 'left')
+            ->where('p.event_id', $eventId)
+            ->where('p.status', 'verified')
+            ->where('u.role', 'presenter')
+            ->countAllResults();
+
+        $givenLoa = $this->dokumenModel->where(['event_id' => $eventId, 'tipe' => 'loa'])->countAllResults(true);
+
+        // Eligible certificate: semua yang hadir
+        $eligibleCert = $this->db->table('absensi')->where(['event_id' => $eventId, 'status' => 'hadir'])->countAllResults();
+        $givenCert    = $this->dokumenModel->where(['event_id' => $eventId, 'tipe' => 'sertifikat'])->countAllResults(true);
+
+        return [
+            'eligible_loa'       => (int) $eligibleLoa,
+            'given_loa'          => (int) $givenLoa,
+            'eligible_cert'      => (int) $eligibleCert,
+            'given_cert'         => (int) $givenCert,
+            'all_loa_completed'  => $eligibleLoa > 0 && $eligibleLoa === $givenLoa,
+            'all_cert_completed' => $eligibleCert > 0 && $eligibleCert === $givenCert,
+        ];
+    }
+
+    private function generateLOAPDF(array $presenter, array $event, string $uploadPath)
     {
         try {
-            // Initialize mPDF
             $mpdf = new Mpdf([
-                'mode' => 'utf-8',
-                'format' => 'A4',
-                'orientation' => 'P',
-                'margin_left' => 15,
-                'margin_right' => 15,
-                'margin_top' => 20,
-                'margin_bottom' => 20,
+                'mode' => 'utf-8', 'format' => 'A4', 'orientation' => 'P',
+                'margin_left' => 15, 'margin_right' => 15, 'margin_top' => 20, 'margin_bottom' => 20,
+                'default_font' => 'dejavusans',
             ]);
-
-            // Set document properties
-            $mpdf->SetTitle('Letter of Acceptance - ' . $presenter['nama_lengkap']);
+            $mpdf->SetTitle('Letter of Acceptance - ' . ($presenter['nama_lengkap'] ?? 'Presenter'));
             $mpdf->SetAuthor('SNIA Organization');
-
-            // Generate HTML content
             $html = $this->getLOAHTML($presenter, $event);
-            
-            // Write HTML to PDF
             $mpdf->WriteHTML($html);
-
-            // Generate filename
             $fileName = 'LOA_' . $event['id'] . '_' . $presenter['id_user'] . '_' . time() . '.pdf';
-            $filePath = $uploadPath . $fileName;
-
-            // Output PDF to file
+            $filePath = rtrim($uploadPath, '/\\') . DIRECTORY_SEPARATOR . $fileName;
             $mpdf->Output($filePath, 'F');
-
             return $filePath;
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             log_message('error', 'LOA PDF generation error: ' . $e->getMessage());
             return false;
         }
     }
 
-    private function generateCertificatePDF($user, $event, $uploadPath)
+    private function generateCertificatePDF(array $user, array $event, string $uploadPath)
     {
         try {
-            // Initialize mPDF with zero margins to prevent cutting
             $mpdf = new Mpdf([
-                'mode' => 'utf-8',
-                'format' => 'A4-L', // A4 Landscape format
-                'orientation' => 'L',
-                'margin_left' => 0,
-                'margin_right' => 0, 
-                'margin_top' => 0,
-                'margin_bottom' => 0,
-                'margin_header' => 0,
-                'margin_footer' => 0,
-                'default_font_size' => 12,
-                'default_font' => 'dejavusans',
+                'mode' => 'utf-8', 'format' => 'A4-L', 'orientation' => 'L',
+                'margin_left' => 0, 'margin_right' => 0, 'margin_top' => 0, 'margin_bottom' => 0,
+                'margin_header' => 0, 'margin_footer' => 0,
+                'default_font_size' => 12, 'default_font' => 'dejavusans',
             ]);
-
-            // Set document properties
-            $mpdf->SetTitle('Certificate of Participation - ' . $user['nama_lengkap']);
+            $mpdf->SetTitle('Certificate of Participation - ' . ($user['nama_lengkap'] ?? 'Participant'));
             $mpdf->SetAuthor('SNIA Organization');
             $mpdf->SetSubject('Certificate of Participation');
-
-            // Critical: Disable auto page break to prevent content splitting
             $mpdf->SetAutoPageBreak(false);
-
-            // Generate HTML content with fixed CSS
             $html = $this->getCertificateHTML($user, $event);
-            
-            // Write HTML to PDF
             $mpdf->WriteHTML($html);
-
-            // Generate filename
             $fileName = 'SERTIFIKAT_' . $event['id'] . '_' . $user['id_user'] . '_' . time() . '.pdf';
-            $filePath = $uploadPath . $fileName;
-
-            // Output PDF to file
+            $filePath = rtrim($uploadPath, '/\\') . DIRECTORY_SEPARATOR . $fileName;
             $mpdf->Output($filePath, 'F');
-
             return $filePath;
-
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             log_message('error', 'Certificate PDF generation error: ' . $e->getMessage());
             return false;
         }
     }
 
-    private function getLOAHTML($presenter, $event)
+    private function getLOAHTML(array $presenter, array $event): string
     {
-        $eventDate = date('d F Y', strtotime($event['event_date'] ?? ''));
-        $currentDate = date('d F Y');
-        $eventTitle = $event['title'] ?? 'Event Title';
-        $eventTime = $event['event_time'] ?? 'TBA';
-        $eventFormat = $event['format'] ?? 'offline';
-        $presenterName = $presenter['nama_lengkap'] ?? 'Presenter Name';
-        
+        $eventDate    = date('d F Y', strtotime($event['event_date'] ?? ''));
+        $currentDate  = date('d F Y');
+        $eventTitle   = $event['title'] ?? 'Event Title';
+        $eventTime    = $event['event_time'] ?? 'TBA';
+        $eventFormat  = $event['format'] ?? 'offline';
+        $presenterName= $presenter['nama_lengkap'] ?? 'Presenter Name';
+
         return '
         <style>
             body { font-family: Arial, sans-serif; line-height: 1.6; }
@@ -641,272 +708,74 @@ class Dokumen extends BaseController
             .header h1 { color: #2563eb; font-size: 28px; margin-bottom: 10px; }
             .header h2 { color: #1e40af; font-size: 20px; margin: 0; }
             .content { margin: 20px 0; text-align: justify; }
-            .content p { margin-bottom: 15px; }
             .details { background-color: #f8f9fa; padding: 15px; border-left: 4px solid #2563eb; margin: 20px 0; }
-            .details ul { margin: 10px 0; padding-left: 20px; }
             .signature { margin-top: 60px; text-align: right; }
-            .signature p { margin: 5px 0; }
             .date { text-align: left; margin-bottom: 30px; }
         </style>
-        
+
         <div class="header">
             <h1>LETTER OF ACCEPTANCE</h1>
             <h2>' . htmlspecialchars($eventTitle) . '</h2>
         </div>
-        
-        <div class="date">
-            <p><strong>Date:</strong> ' . $currentDate . '</p>
-        </div>
-        
+
+        <div class="date"><p><strong>Date:</strong> ' . $currentDate . '</p></div>
+
         <div class="content">
             <p>Dear <strong>' . htmlspecialchars($presenterName) . '</strong>,</p>
-            
-            <p>We are pleased to inform you that your participation as a presenter in <strong>' . htmlspecialchars($eventTitle) . '</strong> has been accepted.</p>
-            
+            <p>Your participation as a presenter in <strong>' . htmlspecialchars($eventTitle) . '</strong> has been accepted.</p>
             <div class="details">
-                <p><strong>Event Details:</strong></p>
-                <ul>
-                    <li><strong>Event:</strong> ' . htmlspecialchars($eventTitle) . '</li>
-                    <li><strong>Date:</strong> ' . $eventDate . '</li>
-                    <li><strong>Time:</strong> ' . htmlspecialchars($eventTime) . '</li>
-                    <li><strong>Format:</strong> ' . ucfirst(htmlspecialchars($eventFormat)) . '</li>
-                </ul>
+                <p><strong>Event:</strong> ' . htmlspecialchars($eventTitle) . '<br/>
+                <strong>Date:</strong> ' . $eventDate . '<br/>
+                <strong>Time:</strong> ' . htmlspecialchars($eventTime) . '<br/>
+                <strong>Format:</strong> ' . ucfirst(htmlspecialchars($eventFormat)) . '</p>
             </div>
-            
-            <p>We look forward to your valuable contribution to this event and appreciate your participation in making this event successful.</p>
-            
-            <p>Should you have any questions or require further information, please do not hesitate to contact us.</p>
-            
             <p>Best regards,</p>
         </div>
-        
+
         <div class="signature">
-            <p><strong>SNIA Organization</strong></p>
-            <p>Event Committee</p>
+            <p><strong>SNIA Organization</strong><br/>Event Committee</p>
         </div>';
     }
 
-    private function getCertificateHTML($user, $event)
+    private function getCertificateHTML(array $user, array $event): string
     {
-        $eventDate = date('d F Y', strtotime($event['event_date'] ?? ''));
+        $eventDate  = date('d F Y', strtotime($event['event_date'] ?? ''));
         $eventTitle = $event['title'] ?? 'Event Title';
-        $userName = $user['nama_lengkap'] ?? 'Participant Name';
-        
+        $userName   = $user['nama_lengkap'] ?? 'Participant Name';
+
         return '
         <style>
-            @page { 
-                size: A4 landscape; 
-                margin: 0;
-            }
-            
-            body { 
-                font-family: "Times New Roman", serif; 
-                margin: 0; 
-                padding: 0;
-                width: 297mm;  /* A4 landscape width */
-                height: 210mm; /* A4 landscape height */
-                overflow: hidden;
-            }
-            
-            .certificate { 
-                width: 100%;
-                height: 100%;
-                border: 12mm solid #2563eb; 
-                padding: 0;
-                text-align: center; 
-                background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-                box-sizing: border-box;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                position: relative;
-            }
-            
-            .content-wrapper {
-                width: 100%;
-                height: 100%;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                padding: 20mm;
-                box-sizing: border-box;
-            }
-            
-            .title { 
-                font-size: 42px; 
-                color: #2563eb; 
-                margin-bottom: 8px; 
-                font-weight: bold; 
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-                letter-spacing: 8px;
-            }
-            
-            .subtitle { 
-                font-size: 22px; 
-                margin-bottom: 25px; 
-                color: #1e40af;
-                letter-spacing: 4px;
-                font-weight: 600;
-            }
-            
-            .decorative-line {
-                width: 180px;
-                height: 3px;
-                background: linear-gradient(to right, #2563eb, #1e40af);
-                margin: 15px auto;
-            }
-            
-            .certify-text {
-                font-size: 18px; 
-                margin: 20px 0; 
-                color: #374151;
-                font-style: italic;
-            }
-            
-            .recipient { 
-                font-size: 32px; 
-                color: #1e40af; 
-                margin: 25px 0; 
-                font-weight: bold;
-                text-decoration: underline;
-                text-decoration-color: #2563eb;
-                text-decoration-thickness: 2px;
-                max-width: 80%;
-                word-wrap: break-word;
-            }
-            
-            .participation-text {
-                font-size: 18px; 
-                margin: 20px 0;
-                color: #374151;
-                font-style: italic;
-            }
-            
-            .event-title { 
-                font-size: 24px; 
-                margin: 20px 0; 
-                font-style: italic;
-                color: #374151;
-                line-height: 1.3;
-                font-weight: 600;
-                max-width: 85%;
-                word-wrap: break-word;
-            }
-            
-            .date { 
-                font-size: 16px; 
-                margin-top: 25px;
-                color: #6b7280;
-                font-weight: 500;
-            }
-            
-            .signature { 
-                margin-top: 30px; 
-                font-size: 16px;
-                color: #374151;
-                position: absolute;
-                bottom: 30mm;
-                right: 40mm;
-                text-align: center;
-            }
-            
-            .signature p { 
-                margin: 3px 0; 
-                line-height: 1.2;
-            }
-            
-            .org-logo {
-                position: absolute;
-                top: 15mm;
-                right: 15mm;
-                font-size: 12px;
-                color: #6b7280;
-                font-style: italic;
-            }
-            
-            /* Decorative elements */
-            .corner-decoration {
-                position: absolute;
-                width: 30px;
-                height: 30px;
-                border: 2px solid #2563eb;
-            }
-            
-            .corner-decoration.top-left {
-                top: 20mm;
-                left: 20mm;
-                border-right: none;
-                border-bottom: none;
-            }
-            
-            .corner-decoration.top-right {
-                top: 20mm;
-                right: 20mm;
-                border-left: none;
-                border-bottom: none;
-            }
-            
-            .corner-decoration.bottom-left {
-                bottom: 20mm;
-                left: 20mm;
-                border-right: none;
-                border-top: none;
-            }
-            
-            .corner-decoration.bottom-right {
-                bottom: 20mm;
-                right: 20mm;
-                border-left: none;
-                border-top: none;
-            }
+            @page { size: A4 landscape; margin: 0; }
+            body { font-family: "Times New Roman", serif; margin: 0; padding: 0; width: 297mm; height: 210mm; overflow: hidden; }
+            .certificate { width: 100%; height: 100%; border: 12mm solid #2563eb; text-align: center; background: linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%); position: relative; }
+            .title { font-size: 42px; color: #2563eb; margin-top: 35mm; font-weight: bold; letter-spacing: 8px; }
+            .subtitle { font-size: 22px; margin-bottom: 25px; color: #1e40af; letter-spacing: 4px; font-weight: 600; }
+            .recipient { font-size: 32px; color: #1e40af; margin: 25px 0; font-weight: bold; text-decoration: underline; text-decoration-color: #2563eb; }
+            .event-title { font-size: 24px; margin: 20px 0; font-style: italic; color: #374151; }
+            .date { font-size: 16px; margin-top: 12px; color: #6b7280; }
+            .signature { position: absolute; bottom: 30mm; right: 40mm; text-align: center; }
         </style>
-        
         <div class="certificate">
-            <div class="corner-decoration top-left"></div>
-            <div class="corner-decoration top-right"></div>
-            <div class="corner-decoration bottom-left"></div>
-            <div class="corner-decoration bottom-right"></div>
-            
-            <div class="org-logo">SNIA-2025</div>
-            
-            <div class="content-wrapper">
-                <div class="title">CERTIFICATE</div>
-                <div class="subtitle">OF PARTICIPATION</div>
-                
-                <div class="decorative-line"></div>
-                
-                <div class="certify-text">This is to certify that</div>
-                
-                <div class="recipient">' . htmlspecialchars($userName) . '</div>
-                
-                <div class="participation-text">has successfully participated in</div>
-                
-                <div class="event-title">' . htmlspecialchars($eventTitle) . '</div>
-                
-                <div class="decorative-line"></div>
-                
-                <div class="date">Held on ' . $eventDate . '</div>
-            </div>
-            
-            <div class="signature">
-                <p><strong>SNIA Organization</strong></p>
-                <p>Event Committee</p>
-                <p style="font-size: 12px; margin-top: 8px;">Authorized Signature</p>
-            </div>
+            <div class="title">CERTIFICATE</div>
+            <div class="subtitle">OF PARTICIPATION</div>
+            <div>This certifies that</div>
+            <div class="recipient">'.htmlspecialchars($userName).'</div>
+            <div>has successfully participated in</div>
+            <div class="event-title">'.htmlspecialchars($eventTitle).'</div>
+            <div class="date">Held on '.$eventDate.'</div>
+            <div class="signature"><strong>SNIA Organization</strong><br/>Event Committee</div>
         </div>';
     }
 
-    private function logActivity($userId, $activity)
+    private function logActivity($userId, $activity): void
     {
         try {
             $this->db->table('log_aktivitas')->insert([
-                'id_user' => $userId,
-                'aktivitas' => $activity,
-                'waktu' => date('Y-m-d H:i:s')
+                'id_user'  => $userId,
+                'aktivitas'=> $activity,
+                'waktu'    => date('Y-m-d H:i:s'),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             log_message('error', 'Failed to log activity: ' . $e->getMessage());
         }
     }

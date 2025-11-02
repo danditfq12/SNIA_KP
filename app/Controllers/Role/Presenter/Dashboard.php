@@ -203,10 +203,16 @@ class Dashboard extends BaseController
         ];
     }
 
+    /**
+     * Progress events — DISARING: tidak menampilkan event yang sudah mulai/berjalan.
+     * Rule: jika event_date ada, event dianggap mulai pada (event_date + event_time | 00:00).
+     * Jika startTs <= now => SKIP dari progres.
+     */
     private function getProgressEvents(int $uid): array
     {
         if (!$this->tableExists('events')) return [];
 
+        // kumpulkan event yang pernah user sentuh (abstrak/pembayaran)
         $ids = [];
         if ($this->tableExists('abstrak')) {
             foreach ($this->db->table('abstrak')->distinct()->select('event_id')->where('id_user',$uid)->get()->getResultArray() as $r) {
@@ -220,6 +226,7 @@ class Dashboard extends BaseController
         }
         if (!$ids) return [];
 
+        // ambil kolom tanggal/waktu yang tersedia
         $dateCol = $this->pickCol('events', ['event_date','tanggal','date','start_at'], 'event_date');
         $timeCol = $this->pickCol('events', ['event_time','waktu','time','start_time'], 'event_time');
 
@@ -228,10 +235,22 @@ class Dashboard extends BaseController
             ->whereIn('id', array_keys($ids))
             ->orderBy('event_date','DESC')->get()->getResultArray();
 
+        $now = time();
         $out = [];
-        foreach ($events as $e) {
-            $eventId = (int)$e['id'];
 
+        foreach ($events as $e) {
+            $eventId   = (int)$e['id'];
+            $dateStr   = trim((string)($e['event_date'] ?? ''));
+            $timeStr   = trim((string)($e['event_time'] ?? ''));
+            // anggap event mulai di jam yang tersedia, default 00:00 kalau kosong
+            $startTs   = $dateStr ? strtotime($dateStr.' '.($timeStr !== '' ? $timeStr : '00:00:00')) : null;
+
+            // SKIP: event yang sudah mulai / sudah lewat
+            if ($startTs !== null && $startTs <= $now) {
+                continue;
+            }
+
+            // ---- progress logic ----
             $absMeta = $this->getAbstractStatus($uid, $eventId);
             $absHas  = $absMeta['has'];
             $absSt   = strtolower($absMeta['status']);
@@ -360,7 +379,6 @@ class Dashboard extends BaseController
 
         $b = $this->db->table('events e')
             ->select("id, title, {$dateExprCol} AS event_date, {$timeExprCol} AS event_time, {$locExprCol} AS location, {$fmtExprCol} AS format", false)
-            // JANGAN set escape=false di value, biar otomatis di-quote → aman untuk PostgreSQL
             ->where("$dateExprCol >=", $start)
             ->where("$dateExprCol <=", $end);
 

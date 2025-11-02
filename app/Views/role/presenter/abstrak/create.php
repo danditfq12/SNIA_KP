@@ -26,7 +26,7 @@ $formLocked     = (bool)($formLocked ?? false);
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- Header (identik dengan index) -->
+      <!-- HERO (seragam) -->
       <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
         <div>
           <h3 class="hero-title mb-1"><i class="bi bi-file-earmark-plus me-2"></i>Kirim Abstrak</h3>
@@ -50,7 +50,6 @@ $formLocked     = (bool)($formLocked ?? false);
                 <span class="badge bg-blue-soft"><i class="bi bi-info-circle"></i></span>
                 <h6 class="mb-0 fw-semibold text-blue-900">Info Event</h6>
               </div>
-              <!-- NEW: Edit Kontributor -->
               <a href="<?= site_url('/presenter/kontributor/start/'.(int)$eventId) ?>" class="btn btn-sm btn-outline-primary">
                 <i class="bi bi-people me-1"></i> Edit Kontributor
               </a>
@@ -187,7 +186,6 @@ $formLocked     = (bool)($formLocked ?? false);
 
                 <!-- Actions -->
                 <div class="d-flex flex-wrap gap-2">
-                  <!-- CHANGED: tombol kembali ke halaman Kontributor -->
                   <a href="<?= site_url('/presenter/kontributor/start/'.(int)$eventId) ?>" class="btn btn-light border">
                     <i class="bi bi-arrow-left"></i> Kembali (Kontributor)
                   </a>
@@ -243,34 +241,38 @@ $formLocked     = (bool)($formLocked ?? false);
   --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
   --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
 
-  --side-pad: 1rem;   /* padding kiri–kanan minimum */
-  --gutter-x: 1rem;   /* jarak antar kolom */
+  --side-pad: clamp(1rem, 2.3vw, 2.2rem);  /* kiri–kanan konsisten (LEBIH LEBAR) */
+  --gutter-x: 1rem;
 }
 
 body{
   font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  font-size:14.6px;       /* sedikit lebih kecil */
-  line-height:1.5;
+  font-size:15.5px;   /* seragam dgn halaman lain */
+  line-height:1.6;
+  color:#0f172a;
 }
 
 /* ===== Layout wrapper ===== */
 .page-wrap-blue{
-  background:linear-gradient(180deg,var(--blue-50),#fff 40%);
-  min-height:100vh;
-  padding-top:72px; /* seragam */
+  min-height:100vh; padding-top:72px;
+  background:
+    radial-gradient(1000px 380px at 10% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
+    radial-gradient(1000px 380px at 90% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
 
-/* ===== Container — lebar tetap, padding kiri–kanan 1rem ===== */
+/* ===== Container — LEBAR disamakan (1560px) ===== */
 .container-xxl{
-  max-width:1400px;
-  padding-left:var(--side-pad) !important;
-  padding-right:var(--side-pad) !important;
+  max-width: min(100%, 1560px);
+  padding-left: var(--side-pad) !important;
+  padding-right: var(--side-pad) !important;
+  margin-inline:auto;
 }
 
-/* ===== Gutter grid (seragam) ===== */
+/* ===== Grid gutter ===== */
 .row.g-3, .row.g-4{ --bs-gutter-x: var(--gutter-x); --bs-gutter-y: var(--gutter-x); }
 
-/* ===== HERO (header biru) ===== */
+/* ===== HERO ===== */
 .hero-blue{
   background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
   color:#fff !important;
@@ -280,14 +282,8 @@ body{
   padding:1.6rem !important;
   margin-bottom:1.25rem !important;
 }
-/* Matikan efek glass jika hero terlanjur diberi .card-glass / .card-glass-plain */
 .hero-blue.card-glass,
-.hero-blue.card-glass-plain{
-  backdrop-filter:none !important;
-  background:radial-gradient(1200px 400px at 10% -20%,var(--blue-600) 0,var(--blue-700) 40%,var(--blue-800) 100%) !important;
-  border:1px solid rgba(255,255,255,.15) !important;
-  box-shadow:0 12px 28px rgba(30,64,175,.10) !important;
-}
+.hero-blue.card-glass-plain{ backdrop-filter:none !important; }
 .hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.45rem; }
 .text-white-75{ color:rgba(255,255,255,.85)!important; }
 
@@ -299,7 +295,7 @@ body{
 }
 .card-glass-plain{
   backdrop-filter:blur(6px);
-  background:rgba(255,255,255,.94);
+  background:rgba(255,255,255,.96);
   border-radius:14px;
   border:1px solid rgba(30,64,175,.10);
 }
@@ -308,117 +304,70 @@ body{
 .card-header{ padding:1rem 1rem .45rem 1rem !important; }
 .card-body{   padding:1.05rem !important; }
 
-/* ===== Badge kecil lembut ===== */
-.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.4rem .6rem; font-weight:600; font-size:.85rem; }
-.bg-success-subtle{   background:#d1fae5!important; color:#065f46!important; }
-.bg-warning-subtle{   background:#fef3c7!important; color:#92400e!important; }
-.bg-danger-subtle{    background:#fee2e2!important; color:#991b1b!important; }
-.bg-info-subtle{      background:#e0f2fe!important; color:#0c4a6e!important; }
-.bg-secondary-subtle{ background:#f1f5f9!important; color:#475569!important; }
-.bg-primary-subtle{   background:#dbeafe!important; color:var(--blue-700)!important; }
+/* ===== Badge & text ===== */
+.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.4rem .6rem; font-weight:700; font-size:.85rem; }
 .text-blue-900{ color:var(--blue-900)!important; }
+.bg-blue-soft-2{ background:#eef6ff; }
 
-/* ===== Event card (box on + compact) ===== */
-.event-card{
-  background:linear-gradient(180deg,#fff,rgba(255,255,255,.96));
-  border:1px solid rgba(30,64,175,.10);
-  border-radius:14px;
-  box-shadow:0 10px 22px rgba(30,64,175,.08);
-  padding:14px;
+/* ===== Forms ===== */
+.form-label{ font-weight:800; color:#334155; }
+.form-control{ border-radius:10px; font-size:.98rem; }
+.form-select{ border-radius:10px; }
+.form-control-soft{
+  border:1px solid rgba(2,6,23,.12);
+  background:#fff;
+  height:44px;
 }
-.event-card h6{ font-size:1.05rem; margin-bottom:.25rem; }
-.event-card .small{ font-size:.92rem; }
-.event-card .badge{ padding:.35rem .6rem; font-size:.78rem; border-radius:10px; }
-.event-card .btn{ border-radius:10px; padding:.58rem 1rem; font-size:.95rem; }
-.opacity-90{ opacity:.92; }
-
-/* ===== Table (kontributor / umum) ===== */
-.table{ font-size:.95rem; margin-bottom:0; }
-.table thead th{
-  background-color:var(--blue-50)!important;
-  border-bottom:1px solid var(--blue-200);
-  font-weight:600; color:var(--blue-900);
-  font-size:.85rem; text-transform:uppercase; letter-spacing:.4px;
-  padding:.75rem 1rem;
+.form-control:focus, .form-select:focus{
+  border-color: var(--blue-400) !important;
+  box-shadow:0 0 0 .2rem rgba(59,130,246,.12) !important;
 }
-.table tbody tr{ border-bottom:1px solid rgba(30,64,175,.08); }
-.table tbody td{
-  padding:.8rem 1rem; vertical-align:middle; border-top:none; font-size:.95rem;
-}
-.table-responsive{ border:1px solid rgba(30,64,175,.08); border-radius:12px; overflow:hidden; }
-
-/* ===== List (progress) ===== */
-.list-group-item{
-  background:transparent!important;
-  border-left:none!important; border-right:none!important;
-  font-size:1rem; padding:.8rem 0; font-weight:500;
-}
-.list-group-item:first-child{ border-top:none!important; }
-.list-group-item:last-child{  border-bottom:none!important; }
-.list-group-item strong{ font-weight:600; font-size:.98rem; }
 
 /* ===== Buttons ===== */
-.btn{
-  font-weight:600; letter-spacing:.25px;
-  border-radius:10px; font-size:.95rem; padding:.55rem 1rem;
-}
-.btn-sm{ padding:.42rem .8rem; font-size:.86rem; }
-.btn-lg{ padding:.85rem 1.5rem; font-size:1.06rem; }
+.btn{ font-weight:800; letter-spacing:.2px; border-radius:10px; }
+.btn-sm{ padding:.38rem .75rem; font-size:.84rem; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
-.btn-info{    background:#06b6d4; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,.2); }
 .btn-success{ background:#059669; border-color:#059669; box-shadow:0 4px 12px rgba(5,150,105,.2); }
-.btn-warning{ background:#d97706; border-color:#d97706; box-shadow:0 4px 12px rgba(217,119,6,.2); }
-.btn-danger{  background:#dc2626; border-color:#dc2626; box-shadow:0 4px 12px rgba(220,38,38,.2); }
+.btn-outline-primary{ color:var(--blue-700); border-color:var(--blue-300); }
+.btn-outline-primary:hover{ background:var(--blue-600); color:#fff; border-color:var(--blue-600); }
 
-.d-grid.gap-2{ gap:1rem !important; }
-
-/* ===== Helpers ===== */
-.text-muted{ color:#6b7280!important; font-weight:500; font-size:.9rem; }
-.text-muted.small{ font-size:.84rem!important; }
-.fw-semibold{ font-weight:600!important; }
-.fw-medium{   font-weight:500!important; }
-a{ text-decoration:none; }
-a.text-primary{ color:var(--blue-600)!important; font-weight:500; }
-
-/* ===== Card glow (notif sukses) ===== */
+/* ===== Alert special (sukses glow) ===== */
 .card-glow{ box-shadow:0 8px 24px rgba(16,185,129,.18); border:1px solid rgba(16,185,129,.2); }
 
-/* ===== Overlay kunci form (dipakai di Kirim Abstrak) ===== */
+/* ===== Overlay lock ===== */
 .form-lock-overlay{
   position:absolute; inset:0;
-  background: rgba(255,255,255,.6);
+  background: rgba(255,255,255,.65);
   border-radius:16px;
   border:1px dashed rgba(30,64,175,.25);
   z-index: 2; text-align:center;
+  backdrop-filter: blur(2px);
+  pointer-events: all;
 }
+
+/* ===== Table (kalau ada tabel tambahan) ===== */
+.table{ font-size:.95rem; margin-bottom:0; }
+.table thead th{
+  background:#f8fbff!important;
+  border-bottom:1px solid rgba(30,64,175,.18);
+  font-weight:800; color:#1e3a8a;
+  font-size:.84rem; text-transform:uppercase; letter-spacing:.4px;
+  padding:.7rem .9rem;
+}
+.table tbody tr{ border-bottom:1px solid rgba(30,64,175,.08); }
+.table tbody td{ padding:.8rem 1rem; vertical-align:middle; border-top:none; }
 
 /* ===== Responsive ===== */
 @media (max-width:575.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
+  .container-xxl{ padding-left: calc(var(--side-pad) - .25rem) !important; padding-right: calc(var(--side-pad) - .25rem) !important; }
   .hero-blue{ border-radius:14px; padding:1.25rem!important; margin-bottom:1rem!important; }
   .hero-title{ font-size:1.25rem; }
   .card-body{  padding:.9rem!important; }
   .card-header{ padding:.9rem .9rem .4rem .9rem!important; }
-  .table thead th, .table tbody td{ padding:.6rem .75rem; font-size:.85rem; }
-  .list-group-item{ font-size:.98rem; padding:.7rem 0; }
-  .badge{ padding:.38rem .6rem; font-size:.74rem; }
-  .event-card{ padding:12px; }
-  .event-card h6{ font-size:1rem; }
-  .event-card .small{ font-size:.9rem; }
+  .btn{ font-size:.94rem; }
 }
 @media (min-width:576px) and (max-width:767.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .hero-title{ font-size:1.35rem; }
-  .card-body{  padding:1rem!important; }
-}
-@media (min-width:768px) and (max-width:991.98px){
-  .container-xxl{ padding-left:1rem !important; padding-right:1rem !important; }
-  .hero-title{ font-size:1.45rem; }
-}
-@media (min-width:992px){
-  .hero-blue{ padding:1.7rem!important; }
-  .card-body{  padding:1.05rem!important; }
-  .card-header{ padding:1rem 1rem .45rem 1rem!important; }
+  .container-xxl{ padding-left: var(--side-pad) !important; padding-right: var(--side-pad) !important; }
 }
 </style>
 
