@@ -1,21 +1,7 @@
 <?php
-$title        = $title        ?? 'Abstrak';
-$uploadEvents = $uploadEvents ?? [];   // -> To-Do
-$history      = $history      ?? [];   // -> Riwayat
-
-$fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
-$fmtDT   = fn($s)=> $s ? date('d M Y H:i', strtotime($s)) : '-';
-$formatLabel = function($f){
-  $f = strtolower((string)$f);
-  return $f === 'both' ? 'Hybrid' : ucfirst($f ?: '-');
-};
-// map badge -> pill class (biar sama kayak fullpaper)
-$badgeToPill = function($b){
-  return [
-    'success'=>'pill-success','danger'=>'pill-danger',
-    'warning'=>'pill-warn','info'=>'pill-info','secondary'=>'pill-muted'
-  ][strtolower((string)$b) ?: 'secondary'] ?? 'pill-muted';
-};
+$title      = $title ?? 'Abstrak';
+$todoCards  = $todoCards ?? [];
+$history    = $historyCards ?? [];
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
@@ -25,7 +11,6 @@ $badgeToPill = function($b){
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- HERO (samakan dengan Full Paper) -->
       <div class="card-hero mb-4">
         <div class="hero-body">
           <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
@@ -37,20 +22,17 @@ $badgeToPill = function($b){
               <div class="input-group input-group-lg hero-search">
                 <span class="input-group-text"><i class="bi bi-search"></i></span>
                 <input id="searchInput" type="text" class="form-control" placeholder="Cari event, status, format…">
-                <button id="clearSearch" type="button" class="btn btn-light d-none">
-                  <i class="bi bi-x-circle"></i>
-                </button>
+                <button id="clearSearch" type="button" class="btn btn-light d-none"><i class="bi bi-x-circle"></i></button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Tabs -->
         <div class="hero-tabs">
           <ul class="nav nav-pills" id="absTabs" role="tablist">
             <li class="nav-item" role="presentation">
               <button class="nav-link active" id="tab-todo" data-bs-toggle="pill" data-bs-target="#pane-todo" type="button" role="tab">
-                To-Do <span class="badge bg-light text-primary ms-1"><?= count($uploadEvents) ?></span>
+                To-Do <span class="badge bg-light text-primary ms-1"><?= count($todoCards) ?></span>
               </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -63,66 +45,46 @@ $badgeToPill = function($b){
       </div>
 
       <div class="tab-content">
-        <!-- TO-DO (dari $uploadEvents) -->
         <div class="tab-pane fade show active" id="pane-todo" role="tabpanel" aria-labelledby="tab-todo">
-          <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3 row-cols-xxl-4 js-grid">
-            <?php if (empty($uploadEvents)): ?>
-              <div class="col"><div class="empty-hint">
-                <i class="bi bi-check2-circle me-1"></i>Tidak ada pekerjaan. Mantap!
-              </div></div>
-            <?php else: foreach ($uploadEvents as $row): ?>
-              <?php
-                $pill = $badgeToPill($row['status_badge'] ?? 'secondary');
-                $labelLower = strtolower($row['status_label'] ?? '');
-                $isRevisi   = ($labelLower === 'revisi');
-                $isDitolak  = ($labelLower === 'ditolak');
-                $hasLast    = !empty($row['last_abs_id']);
-                $primaryUrl = $isRevisi && $hasLast
-                  ? site_url('presenter/abstrak/detail/'.(int)$row['last_abs_id']).'#section-revisi'
-                  : site_url('presenter/abstrak/create/'.(int)$row['event_id']);
-                $primaryTxt = $isRevisi ? 'Kirim Revisi' : ($isDitolak ? 'Upload Ulang' : 'Upload Abstrak');
-                $showUpload = !empty($row['can_upload']); // ⬅️ pakai flag dari controller
-              ?>
-              <div class="col js-col">
-                <div class="fp-card js-card"
-                     data-search="<?= esc(strtolower(
-                       ($row['title'] ?? '') . ' ' .
-                       ($row['status_label'] ?? '') . ' ' .
-                       ($row['format'] ?? '') . ' ' .
-                       ($fmtDate($row['event_date'] ?? null)) . ' ' .
-                       ($fmtDT($row['abstract_deadline'] ?? null))
-                     )) ?>">
+          <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3 row-cols-xxl-4">
+            <?php if (empty($todoCards)): ?>
+              <div class="col"><div class="empty-hint"><i class="bi bi-check2-circle me-1"></i>Tidak ada pekerjaan. Mantap!</div></div>
+            <?php else: foreach ($todoCards as $c): ?>
+              <div class="col">
+                <div class="fp-card js-card" data-search="<?= esc($c['searchable']) ?>">
                   <div class="fp-head">
-                    <h6 class="mb-0 fp-title"><?= esc($row['title'] ?? '-') ?></h6>
-                    <span class="status-pill <?= $pill ?>"><?= esc($row['status_label'] ?? '-') ?></span>
+                    <h6 class="mb-0 fp-title"><?= esc($c['title']) ?></h6>
+                    <span class="status-pill <?= esc($c['status_pill']) ?>"><?= esc($c['status_label']) ?></span>
                   </div>
 
                   <div class="chip-row mb-2">
-                    <span class="chip"><i class="bi bi-laptop me-1"></i><?= esc($formatLabel($row['format'] ?? '')) ?></span>
-                    <?php if (!empty($row['abstract_deadline'])): ?>
-                      <span class="chip alt"><i class="bi bi-clock-history me-1"></i><?= esc($fmtDT($row['abstract_deadline'])) ?></span>
+                    <span class="chip"><i class="bi bi-laptop me-1"></i><?= esc($c['format']) ?></span>
+                    <?php if (!empty($c['abs_deadline'])): ?>
+                      <span class="chip alt"><i class="bi bi-clock-history me-1"></i><?= esc($c['abs_deadline']) ?></span>
+                    <?php endif; ?>
+                    <?php if (!empty($c['rev_deadline'])): ?>
+                      <span class="chip alt"><i class="bi bi-arrow-repeat me-1"></i><?= esc($c['rev_deadline']) ?></span>
                     <?php endif; ?>
                   </div>
 
                   <ul class="meta-list">
-                    <li><span>Tanggal Event</span><strong><?= esc($fmtDate($row['event_date'] ?? null)) ?></strong></li>
-                    <li><span>Deadline Abstrak</span><strong><?= esc($fmtDT($row['abstract_deadline'] ?? null)) ?></strong></li>
+                    <li><span>Tanggal Event</span><strong><?= esc($c['event_date']) ?></strong></li>
+                    <li><span>Deadline Abstrak</span><strong><?= esc($c['abs_deadline']) ?></strong></li>
+                    <?php if (!empty($c['is_revisi'])): ?>
+                      <li><span>Deadline Revisi</span><strong><?= esc($c['rev_deadline']) ?></strong></li>
+                    <?php endif; ?>
                   </ul>
 
-                  <?php if (!empty($row['hint'])): ?>
-                    <div class="mini-hint mt-2"><i class="bi bi-info-circle me-1"></i><?= esc($row['hint']) ?></div>
+                  <?php if (!empty($c['hint'])): ?>
+                    <div class="mini-hint mt-2"><i class="bi bi-info-circle me-1"></i><?= esc($c['hint']) ?></div>
                   <?php endif; ?>
 
                   <div class="fp-foot">
-                    <?php if ($showUpload): ?> <!-- ⬅️ hanya tampil kalau boleh upload -->
-                      <a class="btn btn-primary flex-fill" href="<?= $primaryUrl ?>">
-                        <i class="bi bi-upload me-1"></i><?= esc($primaryTxt) ?>
-                      </a>
+                    <?php if (!empty($c['can_upload'])): ?>
+                      <a class="btn btn-primary flex-fill" href="<?= esc($c['primary_url']) ?>"><i class="bi bi-upload me-1"></i><?= esc($c['primary_text']) ?></a>
                     <?php endif; ?>
-                    <?php if ($hasLast): ?>
-                      <a class="btn btn-outline-secondary flex-fill" href="<?= site_url('presenter/abstrak/detail/'.(int)$row['last_abs_id']) ?>">
-                        <i class="bi bi-eye me-1"></i>Detail
-                      </a>
+                    <?php if (!empty($c['detail_url'])): ?>
+                      <a class="btn btn-outline-secondary flex-fill" href="<?= esc($c['detail_url']) ?>"><i class="bi bi-eye me-1"></i>Detail</a>
                     <?php endif; ?>
                   </div>
                 </div>
@@ -131,54 +93,38 @@ $badgeToPill = function($b){
           </div>
         </div>
 
-        <!-- RIWAYAT -->
         <div class="tab-pane fade" id="pane-history" role="tabpanel" aria-labelledby="tab-history">
-          <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3 row-cols-xxl-4 js-grid">
+          <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3 row-cols-xxl-4">
             <?php if (empty($history)): ?>
-              <div class="col"><div class="empty-hint">
-                <i class="bi bi-inboxes me-1"></i>Belum ada riwayat abstrak.
-              </div></div>
+              <div class="col"><div class="empty-hint"><i class="bi bi-inboxes me-1"></i>Belum ada riwayat abstrak.</div></div>
             <?php else: foreach ($history as $h): ?>
-              <?php $pillH = $badgeToPill($h['status_badge'] ?? 'secondary'); ?>
-              <div class="col js-col">
-                <div class="fp-card js-card"
-                     data-search="<?= esc(strtolower(
-                       ($h['judul'] ?? $h['event_title'] ?? '') . ' ' .
-                       ($h['status_label'] ?? '') . ' ' .
-                       ($h['nama_kategori'] ?? '') . ' ' .
-                       ($fmtDate($h['event_date'] ?? null)) . ' ' .
-                       ($fmtDT($h['tanggal_upload'] ?? null))
-                     )) ?>">
+              <div class="col">
+                <div class="fp-card js-card" data-search="<?= esc($h['searchable']) ?>">
                   <div class="fp-head">
-                    <h6 class="mb-0 fp-title"><?= esc($h['judul'] ?? $h['event_title'] ?? '-') ?></h6>
-                    <span class="status-pill <?= $pillH ?>"><?= esc($h['status_label'] ?? '-') ?></span>
+                    <h6 class="mb-0 fp-title"><?= esc($h['title']) ?></h6>
+                    <span class="status-pill <?= esc($h['status_pill']) ?>"><?= esc($h['status_label']) ?></span>
                   </div>
 
                   <div class="chip-row mb-2">
-                    <?php if (!empty($h['nama_kategori'])): ?>
-                      <span class="chip alt"><i class="bi bi-tag me-1"></i><?= esc($h['nama_kategori']) ?></span>
-                    <?php endif; ?>
-                    <?php if (!empty($h['tanggal_upload'])): ?>
-                      <span class="chip"><i class="bi bi-cloud-arrow-up me-1"></i><?= esc($fmtDT($h['tanggal_upload'])) ?></span>
-                    <?php endif; ?>
+                    <?php if (!empty($h['kategori'])): ?><span class="chip alt"><i class="bi bi-tag me-1"></i><?= esc($h['kategori']) ?></span><?php endif; ?>
+                    <?php if (!empty($h['uploaded_at']) && $h['uploaded_at']!=='-'): ?><span class="chip"><i class="bi bi-cloud-arrow-up me-1"></i><?= esc($h['uploaded_at']) ?></span><?php endif; ?>
                   </div>
 
                   <ul class="meta-list">
-                    <li><span>Tanggal Event</span><strong><?= esc($fmtDate($h['event_date'] ?? null)) ?></strong></li>
-                    <li><span>Event</span><strong><?= esc($h['event_title'] ?? '-') ?></strong></li>
+                    <li><span>Tanggal Event</span><strong><?= esc($h['event_date']) ?></strong></li>
+                    <li><span>Event</span><strong><?= esc($h['event_title']) ?></strong></li>
                   </ul>
 
-                  <?php if (!empty($h['status_hint']) && ($h['status'] ?? '') !== 'diterima'): ?>
-                    <div class="mini-hint mt-2 <?= (($h['status'] ?? '') === 'ditolak') ? 'mini-alert mini-alert-danger' : '' ?>">
-                      <?php if(($h['status'] ?? '') === 'ditolak'): ?><i class="bi bi-x-octagon me-1"></i><?php else: ?><i class="bi bi-info-circle me-1"></i><?php endif; ?>
-                      <?= esc($h['status_hint']) ?>
+                  <?php if (!empty($h['hint']) && $h['status_label'] !== 'Diterima'): ?>
+                    <div class="mini-hint mt-2 <?= (stripos($h['status_label'],'Tolak')!==false?'mini-alert mini-alert-danger':'') ?>">
+                      <i class="bi <?= (stripos($h['status_label'],'Tolak')!==false?'bi-x-octagon':'bi-info-circle') ?> me-1"></i><?= esc($h['hint']) ?>
                     </div>
                   <?php endif; ?>
 
                   <div class="fp-foot">
-                    <a class="btn btn-outline-primary btn-sm w-100" href="<?= site_url('presenter/abstrak/detail/'.(int)$h['id_abstrak']) ?>">
-                      <i class="bi bi-eye me-1"></i>Detail
-                    </a>
+                    <?php if (!empty($h['detail_url'])): ?>
+                      <a class="btn btn-outline-primary btn-sm w-100" href="<?= esc($h['detail_url']) ?>"><i class="bi bi-eye me-1"></i>Detail</a>
+                    <?php endif; ?>
                   </div>
                 </div>
               </div>
@@ -238,6 +184,8 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .pill-success{ background:#d1fae5; color:#065f46; }
 .pill-danger{ background:#fee2e2; color:#991b1b; }
 .pill-muted{ background:#f3f4f6; color:#374151; }
+/* baru: primary */
+.pill-primary{ background:#dbeafe; color:#1d4ed8; }
 
 .chip-row{ display:flex; flex-wrap:wrap; gap:.5rem; }
 .chip{ display:inline-flex; align-items:center; padding:.26rem .55rem; font-size:.86rem; border-radius:999px; background:#eef3ff; color:#1e3a8a; border:1px solid rgba(30,64,175,.15); font-weight:700; }
@@ -266,21 +214,21 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 }
 </style>
 
-<!-- ====== JS filter (sama persis dengan Full Paper) ====== -->
+
 <script>
 (function(){
-  const input = document.getElementById('searchInput');
-  const clearBtn = document.getElementById('clearSearch');
-  const cards = Array.from(document.querySelectorAll('.js-card'));
+  const input=document.getElementById('searchInput');
+  const clearBtn=document.getElementById('clearSearch');
+  const cards=[...document.querySelectorAll('.js-card')];
   function applyFilter(q){
-    const query = (q||'').trim().toLowerCase();
+    const query=(q||'').trim().toLowerCase();
     cards.forEach(card=>{
-      const hay = (card.dataset.search || card.textContent).toLowerCase();
-      card.closest('.js-col').style.display = (!query || hay.includes(query)) ? '' : 'none';
+      const hay=(card.dataset.search||card.textContent).toLowerCase();
+      card.closest('.col').style.display = (!query || hay.includes(query)) ? '' : 'none';
     });
-    if(clearBtn) clearBtn.classList.toggle('d-none', !query);
+    clearBtn.classList.toggle('d-none', !query);
   }
-  if(input){ input.addEventListener('input', e=>applyFilter(e.target.value)); }
-  if(clearBtn){ clearBtn.addEventListener('click', ()=>{ input.value=''; applyFilter(''); input.focus(); }); }
+  input?.addEventListener('input',e=>applyFilter(e.target.value));
+  clearBtn?.addEventListener('click',()=>{ input.value=''; applyFilter(''); input.focus(); });
 })();
 </script>

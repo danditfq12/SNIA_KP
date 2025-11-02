@@ -47,7 +47,6 @@ class FullPaper extends BaseController
         return in_array($col, $this->fields($table), true);
     }
 
-    /** Ambil PK dinamis untuk tabel submission/abstrak (utama halaman ini) */
     private function primaryKey(string $table): string
     {
         $fields = $this->fields($table);
@@ -63,7 +62,6 @@ class FullPaper extends BaseController
             if (in_array($cand, $fields, true)) return $cand;
         }
 
-        // Try from information_schema (Postgres/MySQL)
         try {
             $row = $this->db->query(
                 "SELECT kcu.column_name
@@ -85,7 +83,6 @@ class FullPaper extends BaseController
         return $fields[0] ?? 'id';
     }
 
-    /** Helper umum untuk tabel lain (events, users, dll) */
     private function tablePrimaryKeyFlexible(string $table, array $candidates = []): string
     {
         if (!$this->db->tableExists($table)) return 'id';
@@ -142,16 +139,20 @@ class FullPaper extends BaseController
         if ($fname === '') return null;
         if ($this->isPublicUrl($fname)) return $fname;
 
-        $clean = ltrim(str_replace('\\','/',$fname), '/');
+        $rel = ltrim(str_replace(['\\','..'], ['/', ''], $fname), '/');
+        $baseEnv = trim((string) env('fullpaper.storage_base', ''), '/\\');
+
         $candidates = [
-            FCPATH   . $clean,
-            ROOTPATH . $clean,
-            WRITEPATH. $clean,
-            WRITEPATH . 'uploads/fullpaper/' . basename($clean),
-            FCPATH    . 'uploads/fullpaper/' . basename($clean),
+            FCPATH   . $rel,
+            ROOTPATH . $rel,
+            WRITEPATH. $rel,
+            WRITEPATH . 'uploads/fullpaper/' . basename($rel),
+            FCPATH    . 'uploads/fullpaper/' . basename($rel),
         ];
+        if ($baseEnv !== '') $candidates[] = rtrim($baseEnv, '/\\') . DIRECTORY_SEPARATOR . $rel;
+        if (is_file($fname)) $candidates[] = $fname;
+
         foreach ($candidates as $p) if (is_file($p)) return $p;
-        if (is_file($fname)) return $fname;
         return null;
     }
 
@@ -199,7 +200,7 @@ class FullPaper extends BaseController
         return null;
     }
 
-    /* ========= Abstrak: status global + reviewer-detail ========= */
+    /* ========= Abstrak ========= */
 
     private function getLatestAbstractRow(?int $userId, ?int $eventId): ?array
     {
@@ -302,8 +303,6 @@ class FullPaper extends BaseController
         return $out;
     }
 
-    /* ========= Tambahan util untuk kategori + people dari abstrak ========= */
-
     private function getCategoryNameById(?int $kategoriId): ?string
     {
         if (!$kategoriId) return null;
@@ -377,7 +376,6 @@ class FullPaper extends BaseController
         ];
     }
 
-    /* ====== Fallback identitas presenter dari users/registrations ====== */
     private function getPresenterIdentity(?int $userId, ?int $eventId): array
     {
         $out = ['name'=>null,'email'=>null,'affiliation'=>null];
@@ -442,18 +440,33 @@ class FullPaper extends BaseController
     private function getAssignedReviewers(int $submissionId): array
     {
         if (!$this->db->tableExists('fullpaper_reviewers')) return [];
+
         $src = $this->resolveReviewerSource();
         $nameCol  = $src['name']  ? "{$src['table']}.{$src['name']}"  : "NULL";
         $emailCol = $src['email'] ? "{$src['table']}.{$src['email']}" : "NULL";
 
-        $hasReviews = $this->db->tableExists('fullpaper_reviews');
-        $colsFR = array_flip($this->db->getFieldNames('fullpaper_reviewers'));
+        // Deteksi kolom di pivot
+        $frFields = array_flip($this->db->getFieldNames('fullpaper_reviewers') ?: []);
+        $pick = function(array $cands) use ($frFields) {
+            foreach ($cands as $c) if (isset($frFields[$c])) return "fr.$c";
+            return null;
+        };
 
-        $assignCol = null;
-        foreach (['assignment_status','status_tugas','tugas_status','konfirmasi_status'] as $c) {
-            if (isset($colsFR[$c])) { $assignCol = "fr.$c"; break; }
-        }
+        $assignCol = $pick(['assignment_status','status_tugas','tugas_status','konfirmasi_status']);
+        $reasonCol = $pick(['decline_reason','alasan','alasan_tolak','reason']);
+        $accAtCol  = $pick(['accepted_at','confirmed_at','konfirmasi_at']);
+        $decAtCol  = $pick(['declined_at','rejected_at']);
+        $ordCol    = $pick(['order_no','urutan','posisi']);
+        $assignedAt= $pick(['assigned_at','created_at']);
+
         $assignSel = $assignCol ? "$assignCol AS assignment_status" : "NULL AS assignment_status";
+        $reasonSel = $reasonCol ? "$reasonCol AS decline_reason"    : "NULL AS decline_reason";
+        $accSel    = $accAtCol  ? "$accAtCol  AS accepted_at"       : "NULL AS accepted_at";
+        $decSel    = $decAtCol  ? "$decAtCol  AS declined_at"       : "NULL AS declined_at";
+        $ordSel    = $ordCol    ? "$ordCol    AS order_no"          : "NULL AS order_no";
+        $asgSel    = $assignedAt? "$assignedAt AS assigned_at"      : "fr.assigned_at AS assigned_at";
+
+        $hasReviews = $this->db->tableExists('fullpaper_reviews');
 
         if ($hasReviews) {
             $statusExpr = "(
@@ -470,19 +483,44 @@ class FullPaper extends BaseController
                 ORDER BY fr3.tanggal_review DESC, fr3.id DESC
                 LIMIT 1
             )";
+
             return $this->db->table('fullpaper_reviewers fr')
-                ->select("fr.id, fr.reviewer_id, fr.assigned_at, {$emailCol} AS email, {$nameCol} AS name, {$statusExpr} AS status, {$tanggalExpr} AS status_at, {$assignSel}")
+                ->select("
+                    fr.id, fr.reviewer_id,
+                    {$asgSel},
+                    {$emailCol} AS email,
+                    {$nameCol}  AS name,
+                    {$statusExpr}  AS status,
+                    {$tanggalExpr} AS status_at,
+                    {$assignSel},
+                    {$reasonSel},
+                    {$accSel},
+                    {$decSel},
+                    {$ordSel}
+                ")
                 ->join($src['table'], "{$src['table']}.{$src['id']} = fr.reviewer_id", 'left')
                 ->where('fr.submission_id', $submissionId)
-                ->orderBy('fr.id', 'ASC')
+                ->orderBy($ordCol ? 'order_no' : 'fr.id', 'ASC')
                 ->get()->getResultArray();
         }
 
         return $this->db->table('fullpaper_reviewers fr')
-            ->select("fr.id, fr.reviewer_id, fr.assigned_at, {$emailCol} AS email, {$nameCol} AS name, NULL AS status, NULL AS status_at, {$assignSel}")
+            ->select("
+                fr.id, fr.reviewer_id,
+                {$asgSel},
+                {$emailCol} AS email,
+                {$nameCol}  AS name,
+                NULL AS status,
+                NULL AS status_at,
+                {$assignSel},
+                {$reasonSel},
+                {$accSel},
+                {$decSel},
+                {$ordSel}
+            ")
             ->join($src['table'], "{$src['table']}.{$src['id']} = fr.reviewer_id", 'left')
             ->where('fr.submission_id', $submissionId)
-            ->orderBy('fr.id', 'ASC')
+            ->orderBy($ordCol ? 'order_no' : 'fr.id', 'ASC')
             ->get()->getResultArray();
     }
 
@@ -570,6 +608,7 @@ class FullPaper extends BaseController
         $cols  = $this->resolveColumns($table);
 
         $submission['id']        = $submission[$cols['pk']];
+        the_submission:
         $submission['title']     = $submission[$cols['title']];
         $submission['revisi_ke'] = (int)($submission['revisi_ke'] ?? 0);
 
@@ -582,21 +621,21 @@ class FullPaper extends BaseController
             if ($ev) { $submission['event_title'] = $ev['title']; $submission['event_id'] = (int)$submission[$cols['event_id']]; }
         }
 
-        // author possible fields (from submission table)
+        // author (dari submission bila ada)
         $author = ['name'=>null,'email'=>null];
         foreach (['penulis_nama','nama_lengkap','presenter_name','author_name','nama'] as $c)
             if ($this->columnExists($table,$c) && !empty($submission[$c])) { $author['name'] = $submission[$c]; break; }
         foreach (['penulis_email','email','presenter_email','author_email'] as $c)
             if ($this->columnExists($table,$c) && !empty($submission[$c])) { $author['email'] = $submission[$c]; break; }
 
-        // coauthors from submission
+        // coauthors dari submission
         $coauthors = [];
         if ($this->columnExists($table,'coauthors_json') && !empty($submission['coauthors_json'])) {
             $decoded = json_decode((string)$submission['coauthors_json'], true);
             if (is_array($decoded)) $coauthors = $decoded;
         }
 
-        // history (all rows of same user+event)
+        // history (semua row user+event)
         $history = [];
         if ($cols['event_id'] && !empty($submission[$cols['event_id']]) && $cols['user_id'] && !empty($submission[$cols['user_id']])) {
             $select = [$cols['pk']." AS id"];
@@ -614,22 +653,30 @@ class FullPaper extends BaseController
         // kategori & reviewer
         $kategoriId = $this->resolveCategoryId($submission, $cols);
         $assigned   = $this->getAssignedReviewers($id);
-        $assignedIds= array_map(fn($r)=>(int)$r['reviewer_id'], $assigned);
-        $reviewers  = $this->getReviewersByCategory($kategoriId, $assignedIds);
 
-        // abstrak: status global + reviewer2 (dengan status review abstrak)
+        // === pisahkan penugasan aktif vs declined ===
+        $assignedActive = array_values(array_filter($assigned, function($r){
+            $st = strtolower((string)($r['assignment_status'] ?? ''));
+            return $st !== 'declined';
+        }));
+        $declinedList = array_values(array_filter($assigned, function($r){
+            return strtolower((string)($r['assignment_status'] ?? '')) === 'declined';
+        }));
+
+        $assignedIds = array_map(fn($r)=>(int)$r['reviewer_id'], $assignedActive);
+        $reviewers   = $this->getReviewersByCategory($kategoriId, $assignedIds);
+
+        // abstrak: status & reviewer
         $userId  = $cols['user_id']  ? (int)($submission[$cols['user_id']]  ?? 0) : 0;
         $eventId = $cols['event_id'] ? (int)($submission[$cols['event_id']] ?? 0) : 0;
         $abstractStatus    = $this->getAbstractStatus($userId, $eventId);
         $abstractReviewers = $this->getAbstractReviewersDetailed($userId, $eventId);
 
-        // Tambahan: kategori & people dari abstrak (fallback)
-        $absInfo = $this->getAbstractPeopleData($userId, $eventId);
-
-        // Fallback prioritas: data presenter (users/registrations)
+        // Tambahan dari abstrak & presenter
+        $absInfo   = $this->getAbstractPeopleData($userId, $eventId);
         $presenter = $this->getPresenterIdentity($userId, $eventId);
 
-        // Merge fallback → submission → abstrak → presenter
+        // Fallback author
         if (empty($author['name']) && !empty($absInfo['author']['name']))  $author['name']  = $absInfo['author']['name'];
         if (empty($author['email']) && !empty($absInfo['author']['email'])) $author['email'] = $absInfo['author']['email'];
         if (empty($author['name'])  && !empty($presenter['name']))          $author['name']  = $presenter['name'];
@@ -646,29 +693,109 @@ class FullPaper extends BaseController
 
         $fpReviews = $this->getFullpaperReviews($id);
 
+        /* ========================= View-Model (presentation) ========================= */
+        $badgeMap   = ['NONE'=>'secondary','UPLOADED'=>'info','REVISION'=>'warning','ACCEPTED'=>'success','REJECTED'=>'danger'];
+        $statusText = ['NONE'=>'—','UPLOADED'=>'Diunggah','REVISION'=>'Revisi','ACCEPTED'=>'Diterima','REJECTED'=>'Ditolak'];
+
+        $status     = strtoupper($submission['full_paper_status'] ?? 'NONE');
+        $uploadedAt = !empty($submission['full_paper_uploaded_at']) ? date('d M Y H:i', strtotime($submission['full_paper_uploaded_at'])) : '—';
+        $revisiKe   = (int)($submission['revisi_ke'] ?? 0);
+
+        $submissionId = (int)($submission['id'] ?? 0);
+        $eventIdVM    = (int)($submission['event_id'] ?? 0);
+        $backUrl      = $eventIdVM ? site_url('admin/kelola-paper/detail/'.$eventIdVM) : site_url('admin/kelola-paper');
+
+        $downloadUrl  = $submissionId ? site_url('admin/fullpaper/download/'.$submissionId) : '';
+        $previewUrl   = $submissionId ? site_url('admin/fullpaper/view/'.$submissionId) : '';
+        $gdocs        = $previewUrl ? ('https://docs.google.com/gview?embedded=1&url='.rawurlencode($previewUrl)) : '';
+
+        $rvStatMap = [
+          'diterima'=>['Diterima','success'],
+          'accepted'=>['Diterima','success'],
+          'rejected'=>['Ditolak','danger'],
+          'ditolak' =>['Ditolak','danger'],
+          'revisi'  =>['Revisi','warning'],
+          'revision'=>['Revisi','warning'],
+          'uploaded'=>['Diunggah','info'],
+          'pending' =>['Pending','secondary'],
+          'menunggu'=>['Menunggu','secondary'],
+          'sedang_direview'=>['Sedang Ditinjau','info'],
+          ''=>['—','secondary'], null=>['—','secondary'],
+        ];
+
+        // === counters & kuota (aktif saja) ===
+        $assignedCount  = count($assignedActive);
+        $completedCount = 0;
+        foreach ($assigned as $ar) {
+          $st = strtolower($ar['status'] ?? '');
+          if (in_array($st, ['diterima','accepted','revisi','revision','ditolak','rejected'], true)) $completedCount++;
+        }
+        $maxReviewer = 3;
+        $quotaFull   = $assignedCount >= $maxReviewer;
+
+        $hasReviewDecision = false;
+        foreach ($fpReviews as $rv) {
+          $k = strtolower($rv['keputusan'] ?? '');
+          if (in_array($k, ['accepted','diterima','revision','revisi','rejected','ditolak'], true)) { $hasReviewDecision = true; break; }
+        }
+
+        // mapping badge assignment status
+        $assignStatusMap = [
+          'accepted' => ['primary','Assigned'],
+          'declined' => ['secondary','Declined'],
+          'default'  => ['secondary','Pending'],
+        ];
+
+        $vm = [
+          'status' => $status,
+          'badgeMap' => $badgeMap,
+          'statusText' => $statusText,
+          'uploadedAt' => $uploadedAt,
+          'revisiKe' => $revisiKe,
+
+          'submissionId' => $submissionId,
+          'eventId' => $eventIdVM,
+          'backUrl' => $backUrl,
+          'downloadUrl' => $downloadUrl,
+          'previewUrl'  => $previewUrl,
+          'gdocs'       => $gdocs,
+
+          'rvStatMap' => $rvStatMap,
+
+          'assignedCount' => $assignedCount,
+          'completedCount' => $completedCount,
+          'maxReviewer' => $maxReviewer,
+          'quotaFull' => $quotaFull,
+
+          'hasReviewDecision' => $hasReviewDecision,
+          'assignStatusMap' => $assignStatusMap,
+        ];
+        /* ======================================================= */
+
         return view('role/admin/kelola_paper/fullpaper_detail', [
             'submission'         => $submission,
             'author'             => $author,
             'coauthors'          => $coauthors,
             'history'            => $history,
             'reviewers'          => $reviewers,
-            'assignedReviewers'  => $assigned,
+            // ⬇️ hanya aktif yg tampil di "Reviewer Ditugaskan"
+            'assignedReviewers'  => $assignedActive,
+            // ⬇️ daftar decline untuk "List Penolakan"
+            'declinedReviewers'  => $declinedList,
             'abstractReviewers'  => $abstractReviewers,
             'abstractStatus'     => $abstractStatus,
             'fpReviews'          => $fpReviews,
 
-            // tambahan untuk view
             'absKategoriId'      => $absKategoriId,
             'absKategoriName'    => $absKategoriName,
             'absContributors'    => $absContributors,
             'absJudul'           => $absJudul,
 
             'title'              => 'Detail Full Paper',
-            'maxReviewer'        => 3,
+            'vm'                 => $vm,
         ]);
     }
 
-    /** (opsional) API simple untuk dropdown reviewer by kategori */
     public function reviewersByCategory($kategoriId)
     {
         try {
@@ -676,7 +803,12 @@ class FullPaper extends BaseController
             $exclude = [];
             if ($submissionId) {
                 $assigned = $this->getAssignedReviewers($submissionId);
-                $exclude  = array_map(fn($r)=>(int)$r['reviewer_id'], $assigned);
+                // exclude hanya yang aktif
+                $assignedActive = array_values(array_filter($assigned, function($r){
+                    $st = strtolower((string)($r['assignment_status'] ?? ''));
+                    return $st !== 'declined';
+                }));
+                $exclude  = array_map(fn($r)=>(int)$r['reviewer_id'], $assignedActive);
             }
             $list = $this->getReviewersByCategory((int)$kategoriId, $exclude);
             return $this->response->setJSON(['success'=>true, 'data'=>$list]);
@@ -701,9 +833,17 @@ class FullPaper extends BaseController
             $sub = $this->findSubmission($submissionId);
             if (!$sub) return redirect()->back()->with('error','Submission tidak ditemukan.');
 
-            $count = $this->db->table('fullpaper_reviewers')->where('submission_id',$submissionId)->countAllResults();
-            if ($count >= 3) {
-                return redirect()->back()->with('error','Maksimum 3 reviewer sudah tercapai.');
+            $this->db->transStart();
+
+            // Kuota: hanya hitung aktif
+            $all = $this->getAssignedReviewers($submissionId);
+            $active = array_values(array_filter($all, function($r){
+                $st = strtolower((string)($r['assignment_status'] ?? ''));
+                return $st !== 'declined';
+            }));
+            if (count($active) >= 3) {
+                $this->db->transComplete();
+                return redirect()->back()->with('error','Maksimum 3 reviewer aktif sudah tercapai.');
             }
 
             $dup = $this->db->table('fullpaper_reviewers')
@@ -711,13 +851,15 @@ class FullPaper extends BaseController
                     ->where('reviewer_id',$reviewerId)
                     ->get()->getRowArray();
             if ($dup) {
-                return redirect()->back()->with('error','Reviewer ini sudah ditugaskan pada full paper.');
+                $this->db->transComplete();
+                return redirect()->back()->with('error','Reviewer ini sudah pernah ditugaskan pada full paper.');
             }
 
             $table = $this->tableName(); $cols = $this->resolveColumns($table);
             $kategoriId = $this->resolveCategoryId($sub, $cols);
             if ($kategoriId && $this->revKatModel && method_exists($this->revKatModel,'isReviewerEligible')) {
                 if (!$this->revKatModel->isReviewerEligible($reviewerId, $kategoriId)) {
+                    $this->db->transComplete();
                     return redirect()->back()->with('error','Reviewer tidak sesuai kategori.');
                 }
             }
@@ -728,7 +870,9 @@ class FullPaper extends BaseController
                 'assigned_at'   => date('Y-m-d H:i:s'),
             ]);
 
-            if (!$ok) {
+            $this->db->transComplete();
+
+            if (!$ok || $this->db->transStatus() === false) {
                 return redirect()->back()->with('error','Gagal menugaskan reviewer.');
             }
 
@@ -737,6 +881,26 @@ class FullPaper extends BaseController
 
         } catch (\Throwable $e) {
             log_message('error','FullPaper assign err: '.$e->getMessage());
+            return redirect()->back()->with('error','Terjadi kesalahan.');
+        }
+    }
+
+    public function unassign($submissionId, $reviewerId)
+    {
+        try {
+            $submissionId = (int)$submissionId;
+            $reviewerId   = (int)$reviewerId;
+            if (!$submissionId || !$reviewerId) {
+                return redirect()->back()->with('error','Data tidak valid.');
+            }
+            $ok = $this->db->table('fullpaper_reviewers')
+                ->where('submission_id', $submissionId)
+                ->where('reviewer_id',   $reviewerId)
+                ->delete();
+            return redirect()->to(site_url('admin/fullpaper/detail/'.$submissionId))
+                ->with($ok ? 'success':'error', $ok ? 'Penugasan dicabut.' : 'Gagal mencabut penugasan.');
+        } catch (\Throwable $e) {
+            log_message('error','FullPaper unassign err: '.$e->getMessage());
             return redirect()->back()->with('error','Terjadi kesalahan.');
         }
     }
@@ -752,15 +916,27 @@ class FullPaper extends BaseController
                 return redirect()->back()->with('error','Input tidak valid.');
             }
 
+            // komentar wajib untuk REVISION/REJECTED
+            if (in_array($status, ['REVISION','REJECTED'], true) && mb_strlen($komentar) < 10) {
+                return redirect()->back()->with('error','Harap isi komentar minimal 10 karakter untuk status Revisi/Ditolak.');
+            }
+
             $table = $this->tableName();
             $pk    = $this->primaryKey($table);
 
             $data = ['full_paper_status'=>$status];
+
             foreach (['review_notes','catatan_reviewer','admin_comment','admin_notes'] as $col) {
-                if ($komentar !== '' && $this->columnExists($table,$col)) { $data[$col] = $komentar; break; }
+                if ($this->columnExists($table,$col)) { $data[$col] = ($komentar !== '' ? $komentar : null); break; }
             }
             foreach (['decision_at','full_paper_decision_at'] as $col) {
                 if ($this->columnExists($table,$col)) { $data[$col] = date('Y-m-d H:i:s'); break; }
+            }
+            foreach (['full_paper_decision_by','decision_by'] as $col) {
+                if ($this->columnExists($table,$col)) { $data[$col] = (int)(session('id_user') ?? 0); break; }
+            }
+            if ($this->columnExists($table,'eligible_to_pay')) {
+                $data['eligible_to_pay'] = ($status === 'ACCEPTED');
             }
 
             $ok = $this->db->table($table)->where($pk,$submissionId)->update($data);
@@ -769,6 +945,7 @@ class FullPaper extends BaseController
 
             return redirect()->to(site_url('admin/fullpaper/detail/'.$submissionId))
                 ->with('success','Status berhasil diperbarui.');
+
         } catch (\Throwable $e) {
             log_message('error','FullPaper setStatus err: '.$e->getMessage());
             return redirect()->back()->with('error','Terjadi kesalahan.');

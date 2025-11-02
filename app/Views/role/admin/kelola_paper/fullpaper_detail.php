@@ -1,96 +1,68 @@
 <?php
-// ==== INPUT DARI CONTROLLER (tetap) ====
+// Data utama dari controller
 $submission       = $submission ?? [];
 $author           = $author ?? ['name'=>null,'email'=>null];
 $coauthors        = $coauthors ?? [];
 $history          = $history ?? [];
 $reviewers        = $reviewers ?? [];
+
+// HANYA reviewer aktif (accepted/pending) – dari controller
 $assigned         = $assignedReviewers ?? [];
+
+// Daftar reviewer yang MENOLAK – dari controller
+$declined         = $declinedReviewers ?? [];
+
 $absReviewers     = $abstractReviewers ?? [];
 $abstractStatus   = strtolower((string)($abstractStatus ?? ''));
 $fpReviews        = $fpReviews ?? [];
-$maxReviewer      = (int)($maxReviewer ?? 3);
 
-// tambahan dari controller (kategori & people abstrak)
-$absKategoriId    = $absKategoriId    ?? null;
+// Tambahan dari controller (kategori & people abstrak)
 $absKategoriName  = trim((string)($absKategoriName ?? ''));
 $absContributors  = is_array($absContributors ?? null) ? $absContributors : [];
-$absJudul         = trim((string)($absJudul ?? ''));
 
-// ==== META STATUS FP ====
-$status     = strtoupper($submission['full_paper_status'] ?? 'NONE');
-$badgeMap   = ['NONE'=>'secondary','UPLOADED'=>'info','REVISION'=>'warning','ACCEPTED'=>'success','REJECTED'=>'danger'];
-$statusText = ['NONE'=>'—','UPLOADED'=>'Diunggah','REVISION'=>'Revisi','ACCEPTED'=>'Diterima','REJECTED'=>'Ditolak'];
-$badge      = $badgeMap[$status] ?? 'secondary';
-$uploadedAt = !empty($submission['full_paper_uploaded_at']) ? date('d M Y H:i', strtotime($submission['full_paper_uploaded_at'])) : '—';
-$revisiKe   = isset($submission['revisi_ke']) ? (int)$submission['revisi_ke'] : 0;
+// View-Model
+$VM = $vm ?? [];
+$status        = $VM['status']        ?? 'NONE';
+$badgeMap      = $VM['badgeMap']      ?? [];
+$statusText    = $VM['statusText']    ?? [];
+$uploadedAt    = $VM['uploadedAt']    ?? '—';
 
-// ==== URL & FORMAT ====
-$submissionId = (int)($submission['id'] ?? 0);
-$eventId      = (int)($submission['event_id'] ?? 0);
-$backUrl      = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_url('admin/kelola-paper');
+// === Zero-based revision display (upload pertama = 0) ===
+$rawRevisiKe   = (int)($VM['revisiKe'] ?? 1);
+$revisiKe      = max(0, $rawRevisiKe - 1);
 
+$submissionId  = (int)($VM['submissionId'] ?? 0);
+$backUrl       = $VM['backUrl']       ?? site_url('admin/kelola-paper');
+$downloadUrl   = $VM['downloadUrl']   ?? '';
+$previewUrl    = $VM['previewUrl']    ?? '';
+$gdocs         = $VM['gdocs']         ?? '';
+
+$rvStatMap     = $VM['rvStatMap']     ?? [];
+$assignedCount = (int)($VM['assignedCount'] ?? 0);
+$completedCount= (int)($VM['completedCount'] ?? 0);
+$maxReviewer   = (int)($VM['maxReviewer'] ?? 3);
+$quotaFull     = (bool)($VM['quotaFull'] ?? false);
+
+$hasReviewDecision = (bool)($VM['hasReviewDecision'] ?? false);
+$assignStatusMap   = $VM['assignStatusMap'] ?? ['default'=>['secondary','Pending']];
+
+// Formatter kecil
 $fmtDT = fn($s)=> $s ? date('d M Y H:i', strtotime($s)) : '—';
 
-// preview & download (pakai endpoint admin)
-$downloadUrl = $submissionId ? site_url('admin/fullpaper/download/'.$submissionId) : '';
-$previewUrl  = $submissionId ? site_url('admin/fullpaper/view/'.$submissionId) : '';
-$gdocs       = $previewUrl ? ('https://docs.google.com/gview?embedded=1&url='.rawurlencode($previewUrl)) : '';
+// Badge kelas
+$badge = $badgeMap[$status] ?? 'secondary';
 
-// mapping status review
-$rvStatMap = [
-  'diterima' => ['Diterima','success'],
-  'accepted' => ['Diterima','success'],
-  'rejected' => ['Ditolak','danger'],
-  'ditolak'  => ['Ditolak','danger'],
-  'revisi'   => ['Revisi','warning'],
-  'revision' => ['Revisi','warning'],
-  'uploaded' => ['Diunggah','info'],
-  'pending'  => ['Pending','secondary'],
-  'menunggu' => ['Menunggu','secondary'],
-  'sedang_direview' => ['Sedang Ditinjau','info'],
-  ''         => ['—','secondary'],
-  null       => ['—','secondary'],
-];
+// ==== Count penolakan dari variabel khusus ====
+$declinedCount = is_array($declined) ? count($declined) : 0;
 
-// ringkasan assigned
-$assignedCount  = count($assigned);
-$completedCount = 0;
-foreach ($assigned as $ar) {
-  $st = strtolower($ar['status'] ?? '');
-  if (in_array($st, ['diterima','accepted','revisi','revision','ditolak','rejected'], true)) $completedCount++;
-}
-$quotaFull = $assignedCount >= $maxReviewer;
-
-// helper badge assignment reviewer
-$badgeForAssign = function($s){
-  $s = strtolower((string)$s);
-  return match ($s) {
-    'accepted' => ['primary','Assigned'],
-    'declined' => ['secondary','Declined'],
-    default    => ['secondary','Pending'],
-  };
-};
-
-// Fallback penulis dari abstrak/user
-if (empty($author['name'])) {
-  $author['name'] = $submission['nama_lengkap']
-                  ?? $submission['user_name']
-                  ?? ($absContributors[0] ?? null)
-                  ?? '-';
-}
-if (empty($author['email'])) {
-  $author['email'] = $submission['email'] ?? $submission['user_email'] ?? null;
-}
-
-// Tampilkan Riwayat Revisi HANYA setelah ada keputusan review
-$hasReviewDecision = false;
-foreach ($fpReviews as $rv) {
-  $k = strtolower($rv['keputusan'] ?? '');
-  if (in_array($k, ['accepted','diterima','revision','revisi','rejected','ditolak'], true)) {
-    $hasReviewDecision = true; break;
+// Ambil daftar ID reviewer yang menolak untuk validasi frontend
+$declinedIds = [];
+if ($declined) {
+  foreach ($declined as $d) {
+    $declinedIds[] = (int)($d['reviewer_id'] ?? 0);
   }
 }
+$declinedIds = array_values(array_unique(array_filter($declinedIds)));
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
@@ -120,9 +92,8 @@ foreach ($fpReviews as $rv) {
                 <?php if ($absKategoriName !== ''): ?>
                   <span class="badge bg-secondary-subtle"><i class="bi bi-tags me-1"></i><?= esc($absKategoriName) ?></span>
                 <?php endif; ?>
-                <?php if ($revisiKe): ?>
-                  <span class="badge bg-secondary-subtle">Revisi ke-<?= (int)$revisiKe ?></span>
-                <?php endif; ?>
+                <!-- Tampilkan badge revisi, sekarang zero-based -->
+                <span class="badge bg-secondary-subtle">Revisi ke-<?= (int)$revisiKe ?></span>
                 <?php if ($uploadedAt !== '—'): ?>
                   <span class="badge bg-secondary-subtle"><i class="bi bi-clock me-1"></i><?= esc($uploadedAt) ?></span>
                 <?php endif; ?>
@@ -141,7 +112,7 @@ foreach ($fpReviews as $rv) {
       </div>
 
       <div class="row g-3">
-        <!-- KIRI -->
+        <!-- KIRI (konten utama) -->
         <div class="col-12 col-xl-8">
           <!-- Info FP -->
           <div class="card shadow-soft card-glass-plain mb-3">
@@ -233,10 +204,12 @@ foreach ($fpReviews as $rv) {
                           $st = strtoupper($h['full_paper_status'] ?? 'NONE');
                           $cls = $badgeMap[$st] ?? 'secondary';
                           $ts  = !empty($h['full_paper_uploaded_at']) ? date('d M Y H:i', strtotime($h['full_paper_uploaded_at'])) : '—';
+                          $revRaw = (int)($h['revisi_ke'] ?? 1);
+                          $revDisp = max(0, $revRaw - 1);
                         ?>
                           <tr>
                             <td><?= $no++ ?></td>
-                            <td><?= (int)($h['revisi_ke'] ?? 0) ?></td>
+                            <td><?= (int)$revDisp ?></td>
                             <td><span class="badge bg-<?= $cls ?>"><?= esc($statusText[$st] ?? $st) ?></span></td>
                             <td><?= esc($ts) ?></td>
                             <td><a class="btn btn-ghost btn-xs" href="<?= site_url('admin/fullpaper/detail/'.(int)$h['id']) ?>"><i class="bi bi-eye me-1"></i>Lihat</a></td>
@@ -253,133 +226,215 @@ foreach ($fpReviews as $rv) {
           <?php endif; ?>
         </div>
 
-        <!-- KANAN -->
+        <!-- KANAN (sidebar) -->
         <div class="col-12 col-xl-4">
-          <!-- Status FP -->
-          <div class="card shadow-soft card-glass-plain sticky-card mb-3">
-            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
-              <span class="badge bg-blue-soft"><i class="bi bi-flag"></i></span>
-              <h6 class="mb-0 fw-semibold text-blue-900">Status</h6>
-            </div>
-            <div class="card-body">
-              <?php if ($status === 'NONE'): ?>
-                <div class="alert bg-blue-soft-2 text-blue-900 border-0 fw-semibold mb-0"><i class="bi bi-info-circle me-1"></i> Belum ada Full Paper yang diunggah.</div>
-              <?php elseif ($status === 'UPLOADED'): ?>
-                <div class="alert bg-blue-soft-2 text-blue-900 border-0 fw-semibold mb-0"><i class="bi bi-hourglass-split me-1"></i> Sedang direview.</div>
-              <?php elseif ($status === 'REVISION'): ?>
-                <div class="alert alert-warning fw-semibold mb-0"><i class="bi bi-arrow-repeat me-1"></i> Perlu revisi.</div>
-              <?php elseif ($status === 'REJECTED'): ?>
-                <div class="alert alert-danger fw-semibold mb-0"><i class="bi bi-x-octagon me-1"></i> Ditolak.</div>
-              <?php elseif ($status === 'ACCEPTED'): ?>
-                <div class="alert alert-success fw-semibold mb-0"><i class="bi bi-check2-circle me-1"></i> Diterima.</div>
-              <?php endif; ?>
-            </div>
-          </div>
-
-          <!-- Reviewer -->
-          <div class="card shadow-soft card-glass-plain sticky-card">
-            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
-              <div class="d-flex align-items-center gap-2">
-                <span class="badge bg-blue-soft"><i class="bi bi-people"></i></span>
-                <h6 class="mb-0 fw-semibold text-blue-900">Reviewer Ditugaskan</h6>
+          <div class="sticky-aside">
+            <!-- Status FP -->
+            <div class="card shadow-soft card-glass-plain mb-3">
+              <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+                <span class="badge bg-blue-soft"><i class="bi bi-flag"></i></span>
+                <h6 class="mb-0 fw-semibold text-blue-900">Status</h6>
               </div>
-              <span class="badge bg-light text-muted"><?= $assignedCount ?> / max <?= $maxReviewer ?><?= $quotaFull ? ' — Penuh' : '' ?></span>
-            </div>
-            <div class="card-body">
-              <?php if (empty($assigned)): ?>
-                <div class="empty-hint"><i class="bi bi-info-circle me-1"></i> Belum ada reviewer yang ditugaskan.</div>
-              <?php else: ?>
-                <div class="vstack gap-2">
-                  <?php foreach ($assigned as $ar):
-                    $k = strtolower($ar['status'] ?? 'pending');
-                    $m = $rvStatMap[$k] ?? ['—','secondary'];
-                    $stAt = !empty($ar['status_at']) ? $fmtDT($ar['status_at']) : '—';
-                    $asAt = !empty($ar['assigned_at']) ? $fmtDT($ar['assigned_at']) : '—';
-                    [$csa, $lsa] = $badgeForAssign($ar['assignment_status'] ?? null);
-                  ?>
-                  <div class="p-2 border rounded-3">
-                    <div class="d-flex align-items-start justify-content-between">
-                      <div>
-                        <div class="fw-semibold text-blue-900">
-                          <?= esc($ar['name'] ?? '-') ?>
-                          <?php if (!empty($ar['email'])): ?><small class="text-muted ms-1">&lt;<?= esc($ar['email']) ?>&gt;</small><?php endif; ?>
-                        </div>
-                        <div class="small text-muted">Tugas: <span class="badge bg-<?= $csa ?>"><?= $lsa ?></span></div>
-                      </div>
-                      <div><span class="badge bg-<?= $m[1] ?>"><?= esc($m[0]) ?></span></div>
-                    </div>
-                    <div class="mt-1 small text-muted">
-                      Update: <?= esc($stAt) ?> • Ditugaskan: <?= esc($asAt) ?>
-                    </div>
-                  </div>
-                  <?php endforeach; ?>
-                </div>
-              <?php endif; ?>
-
-              <!-- Tambah reviewer -->
-              <div class="mt-3 p-2 rounded border bg-light">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                  <div class="fw-semibold">Tambah Reviewer</div>
-                  <small class="text-muted">Review masuk: <?= (int)$completedCount ?></small>
-                </div>
-                <?php if (!$quotaFull): ?>
-                  <form method="post" action="<?= site_url('admin/fullpaper/assign/'.$submissionId) ?>" class="row g-2">
-                    <?= csrf_field() ?>
-                    <div class="col-12">
-                      <select name="reviewer_id" class="form-select form-select-sm" required>
-                        <option value="">-- pilih --</option>
-                        <?php if (!empty($reviewers)): ?>
-                          <?php foreach ($reviewers as $rv): ?>
-                            <option value="<?= (int)$rv['id'] ?>">
-                              <?= esc(($rv['name'] ?? 'Reviewer').(!empty($rv['email']) ? ' — '.$rv['email'] : '')) ?>
-                            </option>
-                          <?php endforeach; ?>
-                        <?php else: ?>
-                          <option value="">Semua reviewer sudah ditugaskan</option>
-                        <?php endif; ?>
-                      </select>
-                      <div class="form-text">Kandidat otomatis menyembunyikan reviewer yang sudah ditugaskan. Maksimal <?= $maxReviewer ?> orang.</div>
-                    </div>
-                    <div class="col-12 d-grid">
-                      <button class="btn btn-primary btn-sm"><i class="bi bi-person-plus me-1"></i>Tugaskan</button>
-                    </div>
-                  </form>
-                <?php else: ?>
-                  <div class="alert alert-success-subtle border-0 mb-0">Kuota reviewer penuh.</div>
+              <div class="card-body">
+                <?php if ($status === 'NONE'): ?>
+                  <div class="alert bg-blue-soft-2 text-blue-900 border-0 fw-semibold mb-0"><i class="bi bi-info-circle me-1"></i> Belum ada Full Paper yang diunggah.</div>
+                <?php elseif ($status === 'UPLOADED'): ?>
+                  <div class="alert bg-blue-soft-2 text-blue-900 border-0 fw-semibold mb-0"><i class="bi bi-hourglass-split me-1"></i> Sedang direview.</div>
+                <?php elseif ($status === 'REVISION'): ?>
+                  <div class="alert alert-warning fw-semibold mb-0"><i class="bi bi-arrow-repeat me-1"></i> Perlu revisi.</div>
+                <?php elseif ($status === 'REJECTED'): ?>
+                  <div class="alert alert-danger fw-semibold mb-0"><i class="bi bi-x-octagon me-1"></i> Ditolak.</div>
+                <?php elseif ($status === 'ACCEPTED'): ?>
+                  <div class="alert alert-success fw-semibold mb-0"><i class="bi bi-check2-circle me-1"></i> Diterima.</div>
                 <?php endif; ?>
               </div>
+            </div>
 
-              <!-- Reviewer Abstrak -->
-              <div class="mt-3 p-2 rounded border bg-light-subtle">
-                <div class="fw-semibold mb-2"><i class="bi bi-people-fill me-1"></i>Reviewer Abstrak</div>
-                <?php if (empty($absReviewers)): ?>
-                  <div class="text-muted small">Tidak ada data reviewer abstrak.</div>
+            <!-- Reviewer Ditugaskan (AKTIF SAJA) -->
+            <div class="card shadow-soft card-glass-plain mb-3">
+              <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="badge bg-blue-soft"><i class="bi bi-people"></i></span>
+                  <h6 class="mb-0 fw-semibold text-blue-900">Reviewer Ditugaskan</h6>
+                </div>
+                <span class="badge bg-light text-muted"><?= $assignedCount ?> / max <?= $maxReviewer ?><?= $quotaFull ? ' — Penuh' : '' ?></span>
+              </div>
+              <div class="card-body">
+                <?php if (empty($assigned)): ?>
+                  <div class="empty-hint"><i class="bi bi-info-circle me-1"></i> Belum ada reviewer yang ditugaskan.</div>
+                <?php else: ?>
+                  <div class="vstack gap-2">
+                    <?php foreach ($assigned as $ar):
+                      // status review (progress)
+                      $k = strtolower($ar['status'] ?? 'pending');
+                      $m = $rvStatMap[$k] ?? ['—','secondary'];
+
+                      $stAt = !empty($ar['status_at']) ? $fmtDT($ar['status_at']) : '—';
+                      $asAt = !empty($ar['assigned_at']) ? $fmtDT($ar['assigned_at']) : '—';
+
+                      // assignment status (seharusnya accepted/pending di sini)
+                      $assignKey = strtolower((string)($ar['assignment_status'] ?? ''));
+                      $assignKey = $assignKey ?: 'default';
+                      [$csa, $lsa] = $assignStatusMap[$assignKey] ?? $assignStatusMap['default'];
+
+                      // headline badge: pakai progres review utk accepted, selain itu pending
+                      if ($assignKey === 'accepted') {
+                        $headlineBadge = $m; // progres review
+                      } else {
+                        $headlineBadge = ['Pending', 'secondary'];
+                      }
+
+                      $unassignUrl = site_url('admin/fullpaper/unassign/'.$submissionId.'/'.(int)$ar['reviewer_id']);
+                    ?>
+                    <div class="p-2 border rounded-3">
+                      <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div class="me-2">
+                          <div class="fw-semibold text-blue-900">
+                            <?= esc($ar['name'] ?? '-') ?>
+                            <?php if (!empty($ar['email'])): ?><small class="text-muted ms-1">&lt;<?= esc($ar['email']) ?>&gt;</small><?php endif; ?>
+                          </div>
+                          <div class="small text-muted">Tugas: <span class="badge bg-<?= $csa ?>"><?= $lsa ?></span></div>
+                        </div>
+                        <div class="text-end">
+                          <span class="badge bg-<?= esc($headlineBadge[1]) ?>"><?= esc($headlineBadge[0]) ?></span>
+                          <div class="mt-2">
+                            <a href="<?= esc($unassignUrl) ?>" class="btn btn-outline-danger btn-xs" onclick="return confirm('Cabut penugasan reviewer ini?');">
+                              <i class="bi bi-x-circle me-1"></i>Batalkan
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="mt-1 small text-muted">
+                        Update: <?= esc($stAt) ?> • Ditugaskan: <?= esc($asAt) ?>
+                      </div>
+                    </div>
+                    <?php endforeach; ?>
+                  </div>
+                <?php endif; ?>
+
+                <!-- Tambah reviewer -->
+                <div class="mt-3 p-2 rounded border bg-light">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="fw-semibold">Tambah Reviewer</div>
+                    <small class="text-muted">Review masuk: <?= (int)$completedCount ?></small>
+                  </div>
+                  <?php if (!$quotaFull): ?>
+                    <form method="post" action="<?= site_url('admin/fullpaper/assign/'.$submissionId) ?>" class="row g-2" id="assignForm">
+                      <?= csrf_field() ?>
+                      <div class="col-12">
+                        <select name="reviewer_id" class="form-select form-select-sm" required id="reviewerSelect">
+                          <option value="">-- pilih --</option>
+                          <?php if (!empty($reviewers)): ?>
+                            <?php
+                              $declinedLookup = array_flip($declinedIds);
+                            ?>
+                            <?php foreach ($reviewers as $rv):
+                              $rid = (int)($rv['id'] ?? 0);
+                              $isDeclinedBefore = isset($declinedLookup[$rid]);
+                              $label = ($rv['name'] ?? 'Reviewer') . (!empty($rv['email']) ? ' — '.$rv['email'] : '');
+                              if ($isDeclinedBefore) $label .= ' (menolak)';
+                            ?>
+                              <option
+                                value="<?= $rid ?>"
+                                <?= $isDeclinedBefore ? 'disabled' : '' ?>
+                                data-declined="<?= $isDeclinedBefore ? '1' : '0' ?>"
+                              >
+                                <?= esc($label) ?>
+                              </option>
+                            <?php endforeach; ?>
+                          <?php else: ?>
+                            <option value="">Semua reviewer sudah ditugaskan</option>
+                          <?php endif; ?>
+                        </select>
+                        <div class="form-text">Maksimal <?= $maxReviewer ?> orang.</div>
+                      </div>
+                      <div class="col-12 d-grid">
+                        <button class="btn btn-primary btn-sm" id="btnAssign"><i class="bi bi-person-plus me-1"></i>Tugaskan</button>
+                      </div>
+                    </form>
+                  <?php else: ?>
+                    <div class="alert alert-success-subtle border-0 mb-0">Kuota reviewer penuh.</div>
+                  <?php endif; ?>
+                </div>
+
+                <!-- Reviewer Abstrak -->
+                <div class="mt-3 p-2 rounded border bg-light-subtle">
+                  <div class="fw-semibold mb-2"><i class="bi bi-people-fill me-1"></i>Reviewer Abstrak</div>
+                  <?php if (empty($absReviewers)): ?>
+                    <div class="text-muted small">Tidak ada data reviewer abstrak.</div>
+                  <?php else: ?>
+                    <div class="table-responsive">
+                      <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light"><tr><th>#</th><th>Nama</th><th>Email</th><th>Status</th></tr></thead>
+                        <tbody>
+                          <?php $i=1; foreach ($absReviewers as $rv):
+                            $k = strtolower($rv['status'] ?? '');
+                            $m = $rvStatMap[$k] ?? ['—','secondary'];
+                          ?>
+                            <tr>
+                              <td><?= $i++ ?></td>
+                              <td><?= esc($rv['name'] ?? '-') ?></td>
+                              <td><?= esc($rv['email'] ?? '-') ?></td>
+                              <td><span class="badge bg-<?= $m[1] ?>"><?= esc($m[0]) ?></span></td>
+                            </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="small text-muted mt-2">Info tahap abstrak; boleh menugaskan reviewer yang sama untuk full paper.</div>
+                  <?php endif; ?>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- ============== LIST PENOLAKAN (pakai $declinedReviewers) ============== -->
+            <div class="card shadow-soft card-glass-plain">
+              <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="badge bg-blue-soft"><i class="bi bi-slash-circle"></i></span>
+                  <h6 class="mb-0 fw-semibold text-blue-900">List Penolakan</h6>
+                </div>
+                <span class="badge bg-light text-muted"><?= (int)$declinedCount ?> Penolakan</span>
+              </div>
+              <div class="card-body">
+                <?php if ($declinedCount === 0): ?>
+                  <div class="empty-hint"><i class="bi bi-info-circle me-1"></i> Belum ada reviewer yang menolak penugasan.</div>
                 <?php else: ?>
                   <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-0">
-                      <thead class="table-light"><tr><th>#</th><th>Nama</th><th>Email</th><th>Status</th></tr></thead>
+                    <table class="table table-sm align-middle">
+                      <thead class="table-light">
+                        <tr>
+                          <th>#</th>
+                          <th>Reviewer</th>
+                          <th>Email</th>
+                          <th>Alasan Penolakan</th>
+                          <th>Waktu Penolakan</th>
+                        </tr>
+                      </thead>
                       <tbody>
-                        <?php $i=1; foreach ($absReviewers as $rv):
-                          $k = strtolower($rv['status'] ?? '');
-                          $m = $rvStatMap[$k] ?? ['—','secondary'];
-                        ?>
+                        <?php $n=1; foreach ($declined as $d): ?>
                           <tr>
-                            <td><?= $i++ ?></td>
-                            <td><?= esc($rv['name'] ?? '-') ?></td>
-                            <td><?= esc($rv['email'] ?? '-') ?></td>
-                            <td><span class="badge bg-<?= $m[1] ?>"><?= esc($m[0]) ?></span></td>
+                            <td><?= $n++ ?></td>
+                            <td class="fw-semibold text-blue-900"><?= esc($d['name'] ?? '-') ?></td>
+                            <td><?= esc($d['email'] ?? '—') ?></td>
+                            <td><?= esc($d['decline_reason'] ?? '—') ?></td>
+                            <td><?= !empty($d['declined_at']) ? esc($fmtDT($d['declined_at'])) : '—' ?></td>
                           </tr>
                         <?php endforeach; ?>
                       </tbody>
                     </table>
                   </div>
-                  <div class="small text-muted mt-2">Info tahap abstrak; boleh menugaskan reviewer yang sama untuk full paper.</div>
+                  <div class="small text-muted mt-2">
+                    Catatan: Admin dapat langsung menambahkan reviewer pengganti di panel <b>“Tambah Reviewer”</b> di atas.
+                  </div>
                 <?php endif; ?>
               </div>
-
             </div>
+            <!-- ============ END LIST PENOLAKAN ============ -->
+
           </div>
-        </div>
+        </div> <!-- /KANAN -->
       </div>
 
     </div>
@@ -421,6 +476,9 @@ foreach ($fpReviews as $rv) {
 
 <?= $this->include('partials/footer') ?>
 
+<!-- SweetAlert2 (CDN). Hapus jika sudah dimuat di layout -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <style>
 :root{
   --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe;
@@ -456,12 +514,15 @@ body{ font-size:15.5px; line-height:1.6; }
 .bg-blue-soft-2{ background:linear-gradient(180deg,#eef4ff,#eaf2ff); }
 .btn{ font-weight:700; border-radius:10px; font-size:.98rem; padding:.62rem 1.05rem; }
 .btn-sm{ padding:.5rem .9rem; font-size:.92rem; }
+.btn-xs{ padding:.25rem .5rem; font-size:.8rem; border-radius:.5rem; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
-.sticky-card{ position:sticky; top:84px; }
 
+/* Sidebar sticky */
+.sticky-aside{ position: sticky; top: 84px; }
+
+/* PDF viewer */
 .chip-row{ display:flex; flex-wrap:wrap; gap:.5rem; }
 .chip{ display:inline-flex; align-items:center; padding:.28rem .6rem; font-size:.88rem; border-radius:999px; background:#eef3ff; color:#1e3a8a; border:1px solid rgba(30,64,175,.15); font-weight:600; }
-
 .pdf-wrap{ border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#f8fafc; transition:height .2s ease; }
 .pdf-wrap.is-min{ height:52vh; }
 .pdf-wrap.is-max{ height:82vh; }
@@ -483,23 +544,66 @@ body{ font-size:15.5px; line-height:1.6; }
 
 <script>
 (function(){
+  // Toggle PDF
   const wrap = document.getElementById('pdfWrap');
   const btn  = document.getElementById('btnToggleSize');
-  if(!wrap || !btn) return;
-  function setState(state){
-    if(state==='max'){
-      wrap.classList.remove('is-min'); wrap.classList.add('is-max');
-      btn.dataset.state = 'min';
-      btn.innerHTML = '<i class="bi bi-arrows-angle-contract"></i>';
-      btn.title = 'Minimize';
-    }else{
-      wrap.classList.remove('is-max'); wrap.classList.add('is-min');
-      btn.dataset.state = 'max';
-      btn.innerHTML = '<i class="bi bi-arrows-fullscreen"></i>';
-      btn.title = 'Maximize';
+  if(wrap && btn){
+    function setState(state){
+      if(state==='max'){
+        wrap.classList.remove('is-min'); wrap.classList.add('is-max');
+        btn.dataset.state = 'min';
+        btn.innerHTML = '<i class="bi bi-arrows-angle-contract"></i>';
+        btn.title = 'Minimize';
+      }else{
+        wrap.classList.remove('is-max'); wrap.classList.add('is-min');
+        btn.dataset.state = 'max';
+        btn.innerHTML = '<i class="bi bi-arrows-fullscreen"></i>';
+        btn.title = 'Maximize';
+      }
+    }
+    wrap.classList.add('is-min');
+    btn.addEventListener('click', ()=> setState(btn.dataset.state || 'max'));
+  }
+
+  // ==== Validasi assign: blokir yang pernah menolak ====
+  const declinedIds = <?= json_encode($declinedIds) ?>;
+  const form   = document.getElementById('assignForm');
+  const select = document.getElementById('reviewerSelect');
+
+  function showDeclinedAlert(nameText){
+    if (window.Swal) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Tidak bisa ditugaskan',
+        text: (nameText ? nameText + ' ' : '') + 'sudah menolak penugasan sebelumnya untuk full paper ini.',
+        footer: 'Silakan pilih reviewer lain.',
+        confirmButtonText: 'Mengerti',
+      });
+    } else {
+      alert((nameText? nameText+' ': '') + 'sudah menolak penugasan sebelumnya. Pilih reviewer lain.');
     }
   }
-  wrap.classList.add('is-min');
-  btn.addEventListener('click', ()=> setState(btn.dataset.state));
+
+  // Jika (karena suatu alasan) option tidak disabled dan terpilih, tahan submit
+  form?.addEventListener('submit', function(e){
+    const val = parseInt(select?.value || '0', 10);
+    if (declinedIds.includes(val)) {
+      e.preventDefault();
+      const nameText = select?.selectedOptions?.[0]?.textContent?.trim() || '';
+      showDeclinedAlert(nameText);
+    }
+  });
+
+  // UX: jika user mengklik option yang disabled (via keyboard), kasih info
+  select?.addEventListener('change', function(){
+    const opt = this.selectedOptions?.[0];
+    if (!opt) return;
+    const isDeclined = opt.getAttribute('data-declined') === '1';
+    if (isDeclined) {
+      // kembalikan ke placeholder
+      this.value = '';
+      showDeclinedAlert(opt.textContent?.trim() || '');
+    }
+  });
 })();
 </script>

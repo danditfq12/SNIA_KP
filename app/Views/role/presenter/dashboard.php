@@ -10,6 +10,19 @@ $activities        = $activities        ?? [];
 $monthEvents       = $monthEvents       ?? []; // key: 'YYYY-MM-DD' => array of items
 $todayHasEvent     = !empty($todaySchedule);
 
+/* ===== Nama & sapaan ===== */
+$rawName = '';
+if (function_exists('user') && user()) {
+  $rawName = (string) (user()->name ?? user()->username ?? user()->email ?? '');
+}
+if (!$rawName) {
+  $rawName = (string) (session('nama_lengkap') ?? session('name') ?? session('username') ?? 'Presenter');
+}
+$firstName = trim(explode(' ', $rawName)[0]) ?: 'Presenter';
+
+$hour   = (int)date('G');
+$waktu  = ($hour>=5 && $hour<11) ? 'Pagi' : (($hour>=11 && $hour<15) ? 'Siang' : (($hour>=15 && $hour<18) ? 'Sore' : 'Malam'));
+
 /* ===== Kalender (bulan berjalan) ===== */
 $y       = (int)date('Y');
 $m       = (int)date('n');
@@ -44,7 +57,25 @@ $fpToPill = function($s){
     default => 'pill-muted',
   };
 };
-$maxActivities = 4; // << tampilkan maksimal 4 item
+$mapAbs = function($s){
+  $s = strtolower((string)$s);
+  return match(true){
+    $s === 'diterima' => 'done',
+    $s === 'ditolak'  => 'danger',
+    in_array($s, ['revisi','menunggu','sedang_direview','pending'], true) => 'warn',
+    default           => 'muted',
+  };
+};
+$mapFp = function($s){
+  $s = strtoupper((string)$s);
+  return match($s){
+    'ACCEPTED'  => 'done',
+    'REJECTED'  => 'danger',
+    'REVISION','UPLOADED' => 'warn',
+    'NONE'      => 'muted',
+    default     => 'muted',
+  };
+};
 ?>
 
 <div id="content">
@@ -56,17 +87,9 @@ $maxActivities = 4; // << tampilkan maksimal 4 item
         <div class="hero-body">
           <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>
-              <h3 class="hero-title mb-1"><i class="bi bi-speedometer2 me-2"></i>Dashboard Presenter</h3>
-              <div class="text-white-70 small">Ringkasan progres & aktivitas terbaru.</div>
-            </div>
-            <div class="hero-tools flex-grow-1" style="max-width:620px;">
-              <div class="input-group input-group-lg hero-search">
-                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input id="dashSearch" type="text" class="form-control" placeholder="Cari event / status…">
-                <button id="dashClear" type="button" class="btn btn-light d-none">
-                  <i class="bi bi-x-circle"></i>
-                </button>
-              </div>
+              <!-- GANTI: sambutan user -->
+              <h3 class="hero-title mb-1">Halo, <?= esc($firstName) ?> 👋</h3>
+              <div class="text-white-70 small">Selamat <?= esc($waktu) ?> — semoga produktif! Ini ringkasan progres & aktivitas kamu.</div>
             </div>
           </div>
         </div>
@@ -75,7 +98,7 @@ $maxActivities = 4; // << tampilkan maksimal 4 item
           <ul class="nav nav-pills" id="dashTabs" role="tablist">
             <li class="nav-item" role="presentation">
               <button class="nav-link active" id="tab-overview" data-bs-toggle="pill" data-bs-target="#pane-overview" type="button" role="tab">
-                Overview
+                Utama
               </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -92,28 +115,28 @@ $maxActivities = 4; // << tampilkan maksimal 4 item
         <div class="tab-pane fade show active" id="pane-overview" role="tabpanel" aria-labelledby="tab-overview">
           <!-- KPI + ABSENSI -->
           <div class="row g-3 mb-3 align-items-stretch">
-            <!-- KPI kiri -->
             <div class="col-12 col-lg-3">
               <div class="d-grid gap-3">
+                <!-- KPI 1 -->
                 <div class="fp-card p-3">
-                  <div class="d-flex align-items-start gap-3">
-                    <div class="status-pill pill-info d-inline-flex" style="min-width:44px;justify-content:center;">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="kpi-icon kpi-blue">
                       <i class="bi bi-calendar2-event"></i>
                     </div>
                     <div>
-                      <div class="text-muted small">Event Diikuti</div>
+                      <div class="kpi-label">Event Diikuti</div>
                       <div class="stat-number"><?= (int)($stats['total_events'] ?? 0) ?></div>
                     </div>
                   </div>
                 </div>
-
+                <!-- KPI 2 -->
                 <div class="fp-card p-3">
-                  <div class="d-flex align-items-start gap-3">
-                    <div class="status-pill pill-success d-inline-flex" style="min-width:44px;justify-content:center;">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="kpi-icon kpi-green">
                       <i class="bi bi-patch-check"></i>
                     </div>
                     <div>
-                      <div class="text-muted small">Total LOA</div>
+                      <div class="kpi-label">Total LOA</div>
                       <div class="stat-number"><?= (int)($stats['total_loa'] ?? 0) ?></div>
                     </div>
                   </div>
@@ -130,13 +153,22 @@ $maxActivities = 4; // << tampilkan maksimal 4 item
                 </div>
 
                 <?php if (!$todayHasEvent): ?>
-                  <div class="empty-hint text-center">
-                    <i class="bi bi-calendar-x me-1"></i>Tidak ada event yang diselenggarakan hari ini.
+                  <div class="empty-state">
+                    <div class="empty-ico">
+                      <i class="bi bi-calendar-x"></i>
+                    </div>
+                    <div class="empty-title">Tidak ada event yang diselenggarakan hari ini</div>
+                    <div class="empty-desc">Cek kalender untuk melihat event mendatang atau detail event yang sudah kamu ikuti.</div>
+                    <div class="mt-2">
+                      <button class="btn btn-primary btn-sm" type="button" id="btnGoCalendar">
+                        <i class="bi bi-calendar3 me-1"></i>Lihat Kalender
+                      </button>
+                    </div>
                   </div>
                 <?php else: ?>
                   <ul class="list-unstyled mb-0">
                     <?php $limit=3; $shown=0; foreach ($todaySchedule as $s): if ($shown++ >= $limit) break; ?>
-                      <li class="mb-2 js-row" data-search="<?= esc(strtolower(($s['title'] ?? '').' '.($s['where'] ?? '').' '.($s['start'] ?? ''))) ?>">
+                      <li class="mb-2">
                         <a href="<?= esc($s['link']) ?>" class="activity-item">
                           <div class="fw-semibold text-truncate"><?= esc($s['title']) ?></div>
                           <div class="text-muted small"><?= esc($s['start'] ?: '-') ?> · <?= esc($s['where'] ?: '-') ?></div>
@@ -151,7 +183,7 @@ $maxActivities = 4; // << tampilkan maksimal 4 item
 
           <!-- AKTIVITAS & PROGRESS -->
           <div class="row g-3 mb-4">
-            <!-- AKTIVITAS TERBARU (rapi, klik seluruh baris, max 4 item) -->
+            <!-- AKTIVITAS TERBARU -->
             <div class="col-12 col-lg-5">
               <div class="fp-card h-100 p-0">
                 <div class="p-3 border-bottom small text-muted"><i class="bi bi-bell me-1"></i>Aktivitas Terbaru</div>
@@ -159,51 +191,48 @@ $maxActivities = 4; // << tampilkan maksimal 4 item
                   <?php if (empty($activities)): ?>
                     <div class="empty-hint text-center"><i class="bi bi-inboxes me-1"></i>Belum ada aktivitas.</div>
                   <?php else: ?>
-                    <ul class="list-unstyled mb-0">
-                      <?php
-                        $i=0;
-                        foreach ($activities as $a):
-                          if (++$i > $maxActivities) break;
+                    <div class="scroll-area scroll-area--activity">
+                      <ul class="list-unstyled mb-0">
+                        <?php foreach ($activities as $a):
                           $badge = strtolower($a['badge'] ?? '');
                           $pill  = $badge==='success' ? 'pill-success' : ($badge==='warning' ? 'pill-warn' : ($badge==='danger' ? 'pill-danger' : 'pill-muted'));
                           $link  = !empty($a['link']) ? (string)$a['link'] : 'javascript:void(0)';
-                      ?>
-                        <li class="js-row" data-search="<?= esc(strtolower(($a['title'] ?? '').' '.($a['desc'] ?? ''))) ?>">
-                          <a href="<?= esc($link) ?>" class="activity-item">
-                            <span class="status-pill <?= esc($pill) ?> me-2 icon-pill">
-                              <i class="bi <?= esc($a['icon'] ?? 'bi-dot') ?>"></i>
-                            </span>
-                            <div class="flex-fill">
-                              <div class="d-flex justify-content-between align-items-center">
-                                <div class="fw-semibold small text-truncate"><?= esc($a['title'] ?? '-') ?></div>
-                                <small class="text-muted"><?= !empty($a['time']) ? date('d M Y H:i', (int)$a['time']) : '' ?></small>
+                        ?>
+                          <li>
+                            <a href="<?= esc($link) ?>" class="activity-item">
+                              <span class="status-pill <?= esc($pill) ?> me-2 icon-pill">
+                                <i class="bi <?= esc($a['icon'] ?? 'bi-dot') ?>"></i>
+                              </span>
+                              <div class="flex-fill">
+                                <div class="d-flex justify-content-between align-items-center">
+                                  <div class="fw-semibold small text-truncate"><?= esc($a['title'] ?? '-') ?></div>
+                                  <small class="text-muted"><?= !empty($a['time']) ? date('d M Y H:i', (int)$a['time']) : '' ?></small>
+                                </div>
+                                <?php if (!empty($a['desc'])): ?>
+                                  <div class="text-muted xsmall mt-1 text-truncate-2"><?= esc($a['desc']) ?></div>
+                                <?php endif; ?>
                               </div>
-                              <?php if (!empty($a['desc'])): ?>
-                                <div class="text-muted xsmall mt-1 text-truncate-2"><?= esc($a['desc']) ?></div>
-                              <?php endif; ?>
-                            </div>
-                          </a>
-                        </li>
-                      <?php endforeach; ?>
-                    </ul>
+                            </a>
+                          </li>
+                        <?php endforeach; ?>
+                      </ul>
+                    </div>
                   <?php endif; ?>
                 </div>
               </div>
             </div>
 
-            <!-- PROGRESS EVENT -->
             <div class="col-12 col-lg-7" id="progress">
               <div class="fp-card h-100 p-0">
                 <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
                   <div class="small text-muted"><i class="bi bi-flag me-1"></i>Progress Event</div>
-                  <div class="small text-muted">Flow: Kontributor → Abstrak → Full Paper → Bayar → Selesai</div>
                 </div>
 
                 <div class="p-3">
                   <?php if (empty($progressEvents)): ?>
                     <div class="empty-hint text-center"><i class="bi bi-check2-circle me-1"></i>Tidak ada progres. Semua event sudah selesai.</div>
                   <?php else: ?>
-                    <div class="scroll-area" style="max-height: 520px;">
+                    <div class="scroll-area scroll-area--progress progress-list">
                       <?php foreach ($progressEvents as $p):
                         $eventId = (int)$p['event_id'];
                         $title   = (string)$p['title'];
@@ -238,9 +267,20 @@ $maxActivities = 4; // << tampilkan maksimal 4 item
                           elseif ($fpSt==='REJECTED')         { $ctaHref="/presenter/fullpaper/create/$eventId";  $ctaText="Upload Ulang Full Paper"; }
                           elseif ($fpSt==='ACCEPTED')         { $ctaHref="/presenter/pembayaran/instruction/$eventId"; $ctaText="Lanjut ke Pembayaran"; }
                         }
+
+                        $stKontrib  = !empty($p['steps']['kontributor']) && str_contains($p['steps']['kontributor'],'done') ? 'done'
+                                      : (!empty($p['steps']['kontributor']) && str_contains($p['steps']['kontributor'],'current') ? 'current' : 'muted');
+                        $absState   = $mapAbs($absSt);
+                        $fpState    = $mapFp($fpSt);
+                        $payBlocked = !($absSt === 'diterima' && $fpSt === 'ACCEPTED');
+                        $bayarState = $payBlocked ? ($absState==='danger'||$fpState==='danger' ? 'danger' : 'muted') : 'current';
+                        $veri       = (string)($p['steps']['verifikasi'] ?? '');
+                        $finishState= (!$payBlocked && str_contains($veri,'done')) ? 'done' : 'muted';
+
+                        $absStepClass = ($absState==='done' ? 'done' : ($absState==='warn' ? 'warn' : ($absState==='danger' ? 'danger' : 'current')));
+                        $fpStepClass  = ($fpState==='done'  ? 'done' : ($fpState==='warn'  ? 'warn'  : ($fpState==='danger'  ? 'danger'  : ($absState==='done' ? 'current' : 'muted'))));
                       ?>
-                        <div class="fp-card mb-3 js-row"
-                             data-search="<?= esc(strtolower($title.' '.$absInfo.' '.$fpInfo)) ?>">
+                        <div class="fp-card mb-3">
                           <div class="fp-head">
                             <h6 class="mb-0 fp-title text-truncate"><?= esc($title) ?></h6>
                             <span class="status-pill <?= $absPill ?>">Abstrak: <?= esc($absInfo) ?></span>
@@ -250,30 +290,32 @@ $maxActivities = 4; // << tampilkan maksimal 4 item
                             <span class="status-pill <?= $fpPill ?>">Full Paper: <?= esc($fpInfo) ?></span>
                           </div>
 
-                          <ul class="meta-list">
-                            <?php
-                              $S = $p['steps'] ?? [];
-                              $nodes = [
-                                ['Kontributor',$S['kontributor'] ?? ''],
-                                ['Abstrak',$S['abstrak'] ?? ''],
-                                ['Full Paper', $S['fullpaper'] ?? 'disabled'],
-                                ['Bayar', ($S['bayar'] ?? '').($blockedPay ? ' blocked' : '')],
-                                ['Selesai',$S['verifikasi'] ?? '']
-                              ];
-                            ?>
-                            <?php foreach ($nodes as $n):
-                              $lbl=$n[0]; $st=$n[1]; $dot='pill-muted';
-                              if (str_contains($st,'done'))        $dot='pill-success';
-                              elseif (str_contains($st,'current'))  $dot='pill-info';
-                              elseif (str_contains($st,'disabled')) $dot='pill-muted';
-                              elseif (str_contains($st,'blocked'))  $dot='pill-warn';
-                            ?>
-                              <li>
-                                <span><?= esc($lbl) ?></span>
-                                <span class="status-pill <?= $dot ?>"><?= str_contains($st,'blocked') ? 'Terkunci' : (str_contains($st,'done')?'Selesai':(str_contains($st,'current')?'Berjalan':(str_contains($st,'disabled')?'Nonaktif':'Belum'))) ?></span>
-                              </li>
-                            <?php endforeach; ?>
-                          </ul>
+                          <div class="stepper mb-2">
+                            <div class="step <?= esc($stKontrib) ?>">
+                              <div class="dot"><i class="bi bi-person-lines-fill"></i></div>
+                              <div class="label">Input Data</div>
+                            </div>
+
+                            <div class="step <?= esc($absStepClass) ?>">
+                              <div class="dot"><i class="bi bi-geo-alt-fill"></i></div>
+                              <div class="label">Input Abstrak</div>
+                            </div>
+
+                            <div class="step <?= esc($fpStepClass) ?>">
+                              <div class="dot"><i class="bi bi-file-earmark-arrow-up-fill"></i></div>
+                              <div class="label">Upload Berkas</div>
+                            </div>
+
+                            <div class="step <?= esc($bayarState) ?>">
+                              <div class="dot"><i class="bi bi-cash-stack"></i></div>
+                              <div class="label">Pembayaran</div>
+                            </div>
+
+                            <div class="step <?= esc($finishState) ?>">
+                              <div class="dot"><i class="bi bi-patch-check-fill"></i></div>
+                              <div class="label">Selesai</div>
+                            </div>
+                          </div>
 
                           <div class="fp-foot">
                             <?php if ($blockedPay && $ctaText === 'Lanjut ke Pembayaran'): ?>
@@ -369,32 +411,40 @@ $maxActivities = 4; // << tampilkan maksimal 4 item
             </div>
           </div>
         </div>
-      </div><!-- /tab-content -->
+      </div>
     </div>
   </main>
 </div>
 
 <?= $this->include('partials/footer') ?>
 
-<!-- ====== CSS (konsisten + diperlebar) ====== -->
+
 <style>
 :root{
   --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
   --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
   --muted:#6b7280; --ink:#0f172a; --radius:16px;
-  --card-min-h: 220px;
   --side-pad: clamp(1rem, 2.3vw, 2.2rem);
+
+  /* tinggi-tinggi area scroll */
+  --activity-row-h: 74px;
+  --activity-visible: 4.5;
+  --progress-card-h: 240px;
+  --progress-visible: 1.5;
 }
 
-/* >>>> FIX: lebar container (samakan dgn halaman lain) <<<< */
+/* Lebar container */
 .container-xxl{
-  max-width: min(100%, 1560px); /* sebelumnya salah tulis: max_width */
+  max-width: min(100%, 1560px);
   padding-left: var(--side-pad) !important;
   padding-right: var(--side-pad) !important;
   margin-inline: auto;
 }
 
-body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.5px; line-height:1.6; color:var(--ink); }
+body{
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  font-size:15.75px; line-height:1.6; color:var(--ink); letter-spacing:.1px;
+}
 .page-wrap-blue{
   min-height:100vh; padding-top:72px;
   background:
@@ -406,29 +456,44 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 /* HERO */
 .card-hero{ border:0; border-radius:var(--radius); overflow:hidden; box-shadow:0 12px 28px rgba(30,64,175,.18); }
 .card-hero .hero-body{ background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff; padding:1.8rem 1.2rem; min-height:176px; }
-.hero-title{ font-weight:800; }
-.text-white-70{ color:rgba(255,255,255,.85)!important; }
-.hero-tools .input-group .input-group-text{ background:#fff; border:0; }
-.hero-tools .form-control{ border:0; }
-.hero-tools .btn{ border:0; }
-.hero-search{ border-radius:12px; overflow:hidden; }
+.hero-title{ font-weight:900; letter-spacing:.2px; }
+.text-white-70{ color:rgba(255,255,255,.90)!important; }
 .hero-tabs{ background:#fff; padding:.6rem .8rem; border:1px solid rgba(30,64,175,.18); border-top:0; }
 .hero-tabs .nav-link{ font-weight:700; border-radius:999px; padding:.45rem 1rem; }
 .hero-tabs .nav-link.active{ background:var(--blue-600); color:#fff; }
 
 /* Card seragam */
 .fp-card{
-  border:1px solid rgba(30,64,175,.12); border-radius:14px; background:#fff; box-shadow:0 10px 22px rgba(30,64,175,.10);
-  padding:0.9rem; display:flex; flex-direction:column;
-  transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  border:1px solid rgba(30,64,175,.12);
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 10px 22px rgba(30,64,175,.10);
+  padding:0.9rem;
+  display:flex;
+  flex-direction:column;
 }
-.fp-card:hover{ transform: translateY(-2px); box-shadow:0 16px 28px rgba(30,64,175,.16); border-color: rgba(30,64,175,.22); }
 .fp-head{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:.35rem; }
 .fp-title{ line-height:1.35; max-width:72%; color:var(--blue-900); }
 
+/* KPI: icon & teks */
+.kpi-icon{
+  width:42px; height:42px; border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  background:#eef5ff; color:#1d4ed8; font-size:18px;
+  box-shadow:0 8px 20px rgba(29,78,216,.18), inset 0 -2px 0 rgba(255,255,255,.7);
+}
+.kpi-blue{ background:#e8f0ff; color:#1b4fd6; }
+.kpi-green{ background:#e9fff5; color:#0f8a5b; }
+
+.kpi-label{
+  color:#384; color:#475569; font-weight:700; letter-spacing:.15px;
+}
+.stat-number{
+  font-size:28px; font-weight:900; line-height:1.15; letter-spacing:.25px; margin-top:2px; color:#0f172a;
+}
+
 /* Pills & chips */
 .status-pill{ font-weight:800; font-size:.82rem; padding:.28rem .6rem; border-radius:999px; border:1px solid rgba(0,0,0,.06); white-space:nowrap; }
-.pill-info{ background:#e0f2fe; color:#075985; }
 .pill-warn{ background:#fef3c7; color:#92400e; }
 .pill-success{ background:#d1fae5; color:#065f46; }
 .pill-danger{ background:#fee2e2; color:#991b1b; }
@@ -437,25 +502,45 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .chip{ display:inline-flex; align-items:center; padding:.26rem .55rem; font-size:.86rem; border-radius:999px; background:#eef3ff; color:#1e3a8a; border:1px solid rgba(30,64,175,.15); font-weight:700; }
 .chip.alt{ background:#f1f5ff; color:#244aa4; }
 
-/* Meta list & hints */
-.meta-list{ list-style:none; padding-left:0; margin:.4rem 0 .2rem 0; }
-.meta-list li{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.36rem 0; }
-.meta-list li span{ color:var(--muted); }
+/* Meta / hints */
 .mini-hint{ color:#3a2a6a; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:10px; padding:.5rem .6rem; font-weight:600; font-size:.86rem; }
+.empty-hint{ color:#567; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.8rem 1rem; font-weight:600; }
 
-/* Activity list item (klikable & rapi) */
+/* Empty state khusus Absensi */
+.empty-state{
+  text-align:center; padding:1.2rem; border:1px dashed rgba(30,64,175,.22);
+  border-radius:12px; background:linear-gradient(180deg,#f8fbff, #ffffff);
+}
+.empty-ico{
+  width:60px; height:60px; border-radius:14px; display:flex; align-items:center; justify-content:center;
+  margin:0 auto .6rem; background:#eef2ff; color:#3730a3; font-size:28px;
+  box-shadow:0 6px 16px rgba(55,48,163,.12);
+}
+.empty-title{ font-weight:800; color:#1e3a8a; }
+.empty-desc{ color:#566; font-size:.95rem; }
+
+/* Activity item */
 .activity-item{
   display:flex; gap:.6rem; align-items:flex-start; text-decoration:none; color:inherit;
   border:1px solid rgba(2,6,23,.06); border-radius:12px; padding:.65rem .7rem; margin-bottom:.5rem;
-  transition: background .15s ease, box-shadow .15s ease, border-color .15s ease;
 }
-.activity-item:hover{ background:#f8fbff; box-shadow:0 6px 16px rgba(30,64,175,.10); border-color:rgba(30,64,175,.18); }
 .icon-pill{ min-width:34px; text-align:center; }
 
-/* Footer action area */
+/* Footer action */
 .fp-foot{ display:flex; gap:.6rem; margin-top:auto; padding-top:.6rem; border-top:1px dashed rgba(30,64,175,.16); }
 .btn{ font-weight:800; border-radius:10px; font-size:.98rem; padding:.55rem 1.0rem; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
+
+/* ===== Scroll area ===== */
+.scroll-area{ overflow:auto; padding-right:4px; scrollbar-width:thin; scrollbar-color:#9db7ff #f3f4f6; }
+.scroll-area::-webkit-scrollbar{ width:8px; }
+.scroll-area::-webkit-scrollbar-thumb{ background:#9db7ff; border-radius:6px; }
+.scroll-area::-webkit-scrollbar-track{ background:#f3f4f6; border-radius:6px; }
+
+.scroll-area--activity{ max-height: calc(var(--activity-row-h) * var(--activity-visible)); }
+/* sekitar 1–1.5 kartu terlihat */
+.progress-list .fp-card{ min-height: var(--progress-card-h); }
+.scroll-area--progress{ max-height: calc(var(--progress-card-h) * var(--progress-visible)); }
 
 /* Kalender */
 .calendar-legend{ display:flex; gap:.6rem; align-items:center; }
@@ -479,14 +564,30 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .calendar-grid .cell.today .dot{ background:#2563eb; }
 .calendar-grid .cell .count{ position:absolute; right:6px; bottom:4px; font-size:.65rem; background:#065f4699; color:#fff; padding:0 6px; border-radius:6px; }
 
+/* Stepper */
+.stepper{ position:relative; display:flex; justify-content:space-between; gap:12px; padding:18px 14px; border:1px solid rgba(2,6,23,.06); border-radius:12px; background:#fff; }
+.step{ position:relative; flex:1 1 0; text-align:center; min-width:0; }
+.step .dot{ width:36px; height:36px; border-radius:50%; margin:0 auto 6px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#fff; background:#16a34a; box-shadow:0 0 0 3px #e8f5eb; }
+.step .label{ font-weight:700; font-size:.85rem; color:#14532d; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.step::after{ content:""; position:absolute; top:18px; right:-50%; height:4px; width:100%; background:#16a34a; }
+.step:last-child::after{ display:none; }
+.step.done .dot{ background:#16a34a; } .step.done .label{ color:#14532d; }
+.step.current .dot{ background:#2563eb; } .step.current .label{ color:#1e3a8a; } .step.current::after{ background:#2563eb; }
+.step.warn .dot{ background:#f59e0b; } .step.warn .label{ color:#92400e; } .step.warn::after{ background:#f59e0b; }
+.step.danger .dot{ background:#ef4444; } .step.danger .label{ color:#7f1d1d; } .step.danger::after{ background:#ef4444; }
+.step.muted .dot{ background:#9ca3af; } .step.muted .label{ color:#475569; } .step.muted::after{ background:#9ca3af; }
+.step .bi{ line-height:1; }
+
 /* Responsive */
 @media (max-width:767.98px){
-  .hero-tools{ width:100%; max-width:none; }
   .card-hero .hero-body{ padding:1.4rem 1rem; min-height:165px; }
   .fp-title{ max-width:68%; }
+  :root{ --activity-visible: 3.6; --progress-visible: 1.2; }
 }
-@media (max-width:575.98px){
+@media (max-width:576px){
   .container-xxl{ padding-left: calc(var(--side-pad) - .25rem) !important; padding-right: calc(var(--side-pad) - .25rem) !important; }
+  .step .label{ font-size:.78rem; }
+  .step .dot{ width:32px; height:32px; font-size:16px; }
 }
 
 /* util */
@@ -495,23 +596,18 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 }
 </style>
 
-<!-- ====== JS: filter ringan ====== -->
 <script>
-(function(){
-  const q = document.getElementById('dashSearch');
-  const clr = document.getElementById('dashClear');
-
-  function apply(){
-    const query = (q?.value || '').toLowerCase().trim();
-    document.querySelectorAll('.js-row').forEach(el=>{
-      const hay = (el.dataset.search || el.textContent || '').toLowerCase();
-      el.style.display = (!query || hay.includes(query)) ? '' : 'none';
-    });
-    if (clr) clr.classList.toggle('d-none', !query);
-  }
-  q?.addEventListener('input', apply);
-  clr?.addEventListener('click', ()=>{ q.value=''; apply(); q.focus(); });
-
-  apply();
-})();
+/* Tombol "Lihat Kalender" saat absensi kosong -> pindah ke tab Kalender */
+document.addEventListener('DOMContentLoaded', function(){
+  const btn = document.getElementById('btnGoCalendar');
+  if (!btn) return;
+  btn.addEventListener('click', function(){
+    const tabBtn = document.getElementById('tab-calendar');
+    if (tabBtn) {
+      const t = new bootstrap.Tab(tabBtn);
+      t.show();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  });
+});
 </script>

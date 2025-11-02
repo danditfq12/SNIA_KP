@@ -30,6 +30,8 @@ class Abstrak extends BaseController
         helper(['date', 'text', 'filesystem']);
     }
 
+    /** ===================== UTIL ===================== */
+
     private function isContributorCompleted(?array $reg): bool
     {
         if (!$reg) return false;
@@ -43,9 +45,18 @@ class Abstrak extends BaseController
         return false;
     }
 
-    private function mapStatusMeta(?string $status): array
+    private function mapStatusMeta(?string $status, array $row = []): array
     {
         $s = strtolower((string)$status);
+        $isAuto = false;
+        foreach (['auto_reject_at','auto_rejected_at','auto_reject_reason'] as $k) {
+            if (!empty($row[$k])) { $isAuto = true; break; }
+        }
+
+        if ($s === 'ditolak' && $isAuto) {
+            return ['badge'=>'danger','label'=>'Ditolak (Otomatis)','hint'=>'Ditolak otomatis karena melewati batas waktu.'];
+        }
+
         return match ($s) {
             'menunggu'         => ['badge'=>'warning','label'=>'Menunggu','hint'=>'Menunggu review abstrak'],
             'sedang_direview'  => ['badge'=>'info','label'=>'Sedang direview','hint'=>'Reviewer sedang menilai'],
@@ -55,6 +66,111 @@ class Abstrak extends BaseController
             default            => ['badge'=>'secondary','label'=>'Belum Upload','hint'=>'Belum ada abstrak'],
         };
     }
+
+    /**
+     * Hitung cutoff waktu:
+     * - Untuk submit:  min(abstract_deadline, H-1 event)
+     * - Untuk revisi:  min(abstract_revision_deadline (atau abstract_deadline), H-1 event)
+     */
+    private function computeCutoff(?array $event, string $which='abs'): ?int
+    {
+        if (!$event) return null;
+        $eventDateTs = !empty($event['event_date']) ? strtotime($event['event_date']) : null;
+        // s/d H-1 akhir hari (23:59:59)
+        $hMinus1 = $eventDateTs ? strtotime('-1 day 23:59:59', $eventDateTs) : null;
+
+        if ($which === 'rev') {
+            $revDeadline = !empty($event['abstract_revision_deadline']) ? strtotime($event['abstract_revision_deadline']) : null;
+            $fallback    = !empty($event['abstract_deadline']) ? strtotime($event['abstract_deadline']) : null;
+            $d = $revDeadline ?: $fallback;
+        } else {
+            $d = !empty($event['abstract_deadline']) ? strtotime($event['abstract_deadline']) : null;
+        }
+
+        if ($d && $hMinus1) return min($d, $hMinus1);
+        return $d ?: $hMinus1;
+    }
+
+    /**
+     * Auto-reject rules:
+     * - status 'menunggu' / 'sedang_direview' dan now > cutoffSubmit  -> DITOLAK (otomatis)
+     * - status 'revisi' dan now > cutoffRevision                      -> DITOLAK (otomatis)
+     * Kolom opsional (auto_reject_*, archived, deleted_from_event) di-update hanya jika ada.
+     */
+    private function enforceAutoRejectIfOverdue(int $userId, int $eventId, ?array $lastAbsRow): ?array
+    {
+        $event = $this->eventModel->find($eventId);
+        if (!$event) return $lastAbsRow;
+
+        if (!$lastAbsRow) {
+            $lastAbsRow = $this->abstrakModel->where('id_user',$userId)
+                ->where('event_id',$eventId)->orderBy('id_abstrak','DESC')->first();
+            if (!$lastAbsRow) return null; // tidak ada baris abstrak
+        }
+
+        $status = strtolower((string)($lastAbsRow['status'] ?? ''));
+        if (!in_array($status, ['menunggu','sedang_direview','revisi'], true)) return $lastAbsRow;
+
+        $now = time();
+        $cutoffAbs = $this->computeCutoff($event, 'abs');
+        $cutoffRev = $this->computeCutoff($event, 'rev');
+
+        $shouldReject = false; $reason = null;
+        if (in_array($status, ['menunggu','sedang_direview'], true) && $cutoffAbs && $now > $cutoffAbs) {
+            $shouldReject = true;
+            $reason = 'Melewati batas waktu pengumpulan abstrak (cutoff).';
+        } elseif ($status === 'revisi' && $cutoffRev && $now > $cutoffRev) {
+            $shouldReject = true;
+            $reason = 'Melewati batas waktu pengumpulan revisi abstrak (cutoff).';
+        }
+        if (!$shouldReject) return $lastAbsRow;
+
+        // aman kolom opsional
+        $db = \Config\Database::connect();
+        $tbl = $this->abstrakModel->table ?? 'abstrak';
+        $fields = array_flip($db->getFieldNames($tbl));
+
+        $payload = ['status' => 'ditolak'];
+        if (isset($fields['auto_reject_at']))     $payload['auto_reject_at']     = date('Y-m-d H:i:s');
+        if (isset($fields['auto_rejected_at']))   $payload['auto_rejected_at']   = date('Y-m-d H:i:s');
+        if (isset($fields['auto_reject_reason'])) $payload['auto_reject_reason'] = $reason;
+        if (isset($fields['archived']))           $payload['archived']           = 1;
+        if (isset($fields['deleted_from_event'])) $payload['deleted_from_event'] = 1;
+
+        $this->abstrakModel->update((int)$lastAbsRow['id_abstrak'], $payload);
+
+        return $this->abstrakModel->where('id_abstrak',(int)$lastAbsRow['id_abstrak'])->first();
+    }
+
+    /** ===== Helper presentasi (pindahan dari View) ===== */
+
+    private function formatDate(?string $s): string { return $s ? date('d M Y', strtotime($s)) : '-'; }
+    private function formatDT(?string $s): string   { return $s ? date('d M Y H:i', strtotime($s)) : '-'; }
+    private function formatLabel(?string $f): string
+    {
+        $f = strtolower((string)$f);
+        return $f === 'both' ? 'Hybrid' : ucfirst($f ?: '-');
+    }
+    private function chipForStatus(string $status, bool $isAutoReject): array
+    {
+        return [
+            'menunggu'        => ['label'=>'Menunggu',        'cls'=>'chip-wait'],
+            'sedang_direview' => ['label'=>'Sedang direview', 'cls'=>'chip-info'],
+            'revisi'          => ['label'=>'Revisi',          'cls'=>'chip-warn'],
+            'diterima'        => ['label'=>'Diterima',        'cls'=>'chip-success'],
+            'ditolak'         => ['label'=>$isAutoReject ? 'Ditolak (Otomatis)' : 'Ditolak', 'cls'=>'chip-danger'],
+        ][$status] ?? ['label'=>ucfirst($status), 'cls'=>'chip-muted'];
+    }
+    private function pillFromBadge(string $badge): string
+    {
+        return [
+            'success'=>'pill-success','danger'=>'pill-danger',
+            'warning'=>'pill-warn','info'=>'pill-info',
+            'secondary'=>'pill-muted','primary'=>'pill-primary'
+        ][strtolower($badge) ?: 'secondary'] ?? 'pill-muted';
+    }
+
+    /** ===================== PAGES ===================== */
 
     public function index()
     {
@@ -72,8 +188,8 @@ class Abstrak extends BaseController
             if (!isset($latestPerEvent[$eid]) || $ts > $cur) $latestPerEvent[$eid] = $a;
         }
 
-        $needsUpload = []; // = To-Do
-        $history     = []; // hanya diterima
+        $todoCards = [];
+        $historyCards = [];
 
         foreach ($regs as $r) {
             $eid = (int) ($r['id_event'] ?? 0);
@@ -90,71 +206,112 @@ class Abstrak extends BaseController
                           ? $this->eventModel->isAbstractRevisionOpen($eid)
                           : $isOpenSubmit;
 
+            // ambil latest & jalankan auto-reject bila perlu
             $last = $latestPerEvent[$eid] ?? null;
-            $lastStatus = strtolower((string)($last['status'] ?? '')); // '', menunggu, sedang_direview, revisi, ditolak, diterima
+            $last = $this->enforceAutoRejectIfOverdue($userId, $eid, $last);
 
-            // === hitung apakah BOLEH upload tombolnya ===
-            $canUpload = false;
-            if ($contribOK) {
-                if (!$last) {
-                    // belum pernah upload → boleh kalau jendela submit open
-                    $canUpload = $isOpenSubmit;
-                } else {
-                    if ($lastStatus === 'revisi')  $canUpload = $isOpenRev;
-                    if ($lastStatus === 'ditolak') $canUpload = $isOpenSubmit;
-                }
-            }
+            $lastStatus = strtolower((string)($last['status'] ?? ''));
+            $meta = $this->mapStatusMeta($lastStatus ?: null, $last ?? []);
 
-            // === klasifikasi To-Do vs Riwayat ===
-            if ($last && $lastStatus === 'diterima') {
-                // hanya accepted → Riwayat
-                $meta = $this->mapStatusMeta($lastStatus);
-                $history[] = [
-                    'id_abstrak'     => (int) ($last['id_abstrak'] ?? 0),
-                    'judul'          => $last['judul'] ?? '-',
-                    'nama_kategori'  => $last['nama_kategori'] ?? '-',
-                    'status'         => $lastStatus,
-                    'status_badge'   => $meta['badge'],
-                    'status_label'   => $meta['label'],
-                    'status_hint'    => $meta['hint'],
-                    'tanggal_upload' => $last['tanggal_upload'] ?? null,
-                    'event_id'       => $eid,
-                    'event_title'    => $event['title'] ?? '-',
-                    'event_date'     => $event['event_date'] ?? null,
-                    'revision_open'  => $isOpenRev,
+            $now = time();
+            $cutoffAbs = $this->computeCutoff($event, 'abs');
+
+            // belum pernah upload & lewat cutoff submit → Riwayat (Ditolak Otomatis, virtual)
+            if (!$last && $cutoffAbs && $now > $cutoffAbs) {
+                $m = $this->mapStatusMeta('ditolak', ['auto_reject_at'=>date('Y-m-d H:i:s')]);
+                $historyCards[] = [
+                    'id'            => 0,
+                    'title'         => '-',
+                    'event_title'   => $event['title'] ?? '-',
+                    'event_date'    => $this->formatDate($event['event_date'] ?? null),
+                    'uploaded_at'   => '-',
+                    'status_label'  => $m['label'],
+                    'status_pill'   => $this->pillFromBadge($m['badge']),
+                    'kategori'      => '-',
+                    'hint'          => 'Tidak mengunggah abstrak sampai batas waktu.',
+                    'detail_url'    => null,
+                    'searchable'    => strtolower(($event['title'] ?? '').' '.$m['label']),
                 ];
                 continue;
             }
 
-            // selain accepted (termasuk belum upload) → To-Do
-            $meta = $this->mapStatusMeta($lastStatus ?: null);
-            $needsUpload[] = [
-                'event_id'                   => $eid,
-                'title'                      => $last['judul'] ?? ($event['title'] ?? '-'),
-                'event_title'                => $event['title'] ?? '-',
-                'event_date'                 => $event['event_date'] ?? null,
-                'abstract_deadline'          => $event['abstract_deadline'] ?? null,
-                'abstract_revision_deadline' => $event['abstract_revision_deadline'] ?? null,
-                'abstract_submission_active' => $event['abstract_submission_active'] ?? null,
-                'revision_open'              => $isOpenRev,
-                'format'                     => strtolower($event['format'] ?? ''),
-                'status'                     => $lastStatus ?: 'belum_upload',
-                'status_badge'               => $meta['badge'],
-                'status_label'               => $meta['label'],
-                'status_hint'                => $meta['hint'],
-                'last_abs_id'                => $last['id_abstrak'] ?? null,
-                // ➜ dipakai view untuk tampilkan/hilangkan tombol upload
-                'can_upload'                 => $canUpload,
+            // hitung apakah BOLEH upload tombolnya
+            $canUpload = false;
+            if ($contribOK) {
+                if (!$last) {
+                    $canUpload = $isOpenSubmit; // belum pernah upload
+                } else {
+                    if ($lastStatus === 'revisi')  $canUpload = $isOpenRev;
+                    if ($lastStatus === 'ditolak') $canUpload = $isOpenSubmit; // upload ulang
+                }
+            }
+
+            // klasifikasi: Riwayat jika diterima/ditolak
+            if ($last && in_array($lastStatus, ['diterima','ditolak'], true)) {
+                $historyCards[] = [
+                    'id'            => (int)($last['id_abstrak'] ?? 0),
+                    'title'         => $last['judul'] ?? ($event['title'] ?? '-'),
+                    'event_title'   => $event['title'] ?? '-',
+                    'event_date'    => $this->formatDate($event['event_date'] ?? null),
+                    'uploaded_at'   => $this->formatDT($last['tanggal_upload'] ?? null),
+                    'status_label'  => $meta['label'],
+                    'status_pill'   => $this->pillFromBadge($meta['badge']),
+                    'kategori'      => $last['nama_kategori'] ?? '-',
+                    'hint'          => $meta['hint'],
+                    'detail_url'    => site_url('presenter/abstrak/detail/'.(int)($last['id_abstrak'] ?? 0)),
+                    'searchable'    => strtolower(
+                        ($last['judul'] ?? '') .' '.($event['title'] ?? '').' '.($meta['label'] ?? '').' '.
+                        ($last['nama_kategori'] ?? '')
+                    ),
+                ];
+                continue;
+            }
+
+            // selain accepted/rejected → To-Do
+            $statusCode = $lastStatus ?: 'belum_upload';
+            $isRevisi   = ($statusCode === 'revisi');
+            $isDitolak  = ($statusCode === 'ditolak');
+            $hasLast    = !empty($last['id_abstrak']);
+
+            $primaryUrl = $isRevisi && $hasLast
+                ? site_url('presenter/abstrak/detail/'.(int)$last['id_abstrak']).'#section-revisi'
+                : site_url('presenter/abstrak/create/'.$eid);
+            $primaryTxt = $isRevisi ? 'Kirim Revisi' : ($isDitolak ? 'Upload Ulang' : 'Upload Abstrak');
+
+            $todoCards[] = [
+                'event_id'       => $eid,
+                'title'          => $last['judul'] ?? ($event['title'] ?? '-'),
+                'status_label'   => $meta['label'],
+                'status_pill'    => $this->pillFromBadge($meta['badge']),
+                'format'         => $this->formatLabel($event['format'] ?? ''),
+                'event_date'     => $this->formatDate($event['event_date'] ?? null),
+                'abs_deadline'   => $this->formatDT($event['abstract_deadline'] ?? null),
+                'rev_deadline'   => $isRevisi ? $this->formatDT($event['abstract_revision_deadline'] ?? null) : null,
+                'hint'           => $meta['hint'],
+                'can_upload'     => $canUpload,
+                'primary_url'    => $primaryUrl,
+                'primary_text'   => $primaryTxt,
+                'detail_url'     => $hasLast ? site_url('presenter/abstrak/detail/'.(int)$last['id_abstrak']) : null,
+                'searchable'     => strtolower(
+                    ($event['title'] ?? '') .' '. ($meta['label'] ?? '') .' '.($event['format'] ?? '') .' '.
+                    ($this->formatDate($event['event_date'] ?? null)) .' '. ($this->formatDT($event['abstract_deadline'] ?? null)) .' '.
+                    ($this->formatDT($event['abstract_revision_deadline'] ?? null))
+                ),
+                'is_revisi'      => $isRevisi,
             ];
         }
 
         // urutkan Riwayat dari terbaru
-        usort($history, fn($a,$b) => strtotime($b['tanggal_upload'] ?? '1970-01-01') <=> strtotime($a['tanggal_upload'] ?? '1970-01-01'));
+        usort($historyCards, function($a,$b){
+            $aTime = ($a['uploaded_at'] ?? '-') === '-' ? 0 : strtotime($a['uploaded_at']);
+            $bTime = ($b['uploaded_at'] ?? '-') === '-' ? 0 : strtotime($b['uploaded_at']);
+            return $bTime <=> $aTime;
+        });
 
         return view('role/presenter/abstrak/index', [
             'title'        => 'Abstrak',
-            'uploadEvents' => $needsUpload, // = To-Do
-            'history'      => $history,
+            'todoCards'    => $todoCards,
+            'historyCards' => $historyCards,
         ]);
     }
 
@@ -169,6 +326,10 @@ class Abstrak extends BaseController
                 ->with('error','Event tidak ditemukan.')
                 ->with('swal', ['icon'=>'error','title'=>'Gagal','text'=>'Event tidak ditemukan.']);
         }
+
+        // tegakkan auto-reject state terbaru
+        $lastAbsLatest = $this->abstrakModel->where('id_user',$userId)->where('event_id',$eventId)->orderBy('id_abstrak','DESC')->first();
+        $this->enforceAutoRejectIfOverdue($userId, $eventId, $lastAbsLatest);
 
         $reg = $this->regModel->findUserReg($eventId, $userId);
         if (!$reg) {
@@ -242,6 +403,10 @@ class Abstrak extends BaseController
                 ->with('error','Lengkapi semua field (termasuk kategori).')
                 ->with('swal', ['icon'=>'warning','title'=>'Cek Data','text'=>'Lengkapi semua field termasuk kategori.']);
         }
+
+        // pastikan auto-reject ditegakkan
+        $lastAbsLatest = $this->abstrakModel->where('id_user',$userId)->where('event_id',$eventId)->orderBy('id_abstrak','DESC')->first();
+        $this->enforceAutoRejectIfOverdue($userId, $eventId, $lastAbsLatest);
 
         $event = $this->eventModel->find($eventId);
         if (!$event) {
@@ -399,6 +564,11 @@ class Abstrak extends BaseController
     public function detail($idAbstrak)
     {
         $userId = (int) session()->get('id_user');
+
+        // tegakkan auto-reject bila perlu
+        $rowRaw = $this->abstrakModel->where('id_abstrak',(int)$idAbstrak)->first();
+        if ($rowRaw) { $this->enforceAutoRejectIfOverdue($userId, (int)$rowRaw['event_id'], $rowRaw); }
+
         $row = $this->abstrakModel->getDetailWithRelationsForUser((int)$idAbstrak, $userId);
         if (!$row) {
             return redirect()->to('/presenter/abstrak')
@@ -408,29 +578,31 @@ class Abstrak extends BaseController
 
         $event  = $this->eventModel->find((int)$row['event_id']);
         $status = strtolower((string)($row['status'] ?? 'menunggu'));
-        $badge  = $this->mapStatusMeta($status)['badge'] ?? 'secondary';
+        $meta   = $this->mapStatusMeta($status, $row);
+        $isAutoReject = ($status==='ditolak') && (!empty($row['auto_reject_at']) || !empty($row['auto_reject_reason']));
+        $chip = $this->chipForStatus($status, $isAutoReject);
 
-        // Semua review
+        // Semua review → timeline
         $reviews = $this->reviewModel->getReviewsForDisplay((int)$idAbstrak);
-
-        // Fallback lama: list komentar
-        $reviewComments = [];
+        $timeline = [];
         foreach ($reviews as $rv) {
-            if (!empty($rv['display_comment'])) $reviewComments[] = trim((string)$rv['display_comment']);
-        }
-        $reviewComments = array_values(array_unique(array_filter($reviewComments, fn($v)=>$v!=='')));
+            $kep  = strtolower($rv['keputusan'] ?? 'pending');
+            $kLab = [
+                'diterima' => ['success','Diterima'],
+                'ditolak'  => ['danger','Ditolak'],
+                'revisi'   => ['primary','Revisi'],
+                'sedang_direview' => ['info','Sedang direview'],
+                'pending'  => ['secondary','Pending'],
+            ][$kep] ?? ['secondary', ucfirst($kep ?: 'pending')];
 
-        // NEW: structured list
-        $reviewList = [];
-        foreach ($reviews as $rv) {
-            $komentar = trim((string)($rv['display_comment'] ?? $rv['komentar'] ?? ''));
-            $reviewList[] = [
-                'revisi_ke'      => isset($rv['revisi_ke']) ? (int)$rv['revisi_ke'] : null,
-                'keputusan'      => strtolower((string)($rv['keputusan'] ?? 'pending')),
-                'reviewer_name'  => trim((string)($rv['reviewer_name'] ?? '')),
-                'reviewer_email' => trim((string)($rv['reviewer_email'] ?? '')),
-                'tanggal_review' => $rv['tanggal_review'] ?? null,
-                'komentar'       => $komentar,
+            $timeline[] = [
+                'revisi_ke' => isset($rv['revisi_ke']) ? (int)$rv['revisi_ke'] : null,
+                'badge'     => $kLab[0],
+                'badge_txt' => $kLab[1],
+                'reviewer'  => trim((string)($rv['reviewer_name'] ?? 'Reviewer')),
+                'email'     => trim((string)($rv['reviewer_email'] ?? '')),
+                'waktu'     => $this->formatDT($rv['tanggal_review'] ?? null),
+                'komentar'  => trim((string)($rv['display_comment'] ?? $rv['komentar'] ?? '')),
             ];
         }
 
@@ -451,22 +623,68 @@ class Abstrak extends BaseController
                  ? $this->eventModel->isAbstractRevisionOpen((int)$row['event_id'])
                  : $this->eventModel->isAbstractSubmissionOpen((int)$row['event_id']);
 
-        $showReuploadAbstract = ($status === 'ditolak');
-        $showCancel           = ($status === 'menunggu');
+        // ====== File / Preview URLs ======
+        $fileName   = (string)($row['file_abstrak'] ?? '');
+        $filePath   = $fileName !== '' ? WRITEPATH.'uploads/abstrak/'.$fileName : null;
+        $fileOK     = $filePath && is_file($filePath);
+
+        // route internal untuk stream & download
+        $streamUrl   = $fileOK ? site_url('presenter/abstrak/file/'.$idAbstrak) : null;
+        $downloadUrl = $fileOK ? site_url('presenter/abstrak/download/'.$idAbstrak) : null;
+
+        // gdocs viewer (akan bekerja jika URL publik/diakses tanpa login)
+        $gdocsUrl    = $fileOK ? 'https://docs.google.com/gview?embedded=1&url=' . urlencode($streamUrl) : null;
+
+        // compose view model
+        $vm = [
+            // header
+            'judul'             => (string)($row['judul'] ?? '—'),
+            'event_title'       => (string)($event['title'] ?? '-'),
+            'kategori'          => (string)($row['nama_kategori'] ?? '-'),
+            'uploaded_at'       => $this->formatDT($row['tanggal_upload'] ?? null),
+            'chip'              => $chip,                    // ['label','cls']
+
+            // file preview
+            'file_exists'       => $fileOK,
+            'file_stream_url'   => $streamUrl,
+            'file_download_url' => $downloadUrl,
+            'gdocs_viewer_url'  => $gdocsUrl,
+
+            // alerts auto reject
+            'is_auto_reject'    => $isAutoReject,
+            'auto_reason'       => (string)($row['auto_reject_reason'] ?? ''),
+            'auto_at'           => $this->formatDT($row['auto_reject_at'] ?? ($row['auto_rejected_at'] ?? null)),
+
+            // actions
+            'can_reupload'      => ($status==='ditolak') && $this->eventModel->isAbstractSubmissionOpen((int)$row['event_id']),
+            'reupload_url'      => site_url('/presenter/abstrak/create/'.(int)$row['event_id']),
+            'show_cancel'       => ($status==='menunggu'),
+            'cancel_action'     => site_url('/presenter/abstrak/cancel/'.(int)$row['id_abstrak']),
+
+            // revision section
+            'show_revision'      => ($status==='revisi'),
+            'can_upload_revision'=> ($status==='revisi' && $revOpen),
+            'rev_deadline'       => $this->formatDT($event['abstract_revision_deadline'] ?? null),
+            'revision_post'      => site_url('/presenter/abstrak/revisi/'.(int)$row['id_abstrak']),
+
+            // timeline
+            'timeline'          => $timeline,
+
+            // info event
+            'event_date'        => $this->formatDate($event['event_date'] ?? null),
+            'abs_deadline'      => $this->formatDT($event['abstract_deadline'] ?? null),
+            'rev_deadline_info' => $this->formatDT($event['abstract_revision_deadline'] ?? null),
+            'fp_deadline'       => $this->formatDT($event['full_paper_deadline'] ?? null),
+
+            // side
+            'status'            => $status,
+            'assigned_reviewer' => $assignedReviewer,
+            'contributors'      => $contributors,
+        ];
 
         return view('role/presenter/abstrak/detail', [
-            'title'                => 'Detail Abstrak',
-            'abs'                  => $row,
-            'event'                => $event,
-            'status'               => $status,
-            'badge'                => $badge,
-            'showReuploadAbstract' => $showReuploadAbstract,
-            'showCancel'           => $showCancel,
-            'assignedReviewer'     => $assignedReviewer,
-            'reviewComments'       => $reviewComments,
-            'reviewList'           => $reviewList,
-            'contributors'         => $contributors,
-            'canUploadRevision'    => ($status === 'revisi' && $revOpen),
+            'title' => 'Detail Abstrak',
+            'vm'    => $vm,
         ]);
     }
 
@@ -488,6 +706,15 @@ class Abstrak extends BaseController
                 ->with('swal', ['icon'=>'error','title'=>'Gagal','text'=>'Abstrak tidak ditemukan.']);
         }
 
+        // gate: bila sudah melewati deadline revisi -> auto reject & stop
+        $eventId = (int)$row['event_id'];
+        $row = $this->enforceAutoRejectIfOverdue($userId, $eventId, $row);
+        if ($row && strtolower((string)$row['status']) === 'ditolak') {
+            return redirect()->to('/presenter/abstrak/detail/'.$idAbstrak)
+                ->with('error','Batas waktu revisi telah berakhir. Abstrak ditolak otomatis.')
+                ->with('swal', ['icon'=>'error','title'=>'Ditolak Otomatis','text'=>'Melewati batas waktu revisi.']);
+        }
+
         if (strtolower((string)$row['status']) !== 'revisi') {
             return redirect()->to('/presenter/abstrak/detail/'.$idAbstrak)
                 ->with('error','Abstrak ini tidak dalam status revisi.')
@@ -495,11 +722,12 @@ class Abstrak extends BaseController
         }
 
         // Gate jendela revisi
-        $eventId = (int)$row['event_id'];
         $revOpen = method_exists($this->eventModel, 'isAbstractRevisionOpen')
                  ? $this->eventModel->isAbstractRevisionOpen($eventId)
                  : $this->eventModel->isAbstractSubmissionOpen($eventId);
         if (!$revOpen) {
+            // set auto reject juga agar konsisten
+            $this->enforceAutoRejectIfOverdue($userId, $eventId, $row);
             return redirect()->to('/presenter/abstrak/detail/'.$idAbstrak)
                 ->with('error','Batas waktu revisi telah berakhir.')
                 ->with('swal', ['icon'=>'info','title'=>'Ditutup','text'=>'Batas waktu revisi telah berakhir.']);
@@ -556,7 +784,7 @@ class Abstrak extends BaseController
             'tanggal_upload' => date('Y-m-d H:i:s'),
         ]);
 
-        // re-queue reviewer → SET tugas langsung accepted
+        // re-queue reviewer
         $this->requeueAbstractReviewers((int)$idAbstrak);
 
         return redirect()->to('/presenter/abstrak/detail/'.$idAbstrak)
@@ -565,6 +793,8 @@ class Abstrak extends BaseController
     }
 
     public function uploadRevisi($idAbstrak) { return $this->revisi($idAbstrak); }
+
+    /** ===================== REVIEW QUEUE ===================== */
 
     private function requeueAbstractReviewers(int $idAbstrak): int
     {
@@ -650,6 +880,8 @@ class Abstrak extends BaseController
         return $affected;
     }
 
+    /** ===================== BUILD CONTRIBUTORS ===================== */
+
     private function buildContributorsFromRegistration(int $eventId, int $userId): array
     {
         $out = [];
@@ -704,5 +936,59 @@ class Abstrak extends BaseController
         }
 
         return $out;
+    }
+
+    /** ===================== FILE PREVIEW/DOWNLOAD ===================== */
+
+    /**
+     * Stream PDF secara inline untuk pratinjau.
+     * Route disarankan:  GET /presenter/abstrak/file/(:num)
+     */
+    public function fileStream($idAbstrak)
+    {
+        $userId = (int) session()->get('id_user');
+        $row = $this->abstrakModel->where('id_abstrak',(int)$idAbstrak)
+               ->where('id_user',$userId)->first();
+
+        if (!$row) return $this->response->setStatusCode(404, 'Not Found');
+
+        $file = (string)($row['file_abstrak'] ?? '');
+        $path = WRITEPATH.'uploads/abstrak/'.$file;
+
+        if ($file === '' || !is_file($path)) {
+            return $this->response->setStatusCode(404, 'File not found');
+        }
+
+        $content = file_get_contents($path);
+        $name    = basename($file);
+
+        return $this->response
+            ->setHeader('Content-Type', 'application/pdf')
+            ->setHeader('Content-Disposition', 'inline; filename="'.$name.'"')
+            ->setHeader('Accept-Ranges', 'bytes')
+            ->setBody($content);
+    }
+
+    /**
+     * Download file PDF (attachment).
+     * Route disarankan:  GET /presenter/abstrak/download/(:num)
+     */
+    public function fileDownload($idAbstrak)
+    {
+        $userId = (int) session()->get('id_user');
+        $row = $this->abstrakModel->where('id_abstrak',(int)$idAbstrak)
+               ->where('id_user',$userId)->first();
+
+        if (!$row) return $this->response->setStatusCode(404, 'Not Found');
+
+        $file = (string)($row['file_abstrak'] ?? '');
+        $path = WRITEPATH.'uploads/abstrak/'.$file;
+
+        if ($file === '' || !is_file($path)) {
+            return $this->response->setStatusCode(404, 'File not found');
+        }
+
+        // CI4 response->download otomatis set attachment
+        return $this->response->download($path, null);
     }
 }

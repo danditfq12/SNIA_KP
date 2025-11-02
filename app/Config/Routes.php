@@ -168,6 +168,7 @@ $routes->group('admin', [
     $routes->post('abstrak/assign/(:num)',   'Abstrak::assign/$1');
     $routes->post('abstrak/update-status',   'Abstrak::updateStatus');
     $routes->match(['get','post'], 'abstrak/delete/(:num)', 'Abstrak::delete/$1');
+    
 
     // File handling (tetap di namespace abstrak)
     $routes->get ('abstrak/download/(:num)', 'Abstrak::downloadFile/$1');
@@ -182,8 +183,9 @@ $routes->group('admin', [
     // (detail lama tetap ada)
     $routes->group('fullpaper', static function ($routes) {
         $routes->get ('detail/(:num)',     'FullPaper::detail/$1');
-        $routes->post('set-status/(:num)', 'FullPaper::setStatus/$1'); // UPLOADED/REVISION/ACCEPTED/REJECTED
-        $routes->post('assign/(:num)',     'FullPaper::assign/$1');    // assign reviewer
+        $routes->post('set-status/(:num)', 'FullPaper::setStatus/$1');
+        $routes->post('assign/(:num)',     'FullPaper::assign/$1');
+        $routes->get('unassign/(:num)/(:num)','FullPaper::unassign/$1/$2');
 
         // File handling
         $routes->get ('view/(:num)',       'FullPaper::view/$1');      // preview inline
@@ -313,18 +315,22 @@ $routes->group('presenter', [
     $routes->get ('abstrak/detail/(:num)',             'Abstrak::detail/$1');  
     $routes->get ('abstrak/download/(:segment)',       'Abstrak::download/$1');
     $routes->post('abstrak/cancel/(:num)',             'Abstrak::cancel/$1'); 
-    $routes->post('abstrak/revisi/(:num)',             'Abstrak::revisi/$1'); 
+    $routes->post('abstrak/revisi/(:num)',             'Abstrak::revisi/$1');
+    
+    $routes->get ('abstrak/file/(:num)',           'Abstrak::fileStream/$1');    // buka/preview di iframe/tab baru
+    $routes->get ('abstrak/download/(:num)',       'Abstrak::fileDownload/$1');
 
-    // ====== Full Paper (presenter) ======
+        // ====== Full Paper (presenter) ======
     $routes->group('fullpaper', static function ($routes) {
-    $routes->get ('',                    'Fullpaper::index');
-    $routes->get ('create/(:num)',       'Fullpaper::create/$1');
-    $routes->post('store',               'Fullpaper::store');
-    $routes->get ('detail/(:num)',       'Fullpaper::detail/$1');
-    $routes->get ('download/(:any)',     'Fullpaper::download/$1'); // biar aman jika ada subfolder
-    $routes->get ('blob/(:any)',         'Fullpaper::blob/$1');     // <-- TAMBAH INI
-    $routes->post('delete/(:num)',       'Fullpaper::delete/$1');
-    });
+        $routes->get ('',                'Fullpaper::index');
+        $routes->get ('create/(:num)',   'Fullpaper::create/$1');
+        $routes->post('store',           'Fullpaper::store');
+        $routes->get ('detail/(:num)',   'Fullpaper::detail/$1');
+        $routes->get ('download/(:any)', 'Fullpaper::download/$1'); 
+        $routes->post('cancel/(:num)',   'Fullpaper::cancel/$1');
+        $routes->post('delete/(:num)',   'Fullpaper::delete/$1');
+});
+
 
     // ====== Kontributor (presenter) ======
     $routes->group('kontributor', static function ($routes) {

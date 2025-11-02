@@ -262,6 +262,7 @@ class Abstrak extends BaseController
             ->join('events e','e.id = abstrak.event_id','left');
 
         $taskStatus = 'accepted';
+        $taskReason = null; // <-- tambahkan carrier alasan
         $existing   = null;
 
         if ($rt) {
@@ -270,7 +271,7 @@ class Abstrak extends BaseController
             $abstrak->join("$rt $alias", "{$alias}.{$R['abstrakFk']} = abstrak.id_abstrak", 'inner')
                     ->where("{$alias}.{$R['reviewer']}", $idReviewer);
 
-            if ($R['type'])  $abstrak->groupStart()->where("LOWER({$alias}.{$R['type']})",'abstrak')->orWhere("{$alias}.{$R['type']}", null)->groupEnd();
+            if ($R['type'])  $abstrak->groupStart()->where("LOWER({$alias}.{$R['type']})",'abstrak')->orWhere("{$R['type']}", null)->groupEnd();
             if ($R['subFk']) $abstrak->where("{$alias}.{$R['subFk']} IS NULL", null, false);
 
             $rowAssign  = $this->latestAssignmentRow($idAbstrak, $idReviewer);
@@ -278,6 +279,11 @@ class Abstrak extends BaseController
                 $taskStatus = strtolower((string)($rowAssign[$R['asgStatus']] ?? 'pending'));
                 if (in_array($taskStatus, ['accept','accepted','ok'], true)) $taskStatus = 'accepted';
                 if (in_array($taskStatus, ['decline','declined','no'], true)) $taskStatus = 'declined';
+            }
+
+            // simpan alasan penolakan bila ada (untuk ditampilkan di view)
+            if ($rowAssign && $R['asgReason']) {
+                $taskReason = $rowAssign[$R['asgReason']] ?? null;
             }
 
             if ($rowAssign) {
@@ -305,6 +311,7 @@ class Abstrak extends BaseController
             'title'          => 'Detail Abstrak',
             'abstrak'        => $abstrak,
             'taskStatus'     => $taskStatus,
+            'taskReason'     => $taskReason,      // <-- kirim ke view
             'existingReview' => $existing,
             'isReviewed'     => $existing ? $this->isFinalDecision($existing['keputusan'] ?? null) : false,
         ]);
@@ -428,11 +435,13 @@ class Abstrak extends BaseController
         elseif (in_array($raw, ['ditolak','reject','rejected'], true))   $keputusan = 'ditolak';
         else return redirect()->back()->with('error','Keputusan tidak valid.')->withInput();
 
-        if ($keputusan === 'ditolak' && mb_strlen($komentar) < 10) {
-            return redirect()->back()->with('error','Penolakan wajib disertai alasan yang jelas (minimal 10 karakter).')->withInput();
-        }
-        if (mb_strlen($komentar) < 10) {
-            return redirect()->back()->with('error','Komentar minimal 10 karakter.')->withInput();
+        // === VALIDASI KOMENTAR (disesuaikan dgn view) ===
+        $minLen = ($keputusan === 'ditolak') ? 10 : 5;
+        if (mb_strlen($komentar) < $minLen) {
+            $msg = ($keputusan === 'ditolak')
+                ? 'Penolakan wajib disertai alasan yang jelas (minimal 10 karakter).'
+                : 'Komentar minimal 5 karakter.';
+            return redirect()->back()->with('error', $msg)->withInput();
         }
 
         $rt = $this->reviewTable();

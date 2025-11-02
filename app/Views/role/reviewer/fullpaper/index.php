@@ -1,8 +1,8 @@
 <?php
-// File: app/Views/role/reviewer/fullpaper/index.php
-
+// View: Reviewer Full Paper (To-Do & Riwayat Tabs)
 $title        = $title ?? 'Tugas Full Paper';
-$rows         = $rows  ?? [];
+$todoRows     = $todoRows ?? [];
+$historyRows  = $historyRows ?? [];
 $eventOptions = $eventOptions ?? [];
 
 $fmt = fn($d,$t=false)=> $d ? date($t?'d M Y H:i':'d M Y', strtotime($d)) : '—';
@@ -12,8 +12,6 @@ $badgeRev = fn($s)=> match(strtolower((string)$s)){
   'ditolak'  => 'danger',
   default    => 'secondary'
 };
-
-$isEmpty = empty($rows);
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_reviewer') ?>
@@ -31,7 +29,10 @@ $isEmpty = empty($rows);
               <h3 class="hero-title mb-1">
                 <i class="bi bi-journal-text me-2"></i><?= esc($title) ?>
               </h3>
-              <div class="text-white-70 small">Daftar penugasan full paper. Klik <b>Tinjau</b> untuk memberikan review.</div>
+              <div class="text-white-70 small">
+                To-Do menampilkan tugas yang <b>menunggu/belum direview</b>.
+                Yang sudah Anda beri keputusan akan pindah ke tab <b>Riwayat</b>.
+              </div>
             </div>
             <div class="hero-tools flex-grow-1" style="max-width:620px;">
               <div class="input-group input-group-lg hero-search">
@@ -45,7 +46,7 @@ $isEmpty = empty($rows);
           </div>
         </div>
 
-        <!-- Filter bar -->
+        <!-- Filter / Tabs -->
         <div class="hero-tabs">
           <div class="row g-2 g-md-3 align-items-center">
             <div class="col-6 col-md-3">
@@ -65,86 +66,171 @@ $isEmpty = empty($rows);
                 <option value="ditolak">Ditolak</option>
               </select>
             </div>
+            <div class="col-12 mt-2">
+              <ul class="nav nav-pills">
+                <li class="nav-item">
+                  <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#pane-todo" type="button">
+                    To-Do <span class="badge bg-light text-primary ms-1"><?= count($todoRows) ?></span>
+                  </button>
+                </li>
+                <li class="nav-item">
+                  <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pane-history" type="button">
+                    Riwayat <span class="badge bg-light text-secondary ms-1"><?= count($historyRows) ?></span>
+                  </button>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
 
-      <?php if ($isEmpty): ?>
-        <!-- EMPTY STATE -->
-        <div class="card card-glass border-0">
-          <div class="card-body text-center py-5">
-            <div class="empty-icon mb-3"><i class="bi bi-inbox"></i></div>
-            <div class="empty-title mb-1">Belum ada tugas full paper</div>
-            <div class="empty-subtitle">Penugasan baru akan tampil otomatis di sini.</div>
-          </div>
+      <div class="tab-content">
+        <!-- ================= To-Do ================= -->
+        <div class="tab-pane fade show active" id="pane-todo">
+          <?php if (empty($todoRows)): ?>
+            <div class="card card-glass border-0">
+              <div class="card-body text-center py-5">
+                <div class="empty-icon mb-3"><i class="bi bi-check2-circle"></i></div>
+                <div class="empty-title mb-1">Tidak ada tugas menunggu</div>
+                <div class="empty-subtitle">Semua penugasan sudah ditangani.</div>
+              </div>
+            </div>
+          <?php else: ?>
+            <div class="card card-glass border-0">
+              <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width:44%;">Full Paper</th>
+                      <th class="d-none d-md-table-cell" style="width:20%;">Event</th>
+                      <th class="d-none d-lg-table-cell" style="width:18%;">Penulis</th>
+                      <th class="d-none d-xl-table-cell" style="width:10%;">Kategori</th>
+                      <th style="width:8%;">Status</th>
+                      <th class="text-end" style="width:10%;">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="listBodyTodo">
+                    <?php foreach ($todoRows as $r): ?>
+                      <?php
+                        $id    = (int)($r['id'] ?? 0);
+                        $judul = (string)($r['title'] ?? '—');
+                        $nama  = (string)($r['nama_lengkap']  ?? '-');
+                        $kat   = (string)($r['nama_kategori'] ?? '-');
+                        $evtNm = (string)($r['event_title']   ?? '-');
+                        $txt   = strtolower(trim($judul.' '.$nama.' '.$kat));
+                        $eid   = (int)($r['event_id'] ?? 0);
+                        $rev   = strtolower((string)($r['review_status'] ?? 'menunggu'));
+                        $uploaded = $r['tanggal_upload'] ?? null;
+                      ?>
+                      <tr class="review-row"
+                          data-search="<?= esc($txt) ?>"
+                          data-event="<?= $eid ?>"
+                          data-status="<?= esc($rev) ?>">
+                        <td>
+                          <div class="fw-semibold text-dark mb-1"><?= esc($judul) ?></div>
+                          <div class="small text-muted d-flex flex-wrap gap-2">
+                            <span><i class="bi bi-calendar2-plus me-1"></i><?= $fmt($uploaded, true) ?></span>
+                            <span class="d-md-none">•</span>
+                            <span class="d-md-none"><i class="bi bi-calendar-event me-1"></i><?= esc($evtNm) ?></span>
+                            <span class="d-lg-none">•</span>
+                            <span class="d-lg-none"><i class="bi bi-person me-1"></i><?= esc($nama) ?></span>
+                          </div>
+                        </td>
+                        <td class="d-none d-md-table-cell">
+                          <span class="badge bg-info-subtle text-info px-3 py-2">
+                            <i class="bi bi-calendar-event me-1"></i><?= esc($evtNm ?: 'Event') ?>
+                          </span>
+                        </td>
+                        <td class="d-none d-lg-table-cell"><?= esc($nama) ?></td>
+                        <td class="d-none d-xl-table-cell text-muted"><?= esc($kat) ?></td>
+                        <td><span class="badge bg-<?= $badgeRev($rev) ?> px-3 py-2"><?= esc(ucfirst($rev)) ?></span></td>
+                        <td class="text-end">
+                          <a href="<?= site_url('reviewer/fullpaper/'.$id) ?>" class="btn btn-primary btn-sm">
+                            <i class="bi bi-eye me-1"></i>Tinjau
+                          </a>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          <?php endif; ?>
         </div>
-      <?php else: ?>
-        <!-- LIST -->
-        <div class="card card-glass border-0">
-          <div class="table-responsive">
-            <table class="table align-middle mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th class="fw-semibold" style="width:44%;">Full Paper</th>
-                  <th class="fw-semibold d-none d-md-table-cell" style="width:20%;">Event</th>
-                  <th class="fw-semibold d-none d-lg-table-cell" style="width:18%;">Penulis</th>
-                  <th class="fw-semibold d-none d-xl-table-cell" style="width:10%;">Kategori</th>
-                  <th class="fw-semibold" style="width:8%;">Status Review</th>
-                  <th class="fw-semibold text-end" style="width:10%;">Aksi</th>
-                </tr>
-              </thead>
-              <tbody id="listBody">
-                <?php foreach ($rows as $r): ?>
-                  <?php
-                    $id    = (int)($r['id'] ?? 0);
-                    $judul = (string)($r['title'] ?? '—');
 
-                    $nama  = (string)($r['nama_lengkap']  ?? '-');
-                    $kat   = (string)($r['nama_kategori'] ?? '-');
-                    $evtNm = (string)($r['event_title']   ?? '-');
-
-                    $txt   = strtolower(trim($judul.' '.$nama.' '.$kat));
-                    $eid   = (int)($r['event_id'] ?? 0);
-
-                    $rev   = strtolower((string)($r['review_status'] ?? 'menunggu'));
-                    $uploaded = $r['tanggal_upload'] ?? null;
-                  ?>
-                  <tr class="review-row"
-                      data-search="<?= esc($txt) ?>"
-                      data-event="<?= $eid ?>"
-                      data-status="<?= esc($rev) ?>">
-                    <td>
-                      <div class="fw-semibold text-dark mb-1"><?= esc($judul) ?></div>
-                      <div class="small text-muted d-flex flex-wrap gap-2">
-                        <span><i class="bi bi-calendar2-plus me-1"></i><?= $fmt($uploaded, true) ?></span>
-                        <span class="d-md-none">•</span>
-                        <span class="d-md-none"><i class="bi bi-calendar-event me-1"></i><?= esc($evtNm) ?></span>
-                        <span class="d-lg-none">•</span>
-                        <span class="d-lg-none"><i class="bi bi-person me-1"></i><?= esc($nama) ?></span>
-                      </div>
-                    </td>
-                    <td class="d-none d-md-table-cell">
-                      <span class="badge bg-info-subtle text-info px-3 py-2">
-                        <i class="bi bi-calendar-event me-1"></i><?= esc($evtNm ?: 'Event') ?>
-                      </span>
-                    </td>
-                    <td class="d-none d-lg-table-cell"><?= esc($nama) ?></td>
-                    <td class="d-none d-xl-table-cell text-muted"><?= esc($kat) ?></td>
-                    <td>
-                      <span class="badge bg-<?= $badgeRev($rev) ?> px-3 py-2"><?= esc(ucfirst($rev)) ?></span>
-                    </td>
-                    <td class="text-end">
-                      <a href="<?= site_url('reviewer/fullpaper/'.$id) ?>" class="btn btn-primary btn-sm">
-                        <i class="bi bi-eye me-1"></i>Tinjau
-                      </a>
-                    </td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
-          </div>
+        <!-- ================= Riwayat ================= -->
+        <div class="tab-pane fade" id="pane-history">
+          <?php if (empty($historyRows)): ?>
+            <div class="card card-glass border-0">
+              <div class="card-body text-center py-5">
+                <div class="empty-icon mb-3"><i class="bi bi-inboxes"></i></div>
+                <div class="empty-title mb-1">Belum ada riwayat</div>
+                <div class="empty-subtitle">Review yang selesai akan muncul di sini.</div>
+              </div>
+            </div>
+          <?php else: ?>
+            <div class="card card-glass border-0">
+              <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width:44%;">Full Paper</th>
+                      <th class="d-none d-md-table-cell" style="width:20%;">Event</th>
+                      <th class="d-none d-lg-table-cell" style="width:18%;">Penulis</th>
+                      <th class="d-none d-xl-table-cell" style="width:10%;">Kategori</th>
+                      <th style="width:8%;">Keputusan</th>
+                      <th class="text-end" style="width:10%;">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="listBodyHistory">
+                    <?php foreach ($historyRows as $r): ?>
+                      <?php
+                        $id    = (int)($r['id'] ?? 0);
+                        $judul = (string)($r['title'] ?? '—');
+                        $nama  = (string)($r['nama_lengkap']  ?? '-');
+                        $kat   = (string)($r['nama_kategori'] ?? '-');
+                        $evtNm = (string)($r['event_title']   ?? '-');
+                        $txt   = strtolower(trim($judul.' '.$nama.' '.$kat));
+                        $eid   = (int)($r['event_id'] ?? 0);
+                        $rev   = strtolower((string)($r['review_status'] ?? 'menunggu'));
+                        $uploaded = $r['tanggal_upload'] ?? null;
+                      ?>
+                      <tr class="review-row"
+                          data-search="<?= esc($txt) ?>"
+                          data-event="<?= $eid ?>"
+                          data-status="<?= esc($rev) ?>">
+                        <td>
+                          <div class="fw-semibold text-dark mb-1"><?= esc($judul) ?></div>
+                          <div class="small text-muted d-flex flex-wrap gap-2">
+                            <span><i class="bi bi-calendar2-plus me-1"></i><?= $fmt($uploaded, true) ?></span>
+                            <span class="d-md-none">•</span>
+                            <span class="d-md-none"><i class="bi bi-calendar-event me-1"></i><?= esc($evtNm) ?></span>
+                            <span class="d-lg-none">•</span>
+                            <span class="d-lg-none"><i class="bi bi-person me-1"></i><?= esc($nama) ?></span>
+                          </div>
+                        </td>
+                        <td class="d-none d-md-table-cell">
+                          <span class="badge bg-info-subtle text-info px-3 py-2">
+                            <i class="bi bi-calendar-event me-1"></i><?= esc($evtNm ?: 'Event') ?>
+                          </span>
+                        </td>
+                        <td class="d-none d-lg-table-cell"><?= esc($nama) ?></td>
+                        <td class="d-none d-xl-table-cell text-muted"><?= esc($kat) ?></td>
+                        <td><span class="badge bg-<?= $badgeRev($rev) ?> px-3 py-2"><?= esc(ucfirst($rev)) ?></span></td>
+                        <td class="text-end">
+                          <a href="<?= site_url('reviewer/fullpaper/'.$id) ?>" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-eye me-1"></i>Lihat
+                          </a>
+                        </td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          <?php endif; ?>
         </div>
-      <?php endif; ?>
+      </div>
 
     </div>
   </main>
@@ -211,9 +297,6 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 @media (max-width:767.98px){
   .hero-tools{ width:100%; max-width:none; }
   .card-hero .hero-body{ padding:1.4rem 1rem; min-height:150px; }
-}
-@media (max-width:575.98px){
-  .container-xxl{ padding-left: calc(var(--side-pad) - .25rem) !important; padding-right: calc(var(--side-pad) - .25rem) !important; }
   td.text-end .btn{ min-width:110px; }
 }
 </style>
@@ -224,44 +307,44 @@ document.addEventListener('DOMContentLoaded', function () {
   const clr = document.getElementById('clearSearch');
   const ef  = document.getElementById('eventFilter');
   const sf  = document.getElementById('statusFilter');
-  const body = document.getElementById('listBody');
 
-  if (!body) return;
-  const rows = Array.from(body.querySelectorAll('.review-row'));
-
-  function ensureEmptyRow() {
-    let empty = document.getElementById('emptyRow');
-    if (!empty) {
-      empty = document.createElement('tr');
-      empty.id = 'emptyRow';
-      empty.innerHTML = `<td colspan="6" class="py-5 text-center text-muted">
-        <i class="bi bi-search fs-1 d-block mb-2"></i>Tidak ada hasil
-      </td>`;
-    }
-    return empty;
-  }
+  const bodies = [
+    document.getElementById('listBodyTodo'),
+    document.getElementById('listBodyHistory')
+  ].filter(Boolean);
 
   function apply(){
     const qq = (q?.value || '').toLowerCase().trim();
     const ev = ef?.value || '';
     const st = (sf?.value || '').toLowerCase();
 
-    let shown = 0;
-    rows.forEach(tr=>{
-      const s = (tr.dataset.search || '').toLowerCase();
-      const e = tr.dataset.event  || '';
-      const t = (tr.dataset.status || '').toLowerCase();
-      const ok = (!qq || s.includes(qq)) && (!ev || ev===e) && (!st || st===t);
-      tr.style.display = ok ? '' : 'none';
-      if (ok) shown++;
+    bodies.forEach(body=>{
+      const rows = Array.from(body.querySelectorAll('.review-row'));
+      let shown = 0;
+      rows.forEach(tr=>{
+        const s = (tr.dataset.search || '').toLowerCase();
+        const e = tr.dataset.event  || '';
+        const t = (tr.dataset.status || '').toLowerCase();
+        const ok = (!qq || s.includes(qq)) && (!ev || ev===e) && (!st || st===t);
+        tr.style.display = ok ? '' : 'none';
+        if (ok) shown++;
+      });
+
+      let empty = body.querySelector('.js-empty-row');
+      if (!shown){
+        if (!empty){
+          empty = document.createElement('tr');
+          empty.className = 'js-empty-row';
+          empty.innerHTML = `<td colspan="6" class="py-5 text-center text-muted">
+            <i class="bi bi-search fs-1 d-block mb-2"></i>Tidak ada hasil
+          </td>`;
+          body.appendChild(empty);
+        }
+      } else {
+        empty?.remove();
+      }
     });
 
-    const emptyRow = document.getElementById('emptyRow');
-    if (!shown){
-      if (!emptyRow) body.appendChild(ensureEmptyRow());
-    } else {
-      emptyRow?.remove();
-    }
     if (clr) clr.classList.toggle('d-none', !qq);
   }
 

@@ -1,107 +1,55 @@
 <?php
+// app/Views/role/presenter/events/detail.php
 $event        = $event ?? [];
 $reg          = $reg ?? null;
 $abstrak      = $abstrak ?? null;
 $payment      = $payment ?? null;
-$flow         = $flow ?? [];
 $contributors = $contributors ?? [];
 $price        = $price ?? null;
+$actions      = $actions ?? ['primary'=>null,'secondary'=>null];
 
-/* ================= Utils & Normalisasi ================= */
+/* Utils */
 $abStatus  = strtolower($abstrak['status'] ?? '');
 $fpStatus  = strtolower($abstrak['full_paper_status'] ?? '');
 $payStatus = strtolower($payment['status'] ?? '');
-
-$hasFullpaper = !empty($abstrak['full_paper_path']) || !empty($abstrak['full_paper_status']);
-
-$fmt = function($s, $withTime=false){
-  if (!$s) return '-';
-  $ts = strtotime((string)$s);
-  return $withTime ? date('d M Y H:i', $ts) : date('d M Y', $ts);
-};
-
-/* label format */
-$formatLabel = function($f){
-  $f = strtolower((string)$f);
-  return $f === 'both' ? 'Hybrid' : ucfirst($f ?: '-');
-};
-
-/* nice status label */
-$nice = function($v) {
+$hasFull   = !empty($abstrak['full_paper_path']) || !empty($abstrak['full_paper_status']);
+$fmt = fn($s,$t=false)=> $s ? ($t?date('d M Y H:i',strtotime($s)):date('d M Y',strtotime($s))) : '-';
+$formatLabel = function($f){ $f=strtolower((string)$f); return $f==='both'?'Hybrid':ucfirst($f?:'-'); };
+$nice = function($v){
   if (!$v) return 'Belum';
-  $v = strtolower((string)$v);
+  $v=strtolower((string)$v);
   return match($v){
-    'diterima','accepted','acc','approved'                      => 'Diterima',
-    'ditolak','rejected'                                        => 'Ditolak',
-    'revisi','revision'                                         => 'Revisi',
-    'menunggu','sedang_direview','uploaded','pending'           => 'Menunggu',
-    'verified'                                                  => 'Terverifikasi',
-    'canceled'                                                  => 'Dibatalkan',
-    'expired'                                                   => 'Kedaluwarsa',
-    default                                                     => ucfirst($v)
+    'diterima','accepted','acc','approved' => 'Diterima',
+    'ditolak','rejected'                   => 'Ditolak',
+    'revisi','revision'                    => 'Revisi',
+    'menunggu','sedang_direview','uploaded','pending' => 'Menunggu',
+    'verified'=>'Terverifikasi','canceled'=>'Dibatalkan','expired'=>'Kedaluwarsa',
+    default=>ucfirst($v)
   };
 };
-
-/* ====== CTA ====== */
-$primaryBtn   = null;
-$secondaryBtn = null;
-
 $isReg = (bool)$reg;
 
-/* Kontributor selesai? */
+/* progress: kontributor selesai? */
 $kontributorDone = false;
 if ($reg) {
   foreach (['contributor_done','kontributor_done','profile_completed','is_profile_completed'] as $f) {
-      if (array_key_exists($f,$reg)) { $kontributorDone = (bool)$reg[$f]; break; }
+    if (array_key_exists($f,$reg)) { $kontributorDone = (bool)$reg[$f]; break; }
   }
+}
+
+/* pastikan ada minimal 1 kontributor */
+if ($isReg && empty($contributors)) {
+  $contributors = [[
+    'role' => 'Presenter Utama',
+    'nama' => $reg['nama'] ?? ($reg['full_name'] ?? (session()->get('nama') ?? '')),
+    'email'=> $reg['email'] ?? (session()->get('email') ?? ''),
+    'afiliasi'=>$reg['afiliasi'] ?? ($reg['institution'] ?? ''),
+    'negara'=> $reg['negara'] ?? ($reg['country'] ?? ''),
+  ]];
 }
 
 $eventId = (int)($event['id'] ?? 0);
-
-if (!$isReg) {
-  $primaryBtn = ['label'=>'Daftar', 'url'=>site_url('presenter/events/register/'.$eventId), 'class'=>'btn-primary'];
-} else {
-  if (!$kontributorDone) {
-    $primaryBtn   = ['label'=>'Lengkapi Kontributor', 'url'=>site_url('presenter/kontributor/start/'.$eventId), 'class'=>'btn-primary'];
-    $secondaryBtn = ['label'=>'Batalkan Pendaftaran', 'url'=>site_url('presenter/events/cancel/'.$eventId), 'class'=>'btn-outline-danger'];
-  } else {
-    if (!$abStatus) {
-      $primaryBtn = ['label'=>'Upload Abstrak', 'url'=>site_url('presenter/abstrak/create/'.$eventId), 'class'=>'btn-primary'];
-    } else {
-      if ($abStatus === 'ditolak') {
-        $primaryBtn = ['label'=>'Upload Ulang Abstrak', 'url'=>site_url('presenter/abstrak/create/'.$eventId), 'class'=>'btn-warning'];
-      } elseif ($abStatus === 'diterima') {
-        if (!$hasFullpaper) {
-          $primaryBtn = ['label'=>'Upload Full Paper', 'url'=>site_url('presenter/fullpaper/create/'.$eventId), 'class'=>'btn-primary'];
-        } else {
-          $isRevision = in_array($fpStatus, ['revisi','revision','ditolak','rejected'], true);
-          $isAccepted = in_array($fpStatus, ['diterima','accepted','acc','approved'], true);
-          $isWaiting  = !$isRevision && !$isAccepted;
-
-          if ($isRevision) {
-            $primaryBtn = ['label'=>'Upload Ulang Full Paper', 'url'=>site_url('presenter/fullpaper/create/'.$eventId), 'class'=>'btn-warning'];
-          } elseif ($isAccepted) {
-            if (!$payStatus) {
-              $primaryBtn = ['label'=>'Lanjutkan Pembayaran', 'url'=>site_url('presenter/pembayaran/instruction/'.$eventId), 'class'=>'btn-success'];
-            } elseif ($payStatus === 'pending') {
-              $primaryBtn = ['label'=>'Cek Status Pembayaran', 'url'=>site_url('presenter/pembayaran'), 'class'=>'btn-outline-success'];
-            } elseif (in_array($payStatus, ['rejected','ditolak','canceled','expired'], true)) {
-              $primaryBtn = ['label'=>'Bayar Ulang', 'url'=>site_url('presenter/pembayaran/instruction/'.$eventId), 'class'=>'btn-danger'];
-            } elseif ($payStatus === 'verified') {
-              $primaryBtn = ['label'=>'Buka Halaman Absensi', 'url'=>site_url('presenter/absensi'), 'class'=>'btn-info'];
-            }
-          } elseif ($isWaiting) {
-            $primaryBtn = null; // menunggu review FP
-          }
-        }
-      } else {
-        $primaryBtn = null; // abstrak menunggu
-      }
-    }
-  }
-}
 ?>
-
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
 <?= $this->include('partials/alerts') ?>
@@ -122,7 +70,10 @@ if (!$isReg) {
             </div>
             <div class="d-none d-md-block text-end">
               <div class="text-white-70 small">Tanggal Event</div>
-              <div class="fw-bold"><?= esc($fmt($event['event_date'] ?? null)) ?><?= !empty($event['event_time']) ? ' • '.esc($event['event_time']) : '' ?></div>
+              <div class="fw-bold">
+                <?= esc($fmt($event['event_date'] ?? null)) ?>
+                <?= !empty($event['event_time']) ? ' • '.esc($event['event_time']) : '' ?>
+              </div>
             </div>
           </div>
         </div>
@@ -252,10 +203,12 @@ if (!$isReg) {
 
               <ul class="list-group list-group-flush mb-3">
                 <li class="list-group-item d-flex justify-content-between align-items-center">
-                  <span>Pendaftaran</span>
-                  <strong class="text-blue-900">
-                    <?= $isReg ? 'Terdaftar'.(!$kontributorDone ? ' (lengkapi kontributor)' : '') : 'Belum' ?>
-                  </strong>
+                  <span>Terdaftar</span>
+                  <strong class="text-blue-900"><?= $isReg ? 'Ya' : 'Belum' ?></strong>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  <span>Kontributor</span>
+                  <strong class="text-blue-900"><?= $isReg ? ($kontributorDone ? 'Lengkap' : 'Belum') : 'Belum' ?></strong>
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Abstrak</span>
@@ -263,7 +216,7 @@ if (!$isReg) {
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Full Paper</span>
-                  <strong class="text-blue-900"><?= esc($nice($fpStatus ?: ($hasFullpaper ? 'uploaded' : ''))) ?></strong>
+                  <strong class="text-blue-900"><?= esc($nice($fpStatus ?: ($hasFull ? 'uploaded' : ''))) ?></strong>
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                   <span>Pembayaran</span>
@@ -272,29 +225,34 @@ if (!$isReg) {
               </ul>
 
               <div class="d-grid gap-2">
-                <?php if ($primaryBtn):
-                  $lbl = strtolower((string)($primaryBtn['label'] ?? ''));
+                <?php if (!empty($actions['primary'])):
+                  $p = $actions['primary'];
+                  $lbl = strtolower((string)($p['label'] ?? ''));
                   $icon = 'bi-info-circle';
                   if (str_contains($lbl,'daftar')) $icon='bi-box-arrow-in-right';
                   elseif (str_contains($lbl,'kontributor')) $icon='bi-people';
                   elseif (str_contains($lbl,'upload')) $icon='bi-upload';
                   elseif (str_contains($lbl,'bayar')) $icon='bi-credit-card';
                   elseif (str_contains($lbl,'absen')) $icon='bi-qr-code-scan';
-                  elseif (str_contains($lbl,'cek') || str_contains($lbl,'status')) $icon='bi-clock-history';
                 ?>
-                  <a class="btn <?= esc($primaryBtn['class']) ?>" href="<?= esc($primaryBtn['url']) ?>">
-                    <i class="bi <?= esc($icon) ?> me-1"></i><?= esc($primaryBtn['label']) ?>
+                  <a class="btn <?= esc($p['class'] ?? 'btn-primary') ?> <?= !empty($p['confirm']) ? 'js-swal-confirm' : '' ?>"
+                     href="<?= esc($p['url'] ?? '#') ?>"
+                     <?= !empty($p['confirm']) ? 'data-confirm="'.esc($p['confirm']).'"' : '' ?>>
+                    <i class="bi <?= esc($icon) ?> me-1"></i><?= esc($p['label'] ?? '') ?>
                   </a>
                 <?php endif; ?>
 
-                <?php if ($secondaryBtn): ?>
-                  <a class="btn <?= esc($secondaryBtn['class']) ?>" href="<?= esc($secondaryBtn['url']) ?>">
-                    <?= esc($secondaryBtn['label']) ?>
+                <?php if (!empty($actions['secondary'])):
+                  $s = $actions['secondary']; ?>
+                  <a class="btn <?= esc($s['class'] ?? 'btn-outline-secondary') ?> <?= !empty($s['confirm']) ? 'js-swal-confirm' : '' ?>"
+                     href="<?= esc($s['url'] ?? '#') ?>"
+                     <?= !empty($s['confirm']) ? 'data-confirm="'.esc($s['confirm']).'"' : '' ?>>
+                    <?= esc($s['label'] ?? '') ?>
                   </a>
                 <?php endif; ?>
               </div>
 
-              <?php if (!$primaryBtn && !$secondaryBtn): ?>
+              <?php if (empty($actions['primary']) && empty($actions['secondary'])): ?>
                 <div class="text-muted small mt-2">Tidak ada aksi yang perlu dilakukan saat ini.</div>
               <?php endif; ?>
 
@@ -312,7 +270,6 @@ if (!$isReg) {
 
 <style>
 :root{
-  /* konsisten dengan patokan */
   --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
   --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
   --muted:#6b7280; --ink:#0f172a; --radius:16px;
@@ -392,3 +349,52 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
   .list-group-item{ padding:.6rem 0; }
 }
 </style>
+
+<script>
+/* === SweetAlert2 Helpers === */
+(function(){
+  // Konfirmasi link dengan data-confirm
+  document.addEventListener('click', function(e){
+    const a = e.target.closest('a.js-swal-confirm');
+    if(!a) return;
+    const msg = a.getAttribute('data-confirm');
+    if(!msg) return;
+    e.preventDefault();
+    if (typeof Swal === 'undefined') { // fallback jika Swal tidak tersedia
+      if (confirm(msg)) window.location.href = a.href;
+      return;
+    }
+    Swal.fire({
+      title: 'Konfirmasi',
+      text: msg,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Ya',
+      cancelButtonText: 'Batal',
+    }).then(res=>{
+      if(res.isConfirmed){ window.location.href = a.href; }
+    });
+  });
+
+  // Flash message CI4 -> SweetAlert2
+  <?php
+    $flashTypes = ['success','error','warning','info'];
+    foreach ($flashTypes as $t):
+      $msg = session()->getFlashdata($t);
+      if ($msg):
+        $title = [
+          'success'=>'Berhasil',
+          'error'=>'Gagal',
+          'warning'=>'Perhatian',
+          'info'=>'Info'
+        ][$t];
+  ?>
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({icon:'<?= $t ?>', title:'<?= $title ?>', text: '<?= esc($msg) ?>'});
+  }
+  <?php
+      endif;
+    endforeach;
+  ?>
+})();
+</script>
