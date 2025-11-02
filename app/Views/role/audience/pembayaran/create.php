@@ -1,6 +1,6 @@
 <?php
 // app/Views/role/audience/pembayaran/create.php
-// COMPLETE FIXED Audience Pembayaran Create View
+// COMPLETE FIXED Audience Pembayaran Create View - MIDTRANS ONLY
 // Includes: Enhanced voucher validation, proper Midtrans integration, error handling
 
 $title = 'Pilihan Pembayaran';
@@ -83,100 +83,111 @@ $isProduction = $is_production ?? false;
             </div>
           </div>
 
-          <!-- Payment Method Selection -->
+          <!-- Payment Method Section - Midtrans Only -->
           <h5 class="mb-3">
             <i class="bi bi-credit-card me-2"></i>
-            Pilih Metode Pembayaran
+            Metode Pembayaran
           </h5>
 
           <div class="row g-3 mb-4">
-            
             <!-- Midtrans Payment Option -->
-            <div class="col-12 col-md-6">
-              <div class="payment-method-card" data-method="midtrans" id="midtransCard">
+            <div class="col-12">
+              <div class="payment-method-card selected" id="midtransCard">
                 <div class="payment-header">
                   <div class="payment-icon bg-primary">
                     <i class="bi bi-credit-card-2-front text-white"></i>
                   </div>
                   <div class="flex-grow-1">
                     <h6 class="mb-1">Pembayaran Digital</h6>
-                    <small class="text-muted">Instant verification</small>
+                    <small class="text-muted">Instant verification dengan berbagai metode pembayaran</small>
                   </div>
                   <div class="ms-auto">
-                    <div class="form-check">
-                      <input class="form-check-input" type="radio" name="payment_method" 
-                             id="midtrans" value="midtrans">
+                    <div class="payment-check-badge">
+                      <i class="bi bi-check-circle-fill text-primary"></i>
                     </div>
                   </div>
                 </div>
                 <div class="payment-body">
-                  <div class="payment-logos mb-2">
+                  <div class="payment-logos mb-3">
                     <img src="https://cdn.jsdelivr.net/gh/midtrans/midtrans-logo@main/source/png/logo.png" 
-                         alt="Midtrans" height="20" class="me-2">
-                    <small class="text-muted">Powered by Midtrans</small>
+                         alt="Midtrans" height="24" class="me-2">
+                    <small class="text-muted fw-semibold">Powered by Midtrans</small>
                   </div>
-                  <div class="payment-methods mb-2">
-                    <small class="text-muted d-block">
-                      <i class="bi bi-check-circle text-success me-1"></i>
-                      Credit Card, Debit Card
-                    </small>
-                    <small class="text-muted d-block">
-                      <i class="bi bi-check-circle text-success me-1"></i>
-                      GoPay, ShopeePay, OVO, DANA
-                    </small>
-                    <small class="text-muted d-block">
-                      <i class="bi bi-check-circle text-success me-1"></i>
-                      Bank Transfer, QRIS
-                    </small>
+                  
+                  <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                      <div class="payment-category">
+                        <div class="category-title">
+                          <i class="bi bi-credit-card text-primary me-2"></i>
+                          Kartu Kredit/Debit
+                        </div>
+                        <div class="category-items">
+                          <small class="text-muted d-block">
+                            <i class="bi bi-check-circle text-success me-1"></i>
+                            Visa, Mastercard, JCB, Amex
+                          </small>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                      <div class="payment-category">
+                        <div class="category-title">
+                          <i class="bi bi-wallet2 text-success me-2"></i>
+                          E-Wallet
+                        </div>
+                        <div class="category-items">
+                          <small class="text-muted d-block">
+                            <i class="bi bi-check-circle text-success me-1"></i>
+                            GoPay, ShopeePay, OVO, DANA
+                          </small>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                      <div class="payment-category">
+                        <div class="category-title">
+                          <i class="bi bi-bank text-info me-2"></i>
+                          Transfer Bank
+                        </div>
+                        <div class="category-items">
+                          <small class="text-muted d-block">
+                            <i class="bi bi-check-circle text-success me-1"></i>
+                            BCA, BNI, BRI, Mandiri, Permata
+                          </small>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                      <div class="payment-category">
+                        <div class="category-title">
+                          <i class="bi bi-qr-code text-warning me-2"></i>
+                          QRIS
+                        </div>
+                        <div class="category-items">
+                          <small class="text-muted d-block">
+                            <i class="bi bi-check-circle text-success me-1"></i>
+                            Scan & Pay dengan semua e-wallet
+                          </small>
+                        </div>
+                      </div>
+                    </div>
                   </div>
+                  
                   <div class="payment-benefits">
                     <div class="benefit-item">
                       <i class="bi bi-lightning-charge text-warning"></i>
-                      <span>Verifikasi otomatis</span>
+                      <span>Verifikasi pembayaran otomatis dan instan</span>
                     </div>
                     <div class="benefit-item">
                       <i class="bi bi-shield-check text-success"></i>
-                      <span>Aman & terenkripsi</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Manual Payment Option -->
-            <div class="col-12 col-md-6">
-              <div class="payment-method-card" data-method="manual">
-                <div class="payment-header">
-                  <div class="payment-icon bg-info">
-                    <i class="bi bi-bank text-white"></i>
-                  </div>
-                  <div class="flex-grow-1">
-                    <h6 class="mb-1">Transfer Manual</h6>
-                    <small class="text-muted">Upload bukti pembayaran</small>
-                  </div>
-                  <div class="ms-auto">
-                    <div class="form-check">
-                      <input class="form-check-input" type="radio" name="payment_method" 
-                             id="manual" value="manual">
-                    </div>
-                  </div>
-                </div>
-                <div class="payment-body">
-                  <div class="bank-info mb-2">
-                    <div class="bank-item">
-                      <strong>Bank BNI</strong>
-                      <div class="text-muted small">1234567890</div>
-                      <div class="text-muted small">a.n. Panitia SNIA</div>
-                    </div>
-                  </div>
-                  <div class="payment-benefits">
-                    <div class="benefit-item">
-                      <i class="bi bi-clock text-warning"></i>
-                      <span>Verifikasi manual (1-2 hari)</span>
+                      <span>Transaksi aman dengan enkripsi SSL</span>
                     </div>
                     <div class="benefit-item">
-                      <i class="bi bi-upload text-info"></i>
-                      <span>Perlu upload bukti transfer</span>
+                      <i class="bi bi-clock-history text-info"></i>
+                      <span>Akses langsung ke event setelah pembayaran berhasil</span>
                     </div>
                   </div>
                 </div>
@@ -186,9 +197,10 @@ $isProduction = $is_production ?? false;
 
           <!-- Action Buttons -->
           <div class="d-grid d-md-flex gap-2">
-            <button type="button" id="btnProceed" class="btn btn-primary btn-lg" disabled>
+            <button type="button" id="btnProceed" class="btn btn-primary btn-lg">
               <span class="spinner-border spinner-border-sm me-2 d-none" id="proceedSpinner"></span>
-              <span id="proceedBtnText">Lanjutkan Pembayaran</span>
+              <i class="bi bi-lock-fill me-2"></i>
+              <span id="proceedBtnText">Lanjutkan ke Pembayaran</span>
             </button>
             <a href="<?= site_url('audience/events') ?>" class="btn btn-outline-secondary btn-lg">
               <i class="bi bi-arrow-left me-1"></i> Kembali ke Event
@@ -260,13 +272,11 @@ $isProduction = $is_production ?? false;
 }
 
 .payment-method-card {
-    border: 2px solid #e5e7eb;
+    border: 2px solid #3b82f6;
     border-radius: 12px;
-    padding: 20px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    height: 100%;
-    background: white;
+    padding: 24px;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
     position: relative;
     overflow: hidden;
 }
@@ -286,89 +296,97 @@ $isProduction = $is_production ?? false;
     left: 100%;
 }
 
-.payment-method-card:hover {
-    border-color: #3b82f6;
-    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
-    transform: translateY(-2px);
-}
-
-.payment-method-card.selected {
-    border-color: #3b82f6;
-    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
-}
-
 .payment-method-card.disabled {
     opacity: 0.6;
-    pointer-events: none;
     cursor: not-allowed;
+    background: #f3f4f6;
+    border-color: #e5e7eb;
 }
 
 .payment-header {
     display: flex;
     align-items: center;
     gap: 15px;
-    margin-bottom: 15px;
+    margin-bottom: 20px;
 }
 
 .payment-icon {
-    width: 50px;
-    height: 50px;
+    width: 56px;
+    height: 56px;
     border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
+    font-size: 28px;
+    flex-shrink: 0;
+}
+
+.payment-check-badge {
+    font-size: 28px;
+    line-height: 1;
 }
 
 .payment-body {
-    padding-left: 65px;
+    padding-left: 71px;
+}
+
+.payment-logos {
+    display: flex;
+    align-items: center;
 }
 
 .payment-logos img {
     transition: all 0.3s ease;
-    filter: grayscale(1);
-    opacity: 0.7;
 }
 
-.payment-method-card.selected .payment-logos img,
-.payment-method-card:hover .payment-logos img {
-    filter: grayscale(0);
-    opacity: 1;
+.payment-category {
+    background: white;
+    border-radius: 8px;
+    padding: 12px;
+    height: 100%;
+    border: 1px solid #e5e7eb;
+    transition: all 0.3s ease;
 }
 
-.payment-methods {
-    margin: 8px 0;
+.payment-category:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+    transform: translateY(-2px);
+}
+
+.category-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #1e293b;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+}
+
+.category-items small {
+    font-size: 0.8rem;
+    line-height: 1.6;
 }
 
 .payment-benefits {
-    margin-top: 10px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 2px solid rgba(59, 130, 246, 0.2);
 }
 
 .benefit-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.875rem;
-    margin-bottom: 6px;
-    color: #6b7280;
+    gap: 10px;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    color: #475569;
+    font-weight: 500;
 }
 
 .benefit-item i {
     flex-shrink: 0;
-}
-
-.bank-info {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 12px;
-    margin-bottom: 12px;
-}
-
-.bank-item strong {
-    color: #1e293b;
-    font-size: 0.95rem;
+    font-size: 1.1rem;
 }
 
 /* Loading states */
@@ -411,16 +429,20 @@ $isProduction = $is_production ?? false;
     }
     
     .payment-method-card {
-        padding: 16px;
+        padding: 20px;
     }
     
     .payment-body {
         padding-left: 0;
-        margin-top: 12px;
+        margin-top: 16px;
     }
     
     .payment-header {
         flex-wrap: wrap;
+    }
+    
+    .payment-category {
+        margin-bottom: 0;
     }
 }
 
@@ -441,7 +463,7 @@ $isProduction = $is_production ?? false;
 </style>
 
 <script>
-// Enhanced Payment Processing Script
+// Enhanced Payment Processing Script - Midtrans Only
 (function() {
     'use strict';
 
@@ -470,9 +492,6 @@ $isProduction = $is_production ?? false;
         voucherSpinner: document.getElementById('voucherSpinner'),
         voucherResult: document.getElementById('voucherResult'),
         voucherBtnText: document.getElementById('voucherBtnText'),
-        
-        paymentCards: document.querySelectorAll('.payment-method-card'),
-        paymentRadios: document.querySelectorAll('input[name="payment_method"]'),
         
         btnProceed: document.getElementById('btnProceed'),
         proceedSpinner: document.getElementById('proceedSpinner'),
@@ -638,49 +657,17 @@ $isProduction = $is_production ?? false;
         }
     }
 
-    // Payment Method Selection
-    function initPaymentMethodSelection() {
-        elements.paymentCards.forEach(card => {
-            card.addEventListener('click', function() {
-                if (card.classList.contains('disabled') || isProcessing) return;
-                
-                const method = this.dataset.method;
-                const radio = document.getElementById(method);
-                
-                if (!radio || radio.disabled) return;
-                
-                // Clear previous selections
-                elements.paymentCards.forEach(c => c.classList.remove('selected'));
-                elements.paymentRadios.forEach(r => r.checked = false);
-                
-                // Select current
-                this.classList.add('selected');
-                radio.checked = true;
-                
-                elements.btnProceed.disabled = false;
-                elements.proceedBtnText.textContent = method === 'midtrans' ? 
-                    'Lanjutkan ke Pembayaran Digital' : 'Upload Bukti Transfer';
-            });
-        });
-    }
-
-    // Enhanced Payment Processing
+    // Enhanced Payment Processing - Midtrans Only
     async function processPayment() {
         if (isProcessing) return;
-        
-        const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
-        if (!selectedMethod) {
-            alert('Pilih metode pembayaran terlebih dahulu.');
-            return;
-        }
 
         isProcessing = true;
-        setButtonLoading(elements.btnProceed, elements.proceedSpinner, elements.proceedBtnText, true, 'Processing...');
+        setButtonLoading(elements.btnProceed, elements.proceedSpinner, elements.proceedBtnText, true, 'Memproses...');
 
         try {
             const formData = new FormData();
             formData.append('reg_id', CONFIG.regId);
-            formData.append('payment_method', selectedMethod.value);
+            formData.append('payment_method', 'midtrans');
             formData.append('voucher_code', appliedVoucher?.code || '');
             formData.append(CONFIG.csrfTokenName, getCurrentCsrfToken());
 
@@ -699,12 +686,7 @@ $isProduction = $is_production ?? false;
             const result = await response.json();
 
             if (result.success) {
-                if (result.payment_method === 'midtrans') {
-                    await handleMidtransPayment(result);
-                } else {
-                    // Manual payment redirect
-                    window.location.href = result.redirect_url;
-                }
+                await handleMidtransPayment(result);
             } else {
                 throw new Error(result.message || 'Terjadi kesalahan tidak dikenal');
             }
@@ -767,7 +749,7 @@ $isProduction = $is_production ?? false;
                     console.log('Payment popup closed by user');
                     isProcessing = false;
                     setButtonLoading(elements.btnProceed, elements.proceedSpinner, elements.proceedBtnText, false);
-                    elements.proceedBtnText.textContent = 'Lanjutkan ke Pembayaran Digital';
+                    elements.proceedBtnText.textContent = 'Lanjutkan ke Pembayaran';
                 }
             };
 
@@ -805,9 +787,6 @@ $isProduction = $is_production ?? false;
 
         // Payment processing
         elements.btnProceed.addEventListener('click', processPayment);
-
-        // Payment method selection
-        initPaymentMethodSelection();
     }
 
     // Enhanced Page Initialization
@@ -827,13 +806,12 @@ $isProduction = $is_production ?? false;
                 
                 if (elements.midtransCard) {
                     elements.midtransCard.classList.add('disabled');
-                    const midtransRadio = document.getElementById('midtrans');
-                    if (midtransRadio) midtransRadio.disabled = true;
+                    elements.btnProceed.disabled = true;
                     
                     // Show warning message
                     const warningMsg = document.createElement('div');
-                    warningMsg.className = 'alert alert-warning mt-2 mb-0';
-                    warningMsg.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Pembayaran digital sementara tidak tersedia. Silakan gunakan transfer manual.';
+                    warningMsg.className = 'alert alert-warning mt-3 mb-0';
+                    warningMsg.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i><strong>Perhatian:</strong> Sistem pembayaran sedang tidak tersedia. Silakan refresh halaman atau coba beberapa saat lagi.';
                     elements.midtransCard.querySelector('.payment-body').appendChild(warningMsg);
                 }
             } else {

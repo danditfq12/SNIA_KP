@@ -1,13 +1,10 @@
 <?php
-// =========================================
-//  Enhanced Pembayaran Detail (Audience) - Midtrans Only
-//  Removed: Manual upload, file proof display, reupload functionality
-//  Enhanced: Midtrans transaction details, status checking, auto-verification info
-// =========================================
+// Enhanced Pembayaran Detail (Audience) - Midtrans Only  
 $title = $title ?? 'Detail Pembayaran';
 $pay   = $pay   ?? [];
 $event = $event ?? [];
 $voucher = $voucher ?? null;
+$reg = $reg ?? null;
 
 $amount   = (float)($pay['jumlah'] ?? 0);
 $originalAmount = (float)($pay['original_amount'] ?? $amount);
@@ -23,6 +20,7 @@ $paymentType = $pay['midtrans_payment_type'] ?? null;
 $settlementTime = $pay['midtrans_settlement_time'] ?? null;
 
 $payId = (int)($pay['id_pembayaran'] ?? 0);
+$regId = $reg ? (int)($reg['id'] ?? 0) : 0;
 
 $badge = match($status) {
     'pending' => 'warning',
@@ -36,6 +34,7 @@ $badge = match($status) {
 $evTitle = $event['title'] ?? 'Event';
 $evDate  = isset($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-';
 $evTime  = $event['event_time'] ?? '-';
+$evId    = (int)($event['id'] ?? 0);
 
 $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
 ?>
@@ -229,15 +228,23 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
                   <div class="status-info mt-3">
                     <?php if ($status === 'pending'): ?>
                       <div class="alert alert-warning mb-0">
-                        <i class="bi bi-clock me-2"></i>
-                        Pembayaran sedang diproses. Status akan terupdate otomatis setelah transaksi berhasil.
-                        <?php if ($orderId): ?>
-                        <div class="mt-2">
-                          <a href="<?= site_url('audience/pembayaran/check-status/'.$payId) ?>" class="btn btn-sm btn-outline-warning">
-                            <i class="bi bi-arrow-clockwise me-1"></i>Refresh Status
+                        <div class="d-flex align-items-start gap-2 mb-2">
+                          <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+                          <div>
+                            <strong>Pembayaran Belum Diselesaikan</strong>
+                            <p class="mb-0 mt-1">Anda memiliki pembayaran yang belum selesai. Klik tombol "Lanjutkan Pembayaran" di bawah untuk melanjutkan proses pembayaran melalui Midtrans.</p>
+                          </div>
+                        </div>
+                        <div class="mt-3 d-flex flex-wrap gap-2">
+                          <?php if ($regId > 0): ?>
+                          <a href="<?= site_url('audience/pembayaran/instruction/'.$regId) ?>" class="btn btn-warning">
+                            <i class="bi bi-credit-card me-1"></i>Lanjutkan Pembayaran
+                          </a>
+                          <?php endif; ?>
+                          <a href="<?= site_url('audience/pembayaran/cancel/'.$payId) ?>" class="btn btn-outline-danger js-cancel-payment">
+                            <i class="bi bi-x-circle me-1"></i>Batalkan
                           </a>
                         </div>
-                        <?php endif; ?>
                       </div>
                     <?php elseif ($status === 'verified'): ?>
                       <div class="alert alert-success mb-0">
@@ -256,7 +263,7 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
                         <?php endif; ?>
                         <?php if ($canRetry): ?>
                         <div class="mt-2">
-                          <a href="<?= site_url('audience/events/detail/'.(int)($event['id'] ?? 0)) ?>" class="btn btn-sm btn-primary">
+                          <a href="<?= site_url('audience/events/detail/'.$evId) ?>" class="btn btn-sm btn-primary">
                             <i class="bi bi-arrow-repeat me-1"></i>Coba Bayar Lagi
                           </a>
                         </div>
@@ -268,7 +275,7 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
                         Pembayaran kedaluwarsa. Silakan lakukan pembayaran baru.
                         <?php if ($canRetry): ?>
                         <div class="mt-2">
-                          <a href="<?= site_url('audience/events/detail/'.(int)($event['id'] ?? 0)) ?>" class="btn btn-sm btn-primary">
+                          <a href="<?= site_url('audience/events/detail/'.$evId) ?>" class="btn btn-sm btn-primary">
                             <i class="bi bi-arrow-repeat me-1"></i>Bayar Ulang
                           </a>
                         </div>
@@ -351,13 +358,6 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
                     </div>
                     <?php endif; ?>
                     
-                    <?php if ($status === 'pending'): ?>
-                    <div class="alert alert-info mt-3 mb-0 small">
-                      <i class="bi bi-info-circle me-1"></i>
-                      Pembayaran sedang diproses. Jangan menutup browser jika masih ada proses yang berjalan.
-                    </div>
-                    <?php endif; ?>
-
                     <?php if ($status === 'verified'): ?>
                     <div class="alert alert-success mt-3 mb-0 small">
                       <i class="bi bi-check-circle me-1"></i>
@@ -377,19 +377,13 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
             </a>
             
             <?php if ($status === 'verified'): ?>
-            <a href="<?= site_url('audience/events/detail/'.(int)($event['id'] ?? 0)) ?>" class="btn btn-success">
+            <a href="<?= site_url('audience/events/detail/'.$evId) ?>" class="btn btn-success">
               <i class="bi bi-calendar-check me-1"></i>Detail Event
             </a>
             <?php endif; ?>
 
-            <?php if ($status === 'pending' && $orderId): ?>
-            <a href="<?= site_url('audience/pembayaran/check-status/'.$payId) ?>" class="btn btn-outline-primary">
-              <i class="bi bi-arrow-clockwise me-1"></i>Refresh Status
-            </a>
-            <?php endif; ?>
-
             <?php if ($canRetry): ?>
-            <a href="<?= site_url('audience/events/detail/'.(int)($event['id'] ?? 0)) ?>" class="btn btn-primary">
+            <a href="<?= site_url('audience/events/detail/'.$evId) ?>" class="btn btn-primary">
               <i class="bi bi-arrow-repeat me-1"></i>Coba Lagi
             </a>
             <?php endif; ?>
@@ -576,3 +570,34 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
     .pay-hero{ padding: 20px 24px; border-radius:18px; }
   }
 </style>
+
+<script>
+// Konfirmasi pembatalan pembayaran
+document.querySelectorAll('.js-cancel-payment').forEach(btn => {
+  btn.addEventListener('click', function(e) {
+    e.preventDefault();
+    const url = this.href;
+    
+    if (window.Swal) {
+      Swal.fire({
+        title: 'Batalkan Pembayaran?',
+        html: '<p class="mb-2">Anda yakin ingin membatalkan pembayaran ini?</p><small class="text-muted">Anda dapat mendaftar ulang setelah pembatalan.</small>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Ya, Batalkan',
+        cancelButtonText: 'Tidak'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.location.href = url;
+        }
+      });
+    } else {
+      if (confirm('Batalkan pembayaran ini? Anda dapat mendaftar ulang setelah pembatalan.')) {
+        window.location.href = url;
+      }
+    }
+  });
+});
+</script>
