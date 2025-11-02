@@ -10,6 +10,10 @@
   $regId   = isset($myReg['id']) ? (int)$myReg['id'] : null;
   $payId   = isset($myReg['id_pembayaran']) ? (int)$myReg['id_pembayaran'] : null;
   $payStat = $myReg['payment_status'] ?? null;
+  $regStatus = $myReg['status'] ?? null;
+
+  // Cek apakah benar-benar terdaftar (bukan batal/rejected)
+  $isRegistered = $myReg && !in_array($regStatus, ['batal', 'ditolak'], true);
 
   $fmtDate = function($d){ return $d ? date('d M Y', strtotime($d)) : '-'; };
   $rupiah  = function($n){ return ($n===null||$n==='') ? '—' : 'Rp '.number_format((float)$n,0,',','.'); };
@@ -54,7 +58,7 @@
           </div>
 
           <div class="d-flex align-items-center gap-2">
-            <?php if ($myReg): ?>
+            <?php if ($isRegistered): ?>
               <span class="chip bg-success text-white border-0"><i class="bi bi-check2-circle me-1"></i>Sudah terdaftar</span>
             <?php elseif ($isOpen): ?>
               <span class="chip bg-info text-white border-0"><i class="bi bi-unlock me-1"></i>Pendaftaran dibuka</span>
@@ -96,27 +100,27 @@
           <div class="info-tile p-3 p-md-4 shadow-sm">
             <h5 class="mb-3">Aksi</h5>
 
-            <?php if ($myReg): ?>
+            <?php if ($isRegistered): ?>
               <div class="alert alert-info">
                 Kamu sudah terdaftar (mode:
                 <b><?= esc(strtoupper($myReg['mode_kehadiran'] ?? '-')) ?></b>).
               </div>
 
-              <?php if ($payId): ?>
-                <!-- Jika sudah punya pembayaran, langsung ke DETAIL pembayaran -->
+              <?php if ($payId && $payStat !== 'canceled'): ?>
+                <!-- Jika sudah punya pembayaran yang belum dibatalkan, langsung ke DETAIL pembayaran -->
                 <a class="btn btn-outline-primary w-100 mb-2"
                    href="<?= site_url('audience/pembayaran/detail/'.$payId) ?>">
                   <i class="bi bi-receipt me-1"></i>Lihat Pembayaran
                 </a>
-              <?php elseif (($myReg['status'] ?? '') === 'menunggu_pembayaran' && $regId): ?>
-                <!-- Belum ada pembayaran, lanjut ke instruksi pakai REG ID -->
+              <?php elseif ($regStatus === 'menunggu_pembayaran' && $regId): ?>
+                <!-- Belum ada pembayaran atau pembayaran dibatalkan, lanjut ke instruksi pakai REG ID -->
                 <a class="btn btn-primary w-100 mb-2"
                    href="<?= site_url('audience/pembayaran/instruction/'.$regId) ?>">
                   <i class="bi bi-cash-coin me-1"></i>Lanjutkan Pembayaran
                 </a>
               <?php endif; ?>
 
-              <?php if ($isToday): ?>
+              <?php if ($isToday && $regStatus === 'lunas'): ?>
                 <a class="btn btn-warning w-100"
                    href="<?= site_url('audience/absensi/event/'.($event['id'] ?? 0)) ?>">
                   <i class="bi bi-qr-code-scan me-1"></i>Absen Hari Ini
@@ -124,6 +128,14 @@
               <?php endif; ?>
 
             <?php elseif ($isOpen): ?>
+              <?php if ($myReg && in_array($regStatus, ['batal', 'ditolak'], true)): ?>
+                <!-- Jika pernah daftar tapi dibatalkan/ditolak, tampilkan info -->
+                <div class="alert alert-warning mb-3">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Pendaftaran sebelumnya dibatalkan. Silakan daftar ulang.
+                </div>
+              <?php endif; ?>
+              
               <button type="button" id="btnDaftar" class="btn btn-primary w-100">
                 <i class="bi bi-check2-square me-1"></i>Daftar Sekarang
               </button>

@@ -96,7 +96,12 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
                     $isWaitingVerification = (
                       $regStatus === 'menunggu_pembayaran' &&
                       !empty($paymentId) &&
-                      in_array($paymentStatus, ['pending','uploaded'], true)
+                      $paymentStatus === 'uploaded'
+                    );
+                    $isPendingPayment = (
+                      $regStatus === 'menunggu_pembayaran' &&
+                      !empty($paymentId) &&
+                      $paymentStatus === 'pending'
                     );
                     $isRegistered = ($regStatus !== null && $regStatus !== 'batal');
 
@@ -141,7 +146,7 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
                       </div>
 
                       <div class="d-flex gap-2">
-                        <?php if (!$isWaitingVerification): ?>
+                        <?php if (!$isWaitingVerification && !$isPendingPayment): ?>
                           <a href="<?= site_url('audience/events/detail/'.($e['id'] ?? 0)) ?>"
                              class="btn btn-outline-secondary flex-fill">
                             <?= $isRegistered ? 'Lihat Status' : 'Detail' ?>
@@ -154,13 +159,25 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
                                class="btn btn-primary flex-fill">Detail Pembayaran</a>
                             <a href="<?= site_url('audience/pembayaran/detail/'.(int)$paymentId).'#unggah-ulang' ?>"
                                class="btn btn-outline-primary flex-fill">Ubah Bukti</a>
-                          <?php elseif ($regStatus === 'menunggu_pembayaran'): ?>
-                            <a href="<?= $regId ? site_url('audience/pembayaran/instruction/'.$regId)
-                                                 : site_url('audience/pembayaran') ?>"
+                          <?php elseif ($isPendingPayment): ?>
+                            <!-- FIX: Gunakan regId untuk instruction -->
+                            <a href="<?= site_url('audience/pembayaran/instruction/'.(int)$regId) ?>"
                                class="btn btn-primary flex-fill js-go-pay"
                                data-title="<?= esc($e['title'] ?? 'Event') ?>">Lanjutkan Pembayaran</a>
+                            <a href="<?= site_url('audience/pembayaran/detail/'.(int)$paymentId) ?>"
+                               class="btn btn-outline-primary flex-fill">Detail Pembayaran</a>
+                          <?php elseif ($regStatus === 'menunggu_pembayaran'): ?>
+                            <!-- Belum ada payment_id, berarti belum bayar sama sekali -->
+                            <?php if (!empty($regId)): ?>
+                            <a href="<?= site_url('audience/pembayaran/instruction/'.(int)$regId) ?>"
+                               class="btn btn-primary flex-fill js-go-pay"
+                               data-title="<?= esc($e['title'] ?? 'Event') ?>">Lanjutkan Pembayaran</a>
+                            <?php else: ?>
+                            <a href="<?= site_url('audience/pembayaran') ?>"
+                               class="btn btn-primary flex-fill">Pembayaran</a>
+                            <?php endif; ?>
                             <?php if (!empty($paymentId)): ?>
-                              <a href="<?= site_url('audience/pembayaran/cancel/'.$paymentId) ?>"
+                              <a href="<?= site_url('audience/pembayaran/cancel/'.(int)$paymentId) ?>"
                                  class="btn btn-outline-danger flex-fill js-cancel"
                                  data-title="<?= esc($e['title'] ?? 'Event') ?>">Batalkan</a>
                             <?php endif; ?>
@@ -234,10 +251,18 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
                            class="btn btn-outline-secondary flex-fill">Detail</a>
 
                         <?php if ($isRegistered && $regStatus === 'menunggu_pembayaran'): ?>
-                          <a href="<?= $regId ? site_url('audience/pembayaran/instruction/'.$regId)
-                                               : site_url('audience/pembayaran') ?>"
+                          <!-- FIX: Prioritaskan regId untuk instruction -->
+                          <?php if (!empty($regId)): ?>
+                          <a href="<?= site_url('audience/pembayaran/instruction/'.(int)$regId) ?>"
                              class="btn btn-primary flex-fill js-go-pay"
                              data-title="<?= esc($e['title'] ?? 'Event') ?>">Lanjutkan Pembayaran</a>
+                          <?php elseif (!empty($paymentId)): ?>
+                          <a href="<?= site_url('audience/pembayaran/detail/'.(int)$paymentId) ?>"
+                             class="btn btn-primary flex-fill">Detail Pembayaran</a>
+                          <?php else: ?>
+                          <a href="<?= site_url('audience/pembayaran') ?>"
+                             class="btn btn-primary flex-fill">Pembayaran</a>
+                          <?php endif; ?>
                         <?php else: ?>
                           <button class="btn btn-primary flex-fill" disabled>Daftar</button>
                         <?php endif; ?>
@@ -289,7 +314,7 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
   .welcome-text{ font-weight:700; }
   .bg-gradient-primary{ background:linear-gradient(135deg,var(--primary-color),var(--info-color))!important; }
   .event-card{
-    background:#f3f4f6; /* sama dengan halaman Abstrak */
+    background:#f3f4f6;
     border-radius:14px;
     padding:16px;
     border:1px solid #e5e7eb;
@@ -301,7 +326,6 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
 </style>
 
 <script>
-// konfirmasi (register/cancel/go-pay) – tetap sama
 document.querySelectorAll('.js-register').forEach(a=>{
   a.addEventListener('click', (e)=>{
     const title = a.getAttribute('data-title') || 'Event';

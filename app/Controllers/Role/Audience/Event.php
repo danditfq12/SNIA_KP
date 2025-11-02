@@ -108,7 +108,7 @@ class Event extends BaseController
                 foreach ($regs as $r) {
                     $eid = (int)$r['id_event'];
                     $myRegs[$eid] = [
-                        'reg_id'         => (int)$r['id'],     // untuk /pembayaran/instruction/{reg_id}
+                        'reg_id'         => (int)$r['id'],
                         'status'         => $r['status'],
                         'payment_id'     => $latestPay[$eid]['payment_id']     ?? null,
                         'payment_status' => $latestPay[$eid]['payment_status'] ?? null,
@@ -142,7 +142,21 @@ class Event extends BaseController
 
         $idUser  = (int)(session()->get('id_user') ?? 0);
         $regM    = new EventRegistrationModel();
-        $myReg   = $regM->findUserReg($id, $idUser); // berisi id(reg_id), status, mode_kehadiran, dst.
+        
+        // Ambil registrasi, tapi abaikan yang sudah batal/ditolak
+        $allRegs = $regM->where('id_event', $id)
+                        ->where('id_user', $idUser)
+                        ->findAll();
+        
+        $myReg = null;
+        foreach ($allRegs as $reg) {
+            // Hanya ambil registrasi yang masih aktif (bukan batal/ditolak)
+            if (!in_array($reg['status'] ?? '', ['batal', 'ditolak'], true)) {
+                $myReg = $reg;
+                break;
+            }
+        }
+        
         $options = $eventM->getParticipationOptions($id, 'audience');
         $pricing = $eventM->getPricingMatrix($id);
         $isOpen  = $eventM->isRegistrationOpen($id);
@@ -170,7 +184,20 @@ class Event extends BaseController
 
         $idUser   = (int)(session()->get('id_user') ?? 0);
         $regM     = new EventRegistrationModel();
-        $existing = $regM->findUserReg($id, $idUser);
+        
+        // Cek registrasi yang masih AKTIF (bukan batal/ditolak)
+        $allRegs = $regM->where('id_event', $id)
+                        ->where('id_user', $idUser)
+                        ->findAll();
+        
+        $existing = null;
+        foreach ($allRegs as $reg) {
+            if (!in_array($reg['status'] ?? '', ['batal', 'ditolak'], true)) {
+                $existing = $reg;
+                break;
+            }
+        }
+        
         if ($existing) {
             if (($existing['status'] ?? '') === 'menunggu_pembayaran') {
                 return redirect()->to('/audience/pembayaran/instruction/'.$existing['id'])
@@ -205,8 +232,21 @@ class Event extends BaseController
             return redirect()->to('/audience/events/detail/'.$id)->with('error','Pendaftaran event telah ditutup.');
         }
 
-        $regM     = new EventRegistrationModel();
-        $existing = $regM->findUserReg($id, $idUser);
+        $regM = new EventRegistrationModel();
+        
+        // Cek registrasi yang masih AKTIF (bukan batal/ditolak)
+        $allRegs = $regM->where('id_event', $id)
+                        ->where('id_user', $idUser)
+                        ->findAll();
+        
+        $existing = null;
+        foreach ($allRegs as $reg) {
+            if (!in_array($reg['status'] ?? '', ['batal', 'ditolak'], true)) {
+                $existing = $reg;
+                break;
+            }
+        }
+        
         if ($existing) {
             if (($existing['status'] ?? '') === 'menunggu_pembayaran') {
                 return redirect()->to('/audience/pembayaran/instruction/'.$existing['id'])
@@ -225,7 +265,32 @@ class Event extends BaseController
             return redirect()->to('/audience/events/detail/'.$id)->with('error','Kuota peserta telah penuh.');
         }
 
-        $idReg = $regM->createRegistration($id, $idUser, $mode);
+        // === PERBAIKAN UTAMA: Reuse atau buat registrasi baru ===
+        $oldCanceledReg = $regM->where('id_event', $id)
+                               ->where('id_user', $idUser)
+                               ->whereIn('status', ['batal', 'ditolak'])
+                               ->orderBy('id', 'DESC')
+                               ->first();
+        
+        if ($oldCanceledReg) {
+            // Update registrasi lama menjadi aktif kembali
+            $regM->update($oldCanceledReg['id'], [
+                'status' => 'menunggu_pembayaran',
+                'mode_kehadiran' => $mode,
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+            $idReg = $oldCanceledReg['id'];
+            
+            // === FIX: Hapus pembayaran lama dengan event_id dan id_user ===
+            $this->db->table('pembayaran')
+                     ->where('event_id', $id)
+                     ->where('id_user', $idUser)
+                     ->whereIn('status', ['canceled', 'expired', 'rejected'])
+                     ->delete();
+        } else {
+            // Buat registrasi baru jika tidak ada yang dibatalkan
+            $idReg = $regM->createRegistration($id, $idUser, $mode);
+        }
 
         // notifikasi
         try {
@@ -243,7 +308,9 @@ class Event extends BaseController
                     site_url('admin/event/detail/' . $id)
                 );
             }
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            // Silent fail untuk notifikasi
+        }
 
         return redirect()->to('/audience/pembayaran/instruction/'.$idReg)
                          ->with('message','Pendaftaran berhasil. Silakan lakukan pembayaran.');
