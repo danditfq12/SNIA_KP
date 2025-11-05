@@ -12,11 +12,21 @@ class UserModel extends Model
     protected $useTimestamps = false;
 
     protected $allowedFields = [
-        'nama_lengkap','email','password','role','status',
-        'no_hp','institusi','alamat','foto',
-        'verification_token','email_verified_at',
-        'created_at','updated_at'
+        'nama_lengkap',
+        'email',
+        'password',
+        'role',
+        'status',
+        'no_hp',
+        'institusi',
+        'jenis_peserta',  // ✅ TAMBAHKAN INI
+        'alamat',
+        'foto',
+        'verification_token',
+        'email_verified_at',
     ];
+    
+    // ✅ Hapus created_at & updated_at dari allowedFields jika pakai auto-timestamp
 
     // Method untuk mendapatkan user berdasarkan email
     public function getUserByEmail($email)

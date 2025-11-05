@@ -35,17 +35,40 @@
           <?= csrf_field() ?>
 
           <div class="form-group">
-            <label for="nama_lengkap">Nama Lengkap</label>
+            <label for="nama_lengkap">Nama Lengkap <span class="required">*</span></label>
             <input id="nama_lengkap" type="text" name="nama_lengkap" placeholder="Masukkan nama lengkap" value="<?= old('nama_lengkap') ?>" required>
           </div>
 
           <div class="form-group">
-            <label for="email_reg">Email</label>
+            <label for="email_reg">Email <span class="required">*</span></label>
             <input id="email_reg" type="email" name="email" placeholder="Masukkan email" value="<?= old('email') ?>" required>
           </div>
 
           <div class="form-group">
-            <label for="password">Kata Sandi</label>
+            <label for="no_hp">Nomor HP <span class="required">*</span></label>
+            <input id="no_hp" type="tel" name="no_hp" placeholder="Contoh: 081234567890" value="<?= old('no_hp') ?>" required>
+            <small class="form-hint">Minimal 10 digit, maksimal 15 digit</small>
+          </div>
+
+          <div class="form-group">
+            <label for="institusi">Institusi <span class="required">*</span></label>
+            <input id="institusi" type="text" name="institusi" placeholder="Nama universitas/instansi/perusahaan" value="<?= old('institusi') ?>" required>
+          </div>
+
+          <div class="form-group">
+            <label for="jenis_peserta">Jenis Peserta <span class="required">*</span></label>
+            <select id="jenis_peserta" name="jenis_peserta" required>
+              <option value="">-- Pilih Jenis Peserta --</option>
+              <option value="mahasiswa" <?= old('jenis_peserta')==='mahasiswa' ? 'selected' : '' ?>>Mahasiswa</option>
+              <option value="dosen" <?= old('jenis_peserta')==='dosen' ? 'selected' : '' ?>>Dosen</option>
+              <option value="peneliti" <?= old('jenis_peserta')==='peneliti' ? 'selected' : '' ?>>Peneliti</option>
+              <option value="umum" <?= old('jenis_peserta')==='umum' ? 'selected' : '' ?>>Umum</option>
+              <option value="lainnya" <?= old('jenis_peserta')==='lainnya' ? 'selected' : '' ?>>Lainnya</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Kata Sandi <span class="required">*</span></label>
             <div class="input-group">
               <input id="password" type="password" name="password" placeholder="Minimal 6 karakter" required>
               <button type="button" class="toggle-password" aria-label="Tampilkan kata sandi"><i class="fa fa-eye"></i></button>
@@ -53,7 +76,7 @@
           </div>
 
           <div class="form-group">
-            <label for="password2">Konfirmasi Kata Sandi</label>
+            <label for="password2">Konfirmasi Kata Sandi <span class="required">*</span></label>
             <div class="input-group">
               <input id="password2" type="password" name="password2" placeholder="Ulangi kata sandi" required>
               <button type="button" class="toggle-password" aria-label="Tampilkan kata sandi"><i class="fa fa-eye"></i></button>
@@ -61,7 +84,7 @@
           </div>
 
           <div class="form-group">
-            <label for="role">Daftar Sebagai</label>
+            <label for="role">Daftar Sebagai <span class="required">*</span></label>
             <select id="role" name="role" required>
               <option value="">-- Pilih Peran Anda --</option>
               <option value="presenter" <?= old('role')==='presenter' ? 'selected' : '' ?>>Presenter</option>

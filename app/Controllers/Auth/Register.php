@@ -52,6 +52,29 @@ class Register extends BaseController
                     'in_list'  => 'Role tidak valid.',
                 ]
             ],
+            'no_hp' => [
+                'rules'  => 'required|numeric|min_length[10]|max_length[15]',
+                'errors' => [
+                    'required'   => 'Nomor HP wajib diisi.',
+                    'numeric'    => 'Nomor HP harus berupa angka.',
+                    'min_length' => 'Nomor HP minimal 10 digit.',
+                    'max_length' => 'Nomor HP maksimal 15 digit.',
+                ]
+            ],
+            'institusi' => [
+                'rules'  => 'required|min_length[3]',
+                'errors' => [
+                    'required'   => 'Institusi wajib diisi.',
+                    'min_length' => 'Institusi minimal 3 karakter.',
+                ]
+            ],
+            'jenis_peserta' => [
+                'rules'  => 'required|in_list[mahasiswa,dosen,peneliti,umum,lainnya]',
+                'errors' => [
+                    'required' => 'Jenis peserta wajib dipilih.',
+                    'in_list'  => 'Jenis peserta tidak valid.',
+                ]
+            ],
         ];
 
         if (! $this->validate($rules)) {
@@ -63,10 +86,13 @@ class Register extends BaseController
         }
 
         // Normalisasi
-        $namaLengkap = (string) $this->request->getPost('nama_lengkap');
-        $email       = strtolower(trim((string) $this->request->getPost('email')));
-        $password    = (string) $this->request->getPost('password');
-        $role        = (string) $this->request->getPost('role'); // presenter|audience
+        $namaLengkap   = (string) $this->request->getPost('nama_lengkap');
+        $email         = strtolower(trim((string) $this->request->getPost('email')));
+        $password      = (string) $this->request->getPost('password');
+        $role          = (string) $this->request->getPost('role'); // presenter|audience
+        $noHp          = (string) $this->request->getPost('no_hp');
+        $institusi     = (string) $this->request->getPost('institusi');
+        $jenisPeserta  = (string) $this->request->getPost('jenis_peserta');
 
         $userModel = new UserModel();
 
@@ -102,6 +128,9 @@ class Register extends BaseController
             'email'         => $email,
             'password_hash' => password_hash($password, PASSWORD_BCRYPT),
             'role'          => $role,
+            'no_hp'         => $noHp,
+            'institusi'     => $institusi,
+            'jenis_peserta' => $jenisPeserta,
             'otp_code'      => $otp,
             'otp_expired'   => $expired,
             'updated_at'    => date('Y-m-d H:i:s'),

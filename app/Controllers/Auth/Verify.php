@@ -68,16 +68,19 @@ class Verify extends BaseController
 
         // Kalau belum ada → buat akun baru, set foto default
         if (!$user) {
-            $userId = $userModel->insert([
-                'nama_lengkap' => $row['nama_lengkap'],
-                'email'        => strtolower(trim($row['email'])),
-                'password'     => $row['password_hash'],
-                'role'         => $row['role'],
-                'status'       => 'aktif',
-                'foto'         => 'default.png', // foto default
-            ]);
-            $user = $userModel->find($userId);
-        }
+    $userId = $userModel->insert([
+        'nama_lengkap'  => $row['nama_lengkap'],
+        'email'         => strtolower(trim($row['email'])),
+        'password'      => $row['password_hash'],
+        'role'          => $row['role'],
+        'no_hp'         => $row['no_hp'],           
+        'institusi'     => $row['institusi'],       
+        'jenis_peserta' => $row['jenis_peserta'],   
+        'status'        => 'aktif',
+        'foto'          => 'default.png',
+    ]);
+    $user = $userModel->find($userId);
+}
 
         // hapus pending + session
         $pending->where('email', $email)->delete();
