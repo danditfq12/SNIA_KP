@@ -24,7 +24,7 @@ class Fullpaper extends BaseController
         $this->abstrakModel  = new AbstrakModel();
         $this->fpModel       = new FullPaperModel();
         $this->kategoriModel = new KategoriAbstrakModel();
-        helper(['date']); // trim: remove text, filesystem
+        helper(['date']);
     }
 
     /* ======================= Helpers: status & normalization ======================= */
@@ -129,7 +129,7 @@ class Fullpaper extends BaseController
     }
 
     /**
-     * AUTO-REJECTION logic (tampilan):
+     * AUTO-REJECTION tampil:
      * - Jika window FP TUTUP & ada deadline:
      *   status NONE/REVISION => tampil REJECTED (Auto)
      */
@@ -153,7 +153,7 @@ class Fullpaper extends BaseController
         return [$s, null];
     }
 
-    /* ======================= Reviewer helpers (untuk presenter) ======================= */
+    /* ======================= Reviewer helpers ======================= */
 
     private function resolveReviewerSource(): array
     {
@@ -170,7 +170,6 @@ class Fullpaper extends BaseController
         return ['table'=>$table,'id'=>$idCol,'name'=>$nameCol,'email'=>$emailCol];
     }
 
-    /** cek apakah ada reviewer yang ditugaskan */
     private function hasAnyReviewerAssigned(?int $submissionId): bool
     {
         if (!$submissionId) return false;
@@ -185,10 +184,6 @@ class Fullpaper extends BaseController
         return $cnt > 0;
     }
 
-    /**
-     * Ambil reviewer yang ditugaskan beserta keputusan TERAKHIR masing-masing.
-     * CATATAN: **TIDAK** lagi membatasi ke >= uploadedAt; review lama tetap terlihat.
-     */
     private function getAssignedReviewersWithLatestDecision(int $submissionId, ?string $uploadedAt): array
     {
         $db = \Config\Database::connect();
@@ -228,7 +223,6 @@ class Fullpaper extends BaseController
                 ->select('reviewer_id, keputusan, komentar, tanggal_review')
                 ->where('submission_id', $submissionId)
                 ->whereIn('reviewer_id', $ids);
-            // HAPUS FILTER BERDASARKAN $uploadedAt -> review lama tetap tampil
             $rows = $qb->orderBy('reviewer_id','ASC')->orderBy('tanggal_review','DESC')->get()->getResultArray();
             foreach ($rows as $r) {
                 $rid = (int)$r['reviewer_id'];
@@ -335,18 +329,16 @@ class Fullpaper extends BaseController
     private function hasOptionalRevisionAllowed(?int $submissionId, ?string $uploadedAt): bool
     {
         if (!$submissionId) return false;
-        // gunakan SEMUA review (tanpa filter uploadedAt)
         $reviewers = $this->getAssignedReviewersWithLatestDecision($submissionId, null);
         $panel     = $this->computePanelMajority($reviewers);
         return ($panel['panel'] === 'ACCEPTED' && !empty($panel['optional_revision']));
     }
 
-    /* ========= NEW: Flow status untuk “menunggu …” di UI ========= */
     private function computeFlowStatus(array $reviewers): array
     {
         $total     = count($reviewers);
-        $accepted  = 0; // reviewer yang menerima tugas
-        $submitted = 0; // reviewer yang sudah memberi keputusan
+        $accepted  = 0;
+        $submitted = 0;
 
         foreach ($reviewers as $r) {
             $st = strtolower((string)($r['assignment_status'] ?? ''));
@@ -395,7 +387,7 @@ class Fullpaper extends BaseController
     {
         $db = \Config\Database::connect();
 
-        // submissions table
+        // submissions
         if ($db->tableExists('submissions')) {
             $row = $db->table('submissions')
                 ->select('id')
@@ -414,7 +406,7 @@ class Fullpaper extends BaseController
             }
         }
 
-        // fallback abstrak table
+        // fallback abstrak
         if ($db->tableExists('abstrak')) {
             $row = $db->table('abstrak')
                 ->select('id_abstrak')
@@ -431,9 +423,7 @@ class Fullpaper extends BaseController
         }
     }
 
-    /* ======================= NEW: jejak tipe upload & info revisi ======================= */
-
-    /** Try set last upload type if schema supports it */
+    /** jejak tipe upload */
     private function setLastUploadType(int $submissionId, string $type): void
     {
         $db = \Config\Database::connect();
@@ -443,19 +433,16 @@ class Fullpaper extends BaseController
         $fields = array_flip($db->getFieldNames($table) ?: []);
         $pk     = $table==='submissions' ? 'id' : 'id_abstrak';
 
-        // prefer: last_upload_type (string: OPTIONAL|REVISION|NEW)
         if (isset($fields['last_upload_type'])) {
             $db->table($table)->where($pk, $submissionId)->update(['last_upload_type' => strtoupper($type)]);
             return;
         }
 
-        // fallback: revisi_opsional (boolean)
         if (isset($fields['revisi_opsional'])) {
             $db->table($table)->where($pk, $submissionId)->update(['revisi_opsional' => (strtoupper($type)==='OPTIONAL') ? 1 : 0]);
         }
     }
 
-    /** Read revision info for view */
     private function getRevisionInfo(?int $submissionId): array
     {
         $db = \Config\Database::connect();
@@ -500,22 +487,24 @@ class Fullpaper extends BaseController
                                       ->where('event_id', $eid)
                                       ->orderBy('id_abstrak', 'DESC')->first();
 
+            // penanda abstrak SUDAH diupload
+            $hasAbstract = !empty($abs);
+
             $absRejected = $this->isAbstractRejected($abs);
             $absEligible = !$absRejected;
 
             [$fpStatus, $fpPath, $fpTs] = $this->latestFullpaperMeta($userId, $eid, $abs);
+            $hasFullpaper = ($fpPath !== '' && strtoupper($fpStatus) !== 'NONE');
 
             $isOpen       = $this->isFullPaperOpen($event);
             $eventStarted = $this->isEventStarted($event);
 
-            // status dasar
             $baseStatus = $absRejected ? 'REJECTED' : ($absEligible ? $fpStatus : 'NONE');
             [$effStatus, $autoReason] = $this->autoRejectionStatus($event, $baseStatus);
 
             // auto reject jika event sudah mulai & belum ada review sama sekali
             $autoReasonEvent = null;
             $submissionId  = $this->findCurrentSubmissionId($userId, $eid);
-            // gunakan seluruh review (tanpa filter uploadedAt)
             $reviewersMini = $submissionId ? $this->getAssignedReviewersWithLatestDecision($submissionId, null) : [];
             $doneReviews   = 0; foreach ($reviewersMini as $rv) if (!empty($rv['keputusan'])) $doneReviews++;
             if ($eventStarted && $doneReviews === 0) {
@@ -535,15 +524,22 @@ class Fullpaper extends BaseController
                 $meta['hint']   = $autoReasonEvent;
             }
 
-            // canUpload (dengan optional revision support)
+            // Optional revision allowed?
             $allowOptional = (!$absRejected) && $this->hasOptionalRevisionAllowed($submissionId, null);
-            $canUpload = $isOpen && $absEligible && (
-                in_array($effStatus, ['NONE','REJECTED','REVISION'], true) || $allowOptional
+
+            // tombol upload:
+            // - window open + status NONE/REJECTED/REVISION
+            // - ATAU revisi opsional (meski window tutup)
+            $canUpload = $absEligible && (
+                ($isOpen && in_array($effStatus, ['NONE','REJECTED','REVISION'], true)) ||
+                $allowOptional
             );
             if ($autoReasonEvent) $canUpload = false;
 
             $row = [
                 'event_id'            => $eid,
+                'event_title'         => $event['title'] ?? '-',
+                'abs_title'           => $abs['judul'] ?? null,
                 'title'               => $event['title'] ?? '-',
                 'event_date'          => $event['event_date'] ?? null,
                 'full_paper_deadline' => $event['full_paper_deadline'] ?? null,
@@ -556,8 +552,14 @@ class Fullpaper extends BaseController
                 'uploaded_at'         => $fpTs,
                 'is_open'             => $isOpen,
                 'can_upload'          => $canUpload,
+                // flags untuk view (logic dipindah ke controller)
+                'has_abstract'        => (bool)$hasAbstract,
+                'has_fullpaper'       => (bool)$hasFullpaper,
+                'auto_rejected'       => (strtoupper($effStatus)==='REJECTED' && !$isOpen && !empty($event['full_paper_deadline'])),
+                'primary_btn_label'   => $hasFullpaper ? 'Upload Revisi' : 'Upload Full Paper',
             ];
 
+            // penempatan di tab
             $goHistory =
                 ($effStatus === 'ACCEPTED') ||
                 (!$isOpen && $effStatus === 'REJECTED');
@@ -569,6 +571,7 @@ class Fullpaper extends BaseController
             }
         }
 
+        // urutkan
         usort($todo, function($a,$b){
             $ta = $a['full_paper_deadline'] ? strtotime($a['full_paper_deadline']) : PHP_INT_MAX;
             $tb = $b['full_paper_deadline'] ? strtotime($b['full_paper_deadline']) : PHP_INT_MAX;
@@ -664,12 +667,11 @@ class Fullpaper extends BaseController
         $panel        = ['panel'=>'PENDING','counts'=>['acc'=>0,'rev'=>0,'rej'=>0,'done'=>0,'total'=>0],'decided'=>false,'optional_revision'=>false];
 
         if ($submissionId && !$absRejected) {
-            // gunakan SEMUA review (tanpa filter uploadedAt)
             $reviewers = $this->getAssignedReviewersWithLatestDecision($submissionId, null);
             $panel     = $this->computePanelMajority($reviewers);
         }
 
-        // override dari voting jika tidak auto-reject window & bukan abstrak ditolak
+        // override panel jika bukan auto-reject window & bukan abstrak ditolak
         if (!$autoReason && !$absRejected) {
             if (in_array($panel['panel'], ['ACCEPTED','REVISION','REJECTED'], true)) {
                 $statusEff  = $panel['panel'];
@@ -693,7 +695,8 @@ class Fullpaper extends BaseController
         }
 
         $optionalRevision     = (!$absRejected && $panel['panel'] === 'ACCEPTED' && $panel['optional_revision']);
-        $canOptionalRevision  = $optionalRevision && $isOpen && $absEligible;
+        // Revisi opsional boleh MESKI window tutup
+        $canOptionalRevision  = $optionalRevision && $absEligible;
 
         $canReupload  = $isOpen && $absEligible && in_array($statusEff, ['REVISION','REJECTED'], true);
         $canUploadNew = $isOpen && $absEligible && $statusEff === 'NONE';
@@ -702,7 +705,7 @@ class Fullpaper extends BaseController
         $hasAssigned = $this->hasAnyReviewerAssigned($submissionId);
         $canCancel   = (!$hasAssigned) && $isOpen && !$eventStarted && ($path !== '');
 
-        // kunci aksi jika event sudah mulai & tak ada review
+        // kunci semua aksi jika event start & tak ada review
         if ($eventStarted && (($panel['counts']['done'] ?? 0) === 0)) {
             $canOptionalRevision = false;
             $canReupload = false;
@@ -710,7 +713,6 @@ class Fullpaper extends BaseController
             $canCancel = false;
         }
 
-        // Info ringkas untuk view
         $info = [
             'event'          => (string)($event['title'] ?? '-'),
             'judul'          => (string)($abs['judul'] ?? '-'),
@@ -719,10 +721,7 @@ class Fullpaper extends BaseController
             'fp_diunggah'    => $createdAt,
         ];
 
-        // NEW: Flow status “menunggu …”
         $flow = $this->computeFlowStatus($reviewers);
-
-        // NEW: Info revisi & flash upload kind
         $revisionInfo    = $this->getRevisionInfo($submissionId);
         $uploadKindFlash = session()->getFlashdata('fp_upload_kind'); // OPTIONAL | REVISION | NEW
 
@@ -751,12 +750,11 @@ class Fullpaper extends BaseController
 
             'contributors'          => $contributors,
 
-            // NEW
             'can_cancel'            => $canCancel,
             'info'                  => $info,
-            'flow'                  => $flow, // <— kirim flow ke view
-            'revision_info'         => $revisionInfo,   // <— info revisi
-            'upload_kind'           => $uploadKindFlash // <— toast satu kali
+            'flow'                  => $flow,
+            'revision_info'         => $revisionInfo,
+            'upload_kind'           => $uploadKindFlash
         ]);
     }
 
@@ -770,15 +768,6 @@ class Fullpaper extends BaseController
 
         $reg = $this->regModel->findUserReg($eventId, $userId);
         if (!$reg) return redirect()->to('/presenter/events/detail/'.$eventId)->with('error', 'Anda belum terdaftar pada event ini.');
-
-        if (!$this->isFullPaperOpen($event)) {
-            return redirect()->to('/presenter/fullpaper')->with('error', 'Pengumpulan Full Paper ditutup.');
-        }
-
-        // kunci create saat event sudah mulai
-        if ($this->isEventStarted($event)) {
-            return redirect()->to('/presenter/fullpaper')->with('error', 'Event sudah berjalan — pengumpulan Full Paper ditutup.');
-        }
 
         $absTbl = $this->abstrakModel->getTable() ?? 'abstrak';
         $katTbl = $this->kategoriModel->getTable() ?? 'kategori_abstrak';
@@ -797,17 +786,24 @@ class Fullpaper extends BaseController
 
         [$fpStatus] = $this->latestFullpaperMeta($userId, $eventId, $abs);
         $absEligible = $this->isAbstractEligible($abs);
-
         if (!$absEligible) {
             return redirect()->to('/presenter/abstrak/create/'.$eventId)
                 ->with('error', 'Upload Full Paper tersedia setelah Anda mengunggah abstrak (dan tidak ditolak).');
         }
 
         [$effStatus] = $this->autoRejectionStatus($event, $fpStatus);
-
-        // izinkan upload saat opsional revisi (panel accepted + 1 revisi)
         $submissionId   = $this->findCurrentSubmissionId($userId, $eventId);
         $allowOptional  = $this->hasOptionalRevisionAllowed($submissionId, null);
+
+        // Window tutup? tetap izinkan kalau opsional
+        if (!$this->isFullPaperOpen($event) && !$allowOptional) {
+            return redirect()->to('/presenter/fullpaper')->with('error', 'Pengumpulan Full Paper ditutup.');
+        }
+
+        // Event sudah mulai? blokir kecuali opsional (ubah sesuai kebijakan)
+        if ($this->isEventStarted($event) && !$allowOptional) {
+            return redirect()->to('/presenter/fullpaper')->with('error', 'Event sudah berjalan — pengumpulan Full Paper ditutup.');
+        }
 
         if ($effStatus !== 'NONE' && !in_array($effStatus, ['REVISION','REJECTED'], true) && !$allowOptional) {
             return redirect()->to('/presenter/fullpaper/detail/'.$eventId)
@@ -838,16 +834,6 @@ class Fullpaper extends BaseController
         $reg = $this->regModel->findUserReg($eventId, $userId);
         if (!$reg) return redirect()->to('/presenter/fullpaper')->with('error','Anda belum terdaftar pada event ini.');
 
-        if (!$this->isFullPaperOpen($event)) {
-            return redirect()->to('/presenter/fullpaper')->with('error', 'Pengumpulan Full Paper ditutup.');
-        }
-
-        // kunci store saat event sudah mulai
-        if ($this->isEventStarted($event)) {
-            return redirect()->to('/presenter/fullpaper/detail/'.$eventId)
-                ->with('error', 'Event sudah berjalan — unggahan baru ditolak.');
-        }
-
         $abs = $this->abstrakModel->where('id_user',$userId)
                                   ->where('event_id',$eventId)
                                   ->orderBy('id_abstrak','DESC')->first();
@@ -860,17 +846,25 @@ class Fullpaper extends BaseController
 
         [$fpStatus,,]  = $this->latestFullpaperMeta($userId, $eventId, $abs);
         $absEligible   = $this->isAbstractEligible($abs);
-
         if (!$absEligible) {
             return redirect()->to('/presenter/abstrak/create/'.$eventId)
                 ->with('error', 'Upload Full Paper tersedia setelah Anda mengunggah abstrak (dan tidak ditolak).');
         }
 
         [$effStatus] = $this->autoRejectionStatus($event, $fpStatus);
-
-        // izinkan upload saat opsional revisi
         $submissionId   = $this->findCurrentSubmissionId($userId, $eventId);
         $allowOptional  = $this->hasOptionalRevisionAllowed($submissionId, null);
+
+        // Window tutup? tetap izinkan kalau opsional
+        if (!$this->isFullPaperOpen($event) && !$allowOptional) {
+            return redirect()->to('/presenter/fullpaper')->with('error', 'Pengumpulan Full Paper ditutup.');
+        }
+
+        // Event sudah mulai? blokir kecuali opsional
+        if ($this->isEventStarted($event) && !$allowOptional) {
+            return redirect()->to('/presenter/fullpaper/detail/'.$eventId)
+                ->with('error', 'Event sudah berjalan — unggahan baru ditolak.');
+        }
 
         if ($effStatus !== 'NONE' && !in_array($effStatus, ['REVISION','REJECTED'], true) && !$allowOptional) {
             return redirect()->to('/presenter/fullpaper/detail/'.$eventId)
@@ -902,33 +896,28 @@ class Fullpaper extends BaseController
                 ? $this->fpModel->getLatestRowByUserEvent($userId, $eventId) : null;
             $newId  = $this->resolveSubmissionId($after);
 
-            // === PERBAIKAN: revisi_ke hanya naik saat revisi, bukan unggahan pertama ===
+            // revisi_ke: unggahan pertama => 0, revisi (wajib/opsional) => +1
             $db    = \Config\Database::connect();
             $table = $db->tableExists('submissions') ? 'submissions' : ($db->tableExists('abstrak') ? 'abstrak' : null);
             if ($table && in_array('revisi_ke', $db->getFieldNames($table), true) && $newId) {
                 $pk = $table==='submissions' ? 'id' : 'id_abstrak';
-
-                // Unggahan pertama: status efektif sebelum upload = NONE -> set 0 (jangan +1)
                 if ($effStatus === 'NONE') {
                     $db->table($table)->where($pk, $newId)->update(['revisi_ke' => 0]);
                 } else {
-                    // Revisi wajib (REVISION/REJECTED) atau revisi opsional (panel ACC + 1 revisi)
                     if ($allowOptional || in_array($effStatus, ['REVISION','REJECTED'], true)) {
                         $db->table($table)
                            ->where($pk, $newId)
                            ->set('revisi_ke', 'COALESCE(revisi_ke,0)+1', false)
                            ->update();
                     }
-                    // Status lain (mis. UPLOADED/pending) -> biarkan tanpa perubahan
                 }
             }
-            // === END PERBAIKAN ===
 
             if ($newId && (!$beforeId || $newId !== $beforeId)) {
                 $this->propagateFullpaperAssignments($newId, $userId, $eventId, $beforeId);
             }
 
-            // Tentukan & simpan jenis unggahan
+            // Jenis unggahan (NEW | REVISION | OPTIONAL)
             $uploadType = 'NEW';
             if ($allowOptional) {
                 $uploadType = 'OPTIONAL';
@@ -937,13 +926,10 @@ class Fullpaper extends BaseController
                     $uploadType = 'REVISION';
                 }
             }
-            if ($newId) {
-                $this->setLastUploadType($newId, $uploadType);
-            }
-            // Flash sekali tampil
+            if ($newId) $this->setLastUploadType($newId, $uploadType);
             session()->setFlashdata('fp_upload_kind', $uploadType);
 
-            // Notifikasi hanya ke reviewer Revisi/Reject sebelumnya
+            // Notifikasi reviewer yang sebelumnya memberi revisi/reject
             try {
                 if ($beforeId && $newId && $db->tableExists('fullpaper_reviews') && $db->tableExists('fullpaper_reviewers')) {
                     $rids = array_column(
@@ -1005,11 +991,6 @@ class Fullpaper extends BaseController
         return $this->response->download($path, null);
     }
 
-    /**
-     * NEW: Batalkan unggahan (hanya jika belum ada reviewer yang ditugaskan).
-     * - Clear file path & status -> NONE
-     * - Hapus file fisik
-     */
     public function cancel($eventId)
     {
         $userId  = (int) session()->get('id_user');
@@ -1026,13 +1007,11 @@ class Fullpaper extends BaseController
             return redirect()->to('/presenter/fullpaper/detail/'.$eventId)->with('error', 'Tidak dapat membatalkan pada periode ini.');
         }
 
-        // ambil meta last upload
         $abs = $this->abstrakModel->where('id_user', $userId)
                                   ->where('event_id', $eventId)
                                   ->orderBy('id_abstrak', 'DESC')->first();
 
-        [$status, $path, $createdAt] = $this->latestFullpaperMeta($userId, $eventId, $abs);
-
+        [, $path, ] = $this->latestFullpaperMeta($userId, $eventId, $abs);
         if ($path === '') {
             return redirect()->to('/presenter/fullpaper/detail/'.$eventId)->with('error', 'Tidak ada unggahan untuk dibatalkan.');
         }
@@ -1045,7 +1024,6 @@ class Fullpaper extends BaseController
         $db = \Config\Database::connect();
         $fileDeleted = false;
 
-        // hapus file fisik
         $basename = basename($path);
         $fsPath   = WRITEPATH.'uploads/fullpaper/'.$basename;
         if (is_file($fsPath)) {
@@ -1053,9 +1031,7 @@ class Fullpaper extends BaseController
             $fileDeleted = true;
         }
 
-        // bersihkan field di submissions/abstrak — TANPA LIMIT DI UPDATE (kompatibel PostgreSQL)
         $okUpdate = false;
-
         if ($db->tableExists('submissions')) {
             $fields = array_flip($db->getFieldNames('submissions') ?: []);
             $set = [];
@@ -1063,7 +1039,6 @@ class Fullpaper extends BaseController
             if (isset($fields['full_paper_status']))      $set['full_paper_status'] = 'NONE';
             if (isset($fields['full_paper_uploaded_at'])) $set['full_paper_uploaded_at'] = null;
             if ($set) {
-                // Ambil ID terakhir (SELECT), lalu UPDATE by PK
                 $last = $db->table('submissions')
                     ->select('id')
                     ->where('user_id', $userId)
@@ -1084,7 +1059,6 @@ class Fullpaper extends BaseController
             if (isset($fields['full_paper_status']))      $set['full_paper_status'] = 'NONE';
             if (isset($fields['full_paper_uploaded_at'])) $set['full_paper_uploaded_at'] = null;
             if ($set) {
-                // Ambil ID terakhir (SELECT), lalu UPDATE by PK
                 $last = $db->table('abstrak')
                     ->select('id_abstrak')
                     ->where('id_user', $userId)

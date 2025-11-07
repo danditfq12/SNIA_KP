@@ -204,9 +204,7 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Progress events — DISARING: tidak menampilkan event yang sudah mulai/berjalan.
-     * Rule: jika event_date ada, event dianggap mulai pada (event_date + event_time | 00:00).
-     * Jika startTs <= now => SKIP dari progres.
+     * Progress events — tidak tampilkan event yang sudah mulai/berjalan.
      */
     private function getProgressEvents(int $uid): array
     {
@@ -226,7 +224,6 @@ class Dashboard extends BaseController
         }
         if (!$ids) return [];
 
-        // ambil kolom tanggal/waktu yang tersedia
         $dateCol = $this->pickCol('events', ['event_date','tanggal','date','start_at'], 'event_date');
         $timeCol = $this->pickCol('events', ['event_time','waktu','time','start_time'], 'event_time');
 
@@ -242,15 +239,12 @@ class Dashboard extends BaseController
             $eventId   = (int)$e['id'];
             $dateStr   = trim((string)($e['event_date'] ?? ''));
             $timeStr   = trim((string)($e['event_time'] ?? ''));
-            // anggap event mulai di jam yang tersedia, default 00:00 kalau kosong
             $startTs   = $dateStr ? strtotime($dateStr.' '.($timeStr !== '' ? $timeStr : '00:00:00')) : null;
 
-            // SKIP: event yang sudah mulai / sudah lewat
             if ($startTs !== null && $startTs <= $now) {
                 continue;
             }
 
-            // ---- progress logic ----
             $absMeta = $this->getAbstractStatus($uid, $eventId);
             $absHas  = $absMeta['has'];
             $absSt   = strtolower($absMeta['status']);
@@ -306,33 +300,33 @@ class Dashboard extends BaseController
         return $out;
     }
 
+    /* ====== ABSENSI: hanya untuk event yang SUDAH DIBAYAR ====== */
     private function getTodaySchedule(int $uid): array
     {
         if (!$this->tableExists('events')) return [];
         $today = date('Y-m-d');
 
-        $subA = $this->tableExists('abstrak')
-            ? $this->db->table('abstrak')->distinct()->select('event_id')->where('id_user',$uid)->getCompiledSelect()
-            : null;
-        $subP = $this->tableExists('pembayaran')
-            ? $this->db->table('pembayaran')->distinct()->select('event_id')->where('id_user',$uid)->getCompiledSelect()
-            : null;
+        // WAJIB ada pembayaran & status OK
+        if (!$this->tableExists('pembayaran')) return [];
+        $statusOk = ['verified','paid','lunas'];
+        $subPay = $this->db->table('pembayaran')
+            ->distinct()
+            ->select('event_id')
+            ->where('id_user', $uid)
+            ->whereIn('LOWER(status)', $statusOk)
+            ->getCompiledSelect();
 
         $dateCol = $this->pickCol('events', ['event_date','tanggal','date','start_at'], 'event_date');
         $timeCol = $this->pickCol('events', ['event_time','waktu','time','start_time'], 'event_time');
         $locCol  = $this->pickCol('events', ['location','lokasi','venue'], 'location');
         $fmtCol  = $this->pickCol('events', ['format','tipe','type'], 'format');
 
-        $b = $this->db->table('events')
+        $rows = $this->db->table('events')
             ->select("id,title,{$this->db->protectIdentifiers($timeCol)} AS event_time, {$this->db->protectIdentifiers($locCol)} AS location, {$this->db->protectIdentifiers($fmtCol)} AS format", false)
-            ->where($this->dateExpr('events', $dateCol), $today);
-
-        if     ($subA && $subP) $b->where("(id IN ($subA) OR id IN ($subP))", null, false);
-        elseif ($subA)          $b->where("id IN ($subA)", null, false);
-        elseif ($subP)          $b->where("id IN ($subP)", null, false);
-        else return [];
-
-        $rows = $b->orderBy('event_time','ASC')->get()->getResultArray();
+            ->where($this->dateExpr('events', $dateCol), $today)
+            ->where("id IN ($subPay)", null, false)
+            ->orderBy('event_time','ASC')
+            ->get()->getResultArray();
 
         $out = [];
         foreach ($rows as $r) {
@@ -347,7 +341,7 @@ class Dashboard extends BaseController
         return $out;
     }
 
-    /** Event bulan berjalan (untuk penandaan kalender) — FIX quote tanggal di PostgreSQL. */
+    /** Event bulan berjalan (untuk penandaan kalender). */
     private function getMonthEvents(int $uid, ?int $year = null, ?int $month = null): array
     {
         if (!$this->tableExists('events')) return [];
@@ -358,13 +352,13 @@ class Dashboard extends BaseController
         $start = date('Y-m-01', mktime(0,0,0,$month,1,$year));
         $end   = date('Y-m-t',  mktime(0,0,0,$month,1,$year));
 
+        // tampilkan semua event yg user ikuti (abstrak/pembayaran), kalender tidak wajib disaring paid
         $subA = $this->tableExists('abstrak')
             ? $this->db->table('abstrak')->distinct()->select('event_id')->where('id_user',$uid)->getCompiledSelect()
             : null;
         $subP = $this->tableExists('pembayaran')
             ? $this->db->table('pembayaran')->distinct()->select('event_id')->where('id_user',$uid)->getCompiledSelect()
             : null;
-
         if (!$subA && !$subP) return [];
 
         $dateCol = $this->pickCol('events', ['event_date','tanggal','date','start_at'], 'event_date');
@@ -403,19 +397,22 @@ class Dashboard extends BaseController
         return $out;
     }
 
+    /* ====== Aktivitas / Notifikasi (tambah Full Paper & per reviewer) ====== */
     private function getActivities(int $uid, int $limit = 12): array
     {
         $items = [];
 
+        // Pembayaran diverifikasi
         if ($this->tableExists('pembayaran')) {
             $tsPay = $this->buildCoalesceChecked('pembayaran','p',
                 ['updated_at','tanggal_bayar','created_at','tanggal_transaksi'],
                 'ts'
             );
             $rows = $this->db->table('pembayaran p')
-                ->select("p.event_id, p.jumlah, {$tsPay}, e.title", false)
+                ->select("p.event_id, p.jumlah, LOWER(p.status) AS status, {$tsPay}, e.title", false)
                 ->join('events e','e.id=p.event_id','left')
-                ->where('p.id_user',$uid)->where('p.status','verified')
+                ->where('p.id_user',$uid)
+                ->whereIn('LOWER(p.status)', ['verified','paid','lunas'])
                 ->orderBy('ts','DESC')->get()->getResultArray();
             foreach ($rows as $r) {
                 $items[] = [
@@ -429,6 +426,7 @@ class Dashboard extends BaseController
             }
         }
 
+        // Abstrak
         if ($this->tableExists('abstrak')) {
             $tsAbs = $this->buildCoalesceChecked('abstrak','a',
                 ['updated_at','tanggal_upload','created_at'],
@@ -459,25 +457,158 @@ class Dashboard extends BaseController
             }
         }
 
-        if ($this->tableExists('events')) {
-            $since = date('Y-m-d', strtotime('-14 days'));
-            $tsEvt = $this->buildCoalesceChecked('events','events',
-                ['created_at','updated_at','event_date'],
-                'ts'
-            );
-            $rows = $this->db->table('events')
-                ->select("id, title, {$tsEvt}", false)
-                ->where('event_date >=', $since)
-                ->orderBy('ts','DESC')->limit(10)->get()->getResultArray();
+        // Full Paper: upload & keputusan akhir
+        $fpTables = [];
+        if ($this->tableExists('submissions')) $fpTables[] = 'submissions';
+        if ($this->tableExists('abstrak'))     $fpTables[] = 'abstrak';
+
+        foreach ($fpTables as $t) {
+            $cols = $this->tableCols($t);
+            $hasStatus = isset($cols['full_paper_status']);
+            $hasUploadedAt = isset($cols['full_paper_uploaded_at']);
+            $hasReviewedAt = isset($cols['reviewed_at']);
+            $hasDecisionAt = isset($cols['decision_at']);
+            $orderCol = $this->pickCol($t, ['updated_at','full_paper_uploaded_at','created_at'], $t==='abstrak' ? 'id_abstrak' : 'id');
+
+            $sel = [];
+            if ($hasStatus)     $sel[] = 'UPPER(full_paper_status) AS st';
+            if ($hasUploadedAt) $sel[] = 'full_paper_uploaded_at AS uploaded_at';
+            if ($hasReviewedAt) $sel[] = 'reviewed_at';
+            if ($hasDecisionAt) $sel[] = 'decision_at';
+            $sel[] = 'event_id';
+
+            if (!$sel) continue;
+
+            $rows = $this->db->table($t)
+                ->select(implode(',', $sel), false)
+                ->where('id_user',$uid)
+                ->orderBy($orderCol,'DESC')
+                ->get()->getResultArray();
+
+            if (!$rows) continue;
+
+            // event titles
+            $eventTitles = [];
+            if ($this->tableExists('events')) {
+                $ids = array_values(array_unique(array_map(fn($r)=> (int)($r['event_id'] ?? 0), $rows)));
+                if ($ids) {
+                    foreach ($this->db->table('events')->select('id,title')->whereIn('id',$ids)->get()->getResultArray() as $e) {
+                        $eventTitles[(int)$e['id']] = (string)($e['title'] ?? '-');
+                    }
+                }
+            }
+
             foreach ($rows as $r) {
-                $items[] = [
-                    'time'  => !empty($r['ts']) ? strtotime((string)$r['ts']) : 0,
-                    'title' => 'Event baru: ' . (string)$r['title'],
-                    'desc'  => '',
-                    'link'  => '/presenter/events/detail/' . (int)$r['id'],
-                    'badge' => 'primary',
-                    'icon'  => 'bi-stars',
-                ];
+                $evTitle = $eventTitles[(int)($r['event_id'] ?? 0)] ?? '-';
+
+                // Upload full paper
+                if (!empty($r['uploaded_at'])) {
+                    $items[] = [
+                        'time'  => strtotime((string)$r['uploaded_at']),
+                        'title' => 'Full Paper diunggah',
+                        'desc'  => 'Event: ' . $evTitle,
+                        'link'  => '/presenter/fullpaper/detail/' . (int)($r['event_id'] ?? 0),
+                        'badge' => 'primary',
+                        'icon'  => 'bi-upload',
+                    ];
+                }
+
+                // Keputusan akhir
+                if ($hasStatus && !empty($r['st'])) {
+                    $st = strtoupper((string)$r['st']);
+                    $map = [
+                        'ACCEPTED' => ['Full Paper diterima',   'success','bi-patch-check'],
+                        'REVISION' => ['Full Paper perlu revisi','warning','bi-arrow-repeat'],
+                        'REJECTED' => ['Full Paper ditolak',    'danger', 'bi-x-octagon'],
+                    ];
+                    if (isset($map[$st])) {
+                        [$title,$badge,$icon] = $map[$st];
+                        $ts = null;
+                        if (!empty($r['decision_at']))      $ts = strtotime((string)$r['decision_at']);
+                        elseif (!empty($r['reviewed_at']))  $ts = strtotime((string)$r['reviewed_at']);
+                        else                                 $ts = time();
+                        $items[] = [
+                            'time'  => $ts,
+                            'title' => $title,
+                            'desc'  => 'Event: ' . $evTitle,
+                            'link'  => '/presenter/fullpaper/detail/' . (int)($r['event_id'] ?? 0),
+                            'badge' => $badge,
+                            'icon'  => $icon,
+                        ];
+                    }
+                }
+            }
+        }
+
+        // Notifikasi tiap reviewer mengirim hasil
+        if ($this->tableExists('fullpaper_reviews') && $this->tableExists('submissions')) {
+            $subs = $this->db->table('submissions')->select('id, event_id')
+                ->where('user_id', $uid)->get()->getResultArray();
+
+            if ($subs) {
+                $subById = []; $eventBySub = [];
+                foreach ($subs as $s) { $subById[] = (int)$s['id']; $eventBySub[(int)$s['id']] = (int)$s['event_id']; }
+
+                $evTitles = [];
+                if ($this->tableExists('events')) {
+                    $evIds = array_values(array_unique(array_values($eventBySub)));
+                    if ($evIds) {
+                        foreach ($this->db->table('events')->select('id,title')->whereIn('id',$evIds)->get()->getResultArray() as $e) {
+                            $evTitles[(int)$e['id']] = (string)($e['title'] ?? '-');
+                        }
+                    }
+                }
+
+                $revNames = [];
+                if ($this->tableExists('reviewers')) {
+                    $nameCol = $this->pickCol('reviewers', ['nama_lengkap','nama','name','full_name','username'], 'nama');
+                    foreach ($this->db->table('reviewers')->select("id, {$this->db->protectIdentifiers($nameCol)} AS name", false)->get()->getResultArray() as $rv) {
+                        $revNames[(int)$rv['id']] = (string)($rv['name'] ?? 'Reviewer');
+                    }
+                } elseif ($this->tableExists('users')) {
+                    $nameCol = $this->pickCol('users', ['name','full_name','username'], 'username');
+                    foreach ($this->db->table('users')->select("id, {$this->db->protectIdentifiers($nameCol)} AS name", false)->get()->getResultArray() as $rv) {
+                        $revNames[(int)$rv['id']] = (string)($rv['name'] ?? 'Reviewer');
+                    }
+                }
+
+                if ($subById) {
+                    $rows = $this->db->table('fullpaper_reviews')
+                        ->select('submission_id, reviewer_id, LOWER(keputusan) AS keputusan, komentar, tanggal_review', false)
+                        ->whereIn('submission_id', $subById)
+                        ->orderBy('tanggal_review','DESC')
+                        ->get()->getResultArray();
+
+                    foreach ($rows as $r) {
+                        $sid = (int)$r['submission_id'];
+                        $evId = $eventBySub[$sid] ?? 0;
+                        $evTitle = $evTitles[$evId] ?? '-';
+                        $who = $revNames[(int)($r['reviewer_id'] ?? 0)] ?? 'Reviewer';
+
+                        $k = strtolower((string)($r['keputusan'] ?? ''));
+                        $map = [
+                            'accepted' => ['Reviewer menyetujui naskah','success','bi-hand-thumbs-up'],
+                            'acc'      => ['Reviewer menyetujui naskah','success','bi-hand-thumbs-up'],
+                            'approved' => ['Reviewer menyetujui naskah','success','bi-hand-thumbs-up'],
+                            'revisi'   => ['Reviewer meminta revisi','warning','bi-arrow-repeat'],
+                            'revision' => ['Reviewer meminta revisi','warning','bi-arrow-repeat'],
+                            'rejected' => ['Reviewer menolak naskah','danger','bi-hand-thumbs-down'],
+                            'reject'   => ['Reviewer menolak naskah','danger','bi-hand-thumbs-down'],
+                            'ditolak'  => ['Reviewer menolak naskah','danger','bi-hand-thumbs-down'],
+                        ];
+                        if (!isset($map[$k])) continue;
+                        [$title,$badge,$icon] = $map[$k];
+
+                        $items[] = [
+                            'time'  => !empty($r['tanggal_review']) ? strtotime((string)$r['tanggal_review']) : time(),
+                            'title' => $title,
+                            'desc'  => $who . ' • Event: ' . $evTitle,
+                            'link'  => '/presenter/fullpaper/detail/' . $evId,
+                            'badge' => $badge,
+                            'icon'  => $icon,
+                        ];
+                    }
+                }
             }
         }
 
@@ -495,8 +626,8 @@ class Dashboard extends BaseController
 
         $stats          = $this->getStats($uid);
         $progressEvents = $this->getProgressEvents($uid);
-        $todaySchedule  = $this->getTodaySchedule($uid);
-        $activities     = $this->getActivities($uid);
+        $todaySchedule  = $this->getTodaySchedule($uid);   // <— ABSENSI: sudah difilter paid
+        $activities     = $this->getActivities($uid);      // <— Notifikasi FP & Reviewer
         $monthEvents    = $this->getMonthEvents($uid);
 
         return view('role/presenter/dashboard', [

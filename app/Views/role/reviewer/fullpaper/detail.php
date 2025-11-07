@@ -1,6 +1,6 @@
 <?php
 // INPUT dari controller:
-// 'submission' => [id,title,full_paper_status,full_paper_uploaded_at,file_available,file_path,nama_lengkap,nama_kategori,event_title, (opsional) revisi_ke]
+// 'submission' => [id,title,full_paper_status,full_paper_uploaded_at,file_available,file_path,nama_lengkap,nama_kategori,event_title,event_date,event_time,(opsional) revisi_ke, abstrak_status]
 // 'taskStatus' => 'accepted'|'pending'|'declined'
 // 'taskReason' => string|null
 // 'myReview'   => ['keputusan','komentar','tanggal_review'] | null
@@ -28,6 +28,19 @@ $canReview = ($taskStatus === 'accepted');
 $hasFile   = !empty($S['file_available']);
 $blobUrl   = site_url('reviewer/fullpaper/blob/'.(int)($S['id'] ?? 0));
 $revNo     = isset($S['revisi_ke']) ? (int)$S['revisi_ke'] : null;
+
+// Status Abstrak
+$absStatus = strtolower(trim((string)($S['abstrak_status'] ?? '')));
+$absBadge  = function($s){
+  $s = strtolower((string)$s);
+  return match(true){
+    in_array($s,['accepted','diterima','acc','approved']) => 'bg-success',
+    in_array($s,['revision','revisi'])                    => 'bg-warning text-dark',
+    in_array($s,['rejected','ditolak','reject'])          => 'bg-danger',
+    default => 'bg-secondary'
+  };
+};
+$absLabel = $absStatus ? strtoupper($absStatus) : 'PENDING';
 
 /* ==== Hitung mayoritas panel + opsional revisi ==== */
 $acc=$rev=$rej=$done=0;
@@ -58,6 +71,12 @@ $panelBadge = function($p){
   };
 };
 $pct = function(int $n, int $d): int { $d = max(1,$d); return (int)round(($n/$d)*100); };
+
+// nilai untuk "Review Anda"
+$myKpt = strtolower($my['keputusan'] ?? '');
+$myCmt = trim((string)($my['komentar'] ?? ''));
+$hasMy = !empty($my);
+$btnText = $hasMy ? 'Ubah' : 'Kirim';
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_reviewer') ?>
@@ -83,7 +102,7 @@ $pct = function(int $n, int $d): int { $d = max(1,$d); return (int)round(($n/$d)
                 <?php endif; ?>
               </div>
 
-              <!-- Badge revisi + opsional -->
+              <!-- Badge revisi + panel -->
               <div class="mt-2 d-flex flex-wrap align-items-center gap-2">
                 <?php if ($revNo !== null): ?>
                   <span class="badge bg-light text-dark fw-semibold">
@@ -117,7 +136,7 @@ $pct = function(int $n, int $d): int { $d = max(1,$d); return (int)round(($n/$d)
           </div>
         </div>
 
-        <!-- Bilah pesan pending accept -->
+        <!-- Pesan pending accept -->
         <?php if ($taskStatus === 'pending'): ?>
           <div class="hero-tabs">
             <div class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2 mb-0">
@@ -186,7 +205,7 @@ $pct = function(int $n, int $d): int { $d = max(1,$d); return (int)round(($n/$d)
             </div>
           </div>
 
-          <!-- PDF Viewer (default setengah, toggle full) -->
+          <!-- PDF Viewer -->
           <div class="card card-glass border-0 mb-3">
             <div class="card-header d-flex align-items-center justify-content-between bg-transparent border-0 pb-0">
               <div class="d-flex align-items-center gap-2">
@@ -217,33 +236,75 @@ $pct = function(int $n, int $d): int { $d = max(1,$d); return (int)round(($n/$d)
               <?php endif; ?>
             </div>
           </div>
+        </div>
 
-          <!-- Review saya -->
-          <div class="card card-glass border-0">
+        <!-- KANAN (empat kartu terpisah sesuai urutan) -->
+        <div class="col-12 col-xl-4">
+          <!-- 1) Informasi Event -->
+          <div class="card card-glass border-0 mb-3">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-calendar-week"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Informasi Event</h6>
+            </div>
+            <div class="card-body">
+              <div class="kv-row">
+                <div class="kv-label">Nama Event</div>
+                <div class="kv-value"><?= esc($S['event_title'] ?? '-') ?></div>
+              </div>
+              <?php if (!empty($S['event_date'])): ?>
+                <div class="kv-row mt-2">
+                  <div class="kv-label">Tanggal</div>
+                  <div class="kv-value"><?= $fmt($S['event_date']) ?> <?= esc($S['event_time'] ?? '') ?></div>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+
+          <!-- 2) Status Abstrak -->
+          <div class="card card-glass border-0 mb-3">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-journal-check"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Status Abstrak</h6>
+            </div>
+            <div class="card-body">
+              <div class="d-flex align-items-center justify-content-between">
+                <div class="text-muted">Status</div>
+                <span class="badge <?= $absBadge($absStatus) ?>"><?= $absLabel ?></span>
+              </div>
+              <?php if (!$absStatus): ?>
+                <div class="small text-muted mt-2">Belum ada data status abstrak atau kolom status tidak tersedia.</div>
+              <?php endif; ?>
+            </div>
+          </div>
+
+          <!-- 3) Review Anda -->
+          <div class="card card-glass border-0 mb-3">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
               <div class="d-flex align-items-center gap-2">
                 <span class="badge bg-blue-soft"><i class="bi bi-person-check"></i></span>
                 <h6 class="mb-0 fw-semibold text-blue-900">Review Anda</h6>
               </div>
-              <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#reviewModal" <?= $canReview && $hasFile ? '' : 'disabled' ?>>
-                <i class="bi bi-pencil-square me-1"></i><?= $my ? 'Ubah' : 'Kirim' ?>
+              <button
+                class="btn btn-primary btn-sm"
+                data-bs-toggle="modal" data-bs-target="#reviewModal"
+                <?= ($canReview && $hasFile) ? '' : 'disabled' ?>>
+                <i class="bi bi-pencil-square me-1"></i><?= $btnText ?>
               </button>
             </div>
             <div class="card-body">
-              <?php if (!$my): ?>
+              <?php if (!$hasMy): ?>
                 <div class="text-muted">Belum ada review yang Anda kirim.</div>
               <?php else: ?>
-                <?php $kpt = strtolower($my['keputusan'] ?? ''); ?>
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                  <span class="badge <?= $badgeMap($kpt) ?>"><?= strtoupper($kpt ?: 'PENDING') ?></span>
+                  <span class="badge <?= $badgeMap($myKpt) ?>"><?= strtoupper($myKpt ?: 'PENDING') ?></span>
                   <?php if (!empty($my['tanggal_review'])): ?>
                     <small class="text-muted">Terakhir dikirim: <?= $fmt($my['tanggal_review'], true) ?></small>
                   <?php endif; ?>
                 </div>
-                <?php if (!empty($my['komentar'])): ?>
+                <?php if ($myCmt !== ''): ?>
                   <div class="border rounded p-2 bg-light">
                     <div class="small text-muted mb-1">Komentar:</div>
-                    <div><?= nl2br(esc($my['komentar'])) ?></div>
+                    <div><?= nl2br(esc($myCmt)) ?></div>
                   </div>
                 <?php else: ?>
                   <div class="text-muted">Tidak ada komentar.</div>
@@ -257,11 +318,9 @@ $pct = function(int $n, int $d): int { $d = max(1,$d); return (int)round(($n/$d)
               <?php endif; ?>
             </div>
           </div>
-        </div>
 
-        <!-- KANAN -->
-        <div class="col-12 col-xl-4">
-          <div class="card card-glass border-0 mb-3">
+          <!-- 4) Status & Reviewer -->
+          <div class="card card-glass border-0">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-flag"></i></span>
               <h6 class="mb-0 fw-semibold text-blue-900">Status & Reviewer</h6>
@@ -295,13 +354,6 @@ $pct = function(int $n, int $d): int { $d = max(1,$d); return (int)round(($n/$d)
                     <span class="badge bg-danger-subtle text-danger-emphasis"><i class="bi bi-x-octagon me-1"></i>Reject <?= $rej ?></span>
                     <span class="ms-auto text-muted">Selesai <?= $done ?>/<?= $total ?></span>
                   </div>
-                  <?php if ($panel==='ACCEPTED' && $optional): ?>
-                    <div class="alert alert-warning mt-2 mb-0"><i class="bi bi-stars me-1"></i> Mayoritas ACC — ada 1 reviewer minta revisi ⇒ revisi opsional untuk presenter.</div>
-                  <?php elseif ($panel==='REVISION'): ?>
-                    <div class="alert alert-warning mt-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Mayoritas revisi — tunggu unggahan revisi dari presenter.</div>
-                  <?php elseif ($panel==='REJECTED'): ?>
-                    <div class="alert alert-danger mt-2 mb-0"><i class="bi bi-x-octagon me-1"></i> Mayoritas reject.</div>
-                  <?php endif; ?>
                 </div>
               </div>
 
@@ -311,8 +363,7 @@ $pct = function(int $n, int $d): int { $d = max(1,$d); return (int)round(($n/$d)
                   <div class="text-muted">Belum ada data reviewer.</div>
                 <?php else: foreach ($reviewers as $rv):
                   $tsBadge = $rv['tugas_status']==='accepted' ? 'bg-success'
-                            : ($rv['tugas_status']==='declined' ? 'bg-danger' : 'bg-secondary');
-                ?>
+                            : ($rv['tugas_status']==='declined' ? 'bg-danger' : 'bg-secondary'); ?>
                   <div class="border rounded p-2 mb-2">
                     <div class="d-flex justify-content-between">
                       <div class="fw-semibold">Reviewer <?= (int)$rv['order'] ?> <?= $rv['is_me'] ? '<span class="text-primary">(Anda)</span>' : '' ?></div>
@@ -325,19 +376,6 @@ $pct = function(int $n, int $d): int { $d = max(1,$d); return (int)round(($n/$d)
                     </div>
                   </div>
                 <?php endforeach; endif; ?>
-              </div>
-            </div>
-          </div>
-
-          <div class="card card-glass border-0">
-            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
-              <span class="badge bg-blue-soft"><i class="bi bi-calendar-week"></i></span>
-              <h6 class="mb-0 fw-semibold text-blue-900">Info Event</h6>
-            </div>
-            <div class="card-body">
-              <div class="kv-row">
-                <div class="kv-label">Nama Event</div>
-                <div class="kv-value"><?= esc($S['event_title'] ?? '-') ?></div>
               </div>
             </div>
           </div>
@@ -354,7 +392,7 @@ $pct = function(int $n, int $d): int { $d = max(1,$d); return (int)round(($n/$d)
     <form method="post" action="<?= site_url('reviewer/fullpaper/submit/'.(int)$S['id']) ?>" class="modal-content" id="reviewForm">
       <?= csrf_field() ?>
       <div class="modal-header">
-        <h6 class="modal-title"><i class="bi bi-chat-left-text me-2"></i><?= $my ? 'Ubah Review' : 'Kirim Review' ?></h6>
+        <h6 class="modal-title"><i class="bi bi-chat-left-text me-2"></i><?= $hasMy ? 'Ubah Review' : 'Kirim Review' ?></h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -376,7 +414,7 @@ $pct = function(int $n, int $d): int { $d = max(1,$d); return (int)round(($n/$d)
       <div class="modal-footer">
         <button class="btn btn-light" type="button" data-bs-dismiss="modal">Batal</button>
         <button class="btn btn-primary" type="submit" <?= !$canReview || !$hasFile ? 'disabled' : '' ?> id="btnSubmitReview">
-          <i class="bi bi-save me-1"></i><?= $my ? 'Perbarui' : 'Kirim' ?>
+          <i class="bi bi-save me-1"></i><?= $hasMy ? 'Perbarui' : 'Kirim' ?>
         </button>
       </div>
     </form>
@@ -437,7 +475,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .text-white-70{ color:rgba(255,255,255,.85)!important; }
 .hero-tabs{ background:#fff; padding:.6rem .8rem; border:1px solid rgba(30,64,175,.18); border-top:0; }
 
-/* Status chips fixed width tidak bergeser */
+/* Status chips fixed width */
 .status-fixed-wrap{ flex:0 0 auto; }
 .chip-fixed{ display:inline-flex; align-items:center; gap:.4rem; padding:.5rem .7rem; border-radius:10px; color:#fff; font-weight:700; white-space:nowrap; min-width:170px; justify-content:center; }
 
@@ -496,9 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Validasi review sesuai controller:
-  // - komentar wajib non-kosong
-  // - jika 'rejected' wajib ≥10 char
+  // Validasi review minimal: komentar wajib, kalau 'rejected' ≥ 10
   const form   = document.getElementById('reviewForm');
   const select = form?.querySelector('select[name="keputusan"]');
   const text   = form?.querySelector('textarea[name="komentar"]');

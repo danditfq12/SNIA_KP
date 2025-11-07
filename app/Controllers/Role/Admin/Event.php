@@ -142,7 +142,9 @@ class Event extends BaseController
             'presenter_fee_offline'        => 'required|integer|greater_than_equal_to[0]',
             'audience_fee_online'          => 'permit_empty|integer|greater_than_equal_to[0]',
             'audience_fee_offline'         => 'permit_empty|integer|greater_than_equal_to[0]',
-            'max_participants'             => 'permit_empty|integer|greater_than[0]',
+            // ==== CHANGED: allow 0 ====
+            'max_participants'             => 'permit_empty|integer|greater_than_equal_to[0]',
+            // ============================
             'registration_deadline'        => 'permit_empty|valid_date',
             'abstract_deadline'            => 'permit_empty|valid_date',
             'full_paper_deadline'          => 'permit_empty|valid_date',
@@ -231,7 +233,9 @@ class Event extends BaseController
             'presenter_fee_offline'        => 'required|integer|greater_than_equal_to[0]',
             'audience_fee_online'          => 'permit_empty|integer|greater_than_equal_to[0]',
             'audience_fee_offline'         => 'permit_empty|integer|greater_than_equal_to[0]',
-            'max_participants'             => 'permit_empty|integer|greater_than[0]',
+            // ==== CHANGED: allow 0 ====
+            'max_participants'             => 'permit_empty|integer|greater_than_equal_to[0]',
+            // ============================
             'registration_deadline'        => 'permit_empty|valid_date',
             'abstract_deadline'            => 'permit_empty|valid_date',
             'full_paper_deadline'          => 'permit_empty|valid_date',
@@ -291,6 +295,16 @@ class Event extends BaseController
             $this->pembayaranModel->where('event_id', $id)->delete();
             $this->registrationModel->where('id_event', $id)->delete();
             $this->abstrakModel->where('event_id', $id)->delete();
+
+            // === Tambahan: hapus penugasan/tugas reviewer (aman, cek tabel & kolom dulu) ===
+            $this->safeDeleteByEventId('reviewer_assignments', 'event_id', $id);
+            $this->safeDeleteByEventId('penugasan_reviewer',   'event_id', $id);
+            $this->safeDeleteByEventId('review_tasks',         'event_id', $id);
+            $this->safeDeleteByEventId('tugas_reviewer',       'event_id', $id);
+            $this->safeDeleteByEventId('reviews',              'event_id', $id);
+            $this->safeDeleteByEventId('nilai_review',         'event_id', $id);
+            // ==============================================================================
+
             $this->db->table('notifikasi')->like('link', 'event/'.$id)->delete();
             $this->db->table('log_aktivitas')->like('aktivitas', "(ID: {$id})")->delete();
 
@@ -573,19 +587,25 @@ class Event extends BaseController
         }
     }
 
+    // ==== CHANGED: guard saat event_date kosong ====
     private function calculateRegistrationStatus($e)
     {
         if (!$this->parseBoolean($e['registration_active'])) {
             return ['text' => 'Tutup', 'badge_class' => 'bg-danger'];
         }
-        $now       = time();
-        $eventDate = strtotime($e['event_date']);
+        $now = time();
+        $eventDateStr = $e['event_date'] ?? null;
+        if (!$eventDateStr) {
+            return ['text' => 'Buka', 'badge_class' => 'bg-success'];
+        }
+        $eventDate = strtotime($eventDateStr);
         $deadline  = !empty($e['registration_deadline']) ? strtotime($e['registration_deadline']) : null;
 
         if ($deadline && $now > $deadline) return ['text' => 'Sudah Berakhir', 'badge_class' => 'bg-warning'];
-        if ($now > $eventDate)             return ['text' => 'Event Sudah Lewat', 'badge_class' => 'bg-danger'];
+        if ($eventDate && $now > $eventDate) return ['text' => 'Event Sudah Lewat', 'badge_class' => 'bg-danger'];
         return ['text' => 'Buka', 'badge_class' => 'bg-success'];
     }
+    // ================================================
 
     private function prepareEventData(bool $isCreate = false, array $existingEvent = null)
     {
@@ -781,6 +801,24 @@ class Event extends BaseController
         if ($ok === false) return false;
         return ($this->db->affectedRows() >= 0);
     }
+
+    // ==== CHANGED: helper aman untuk cek tabel & hapus by event ====
+    private function tableExists(string $table): bool
+    {
+        try {
+            return $this->db->tableExists($table);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function safeDeleteByEventId(string $table, string $column, $eventId): void
+    {
+        if ($this->tableExists($table) && $this->columnExists($table, $column)) {
+            $this->db->table($table)->where($column, $eventId)->delete();
+        }
+    }
+    // ===============================================================
 
     /* ====================== SMALL HELPER ====================== */
 

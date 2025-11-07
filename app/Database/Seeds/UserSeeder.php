@@ -14,22 +14,22 @@ class UserSeeder extends Seeder
 
         $users = [
             [
-                'nama_lengkap' => 'Super Admin',
-                'email'        => 'superadmin@gmail.com',
+                'nama_lengkap' => 'Admin Biasa',
+                'email'        => 'admin@gmail.com',
                 'role'         => 'admin',
             ],
             [
-                'nama_lengkap' => 'Presenter Test',
+                'nama_lengkap' => 'Jhon Presenter ',
                 'email'        => 'presenter@gmail.com',
                 'role'         => 'presenter',
             ],
             [
-                'nama_lengkap' => 'Audience',
+                'nama_lengkap' => 'Naruto Audience',
                 'email'        => 'audience@gmail.com',
                 'role'         => 'audience',
             ],
             [
-                'nama_lengkap' => 'Reviewer Test',
+                'nama_lengkap' => 'Uciha Reviewer',
                 'email'        => 'reviewer@gmail.com',
                 'role'         => 'reviewer',
             ],

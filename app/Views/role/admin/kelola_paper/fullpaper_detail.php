@@ -1,5 +1,5 @@
 <?php
-// Data utama dari controller
+// ===================== Data dari controller =====================
 $submission       = $submission ?? [];
 $author           = $author ?? ['name'=>null,'email'=>null];
 $coauthors        = $coauthors ?? [];
@@ -20,14 +20,14 @@ $fpReviews        = $fpReviews ?? [];
 $absKategoriName  = trim((string)($absKategoriName ?? ''));
 $absContributors  = is_array($absContributors ?? null) ? $absContributors : [];
 
-// View-Model
+// ===================== View-Model =====================
 $VM = $vm ?? [];
 $status        = $VM['status']        ?? 'NONE';
 $badgeMap      = $VM['badgeMap']      ?? [];
 $statusText    = $VM['statusText']    ?? [];
 $uploadedAt    = $VM['uploadedAt']    ?? '—';
 
-// === Zero-based revision display (upload pertama = 0) ===
+// Zero-based revision display (upload pertama = 0)
 $rawRevisiKe   = (int)($VM['revisiKe'] ?? 1);
 $revisiKe      = max(0, $rawRevisiKe - 1);
 
@@ -58,11 +58,22 @@ $declinedCount = is_array($declined) ? count($declined) : 0;
 // Ambil daftar ID reviewer yang menolak untuk validasi frontend
 $declinedIds = [];
 if ($declined) {
-  foreach ($declined as $d) {
-    $declinedIds[] = (int)($d['reviewer_id'] ?? 0);
-  }
+  foreach ($declined as $d) $declinedIds[] = (int)($d['reviewer_id'] ?? 0);
 }
 $declinedIds = array_values(array_unique(array_filter($declinedIds)));
+
+// ===================== FLAG: Abstrak belum direview? =====================
+$absHasDecision = false;
+if (is_array($absReviewers) && $absReviewers) {
+  foreach ($absReviewers as $rv) {
+    $k = strtolower((string)($rv['status'] ?? ''));
+    if (in_array($k, ['accepted','diterima','rejected','ditolak','revision','revisi'], true)) {
+      $absHasDecision = true;
+      break;
+    }
+  }
+}
+$absNotReviewed = !$absHasDecision;
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
@@ -92,7 +103,6 @@ $declinedIds = array_values(array_unique(array_filter($declinedIds)));
                 <?php if ($absKategoriName !== ''): ?>
                   <span class="badge bg-secondary-subtle"><i class="bi bi-tags me-1"></i><?= esc($absKategoriName) ?></span>
                 <?php endif; ?>
-                <!-- Tampilkan badge revisi, sekarang zero-based -->
                 <span class="badge bg-secondary-subtle">Revisi ke-<?= (int)$revisiKe ?></span>
                 <?php if ($uploadedAt !== '—'): ?>
                   <span class="badge bg-secondary-subtle"><i class="bi bi-clock me-1"></i><?= esc($uploadedAt) ?></span>
@@ -250,6 +260,14 @@ $declinedIds = array_values(array_unique(array_filter($declinedIds)));
               </div>
             </div>
 
+            <!-- === Satu Alert Saja: Abstrak belum direview === -->
+            <?php if ($absNotReviewed): ?>
+              <div class="alert alert-warning shadow-soft border-0 mb-3">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Abstrak belum direview. Penugasan reviewer Full Paper dinonaktifkan sementara.
+              </div>
+            <?php endif; ?>
+
             <!-- Reviewer Ditugaskan (AKTIF SAJA) -->
             <div class="card shadow-soft card-glass-plain mb-3">
               <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
@@ -277,12 +295,8 @@ $declinedIds = array_values(array_unique(array_filter($declinedIds)));
                       $assignKey = $assignKey ?: 'default';
                       [$csa, $lsa] = $assignStatusMap[$assignKey] ?? $assignStatusMap['default'];
 
-                      // headline badge: pakai progres review utk accepted, selain itu pending
-                      if ($assignKey === 'accepted') {
-                        $headlineBadge = $m; // progres review
-                      } else {
-                        $headlineBadge = ['Pending', 'secondary'];
-                      }
+                      // headline badge
+                      $headlineBadge = ($assignKey === 'accepted') ? $m : ['Pending','secondary'];
 
                       $unassignUrl = site_url('admin/fullpaper/unassign/'.$submissionId.'/'.(int)$ar['reviewer_id']);
                     ?>
@@ -298,7 +312,10 @@ $declinedIds = array_values(array_unique(array_filter($declinedIds)));
                         <div class="text-end">
                           <span class="badge bg-<?= esc($headlineBadge[1]) ?>"><?= esc($headlineBadge[0]) ?></span>
                           <div class="mt-2">
-                            <a href="<?= esc($unassignUrl) ?>" class="btn btn-outline-danger btn-xs" onclick="return confirm('Cabut penugasan reviewer ini?');">
+                            <a href="#"
+                               class="btn btn-outline-danger btn-xs js-unassign"
+                               data-url="<?= esc($unassignUrl) ?>"
+                               data-name="<?= esc($ar['name'] ?? 'Reviewer') ?>">
                               <i class="bi bi-x-circle me-1"></i>Batalkan
                             </a>
                           </div>
@@ -322,12 +339,13 @@ $declinedIds = array_values(array_unique(array_filter($declinedIds)));
                     <form method="post" action="<?= site_url('admin/fullpaper/assign/'.$submissionId) ?>" class="row g-2" id="assignForm">
                       <?= csrf_field() ?>
                       <div class="col-12">
-                        <select name="reviewer_id" class="form-select form-select-sm" required id="reviewerSelect">
-                          <option value="">-- pilih --</option>
+                        <select name="reviewer_id"
+                                class="form-select form-select-sm"
+                                required id="reviewerSelect"
+                                <?= $absNotReviewed ? 'disabled' : '' ?>>
+                          <option value=""><?= $absNotReviewed ? '-- menunggu review abstrak --' : '-- pilih --' ?></option>
                           <?php if (!empty($reviewers)): ?>
-                            <?php
-                              $declinedLookup = array_flip($declinedIds);
-                            ?>
+                            <?php $declinedLookup = array_flip($declinedIds); ?>
                             <?php foreach ($reviewers as $rv):
                               $rid = (int)($rv['id'] ?? 0);
                               $isDeclinedBefore = isset($declinedLookup[$rid]);
@@ -337,8 +355,7 @@ $declinedIds = array_values(array_unique(array_filter($declinedIds)));
                               <option
                                 value="<?= $rid ?>"
                                 <?= $isDeclinedBefore ? 'disabled' : '' ?>
-                                data-declined="<?= $isDeclinedBefore ? '1' : '0' ?>"
-                              >
+                                data-declined="<?= $isDeclinedBefore ? '1' : '0' ?>">
                                 <?= esc($label) ?>
                               </option>
                             <?php endforeach; ?>
@@ -349,7 +366,9 @@ $declinedIds = array_values(array_unique(array_filter($declinedIds)));
                         <div class="form-text">Maksimal <?= $maxReviewer ?> orang.</div>
                       </div>
                       <div class="col-12 d-grid">
-                        <button class="btn btn-primary btn-sm" id="btnAssign"><i class="bi bi-person-plus me-1"></i>Tugaskan</button>
+                        <button class="btn btn-primary btn-sm" id="btnAssign" <?= $absNotReviewed ? 'disabled' : '' ?>>
+                          <i class="bi bi-person-plus me-1"></i>Tugaskan
+                        </button>
                       </div>
                     </form>
                   <?php else: ?>
@@ -388,7 +407,7 @@ $declinedIds = array_values(array_unique(array_filter($declinedIds)));
               </div>
             </div>
 
-            <!-- ============== LIST PENOLAKAN (pakai $declinedReviewers) ============== -->
+            <!-- ============== LIST PENOLAKAN ============== -->
             <div class="card shadow-soft card-glass-plain">
               <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
                 <div class="d-flex align-items-center gap-2">
@@ -449,12 +468,12 @@ $declinedIds = array_values(array_unique(array_filter($declinedIds)));
         <h5 class="modal-title"><i class="bi bi-flag me-2"></i>Keputusan Full Paper</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <form action="<?= site_url('admin/fullpaper/set-status/'.$submissionId) ?>" method="post">
+      <form action="<?= site_url('admin/fullpaper/set-status/'.$submissionId) ?>" method="post" id="statusForm">
         <?= csrf_field() ?>
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Status</label>
-            <select class="form-select" name="status" required>
+            <select class="form-select" name="status" id="statusSelect" required>
               <?php foreach (['UPLOADED','REVISION','ACCEPTED','REJECTED'] as $opt): ?>
                 <option value="<?= $opt ?>" <?= $status===$opt?'selected':'' ?>><?= $statusText[$opt] ?></option>
               <?php endforeach; ?>
@@ -462,7 +481,8 @@ $declinedIds = array_values(array_unique(array_filter($declinedIds)));
           </div>
           <div class="mb-0">
             <label class="form-label">Komentar (opsional)</label>
-            <textarea class="form-control" name="komentar" rows="3" placeholder="Catatan untuk penulis atau internal…"></textarea>
+            <textarea class="form-control" name="komentar" id="komentarField" rows="3" placeholder="Catatan untuk penulis atau internal…"></textarea>
+            <div class="form-text" id="komentarHint" style="display:none;">Komentar minimal 10 karakter untuk Revisi/Ditolak.</div>
           </div>
         </div>
         <div class="modal-footer">
@@ -584,7 +604,6 @@ body{ font-size:15.5px; line-height:1.6; }
     }
   }
 
-  // Jika (karena suatu alasan) option tidak disabled dan terpilih, tahan submit
   form?.addEventListener('submit', function(e){
     const val = parseInt(select?.value || '0', 10);
     if (declinedIds.includes(val)) {
@@ -594,16 +613,72 @@ body{ font-size:15.5px; line-height:1.6; }
     }
   });
 
-  // UX: jika user mengklik option yang disabled (via keyboard), kasih info
   select?.addEventListener('change', function(){
     const opt = this.selectedOptions?.[0];
     if (!opt) return;
     const isDeclined = opt.getAttribute('data-declined') === '1';
     if (isDeclined) {
-      // kembalikan ke placeholder
       this.value = '';
       showDeclinedAlert(opt.textContent?.trim() || '');
     }
   });
+
+  // ==== SweetAlert konfirmasi Unassign ====
+  document.querySelectorAll('.js-unassign').forEach(function(el){
+    el.addEventListener('click', function(e){
+      e.preventDefault();
+      const url  = this.getAttribute('data-url');
+      const name = this.getAttribute('data-name') || 'reviewer';
+
+      Swal.fire({
+        title: 'Cabut Penugasan?',
+        html: `<div class="text-start">Penugasan untuk <b>${name}</b> akan dicabut dari full paper ini.</div>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Cabut',
+        cancelButtonText: 'Batal',
+        reverseButtons: true,
+        customClass: {
+          confirmButton: 'btn btn-danger',
+          cancelButton: 'btn btn-secondary'
+        },
+        buttonsStyling: false
+      }).then((res)=>{
+        if(res.isConfirmed){
+          window.location.href = url;
+        }
+      });
+    });
+  });
+
+  // ==== Validasi “Keputusan” (komentar wajib untuk REVISION/REJECTED) ====
+  const statusForm   = document.getElementById('statusForm');
+  const statusSelect = document.getElementById('statusSelect');
+  const komentar     = document.getElementById('komentarField');
+  const hint         = document.getElementById('komentarHint');
+
+  function toggleKomentarHint(){
+    const v = statusSelect?.value || '';
+    const need = (v === 'REVISION' || v === 'REJECTED');
+    hint.style.display = need ? 'block':'none';
+  }
+  toggleKomentarHint();
+  statusSelect?.addEventListener('change', toggleKomentarHint);
+
+  statusForm?.addEventListener('submit', function(e){
+    const v = statusSelect?.value || '';
+    const need = (v === 'REVISION' || v === 'REJECTED');
+    const note = (komentar?.value || '').trim();
+    if (need && note.length < 10) {
+      e.preventDefault();
+      Swal.fire({
+        icon: 'warning',
+        title: 'Komentar belum memadai',
+        text: 'Untuk status Revisi/Ditolak, komentar minimal 10 karakter.',
+        confirmButtonText: 'Mengerti'
+      });
+    }
+  });
+
 })();
 </script>

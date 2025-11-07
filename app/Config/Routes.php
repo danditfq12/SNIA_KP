@@ -10,7 +10,7 @@ use CodeIgniter\Router\RouteCollection;
 // Landing Page
 // ---------------------------------------------------
 $routes->get('/', 'Landing::index');
-$routes->get('home', 'Landing::index');
+$routes->get('/about', 'About::index');
 
 // ---------------------------------------------------
 // Enhanced QR System Routes (URUTAN PENTING)

@@ -28,6 +28,21 @@ class FullPaper extends BaseController
         }
     }
 
+    /* ========================= Helper Redirect ========================= */
+    /**
+     * Pastikan "balik" selalu jatuh ke halaman detail submission
+     * jika previous_url() kosong (CI4 kadang bisa kosong → jatuh ke '/').
+     */
+    private function backOrDetail(int $submissionId, array $flash = [], ?string $explicitUrl = null)
+    {
+        $fallback = $explicitUrl ?: site_url('admin/fullpaper/detail/'.$submissionId);
+        $target   = previous_url() ?: $fallback;
+
+        $resp = redirect()->to($target);
+        foreach ($flash as $k => $v) $resp->with($k, $v);
+        return $resp;
+    }
+
     /* ========================= Utilities ========================= */
 
     private function tableName(): string
@@ -218,6 +233,17 @@ class FullPaper extends BaseController
     {
         $abs = $this->getLatestAbstractRow($userId, $eventId);
         return $abs['status'] ?? null;
+    }
+
+    private function normAbsStatus(?string $v): string
+    {
+        $k = strtolower(trim((string)$v));
+        if (in_array($k, ['accepted','diterima','accept'], true)) return 'diterima';
+        if (in_array($k, ['revisi','revision'], true))           return 'revisi';
+        if (in_array($k, ['rejected','ditolak','reject'], true)) return 'ditolak';
+        if (in_array($k, ['sedang_direview','in_review'], true)) return 'sedang_direview';
+        if (in_array($k, ['pending','menunggu',''], true))       return 'menunggu';
+        return 'menunggu';
     }
 
     private function getAbstractReviewersDetailed(?int $userId, ?int $eventId): array
@@ -602,7 +628,7 @@ class FullPaper extends BaseController
     {
         $id = (int)$id;
         $submission = $this->findSubmission($id);
-        if (!$submission) return redirect()->back()->with('error','Submission tidak ditemukan');
+        if (!$submission) return $this->backOrDetail($id, ['error'=>'Submission tidak ditemukan'], site_url('admin/kelola-paper'));
 
         $table = $this->tableName();
         $cols  = $this->resolveColumns($table);
@@ -669,7 +695,8 @@ class FullPaper extends BaseController
         // abstrak: status & reviewer
         $userId  = $cols['user_id']  ? (int)($submission[$cols['user_id']]  ?? 0) : 0;
         $eventId = $cols['event_id'] ? (int)($submission[$cols['event_id']] ?? 0) : 0;
-        $abstractStatus    = $this->getAbstractStatus($userId, $eventId);
+        $abstractStatusRaw = $this->getAbstractStatus($userId, $eventId);
+        $abstractStatus    = $this->normAbsStatus($abstractStatusRaw);
         $abstractReviewers = $this->getAbstractReviewersDetailed($userId, $eventId);
 
         // Tambahan dari abstrak & presenter
@@ -746,6 +773,15 @@ class FullPaper extends BaseController
           'default'  => ['secondary','Pending'],
         ];
 
+        // === Gating flag utk UI ===
+        $canAssign = ($abstractStatus === 'diterima') && !in_array($status, ['REJECTED','ACCEPTED'], true);
+        $assignBlockedReason = null;
+        if ($abstractStatus !== 'diterima') {
+            $assignBlockedReason = 'Abstrak belum diterima (status: '.ucfirst(str_replace('_',' ',$abstractStatus)).').';
+        } elseif (in_array($status, ['REJECTED','ACCEPTED'], true)) {
+            $assignBlockedReason = 'Full paper sudah berstatus final ('.$statusText[$status].').';
+        }
+
         $vm = [
           'status' => $status,
           'badgeMap' => $badgeMap,
@@ -769,6 +805,10 @@ class FullPaper extends BaseController
 
           'hasReviewDecision' => $hasReviewDecision,
           'assignStatusMap' => $assignStatusMap,
+
+          // NEW for UI gating
+          'canAssign' => $canAssign,
+          'assignBlockedReason' => $assignBlockedReason,
         ];
         /* ======================================================= */
 
@@ -827,11 +867,48 @@ class FullPaper extends BaseController
             $reviewerId   = (int)$this->request->getPost('reviewer_id');
 
             if (!$submissionId || !$reviewerId) {
-                return redirect()->back()->with('error','Data tidak valid.');
+                return $this->backOrDetail($submissionId, ['error'=>'Data tidak valid.']);
             }
 
             $sub = $this->findSubmission($submissionId);
-            if (!$sub) return redirect()->back()->with('error','Submission tidak ditemukan.');
+            if (!$sub) return $this->backOrDetail($submissionId, ['error'=>'Submission tidak ditemukan.']);
+
+            $table = $this->tableName(); 
+            $cols  = $this->resolveColumns($table);
+
+            // === Gating 1: Abstrak harus punya review dari reviewer (bukan sekadar uploaded) ===
+            $userId  = $cols['user_id']  ? (int)($sub[$cols['user_id']]  ?? 0) : 0;
+            $eventId = $cols['event_id'] ? (int)($sub[$cols['event_id']] ?? 0) : 0;
+
+            $absReviewers = $this->getAbstractReviewersDetailed($userId, $eventId);
+            $adaKeputusan = false;
+            foreach ($absReviewers as $rv) {
+                $k = strtolower($rv['status'] ?? '');
+                if (in_array($k, ['accepted','diterima','rejected','ditolak','revision','revisi'], true)) {
+                    $adaKeputusan = true; break;
+                }
+            }
+            if (!$adaKeputusan) {
+                return $this->backOrDetail($submissionId, [
+                    'error' => 'Tidak dapat menugaskan reviewer: abstrak presenter tersebut belum direview oleh reviewer.'
+                ]);
+            }
+
+            // === Gating 2: Abstrak harus DITERIMA (kalau ini memang kebijakanmu)
+            $absStatusNorm = $this->normAbsStatus($this->getAbstractStatus($userId, $eventId));
+            if ($absStatusNorm !== 'diterima') {
+                return $this->backOrDetail($submissionId, [
+                    'error' => 'Tidak dapat menugaskan reviewer: abstrak belum diterima (status: '.ucfirst(str_replace('_',' ',$absStatusNorm)).').'
+                ]);
+            }
+
+            // Blok kalau submission sudah final (REJECTED atau ACCEPTED)
+            $fpStatus = strtoupper((string)($sub['full_paper_status'] ?? 'NONE'));
+            if (in_array($fpStatus, ['REJECTED','ACCEPTED'], true)) {
+                return $this->backOrDetail($submissionId, [
+                    'error' => 'Penugasan ditolak: full paper sudah berstatus final ('.$fpStatus.').'
+                ]);
+            }
 
             $this->db->transStart();
 
@@ -843,7 +920,7 @@ class FullPaper extends BaseController
             }));
             if (count($active) >= 3) {
                 $this->db->transComplete();
-                return redirect()->back()->with('error','Maksimum 3 reviewer aktif sudah tercapai.');
+                return $this->backOrDetail($submissionId, ['error'=>'Maksimum 3 reviewer aktif sudah tercapai.']);
             }
 
             $dup = $this->db->table('fullpaper_reviewers')
@@ -852,15 +929,14 @@ class FullPaper extends BaseController
                     ->get()->getRowArray();
             if ($dup) {
                 $this->db->transComplete();
-                return redirect()->back()->with('error','Reviewer ini sudah pernah ditugaskan pada full paper.');
+                return $this->backOrDetail($submissionId, ['error'=>'Reviewer ini sudah pernah ditugaskan pada full paper.']);
             }
 
-            $table = $this->tableName(); $cols = $this->resolveColumns($table);
             $kategoriId = $this->resolveCategoryId($sub, $cols);
             if ($kategoriId && $this->revKatModel && method_exists($this->revKatModel,'isReviewerEligible')) {
                 if (!$this->revKatModel->isReviewerEligible($reviewerId, $kategoriId)) {
                     $this->db->transComplete();
-                    return redirect()->back()->with('error','Reviewer tidak sesuai kategori.');
+                    return $this->backOrDetail($submissionId, ['error'=>'Reviewer tidak sesuai kategori.']);
                 }
             }
 
@@ -873,7 +949,7 @@ class FullPaper extends BaseController
             $this->db->transComplete();
 
             if (!$ok || $this->db->transStatus() === false) {
-                return redirect()->back()->with('error','Gagal menugaskan reviewer.');
+                return $this->backOrDetail($submissionId, ['error'=>'Gagal menugaskan reviewer.']);
             }
 
             return redirect()->to(site_url('admin/fullpaper/detail/'.$submissionId))
@@ -881,7 +957,7 @@ class FullPaper extends BaseController
 
         } catch (\Throwable $e) {
             log_message('error','FullPaper assign err: '.$e->getMessage());
-            return redirect()->back()->with('error','Terjadi kesalahan.');
+            return $this->backOrDetail((int)$submissionId, ['error'=>'Terjadi kesalahan.']);
         }
     }
 
@@ -891,7 +967,7 @@ class FullPaper extends BaseController
             $submissionId = (int)$submissionId;
             $reviewerId   = (int)$reviewerId;
             if (!$submissionId || !$reviewerId) {
-                return redirect()->back()->with('error','Data tidak valid.');
+                return $this->backOrDetail($submissionId, ['error'=>'Data tidak valid.']);
             }
             $ok = $this->db->table('fullpaper_reviewers')
                 ->where('submission_id', $submissionId)
@@ -901,7 +977,7 @@ class FullPaper extends BaseController
                 ->with($ok ? 'success':'error', $ok ? 'Penugasan dicabut.' : 'Gagal mencabut penugasan.');
         } catch (\Throwable $e) {
             log_message('error','FullPaper unassign err: '.$e->getMessage());
-            return redirect()->back()->with('error','Terjadi kesalahan.');
+            return $this->backOrDetail((int)$submissionId, ['error'=>'Terjadi kesalahan.']);
         }
     }
 
@@ -913,12 +989,12 @@ class FullPaper extends BaseController
             $komentar = trim((string)$this->request->getPost('komentar'));
             $allowed = ['UPLOADED','REVISION','ACCEPTED','REJECTED'];
             if (!$submissionId || !in_array($status,$allowed,true)) {
-                return redirect()->back()->with('error','Input tidak valid.');
+                return $this->backOrDetail($submissionId, ['error'=>'Input tidak valid.']);
             }
 
             // komentar wajib untuk REVISION/REJECTED
             if (in_array($status, ['REVISION','REJECTED'], true) && mb_strlen($komentar) < 10) {
-                return redirect()->back()->with('error','Harap isi komentar minimal 10 karakter untuk status Revisi/Ditolak.');
+                return $this->backOrDetail($submissionId, ['error'=>'Harap isi komentar minimal 10 karakter untuk status Revisi/Ditolak.']);
             }
 
             $table = $this->tableName();
@@ -941,14 +1017,14 @@ class FullPaper extends BaseController
 
             $ok = $this->db->table($table)->where($pk,$submissionId)->update($data);
 
-            if (!$ok) return redirect()->back()->with('error','Gagal memperbarui status.');
+            if (!$ok) return $this->backOrDetail($submissionId, ['error'=>'Gagal memperbarui status.']);
 
             return redirect()->to(site_url('admin/fullpaper/detail/'.$submissionId))
                 ->with('success','Status berhasil diperbarui.');
 
         } catch (\Throwable $e) {
             log_message('error','FullPaper setStatus err: '.$e->getMessage());
-            return redirect()->back()->with('error','Terjadi kesalahan.');
+            return $this->backOrDetail((int)$submissionId, ['error'=>'Terjadi kesalahan.']);
         }
     }
 
@@ -1055,10 +1131,10 @@ class FullPaper extends BaseController
     {
         $id = (int)$id;
         $submission = $this->findSubmission($id);
-        if (!$submission) return redirect()->back()->with('error','Submission tidak ditemukan');
+        if (!$submission) return $this->backOrDetail($id, ['error'=>'Submission tidak ditemukan']);
 
         $path = $this->resolveFullPaperPath($submission);
-        if (!$path) return redirect()->back()->with('error','File full paper tidak ditemukan');
+        if (!$path) return $this->backOrDetail($id, ['error'=>'File full paper tidak ditemukan']);
 
         if ($this->isPublicUrl($path)) return redirect()->to($path);
 

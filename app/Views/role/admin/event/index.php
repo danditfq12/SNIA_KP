@@ -82,6 +82,10 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
           $id=(int)$event['id']; $fmt=strtolower($event['format'] ?? 'both');
           $isOn=!empty($event['is_active']); $reg=!empty($event['registration_active']);
           $fullOn = !empty($event['full_paper_submission_active']);
+
+          // --- PATCH A: guard tanggal & waktu ---
+          $dateStr = !empty($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-';
+          $timeStr = !empty($event['event_time']) ? substr($event['event_time'],0,5) : '-';
         ?>
         <div class="col-lg-6 mb-3">
           <div class="event-card shadow-sm">
@@ -112,9 +116,9 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
               </div>
 
               <div class="text-muted small">
-                <i class="bi bi-calendar-event me-1"></i><?= date('d M Y', strtotime($event['event_date'])) ?>
+                <i class="bi bi-calendar-event me-1"></i><?= esc($dateStr) ?>
                 <i class="bi bi-dot"></i>
-                <i class="bi bi-clock me-1"></i><?= date('H:i', strtotime($event['event_time'])) ?>
+                <i class="bi bi-clock me-1"></i><?= esc($timeStr) ?>
               </div>
             </div>
 
@@ -122,7 +126,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
               <div class="price-display">
                 <h6 class="mb-2"><i class="bi bi-tag me-2"></i>Harga</h6>
                 <div class="row g-2 small">
-                  <div class="col-6"><strong>Presenter:</strong><br>Rp <?= number_format((float)$event['presenter_fee_offline'],0,',','.') ?></div>
+                  <div class="col-6"><strong>Presenter:</strong><br>Rp <?= number_format((float)($event['presenter_fee_offline'] ?? 0),0,',','.') ?></div>
                   <div class="col-6"><strong>Audience:</strong><br>
                     <?php if ($fmt!=='offline'): ?>Online: Rp <?= number_format((float)($event['audience_fee_online'] ?? 0),0,',','.') ?><br><?php endif; ?>
                     <?php if ($fmt!=='online'): ?>Offline: Rp <?= number_format((float)($event['audience_fee_offline'] ?? 0),0,',','.') ?><?php endif; ?>
@@ -496,11 +500,41 @@ function handleFormatChange(){
   }
 }
 
+// ===== PATCH B: util untuk EDIT agar ikut aturan format =====
+function handleEditFormatChange(root){
+  const formatSelect = root.querySelector('select[name="format"]');
+  if (!formatSelect) return;
+
+  const format = formatSelect.value;
+
+  const locInput  = root.querySelector('input[name="location"]');
+  const zoomInput = root.querySelector('input[name="zoom_link"]');
+
+  const onlineInput  = root.querySelector('input[name="audience_fee_online"]');
+  const offlineInput = root.querySelector('input[name="audience_fee_offline"]');
+
+  // reset required
+  [locInput, zoomInput, onlineInput, offlineInput].forEach(i=> i && i.removeAttribute('required'));
+
+  if (format === 'offline'){
+    if (locInput)  locInput.setAttribute('required','required');
+    if (onlineInput){ onlineInput.value = onlineInput.value || '0'; }
+  } else if (format === 'online'){
+    if (zoomInput) zoomInput.setAttribute('required','required');
+    if (offlineInput){ offlineInput.value = offlineInput.value || '0'; }
+  } else { // both
+    if (locInput)     locInput.setAttribute('required','required');
+    if (zoomInput)    zoomInput.setAttribute('required','required');
+    if (onlineInput)  onlineInput.setAttribute('required','required');
+    if (offlineInput) offlineInput.setAttribute('required','required');
+  }
+}
+
 function submitForm(form, url){
   const fd = new FormData(form);
   const format = fd.get('format');
 
-  // nol-kan field yang tidak dipakai
+  // nol-kan field yang tidak dipakai (ADD & EDIT)
   if (format==='online') fd.set('audience_fee_offline','0');
   if (format==='offline') fd.set('audience_fee_online','0');
 
@@ -678,6 +712,11 @@ function populateEditForm(event){
       updateDeadlineBounds(editForm, editForm.querySelector('input[name="event_date"]'), editForm.querySelector('input[name="event_time"]'))
     );
   });
+
+  // ===== PATCH C: binding perubahan format pada EDIT + apply awal
+  const editFormatSelect = editForm.querySelector('select[name="format"]');
+  handleEditFormatChange(editForm);
+  editFormatSelect?.addEventListener('change', () => handleEditFormatChange(editForm));
 }
 
 // ===== Actions =====

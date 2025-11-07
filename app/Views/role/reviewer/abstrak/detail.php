@@ -1,16 +1,15 @@
 <?php
-// Input dari controller (versi ABSTRAK):
-// 'abstrak'         => [id_abstrak, judul, tanggal_upload, file_abstrak, nama_lengkap, nama_kategori, event_title, event_date?, event_time?]
-// 'taskStatus'      => 'accepted'|'pending'|'declined'
-// 'taskReason'      => string|null (opsional)
-// 'myReview'        => ['keputusan','komentar','tanggal_review'] | null
-// (opsional) 'existingReview' => sama struktur dengan myReview
+// Input dari controller:
+// 'abstrak'        => [id_abstrak, judul, tanggal_upload, file_abstrak, nama_lengkap, nama_kategori, event_title, event_date?, event_time?]
+// 'taskStatus'     => 'accepted'|'pending'|'declined'
+// 'taskReason'     => string|null
+// 'existingReview' => ['keputusan','komentar','tanggal_review'] | null
 
 $title       = $title ?? 'Detail Abstrak';
 $A           = $abstrak ?? [];
 $taskStatus  = strtolower($taskStatus ?? 'pending');
 $taskReason  = $taskReason ?? null;
-$my          = $myReview ?? ($existingReview ?? null);
+$my          = $existingReview ?? null; // pakai existingReview dari controller
 $reviewers   = $reviewers ?? [];
 
 $fmt = fn($d,$h=false)=>$d ? date($h?'d M Y H:i':'d M Y', strtotime($d)) : '-';
@@ -18,9 +17,8 @@ $badgeMap = function($s){
   $s = strtolower((string)$s);
   return match(true){
     in_array($s,['accepted','diterima']) => 'bg-success',
-    in_array($s,['revision','revisi'])   => 'bg-warning text-dark',
     in_array($s,['rejected','ditolak'])  => 'bg-danger',
-    in_array($s,['pending','menunggu','none','']) => 'bg-secondary',
+    in_array($s,['pending','menunggu','sedang_direview','none','']) => 'bg-secondary',
     default => 'bg-secondary'
   };
 };
@@ -33,8 +31,7 @@ $hasFile     = !empty($A['file_abstrak']);
 $kpt         = strtolower(trim((string)($my['keputusan'] ?? '')));
 $comment     = trim((string)($my['komentar'] ?? ''));
 $commentLen  = mb_strlen($comment);
-// dianggap “sudah review” jika ada keputusan final DAN komentar valid (≥5)
-$isFinal     = in_array($kpt, ['accepted','diterima','revision','revisi','rejected','ditolak'], true);
+$isFinal     = in_array($kpt, ['accepted','diterima','rejected','ditolak'], true);
 $isReviewed  = $isFinal && $commentLen >= 5;
 
 $showLastSent = !empty($my['tanggal_review']) && $isReviewed;
@@ -278,7 +275,7 @@ $blobUrl      = site_url('reviewer/abstrak/blob/'.$idAbs);
   </main>
 </div>
 
-<!-- Modal: Kirim/Ubah Review (centered) -->
+<!-- Modal: Kirim/Ubah Review -->
 <div class="modal fade" id="reviewModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <form method="post" action="<?= site_url('reviewer/abstrak/review/'.$idAbs) ?>" class="modal-content" id="reviewForm">
@@ -296,9 +293,8 @@ $blobUrl      = site_url('reviewer/abstrak/blob/'.$idAbs);
           <label class="form-label">Keputusan</label>
           <?php $val = $isReviewed ? $kpt : 'accepted'; ?>
           <select name="keputusan" class="form-select" <?= !$canReview?'disabled':'' ?> required>
-            <option value="accepted" <?= $val==='accepted' || $val==='diterima' ? 'selected':'' ?>>Diterima (Accept)</option>
-            <option value="revision" <?= $val==='revision' || $val==='revisi' ? 'selected':'' ?>>Revisi (Revision)</option>
-            <option value="rejected" <?= $val==='rejected' || $val==='ditolak' ? 'selected':'' ?>>Ditolak (Reject)</option>
+            <option value="accepted" <?= in_array($val, ['accepted','diterima']) ? 'selected':'' ?>>Diterima (Accept)</option>
+            <option value="rejected" <?= in_array($val, ['rejected','ditolak']) ? 'selected':'' ?>>Ditolak (Reject)</option>
           </select>
         </div>
         <div>
@@ -317,7 +313,7 @@ $blobUrl      = site_url('reviewer/abstrak/blob/'.$idAbs);
   </div>
 </div>
 
-<!-- Modal: Tolak Penugasan (centered) -->
+<!-- Modal: Tolak Penugasan -->
 <div class="modal fade" id="declineModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <form method="post" action="<?= site_url('reviewer/abstrak/confirm/'.$idAbs) ?>" class="modal-content" id="declineForm">
@@ -392,7 +388,6 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 
 /* badges */
 .bg-success{ background-color:#10b981 !important; }
-.bg-warning{ background-color:#f59e0b !important; }
 .bg-danger{ background-color:#ef4444 !important; }
 .bg-secondary{ background-color:#6b7280 !important; }
 
@@ -419,7 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ==== VALIDASI DENGAN SWEETALERT2 ====
+  // VALIDASI REVIEW (SweetAlert2)
   const form   = document.getElementById('reviewForm');
   const select = form?.querySelector('select[name="keputusan"]');
   const text   = form?.querySelector('textarea[name="komentar"]');

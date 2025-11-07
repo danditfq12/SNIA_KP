@@ -1,6 +1,30 @@
 <?php
+/** role/presenter/abstrak/detail.php **/
+
 /** @var array $vm */
 $title = $title ?? 'Detail Abstrak';
+
+/* Normalisasi & helper ringan */
+$info = [
+  'event'    => (string)($vm['event_title'] ?? '-'),
+  'judul'    => (string)($vm['judul'] ?? '-'),
+  'kategori' => (string)($vm['kategori'] ?? '-'),
+  'status'   => (string)($vm['chip']['label'] ?? '-'),
+  'diunggah' => (string)($vm['uploaded_at'] ?? '-'),
+];
+$hasFile      = !empty($vm['file_exists']);
+$streamUrl    = (string)($vm['file_stream_url'] ?? '');
+$downloadUrl  = (string)($vm['file_download_url'] ?? '');
+$gdocsUrl     = (string)($vm['gdocs_viewer_url'] ?? '');
+$canReupload  = !empty($vm['can_reupload']) && !empty($vm['reupload_url']);
+$reuploadUrl  = (string)($vm['reupload_url'] ?? '');
+$showCancel   = !empty($vm['show_cancel']) && !empty($vm['cancel_action']);
+$cancelAction = (string)($vm['cancel_action'] ?? '');
+$showRevision = !empty($vm['show_revision']);
+$revDeadline  = (string)($vm['rev_deadline'] ?? '');
+$canUploadRev = !empty($vm['can_upload_revision']);
+$revPost      = (string)($vm['revision_post'] ?? '');
+$statusRaw    = (string)($vm['status'] ?? '');
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
@@ -10,32 +34,32 @@ $title = $title ?? 'Detail Abstrak';
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- ===== Header / Hero ===== -->
-      <div class="header-strip mb-3">
-        <div class="h-left">
-          <div class="eyebrow">Detail Abstrak</div>
-          <h2 class="title"><?= esc($vm['judul'] ?? '—') ?></h2>
-          <div class="meta">
-            <span class="icontext"><i class="bi bi-calendar-event"></i><?= esc($vm['event_title'] ?? '—') ?></span>
-            <span class="sep">•</span>
-            <span class="icontext"><i class="bi bi-tag"></i><?= esc($vm['kategori'] ?? '—') ?></span>
-            <span class="sep">•</span>
-            <span class="icontext"><i class="bi bi-clock"></i><?= esc($vm['uploaded_at'] ?? '—') ?></span>
+      <!-- HERO SEDERHANA (status di hero DIHAPUS, batal upload TIDAK di hero) -->
+      <div class="card-hero mb-4">
+        <div class="hero-body">
+          <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+            <div>
+              <h3 class="hero-title mb-0">
+                <i class="bi bi-file-earmark-text me-2"></i>Detail Abstrak
+              </h3>
+              <!-- (badge status di hero dihapus sesuai permintaan) -->
+            </div>
+
+            <div class="d-flex gap-2 ms-auto align-items-center">
+              <?php if ($canReupload): ?>
+                <a class="btn btn-danger btn-sm" href="<?= esc($reuploadUrl) ?>">
+                  <i class="bi bi-upload me-1"></i>Upload Ulang
+                </a>
+              <?php endif; ?>
+              <!-- (Batalkan Upload dipindah ke Kartu Status) -->
+              <a href="javascript:history.back()" class="btn btn-light btn-sm">
+                <i class="bi bi-arrow-left"></i> Kembali
+              </a>
+            </div>
           </div>
-        </div>
-        <div class="h-right">
-          <?php if (!empty($vm['chip'])): ?>
-            <span class="chip <?= esc($vm['chip']['cls']) ?>">
-              <i class="bi bi-flag me-1"></i><?= esc($vm['chip']['label']) ?>
-            </span>
-          <?php endif; ?>
-          <a href="javascript:history.back()" class="btn btn-light btn-sm ms-2">
-            <i class="bi bi-arrow-left"></i> Kembali
-          </a>
         </div>
       </div>
 
-      <!-- Auto Reject notice -->
       <?php if (!empty($vm['is_auto_reject'])): ?>
         <div class="alert alert-danger fw-semibold d-flex align-items-start gap-2">
           <i class="bi bi-x-octagon fs-5"></i>
@@ -54,112 +78,82 @@ $title = $title ?? 'Detail Abstrak';
       <?php endif; ?>
 
       <div class="row g-3">
-        <!-- ===== KIRI ===== -->
+        <!-- KIRI -->
         <div class="col-12 col-xl-8">
-          <!-- Ringkasan & Aksi -->
-          <div class="card card-plain mb-3">
-            <div class="card-body p-3 p-md-4">
-              <div class="row g-3">
-                <div class="col-sm-6">
-                  <div class="info-row"><span>Judul</span><b><?= esc($vm['judul'] ?? '—') ?></b></div>
-                  <div class="info-row"><span>Kategori</span><b><?= esc($vm['kategori'] ?? '—') ?></b></div>
-                </div>
-                <div class="col-sm-6">
-                  <div class="info-row"><span>Status</span><b><?= esc($vm['chip']['label'] ?? '—') ?></b></div>
-                  <div class="info-row"><span>Event</span><b><?= esc($vm['event_title'] ?? '—') ?></b></div>
-                </div>
-              </div>
 
-              <div class="mt-3 pt-3 border-top d-flex flex-wrap gap-2">
-                <?php if (!empty($vm['can_reupload']) && !empty($vm['reupload_url'])): ?>
-                  <a class="btn btn-danger" href="<?= esc($vm['reupload_url']) ?>">
-                    <i class="bi bi-upload"></i> Upload Ulang Abstrak
-                  </a>
-                <?php endif; ?>
-
-                <?php if (!empty($vm['show_cancel']) && !empty($vm['cancel_action'])): ?>
-                  <form id="cancelForm" action="<?= esc($vm['cancel_action']) ?>" method="POST" class="m-0">
-                    <?= csrf_field() ?>
-                    <button type="button" class="btn btn-outline-danger"
-                            data-bs-toggle="modal" data-bs-target="#confirmCancelModal"
-                            data-form-id="cancelForm" data-message="Batalkan upload abstrak ini?">
-                      <i class="bi bi-x-circle"></i> Batalkan Upload
-                    </button>
-                  </form>
-                <?php endif; ?>
-              </div>
+          <!-- INFORMASI (SIMPLE META LIST) -->
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-info-circle"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Informasi Abstrak</h6>
+            </div>
+            <div class="card-body">
+              <ul class="meta-list mb-0">
+                <li><span>Event</span><strong class="text-blue-900"><?= esc($info['event']) ?></strong></li>
+                <li><span>Judul</span><strong class="text-blue-900"><?= esc($info['judul']) ?></strong></li>
+                <li><span>Kategori</span><strong class="text-blue-900"><?= esc($info['kategori']) ?></strong></li>
+                <li><span>Status</span><strong class="text-blue-900"><?= esc($info['status']) ?></strong></li>
+                <li><span>Diunggah</span><strong class="text-blue-900"><?= esc($info['diunggah']) ?></strong></li>
+              </ul>
             </div>
           </div>
 
-          <!-- ===== Pratinjau PDF (sesuai controller: file_exists + file_stream_url + file_download_url) ===== -->
-          <?php if (!empty($vm['file_exists'])): ?>
-            <div class="card card-plain mb-3" id="pdfCard">
-              <div class="d-flex align-items-center justify-content-between px-3 pt-3">
-                <div class="d-flex align-items-center gap-2">
-                  <span class="badge bg-blue-soft"><i class="bi bi-file-earmark-pdf"></i></span>
-                  <h6 class="mb-0 fw-semibold text-blue-900">Pratinjau Abstrak</h6>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                  <?php if (!empty($vm['file_stream_url'])): ?>
-                    <a class="btn btn-outline-secondary btn-sm" href="<?= esc($vm['file_stream_url']) ?>" target="_blank" rel="noopener" title="Buka di tab baru">
-                      <i class="bi bi-box-arrow-up-right"></i>
-                    </a>
-                  <?php endif; ?>
-                  <?php if (!empty($vm['file_download_url'])): ?>
-                    <a class="btn btn-outline-secondary btn-sm" href="<?= esc($vm['file_download_url']) ?>" title="Unduh">
-                      <i class="bi bi-download"></i>
-                    </a>
-                  <?php endif; ?>
-                  <button type="button" class="btn btn-outline-secondary btn-sm" id="pdfFullscreenBtn" title="Fullscreen">
-                    <i class="bi bi-arrows-fullscreen"></i>
-                  </button>
-                </div>
+          <!-- PREVIEW PDF -->
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-blue-soft"><i class="bi bi-file-earmark-pdf"></i></span>
+                <h6 class="mb-0 fw-semibold text-blue-900">Pratinjau Abstrak</h6>
               </div>
-
-              <div class="small text-muted px-3 pt-2">
-                <i class="bi bi-paperclip me-1"></i>File PDF abstrak
-              </div>
-
-              <div class="mt-2 pdf-wrap" id="pdfWrap" style="--pdf-h:80vh;">
-                <iframe class="pdf-frame"
-                        src="<?= esc($vm['file_stream_url']) ?>#zoom=page-width&toolbar=1"
-                        title="Preview PDF" loading="lazy"></iframe>
-                <div class="pdf-hint small text-muted px-3 pb-3">
-                  Jika pratinjau kosong, klik ikon <i class="bi bi-box-arrow-up-right"></i> untuk membuka di tab baru.
-                  <?php if (!empty($vm['gdocs_viewer_url'])): ?>
-                    Atau gunakan
-                    <a href="<?= esc($vm['gdocs_viewer_url']) ?>" target="_blank" rel="noopener">
-                      Google Docs Viewer
-                    </a>.
-                  <?php endif; ?>
-                </div>
+              <div class="btn-group btn-group-sm">
+                <?php if ($downloadUrl): ?>
+                  <a class="btn btn-outline-secondary" href="<?= esc($downloadUrl) ?>" title="Unduh">
+                    <i class="bi bi-download"></i>
+                  </a>
+                <?php endif; ?>
+                <?php if ($streamUrl): ?>
+                  <a class="btn btn-outline-secondary" target="_blank" rel="noopener" href="<?= esc($streamUrl) ?>" title="Buka tab baru">
+                    <i class="bi bi-box-arrow-up-right"></i>
+                  </a>
+                <?php endif; ?>
+                <button type="button" class="btn btn-outline-secondary" id="btnToggleSize" data-state="max" title="Fullscreen">
+                  <i class="bi bi-arrows-fullscreen"></i>
+                </button>
               </div>
             </div>
-          <?php else: ?>
-            <div class="card card-plain mb-3">
-              <div class="card-body p-3">
-                <div class="empty-hint">
-                  <i class="bi bi-info-circle me-1"></i>File abstrak belum tersedia untuk dipratinjau.
+            <div class="card-body">
+              <?php if ($hasFile && $streamUrl): ?>
+                <div class="pdf-wrap is-min" id="pdfWrap">
+                  <iframe class="pdf-frame" title="Preview PDF" id="pdfFrame"
+                          src="<?= esc($streamUrl) ?>#zoom=page-width&toolbar=1&navpanes=0"></iframe>
                 </div>
-              </div>
+                <div class="small text-muted mt-2">
+                  Jika pratinjau kosong, klik ikon ↗ untuk membuka di tab baru
+                  <?php if ($gdocsUrl): ?>
+                    atau gunakan <a target="_blank" rel="noopener" href="<?= esc($gdocsUrl) ?>">Google Docs Viewer</a>.
+                  <?php endif; ?>
+                </div>
+              <?php else: ?>
+                <div class="empty-hint"><i class="bi bi-info-circle me-1"></i> Belum ada file untuk dipratinjau.</div>
+              <?php endif; ?>
             </div>
-          <?php endif; ?>
+          </div>
 
-          <!-- ===== Form Revisi ===== -->
-          <?php if (!empty($vm['show_revision'])): ?>
-            <div id="section-revisi" class="card card-plain mb-3">
-              <div class="card-header border-0 pb-0">
-                <h6 class="mb-0"><i class="bi bi-arrow-repeat me-1"></i>Upload Revisi Abstrak</h6>
+          <!-- FORM REVISI -->
+          <?php if ($showRevision): ?>
+            <div id="section-revisi" class="card shadow-soft card-glass-plain mb-3">
+              <div class="card-header bg-transparent border-0 pb-0">
+                <h6 class="mb-0 fw-semibold text-blue-900"><i class="bi bi-arrow-repeat me-1"></i>Upload Revisi Abstrak</h6>
               </div>
-              <div class="card-body p-3 p-md-4">
-                <?php if(!empty($vm['rev_deadline'])): ?>
+              <div class="card-body">
+                <?php if($revDeadline): ?>
                   <div class="alert alert-info fw-semibold">
-                    <i class="bi bi-clock me-1"></i> Batas pengumpulan revisi: <b><?= esc($vm['rev_deadline']) ?></b>
+                    <i class="bi bi-clock me-1"></i> Batas pengumpulan revisi: <b><?= esc($revDeadline) ?></b>
                   </div>
                 <?php endif; ?>
 
-                <?php if (!empty($vm['can_upload_revision'])): ?>
-                  <form action="<?= esc($vm['revision_post']) ?>" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                <?php if ($canUploadRev): ?>
+                  <form action="<?= esc($revPost) ?>" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
                     <?= csrf_field() ?>
                     <div class="mb-3">
                       <label class="form-label">File Abstrak (PDF) <span class="text-danger">*</span></label>
@@ -180,12 +174,12 @@ $title = $title ?? 'Detail Abstrak';
             </div>
           <?php endif; ?>
 
-          <!-- ===== Komentar Reviewer ===== -->
-          <div class="card card-plain mb-3">
-            <div class="card-header border-0 pb-0">
-              <h6 class="mb-0"><i class="bi bi-chat-left-dots me-1"></i>Komentar Reviewer</h6>
+          <!-- KOMENTAR REVIEWER -->
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 pb-0">
+              <h6 class="mb-0 fw-semibold text-blue-900"><i class="bi bi-chat-left-dots me-1"></i>Komentar Reviewer</h6>
             </div>
-            <div class="card-body p-3 p-md-4">
+            <div class="card-body">
               <?php if (!empty($vm['timeline'])): ?>
                 <div class="timeline">
                   <?php foreach ($vm['timeline'] as $t): ?>
@@ -221,39 +215,55 @@ $title = $title ?? 'Detail Abstrak';
                   <?php endforeach; ?>
                 </div>
               <?php else: ?>
-                <div class="empty-hint">
-                  <i class="bi bi-info-circle me-1"></i>Tidak ada komentar tersimpan.
-                </div>
+                <div class="empty-hint"><i class="bi bi-info-circle me-1"></i>Tidak ada komentar tersimpan.</div>
               <?php endif; ?>
             </div>
           </div>
         </div>
 
-        <!-- ===== KANAN ===== -->
+        <!-- KANAN -->
         <div class="col-12 col-xl-4">
-          <!-- Status -->
-          <div class="side-card sticky mb-3">
-            <div class="side-head"><i class="bi bi-flag me-2"></i>Status</div>
-            <div>
-              <?php if (in_array($vm['status'] ?? '', ['menunggu','sedang_direview'], true)): ?>
+          <!-- STATUS (tidak sticky lagi, tombol Batalkan Upload dipindah ke sini) -->
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-flag"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Status</h6>
+            </div>
+            <div class="card-body">
+              <?php if (in_array($statusRaw, ['menunggu','sedang_direview'], true)): ?>
                 <div class="callout callout-info"><i class="bi bi-hourglass-split me-1"></i>Abstrak Anda sedang diproses oleh reviewer.</div>
-              <?php elseif (($vm['status'] ?? '') === 'revisi'): ?>
+              <?php elseif ($statusRaw === 'revisi'): ?>
                 <div class="callout callout-warn"><i class="bi bi-arrow-repeat me-1"></i>Perlu revisi. Unggah file revisi pada form.</div>
-                <?php if(!empty($vm['rev_deadline'])): ?>
-                  <div class="small text-muted"><i class="bi bi-clock me-1"></i>Deadline revisi: <b><?= esc($vm['rev_deadline']) ?></b></div>
+                <?php if($revDeadline): ?>
+                  <div class="small text-muted"><i class="bi bi-clock me-1"></i>Deadline revisi: <b><?= esc($revDeadline) ?></b></div>
                 <?php endif; ?>
-              <?php elseif (($vm['status'] ?? '') === 'ditolak'): ?>
+              <?php elseif ($statusRaw === 'ditolak'): ?>
                 <div class="callout callout-danger"><i class="bi bi-x-octagon me-1"></i>Abstrak ditolak.</div>
-              <?php elseif (($vm['status'] ?? '') === 'diterima'): ?>
+              <?php elseif ($statusRaw === 'diterima'): ?>
                 <div class="callout callout-success"><i class="bi bi-check2-circle me-1"></i>Abstrak diterima.</div>
+              <?php else: ?>
+                <div class="callout callout-info"><i class="bi bi-info-circle me-1"></i>—</div>
+              <?php endif; ?>
+
+              <?php if ($showCancel): ?>
+                <hr class="my-3">
+                <form id="cancelForm" action="<?= esc($cancelAction) ?>" method="POST" class="d-none">
+                  <?= csrf_field() ?>
+                </form>
+                <button type="button" class="btn btn-outline-danger btn-sm js-cancel-abs w-100">
+                  <i class="bi bi-x-circle me-1"></i>Batalkan Upload
+                </button>
               <?php endif; ?>
             </div>
           </div>
 
-          <!-- Reviewer -->
-          <div class="side-card mb-3">
-            <div class="side-head"><i class="bi bi-person-badge me-2"></i>Reviewer Ditugaskan</div>
-            <div>
+          <!-- REVIEWER -->
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-person-badge"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Reviewer Ditugaskan</h6>
+            </div>
+            <div class="card-body">
               <?php if (!empty($vm['assigned_reviewer']['name']) || !empty($vm['assigned_reviewer']['email'])): ?>
                 <div class="d-flex align-items-center gap-3">
                   <div class="avatar-badge"><span><?= esc(strtoupper(mb_substr($vm['assigned_reviewer']['name'] ?? 'R',0,1))) ?></span></div>
@@ -274,11 +284,14 @@ $title = $title ?? 'Detail Abstrak';
             </div>
           </div>
 
-          <!-- Kontributor -->
+          <!-- KONTRIBUTOR -->
           <?php if (!empty($vm['contributors'])): ?>
-            <div class="side-card">
-              <div class="side-head"><i class="bi bi-people me-2"></i>Kontributor</div>
-              <div>
+            <div class="card shadow-soft card-glass-plain mb-3">
+              <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+                <span class="badge bg-blue-soft"><i class="bi bi-people"></i></span>
+                <h6 class="mb-0 fw-semibold text-blue-900">Kontributor</h6>
+              </div>
+              <div class="card-body">
                 <?php foreach ($vm['contributors'] as $c): ?>
                   <div class="contrib-item">
                     <div class="avatar-badge"><span><?= esc(strtoupper(mb_substr($c['name'] ?? 'C',0,1))) ?></span></div>
@@ -303,9 +316,10 @@ $title = $title ?? 'Detail Abstrak';
           <?php endif; ?>
         </div>
       </div>
+
     </div>
 
-    <!-- Modal Konfirmasi Batalkan Upload -->
+    <!-- Fallback modal (kalau SweetAlert tidak ada) -->
     <div class="modal fade" id="confirmCancelModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0">
@@ -314,7 +328,7 @@ $title = $title ?? 'Detail Abstrak';
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
           </div>
           <div class="modal-body">
-            <p id="confirmCancelText" class="mb-0">Batalkan upload abstrak?</p>
+            <p class="mb-0">Batalkan upload abstrak?</p>
             <small class="text-muted">Tindakan ini akan menghapus file dan data unggahan Anda.</small>
           </div>
           <div class="modal-footer">
@@ -331,128 +345,111 @@ $title = $title ?? 'Detail Abstrak';
 
 <?= $this->include('partials/footer') ?>
 
+<!-- (opsional) SweetAlert2 via CDN -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <style>
 :root{
   --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd; --blue-400:#60a5fa;
   --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
-  --ink:#0f172a; --muted:#6b7280; --radius:16px; --side-pad:clamp(1rem,2.3vw,2.2rem);
+  --muted:#6b7280; --side-pad: clamp(1rem, 2.3vw, 2.2rem);
 }
-body{ font-family: ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif; font-size:15.75px; line-height:1.6; color:var(--ink); }
-.page-wrap-blue{
-  min-height:100vh; padding-top:72px;
-  background:
-    radial-gradient(900px 300px at 20% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
-    radial-gradient(900px 300px at 80% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
-    linear-gradient(180deg, var(--blue-50), #fff 40%);
-}
-.container-xxl{ max-width:min(100%,1560px); padding-inline:var(--side-pad)!important; margin-inline:auto; }
+.container-xxl{ max-width:min(100%, 1560px); padding-inline:var(--side-pad)!important; margin-inline:auto; }
+body{ font-family: ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif; font-size:15.5px; line-height:1.6; }
+.page-wrap-blue{ min-height:100vh; padding-top:72px; background:
+  radial-gradient(900px 300px at 20% -10%, rgba(59,130,246,.17), rgba(59,130,246,0) 60%),
+  radial-gradient(900px 300px at 80% 110%, rgba(59,130,246,.14), rgba(59,130,246,0) 70%),
+  linear-gradient(180deg, var(--blue-50), #fff 40%); }
 
-/* Header strip */
-.header-strip{
-  display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
-  background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff;
-  border-radius:16px; padding:18px 16px; box-shadow:0 12px 28px rgba(30,64,175,.12);
-}
-.header-strip .title{ margin:0; font-size:1.45rem; font-weight:900; letter-spacing:.2px; }
-.header-strip .eyebrow{ font-weight:700; opacity:.92; }
-.header-strip .meta{ font-size:.9rem; opacity:.95; display:flex; gap:.6rem; flex-wrap:wrap; }
-.header-strip .icontext{ display:inline-flex; gap:.4rem; align-items:center; }
-.header-strip .sep{ opacity:.6; }
-.h-right{ display:flex; align-items:center; }
+.card-hero{ border:0; border-radius:16px; overflow:hidden; box-shadow:0 12px 28px rgba(30,64,175,.10); }
+.card-hero .hero-body{ background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff; padding:1.4rem 1.1rem; }
+.hero-title{ font-weight:800; letter-spacing:.2px; font-size:1.25rem; }
 
-/* Chips */
-.chip{ display:inline-flex; align-items:center; gap:.3rem; padding:.28rem .6rem; border-radius:999px; font-weight:800; font-size:.82rem; border:1px solid rgba(255,255,255,.25); color:#fff; }
-.chip-success{ background:#10b981; } .chip-danger{ background:#ef4444; }
-.chip-warn{ background:#f59e0b; } .chip-info{ background:#3b82f6; }
-.chip-muted{ background:#64748b; }
+.card-glass-plain{ background:#fff; border-radius:14px; border:1px solid rgba(30,64,175,.10); }
+.shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
 
-/* Cards */
-.card-plain{ border:1px solid rgba(30,64,175,.10); border-radius:16px; background:#fff; box-shadow:0 10px 24px rgba(30,64,175,.08); }
-.card-plain .card-header h6{ font-weight:800; color:var(--blue-900); }
+.meta-list{ list-style:none; padding-left:0; margin:0; }
+.meta-list li{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.45rem 0; }
+.meta-list li span{ color:var(--muted); }
+.text-blue-900{ color:var(--blue-900)!important; }
+.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:10px; padding:.38rem .6rem; font-weight:600; font-size:.9rem; }
 
-/* Info rows */
-.info-row{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.45rem 0; }
-.info-row > span{ color:var(--muted); }
+/* sticky-card DIHILANGKAN agar tidak ikut scroll */
+.sticky-card{ position:static; top:auto; }
 
-/* Callouts */
+/* callout */
 .callout{ border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.7rem .9rem; font-weight:600; }
 .callout-info{ background:#eef6ff; color:#124d9b; }
 .callout-success{ background:#ecfdf5; color:#065f46; }
 .callout-danger{ background:#fef2f2; color:#9f1239; }
 .callout-warn{ background:#fff7ed; color:#92400e; }
 
-/* Side panel */
-.side-card{ border:1px solid rgba(30,64,175,.10); border-radius:16px; background:#fff; padding:14px 16px; box-shadow:0 10px 24px rgba(30,64,175,.08); }
-.side-card .side-head{ font-weight:800; color:var(--blue-900); margin-bottom:.4rem; }
-.sticky{ position:sticky; top:84px; }
-
-/* Timeline */
-.timeline{ position:relative; padding-left:18px; }
-.timeline::before{ content:""; position:absolute; left:5px; top:0; bottom:0; width:2px; background:rgba(30,64,175,.18); }
-.tl-item{ position:relative; margin-bottom:16px; }
-.tl-item:last-child{ margin-bottom:0; }
-.tl-dot{ position:absolute; left:-1px; top:6px; width:12px; height:12px; border-radius:50%; background:var(--blue-500); box-shadow:0 0 0 4px rgba(59,130,246,.18); }
-.tl-card{ margin-left:14px; background:#fff; border:1px solid rgba(30,64,175,.12); border-radius:12px; padding:12px 14px; box-shadow:0 6px 16px rgba(30,64,175,.06); }
-.review-text{ white-space:pre-wrap; }
-
-/* Avatars & list */
 .avatar-badge{ width:44px; height:44px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(180deg,#eaf2ff,#e3edff); color:#274690; font-weight:800; border:1px solid rgba(39,70,144,.15); }
 .avatar-badge.sm{ width:36px; height:36px; font-size:.9rem; }
 .contrib-item{ display:flex; gap:.75rem; align-items:flex-start; padding:.65rem 0; border-bottom:1px dashed rgba(30,64,175,.12); }
 .contrib-item:last-child{ border-bottom:none; }
 
-/* Buttons */
-.btn{ font-weight:800; border-radius:10px; font-size:.98rem; padding:.55rem 1rem; }
+.btn{ font-weight:800; border-radius:10px; font-size:.95rem; padding:.54rem .96rem; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
 
-/* PDF Preview */
-.bg-blue-soft{ background:#bfdbfe; color:#1e3a8a; }
-.pdf-wrap{ background:#f8fafc; border-top:1px dashed rgba(30,64,175,.16); border-bottom-left-radius:16px; border-bottom-right-radius:16px; overflow:hidden; }
-.pdf-frame{ width:100%; height:var(--pdf-h,80vh); border:0; display:block; background:#fff; }
-.pdf-hint{ background:#fff; }
+.pdf-wrap{ border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#f8fafc; transition:height .2s ease; }
+.pdf-wrap.is-min{ height:52vh; }
+.pdf-wrap.is-max{ height:82vh; }
+.pdf-frame{ width:100%; height:100%; border:0; }
 
-/* Empty hint */
-.empty-hint{ color:#567; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.75rem 1rem; font-weight:600; }
-
-@media (max-width:575.98px){
-  .container-xxl{ padding-inline:1rem!important; }
-  .header-strip{ border-radius:14px; }
-  .header-strip .title{ font-size:1.25rem; }
-  .pdf-frame{ height:70vh; }
-}
+.empty-hint{ color:#567; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.8rem 1rem; }
 </style>
 
 <script>
-(() => {
-  // Modal confirm reusable
-  let targetFormId = null;
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-bs-target="#confirmCancelModal"][data-form-id]');
-    if (!btn) return;
-    targetFormId = btn.getAttribute('data-form-id');
-    const msg = btn.getAttribute('data-message') || 'Batalkan upload abstrak?';
-    const textEl = document.getElementById('confirmCancelText');
-    if (textEl) textEl.textContent = msg;
-  });
-  document.getElementById('confirmCancelBtn')?.addEventListener('click', () => {
-    if (!targetFormId) return;
-    const form = document.getElementById(targetFormId);
-    if (form) { document.getElementById('confirmCancelBtn').setAttribute('disabled','disabled'); form.submit(); }
-  });
+document.addEventListener('DOMContentLoaded', function(){
+  // Toggle preview size
+  const wrap = document.getElementById('pdfWrap');
+  const btn  = document.getElementById('btnToggleSize');
+  if (wrap && btn) {
+    wrap.classList.add('is-min');
+    btn.addEventListener('click', function(){
+      const toMax = btn.dataset.state === 'max';
+      wrap.classList.toggle('is-min', !toMax);
+      wrap.classList.toggle('is-max',  toMax);
+      btn.dataset.state = toMax ? 'min' : 'max';
+      btn.innerHTML = toMax ? '<i class="bi bi-arrows-angle-contract"></i>'
+                            : '<i class="bi bi-arrows-fullscreen"></i>';
+      btn.title = toMax ? 'Minimize' : 'Fullscreen';
+    });
+  }
 
-  // Fullscreen untuk PDF
-  const fsBtn = document.getElementById('pdfFullscreenBtn');
-  const wrap  = document.getElementById('pdfWrap');
-  fsBtn?.addEventListener('click', () => {
-    if (!wrap) return;
-    if (!document.fullscreenElement) { wrap.requestFullscreen?.(); }
-    else { document.exitFullscreen?.(); }
-  });
+  // Batalkan upload (SweetAlert jika tersedia) — tombol sekarang di Kartu Status
+  const cancelBtn = document.querySelector('.js-cancel-abs');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', function(){
+      const form = document.getElementById('cancelForm');
+      if (window.Swal) {
+        Swal.fire({
+          title: 'Batalkan upload abstrak?',
+          text: 'File dan data unggahan akan dihapus.',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Ya, batalkan',
+          cancelButtonText: 'Batal',
+          confirmButtonColor: '#dc2626',
+          reverseButtons: true,
+          focusCancel: true
+        }).then((res) => { if (res.isConfirmed && form) form.submit(); });
+      } else {
+        if (confirm('Batalkan upload abstrak? File dan data unggahan akan dihapus.') && form) form.submit();
+      }
+    });
+  }
 
-  // Auto-scroll ke form revisi bila ada anchor
+  // Auto-scroll ke form revisi bila anchor
   if (location.hash === '#section-revisi') {
     const t = document.getElementById('section-revisi');
     if (t) setTimeout(() => t.scrollIntoView({behavior:'smooth', block:'start'}), 120);
   }
-})();
+
+  // Fallback modal handler (jika memakai modal bootstrap)
+  document.getElementById('confirmCancelBtn')?.addEventListener('click', () => {
+    document.getElementById('cancelForm')?.submit();
+  });
+});
 </script>

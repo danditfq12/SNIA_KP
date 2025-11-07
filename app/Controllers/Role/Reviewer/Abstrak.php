@@ -64,7 +64,6 @@ class Abstrak extends BaseController
     {
         $k = strtolower((string)$v);
         if (in_array($k, ['accepted','diterima','accept','ok','yes'], true)) return 'diterima';
-        if (in_array($k, ['revisi','revision','revise'], true))            return 'revisi';
         if (in_array($k, ['rejected','ditolak','reject','no'], true))       return 'ditolak';
         if (in_array($k, ['sedang_direview','in_review'], true))            return 'sedang_direview';
         if (in_array($k, ['pending','menunggu',''], true))                  return 'menunggu';
@@ -74,7 +73,7 @@ class Abstrak extends BaseController
     private function isFinalDecision(?string $v): bool
     {
         $n = $this->normDecision($v);
-        return in_array($n, ['diterima','revisi','ditolak'], true);
+        return in_array($n, ['diterima','ditolak'], true);
     }
 
     private function latestAssignmentRow(int $idAbstrak, int $idReviewer): ?array
@@ -262,7 +261,7 @@ class Abstrak extends BaseController
             ->join('events e','e.id = abstrak.event_id','left');
 
         $taskStatus = 'accepted';
-        $taskReason = null; // <-- tambahkan carrier alasan
+        $taskReason = null;
         $existing   = null;
 
         if ($rt) {
@@ -281,7 +280,6 @@ class Abstrak extends BaseController
                 if (in_array($taskStatus, ['decline','declined','no'], true)) $taskStatus = 'declined';
             }
 
-            // simpan alasan penolakan bila ada (untuk ditampilkan di view)
             if ($rowAssign && $R['asgReason']) {
                 $taskReason = $rowAssign[$R['asgReason']] ?? null;
             }
@@ -304,14 +302,13 @@ class Abstrak extends BaseController
                 ->with('error', 'Abstrak tidak ditemukan / bukan tugas Anda.');
         }
 
-        // flag untuk view
         $abstrak['has_file'] = !empty($abstrak['file_abstrak']);
 
         return view('role/reviewer/abstrak/detail', [
             'title'          => 'Detail Abstrak',
             'abstrak'        => $abstrak,
             'taskStatus'     => $taskStatus,
-            'taskReason'     => $taskReason,      // <-- kirim ke view
+            'taskReason'     => $taskReason,
             'existingReview' => $existing,
             'isReviewed'     => $existing ? $this->isFinalDecision($existing['keputusan'] ?? null) : false,
         ]);
@@ -431,11 +428,10 @@ class Abstrak extends BaseController
         $komentar  = trim((string)$this->request->getPost('komentar'));
 
         if (in_array($raw, ['diterima','accept','accepted'], true))      $keputusan = 'diterima';
-        elseif (in_array($raw, ['revisi','revision','revise'], true))    $keputusan = 'revisi';
         elseif (in_array($raw, ['ditolak','reject','rejected'], true))   $keputusan = 'ditolak';
         else return redirect()->back()->with('error','Keputusan tidak valid.')->withInput();
 
-        // === VALIDASI KOMENTAR (disesuaikan dgn view) ===
+        // Validasi komentar
         $minLen = ($keputusan === 'ditolak') ? 10 : 5;
         if (mb_strlen($komentar) < $minLen) {
             $msg = ($keputusan === 'ditolak')
@@ -477,7 +473,7 @@ class Abstrak extends BaseController
             $this->abstrakModel->update($idAbstrak, ['status' => $keputusan]);
         }
 
-        return redirect()->to(site_url('reviewer/abstrak'))->with('success','Review tersimpan. Tugas dipindah ke riwayat.');
+        return redirect()->to(site_url('reviewer/abstrak'))->with('success','Review tersimpan.');
     }
 
     public function confirm($id)

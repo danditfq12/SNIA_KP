@@ -10,14 +10,15 @@ $formatLabel = function($f){
   $f = strtolower((string)$f);
   return $f === 'both' ? 'Hybrid' : ucfirst($f ?: '-');
 };
-// map badge -> pill class
 $badgeToPill = function($badge){
   $key = strtolower((string)($badge ?? 'secondary'));
   return [
     'success'=>'pill-success','danger'=>'pill-danger',
-    'warning'=>'pill-warn','info'=>'pill-info','secondary'=>'pill-muted'
+    'warning'=>'pill-warn','info'=>'pill-info','secondary'=>'pill-muted','primary'=>'pill-primary'
   ][$key] ?? 'pill-muted';
 };
+$absTitle   = fn(array $row) => trim((string)($row['abs_title'] ?? $row['abstract_title'] ?? $row['paper_title'] ?? ''));
+$eventTitle = fn(array $row) => trim((string)($row['event_title'] ?? $row['title'] ?? '-'));
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
@@ -38,7 +39,7 @@ $badgeToPill = function($badge){
             <div class="hero-tools flex-grow-1" style="max-width:620px;">
               <div class="input-group input-group-lg hero-search">
                 <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input id="searchInput" type="text" class="form-control" placeholder="Cari event, status, format…">
+                <input id="searchInput" type="text" class="form-control" placeholder="Cari judul abstrak, event, status…">
                 <button id="clearSearch" type="button" class="btn btn-light d-none"><i class="bi bi-x-circle"></i></button>
               </div>
             </div>
@@ -66,30 +67,37 @@ $badgeToPill = function($badge){
         <!-- TO-DO -->
         <div class="tab-pane fade show active" id="pane-todo" role="tabpanel" aria-labelledby="tab-todo">
           <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3 row-cols-xxl-4 js-grid">
-            <?php if (empty($todo)): ?>
-              <div class="col">
-                <div class="empty-hint"><i class="bi bi-check2-circle me-1"></i>Tidak ada pekerjaan. Mantap!</div>
-              </div>
-            <?php else: foreach ($todo as $row): ?>
-              <?php
-                $autoRejected = (strtoupper($row['fp_status'] ?? '') === 'REJECTED')
-                                && (empty($row['is_open']))
-                                && !empty($row['full_paper_deadline']);
-                $pill = $badgeToPill($row['status_badge'] ?? 'secondary');
-              ?>
+            <?php
+            $hasTodo = false;
+            foreach ($todo as $row):
+              if (empty($row['has_abstract'])) { continue; } // hanya tampil jika abstrak SUDAH diupload
+              $hasTodo = true;
+
+              $titleAbs   = $absTitle($row);
+              $titleEvent = $eventTitle($row);
+              $pill       = $badgeToPill($row['status_badge'] ?? 'secondary');
+
+              $searchable = strtolower(trim(
+                ($titleAbs ?: '') . ' ' . ($titleEvent ?: '') . ' ' .
+                ($row['status_label'] ?? '') . ' ' .
+                ($row['format'] ?? '') . ' ' .
+                $fmtDate($row['event_date'] ?? null) . ' ' .
+                $fmtDT($row['full_paper_deadline'] ?? null)
+              ));
+            ?>
               <div class="col js-col">
-                <div class="fp-card js-card"
-                     data-search="<?= esc(strtolower(
-                       ($row['title'] ?? '') . ' ' .
-                       ($row['status_label'] ?? '') . ' ' .
-                       ($row['format'] ?? '') . ' ' .
-                       ($fmtDate($row['event_date'] ?? null)) . ' ' .
-                       ($fmtDT($row['full_paper_deadline'] ?? null))
-                     )) ?>">
+                <div class="fp-card js-card" data-search="<?= esc($searchable) ?>">
                   <div class="fp-head">
-                    <h6 class="mb-0 fp-title"><?= esc($row['title'] ?? '-') ?></h6>
+                    <div class="fp-title-wrap">
+                      <h6 class="mb-0 fp-title"><?= esc($titleAbs !== '' ? $titleAbs : ($titleEvent ?: '-')) ?></h6>
+                      <?php if ($titleEvent && $titleEvent !== '-'): ?>
+                        <div class="fp-subtitle text-muted small">
+                          <i class="bi bi-calendar-event me-1"></i><?= esc($titleEvent) ?>
+                        </div>
+                      <?php endif; ?>
+                    </div>
                     <span class="status-pill <?= $pill ?>">
-                      <?= esc(($row['status_label'] ?? '-') . ($autoRejected ? ' (Auto)' : '')) ?>
+                      <?= esc(($row['status_label'] ?? '-')) ?>
                     </span>
                   </div>
 
@@ -98,9 +106,6 @@ $badgeToPill = function($badge){
                     <?php if (!empty($row['full_paper_deadline'])): ?>
                       <span class="chip alt"><i class="bi bi-clock-history me-1"></i><?= esc($fmtDT($row['full_paper_deadline'])) ?></span>
                     <?php endif; ?>
-                    <span class="chip <?= $row['is_open'] ? 'chip-open' : 'chip-closed' ?>">
-                      <i class="bi <?= $row['is_open'] ? 'bi-unlock' : 'bi-lock' ?> me-1"></i><?= $row['is_open'] ? 'Open' : 'Closed' ?>
-                    </span>
                   </div>
 
                   <ul class="meta-list">
@@ -108,62 +113,74 @@ $badgeToPill = function($badge){
                     <li><span>Deadline FP</span><strong><?= esc($fmtDT($row['full_paper_deadline'] ?? null)) ?></strong></li>
                   </ul>
 
-                  <?php if ($autoRejected): ?>
+                  <?php if (!empty($row['auto_rejected'])): ?>
                     <div class="mini-alert mini-alert-danger mt-2">
                       <i class="bi bi-x-octagon me-1"></i>Lewat batas waktu revisi — ditolak otomatis.
                     </div>
-                  <?php elseif (!empty($row['status_hint']) && (strtoupper($row['fp_status'] ?? '') !== 'ACCEPTED')): ?>
-                    <div class="mini-hint mt-2"><i class="bi bi-info-circle me-1"></i><?= esc($row['status_hint']) ?></div>
                   <?php endif; ?>
 
                   <div class="fp-foot">
-                    <?php if (!empty($row['can_upload'])): ?>
-                      <?php
-                        $btnLabel = in_array(strtoupper($row['fp_status'] ?? ''), ['REVISION','REJECTED'], true)
-                          ? 'Upload Revisi'
-                          : 'Upload Full Paper';
-                      ?>
+                    <?php if (empty($row['has_fullpaper'])): ?>
+                      <!-- belum ada FP => hanya tombol Upload -->
                       <a class="btn btn-primary flex-fill" href="<?= site_url('presenter/fullpaper/create/'.(int)$row['event_id']) ?>">
-                        <i class="bi bi-upload me-1"></i><?= esc($btnLabel) ?>
+                        <i class="bi bi-upload me-1"></i><?= esc($row['primary_btn_label'] ?? 'Upload Full Paper') ?>
+                      </a>
+                    <?php else: ?>
+                      <!-- sudah ada FP -->
+                      <?php if (!empty($row['can_upload'])): ?>
+                        <a class="btn btn-primary flex-fill" href="<?= site_url('presenter/fullpaper/create/'.(int)$row['event_id']) ?>">
+                          <i class="bi bi-arrow-repeat me-1"></i>Upload Revisi
+                        </a>
+                      <?php endif; ?>
+                      <a class="btn btn-outline-secondary flex-fill" href="<?= site_url('presenter/fullpaper/detail/'.(int)$row['event_id']) ?>">
+                        <i class="bi bi-eye me-1"></i>Detail
                       </a>
                     <?php endif; ?>
-                    <a class="btn btn-outline-secondary flex-fill" href="<?= site_url('presenter/fullpaper/detail/'.(int)$row['event_id']) ?>">
-                      <i class="bi bi-eye me-1"></i>Detail
-                    </a>
                   </div>
                 </div>
               </div>
-            <?php endforeach; endif; ?>
+            <?php endforeach; if (!$hasTodo): ?>
+              <div class="col">
+                <div class="empty-hint"><i class="bi bi-check2-circle me-1"></i>Tidak ada pekerjaan. Mantap!</div>
+              </div>
+            <?php endif; ?>
           </div>
         </div>
 
         <!-- RIWAYAT -->
         <div class="tab-pane fade" id="pane-history" role="tabpanel" aria-labelledby="tab-history">
           <div class="row g-3 row-cols-1 row-cols-md-2 row-cols-xl-3 row-cols-xxl-4 js-grid">
-            <?php if (empty($history)): ?>
-              <div class="col">
-                <div class="empty-hint"><i class="bi bi-inboxes me-1"></i>Belum ada riwayat final.</div>
-              </div>
-            <?php else: foreach ($history as $h): ?>
-              <?php
-                $autoRejectedH = (strtoupper($h['fp_status'] ?? '') === 'REJECTED')
-                                 && (empty($h['is_open']))
-                                 && !empty($h['full_paper_deadline']);
-                $pillH = $badgeToPill($h['status_badge'] ?? 'secondary');
-              ?>
+            <?php
+            $hasHist = false;
+            foreach ($history as $h):
+              if (empty($h['has_abstract'])) { continue; }
+              $hasHist = true;
+
+              $titleAbsH   = $absTitle($h);
+              $titleEventH = $eventTitle($h);
+              $pillH       = $badgeToPill($h['status_badge'] ?? 'secondary');
+
+              $searchableH = strtolower(trim(
+                ($titleAbsH ?: '') . ' ' . ($titleEventH ?: '') . ' ' .
+                ($h['status_label'] ?? '') . ' ' .
+                ($h['format'] ?? '') . ' ' .
+                $fmtDate($h['event_date'] ?? null) . ' ' .
+                $fmtDT($h['uploaded_at'] ?? null)
+              ));
+            ?>
               <div class="col js-col">
-                <div class="fp-card js-card"
-                     data-search="<?= esc(strtolower(
-                       ($h['title'] ?? $h['event_title'] ?? '') . ' ' .
-                       ($h['status_label'] ?? '') . ' ' .
-                       ($h['format'] ?? '') . ' ' .
-                       ($fmtDate($h['event_date'] ?? null)) . ' ' .
-                       ($fmtDT($h['uploaded_at'] ?? null))
-                     )) ?>">
+                <div class="fp-card js-card" data-search="<?= esc($searchableH) ?>">
                   <div class="fp-head">
-                    <h6 class="mb-0 fp-title"><?= esc($h['title'] ?? $h['event_title'] ?? '-') ?></h6>
+                    <div class="fp-title-wrap">
+                      <h6 class="mb-0 fp-title"><?= esc($titleAbsH !== '' ? $titleAbsH : ($titleEventH ?: '-')) ?></h6>
+                      <?php if ($titleEventH && $titleEventH !== '-'): ?>
+                        <div class="fp-subtitle text-muted small">
+                          <i class="bi bi-calendar-event me-1"></i><?= esc($titleEventH) ?>
+                        </div>
+                      <?php endif; ?>
+                    </div>
                     <span class="status-pill <?= $pillH ?>">
-                      <?= esc(($h['status_label'] ?? '-') . ($autoRejectedH ? ' (Auto)' : '')) ?>
+                      <?= esc(($h['status_label'] ?? '-')) ?>
                     </span>
                   </div>
 
@@ -179,7 +196,7 @@ $badgeToPill = function($badge){
                     <li><span>Deadline FP</span><strong><?= esc($fmtDT($h['full_paper_deadline'] ?? null)) ?></strong></li>
                   </ul>
 
-                  <?php if ($autoRejectedH): ?>
+                  <?php if (!empty($h['auto_rejected'])): ?>
                     <div class="mini-alert mini-alert-danger mt-2"><i class="bi bi-x-octagon me-1"></i>Lewat batas waktu revisi — ditolak otomatis.</div>
                   <?php endif; ?>
 
@@ -190,7 +207,11 @@ $badgeToPill = function($badge){
                   </div>
                 </div>
               </div>
-            <?php endforeach; endif; ?>
+            <?php endforeach; if (!$hasHist): ?>
+              <div class="col">
+                <div class="empty-hint"><i class="bi bi-inboxes me-1"></i>Belum ada riwayat final.</div>
+              </div>
+            <?php endif; ?>
           </div>
         </div>
       </div>
@@ -234,8 +255,10 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
   padding:0.9rem; display:flex; flex-direction:column; min-height:var(--card-min-h);
   transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
 .fp-card:hover{ transform: translateY(-2px); box-shadow:0 16px 28px rgba(30,64,175,.16); border-color: rgba(30,64,175,.22); }
-.fp-head{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:.25rem; }
-.fp-title{ line-height:1.35; max-width:72%; color:var(--blue-900); }
+.fp-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; margin-bottom:.25rem; }
+.fp-title-wrap{ max-width:72%; }
+.fp-title{ line-height:1.35; color:var(--blue-900); }
+.fp-subtitle{ margin-top:2px; }
 
 .status-pill{ font-weight:800; font-size:.82rem; padding:.28rem .6rem; border-radius:999px; border:1px solid rgba(0,0,0,.06); white-space:nowrap; }
 .pill-info{ background:#e0f2fe; color:#075985; }
@@ -247,14 +270,11 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .chip-row{ display:flex; flex-wrap:wrap; gap:.5rem; }
 .chip{ display:inline-flex; align-items:center; padding:.26rem .55rem; font-size:.86rem; border-radius:999px; background:#eef3ff; color:#1e3a8a; border:1px solid rgba(30,64,175,.15); font-weight:700; }
 .chip.alt{ background:#f1f5ff; color:#244aa4; }
-.chip-open{ background:#e8faf1; color:#0f5132; border-color:#b6e4c7; }
-.chip-closed{ background:#f9eaea; color:#7f1d1d; border-color:#f1c9c9; }
 
 .meta-list{ list-style:none; padding-left:0; margin:.4rem 0 .2rem 0; }
 .meta-list li{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.36rem 0; }
-.meta-list li span{ color:var(--muted); }
+.meta-list li span{ color:#6b7280; }
 
-.mini-hint{ color:#3a2a6a; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:10px; padding:.5rem .6rem; font-weight:600; font-size:.86rem; }
 .mini-alert{ border-radius:10px; padding:.5rem .6rem; font-weight:700; font-size:.86rem; }
 .mini-alert-danger{ background:#fff1f2; color:#7f1d1d; border:1px solid #fecaca; }
 
@@ -265,7 +285,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 @media (max-width:767.98px){
   .hero-tools{ width:100%; max-width:none; }
   .card-hero .hero-body{ padding:1.4rem 1rem; min-height:165px; }
-  .fp-title{ max-width:68%; }
+  .fp-title-wrap{ max-width:68%; }
   :root{ --card-min-h: 300px; }
 }
 @media (max-width:575.98px){

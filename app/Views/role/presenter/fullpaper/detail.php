@@ -1,6 +1,4 @@
 <?php
-/** role/presenter/fullpaper/detail.php **/
-
 $title       = $title       ?? 'Detail Full Paper';
 $event       = $event       ?? [];
 $abs         = $abs         ?? [];
@@ -21,22 +19,21 @@ $panel               = $panel ?? ['panel'=>'PENDING','counts'=>['acc'=>0,'rev'=>
 $optionalRevision    = (bool)($optional_revision ?? false);
 $canOptionalRevision = (bool)($can_optional_revision ?? false);
 $canCancel           = (bool)($can_cancel ?? false);
-$flow                = $flow ?? null; // dari controller (opsional)
+$flow                = $flow ?? null;
 
-// NEW: info revisi & jenis upload
 $revisionInfo = $revision_info ?? ['revisi_ke'=>0,'last_upload_type'=>null,'revisi_opsional'=>null];
 $revNo        = max(0, (int)($revisionInfo['revisi_ke'] ?? 0));
 $lastType     = strtoupper((string)($revisionInfo['last_upload_type'] ?? ''));
-$uploadKind   = strtoupper((string)($upload_kind ?? '')); // flash: NEW | REVISION | OPTIONAL
+$uploadKind   = strtoupper((string)($upload_kind ?? '')); // NEW | REVISION | OPTIONAL
 
-// Sembunyikan tombol opsional jika sudah pernah upload opsional
 $showOptionalBtn = $canOptionalRevision && ($lastType !== 'OPTIONAL');
 
-$info = $info ?? [
+$info = [
   'event'          => (string)($event['title'] ?? '-'),
   'judul'          => (string)($abs['judul'] ?? '-'),
   'kategori'       => (string)($abs['nama_kategori'] ?? '-'),
   'status_abstrak' => (string)($absMeta['label'] ?? '-'),
+  'status_fp'      => (string)($meta['label'] ?? '-'),
   'fp_diunggah'    => $createdAt,
 ];
 
@@ -57,18 +54,18 @@ if ($previewUrl) {
 $badgeForDecision = function($k){
   $k = strtolower((string)$k);
   return match (true) {
-    in_array($k,['accepted','accept','diterima','acc','approved']) => ['success','Accepted'],
-    in_array($k,['revision','revisi'])                              => ['warning','Revision'],
-    in_array($k,['rejected','reject','ditolak'])                    => ['danger','Rejected'],
+    in_array($k,['accepted','accept','diterima','acc','approved']) => ['success','Diterima'],
+    in_array($k,['revision','revisi'])                              => ['warning','Revisi'],
+    in_array($k,['rejected','reject','ditolak'])                    => ['danger','Ditolak'],
     default                                                         => ['secondary', $k ? ucfirst($k) : '—'],
   };
 };
 $badgeForAssign = function($s){
   $s = strtolower((string)$s);
   return match ($s) {
-    'accepted' => ['primary','Assigned'],
-    'declined' => ['secondary','Declined'],
-    default    => ['secondary','Pending'],
+    'accepted' => ['primary','Menerima Tugas'],
+    'declined' => ['secondary','Menolak'],
+    default    => ['secondary','Menunggu'],
   };
 };
 $panelBadge = function($p){
@@ -81,17 +78,14 @@ $panelBadge = function($p){
     default    => 'secondary'
   };
 };
-
-$alertMap = function(string $s): array {
-  $s = strtoupper(trim($s));
-  switch ($s) {
-    case 'NONE':     return ['cls'=>'alert-info','icon'=>'bi-info-circle','text'=>'Belum ada Full Paper yang diunggah.'];
-    case 'UPLOADED': return ['cls'=>'alert-info','icon'=>'bi-hourglass-split','text'=>'Sedang direview.'];
-    case 'REVISION': return ['cls'=>'alert-warning','icon'=>'bi-arrow-repeat','text'=>'Perlu revisi.'];
-    case 'REJECTED': return ['cls'=>'alert-danger','icon'=>'bi-x-octagon','text'=>'Ditolak.'];
-    case 'ACCEPTED': return ['cls'=>'alert-success','icon'=>'bi-check2-circle','text'=>'Diterima.'];
-    default:         return ['cls'=>'alert-secondary','icon'=>'bi-info-circle','text'=>ucfirst(strtolower($s))];
-  }
+$panelLabel = function($p){
+  return match(strtoupper((string)$p)){
+    'ACCEPTED' => 'Diterima',
+    'REVISION' => 'Revisi',
+    'REJECTED' => 'Ditolak',
+    'PENDING'  => 'Menunggu',
+    default    => ucfirst(strtolower((string)$p ?: 'Menunggu')),
+  };
 };
 ?>
 <?= $this->include('partials/header') ?>
@@ -111,18 +105,9 @@ $alertMap = function(string $s): array {
                 <i class="bi bi-file-earmark-text me-2"></i>Detail Full Paper
               </h3>
 
-              <!-- FLOW STATUS (opsional) + BADGE REVISI -->
-              <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
-                <?php if (!empty($flow) && !empty($flow['title'])): ?>
-                  <span class="badge bg-<?= esc($flow['badge'] ?? 'secondary') ?>">
-                    <i class="bi bi-activity me-1"></i><?= esc($flow['title']) ?>
-                  </span>
-                  <?php if (!empty($flow['hint'])): ?>
-                    <small class="opacity-75"><?= esc($flow['hint']) ?></small>
-                  <?php endif; ?>
-                <?php endif; ?>
-
-                <?php if ($revNo > 0): ?>
+              <!-- hanya badge revisi (tanpa info "menunggu reviewer") -->
+              <?php if ($revNo > 0): ?>
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
                   <span class="badge bg-light text-dark fw-semibold">
                     <i class="bi bi-arrow-repeat me-1"></i>Revisi ke-<?= (int)$revNo ?>
                   </span>
@@ -135,9 +120,8 @@ $alertMap = function(string $s): array {
                       <i class="bi bi-check2-circle me-1"></i>Revisi diunggah
                     </span>
                   <?php endif; ?>
-                <?php endif; ?>
-              </div>
-              <!-- /FLOW STATUS -->
+                </div>
+              <?php endif; ?>
             </div>
 
             <div class="d-flex gap-2 ms-auto align-items-center">
@@ -178,11 +162,11 @@ $alertMap = function(string $s): array {
                 <li><span>Judul</span><strong class="text-blue-900"><?= esc($info['judul']) ?></strong></li>
                 <li><span>Kategori</span><strong class="text-blue-900"><?= esc($info['kategori']) ?></strong></li>
                 <li><span>Status Abstrak</span><strong class="text-blue-900"><?= esc($info['status_abstrak']) ?></strong></li>
-                <li><span>Status Full Paper</span><strong class="text-blue-900"><?= esc($meta['label'] ?? '-') ?></strong></li>
+                <li><span>Status Full Paper</span><strong class="text-blue-900"><?= esc($meta['label']) ?></strong></li>
                 <li><span>Full paper diunggah</span><strong class="text-blue-900"><?= esc($fmt($info['fp_diunggah'])) ?></strong></li>
               </ul>
 
-              <?php if (!empty($notes)): ?>
+              <?php if ($notes !== ''): ?>
                 <div class="mt-2 p-2 rounded bg-light border small">
                   <div class="fw-semibold mb-1"><i class="bi bi-chat-dots me-1"></i>Catatan</div>
                   <div><?= nl2br(esc($notes)) ?></div>
@@ -242,10 +226,12 @@ $alertMap = function(string $s): array {
                 <?php if ($downloadUrl): ?>
                   <a class="btn btn-outline-secondary" href="<?= $downloadUrl ?>"><i class="bi bi-download"></i></a>
                 <?php endif; ?>
-                <?php if (!empty($absPreview)): ?>
+                <?php if ($absPreview): ?>
                   <a class="btn btn-outline-secondary" target="_blank" rel="noopener" href="<?= esc($absPreview) ?>"><i class="bi bi-box-arrow-up-right"></i></a>
                 <?php endif; ?>
-                <button type="button" class="btn btn-outline-secondary" id="btnToggleSize" data-state="max"><i class="bi bi-arrows-fullscreen"></i></button>
+                <button type="button" class="btn btn-outline-secondary" id="btnToggleSize" data-state="max" title="Maximize">
+                  <i class="bi bi-arrows-fullscreen"></i>
+                </button>
               </div>
             </div>
             <div class="card-body">
@@ -256,7 +242,7 @@ $alertMap = function(string $s): array {
                 </div>
                 <div class="small text-muted mt-2">
                   Jika pratinjau kosong, klik ikon <b>↗</b> untuk membuka di tab baru
-                  <?php if (!empty($gdocs)): ?>
+                  <?php if ($gdocs): ?>
                     atau gunakan <a target="_blank" rel="noopener" href="<?= esc($gdocs) ?>">Google Docs Viewer</a>.
                   <?php endif; ?>
                 </div>
@@ -279,7 +265,7 @@ $alertMap = function(string $s): array {
               <?php if ($submissionId): ?><span class="badge bg-light text-muted">#<?= (int)$submissionId ?></span><?php endif; ?>
             </div>
             <div class="card-body">
-              <?php if (empty($reviewers)): ?>
+              <?php if (!$reviewers): ?>
                 <div class="empty-hint"><i class="bi bi-info-circle me-1"></i> Belum ada reviewer yang ditugaskan.</div>
               <?php else: ?>
                 <div class="vstack gap-3">
@@ -329,21 +315,21 @@ $alertMap = function(string $s): array {
                     <div class="fw-semibold">Hasil Akhir</div>
                   </div>
                   <span class="badge bg-<?= $panelBadge($panel['panel']) ?> px-3 py-2">
-                    <i class="bi bi-flag me-1"></i><?= strtoupper($panel['panel']) ?>
+                    <i class="bi bi-flag me-1"></i><?= $panelLabel($panel['panel']) ?>
                   </span>
                 </div>
 
                 <?php if ($done > 0): ?>
                   <div class="px-3 pt-3">
                     <div class="progress" style="height: 12px;">
-                      <div class="progress-bar bg-success" role="progressbar" style="width: <?= $pct($acc,$tot) ?>%" aria-label="ACC"></div>
-                      <div class="progress-bar bg-warning text-dark" role="progressbar" style="width: <?= $pct($rev,$tot) ?>%" aria-label="REV"></div>
-                      <div class="progress-bar bg-danger" role="progressbar" style="width: <?= $pct($rej,$tot) ?>%" aria-label="REJ"></div>
+                      <div class="progress-bar bg-success" role="progressbar" style="width: <?= $pct($acc,$tot) ?>%" aria-label="Diterima"></div>
+                      <div class="progress-bar bg-warning text-dark" role="progressbar" style="width: <?= $pct($rev,$tot) ?>%" aria-label="Revisi"></div>
+                      <div class="progress-bar bg-danger" role="progressbar" style="width: <?= $pct($rej,$tot) ?>%" aria-label="Ditolak"></div>
                     </div>
                     <div class="d-flex flex-wrap gap-2 mt-2 small">
-                      <span class="badge bg-success-subtle text-success-emphasis"><i class="bi bi-check2-circle me-1"></i>ACC <?= $acc ?></span>
+                      <span class="badge bg-success-subtle text-success-emphasis"><i class="bi bi-check2-circle me-1"></i>Diterima <?= $acc ?></span>
                       <span class="badge bg-warning-subtle text-warning-emphasis"><i class="bi bi-arrow-repeat me-1"></i>Revisi <?= $rev ?></span>
-                      <span class="badge bg-danger-subtle text-danger-emphasis"><i class="bi bi-x-octagon me-1"></i>Reject <?= $rej ?></span>
+                      <span class="badge bg-danger-subtle text-danger-emphasis"><i class="bi bi-x-octagon me-1"></i>Ditolak <?= $rej ?></span>
                       <span class="ms-auto text-muted">Selesai <?= $done ?>/<?= $tot ?></span>
                     </div>
                   </div>
@@ -352,9 +338,9 @@ $alertMap = function(string $s): array {
                     <?php if ($panel['panel']==='REVISION' && $isOpen): ?>
                       <div class="alert alert-warning mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Mayoritas revisi — silakan unggah revisi.</div>
                     <?php elseif ($panel['panel']==='ACCEPTED'): ?>
-                      <div class="alert alert-success mb-0"><i class="bi bi-check2-circle me-1"></i> Mayoritas ACC — naskah diterima.</div>
+                      <div class="alert alert-success mb-0"><i class="bi bi-check2-circle me-1"></i> Mayoritas Diterima — naskah diterima.</div>
                     <?php elseif ($panel['panel']==='REJECTED'): ?>
-                      <div class="alert alert-danger mb-0"><i class="bi bi-x-octagon me-1"></i> Mayoritas reject — hubungi panitia bila perlu.</div>
+                      <div class="alert alert-danger mb-0"><i class="bi bi-x-octagon me-1"></i> Mayoritas Ditolak — hubungi panitia bila perlu.</div>
                     <?php else: ?>
                       <div class="alert alert-info mb-0"><i class="bi bi-hourglass-split me-1"></i> Menunggu keputusan panel.</div>
                     <?php endif; ?>
@@ -367,16 +353,15 @@ $alertMap = function(string $s): array {
                     <div class="fw-semibold">Belum ada review yang masuk</div>
                     <div class="text-muted small">Menunggu reviewer menyelesaikan penilaian.</div>
                     <div class="d-flex justify-content-center gap-2 mt-3">
-                      <span class="badge bg-secondary-subtle text-secondary-emphasis">ACC 0</span>
+                      <span class="badge bg-secondary-subtle text-secondary-emphasis">Diterima 0</span>
                       <span class="badge bg-secondary-subtle text-secondary-emphasis">Revisi 0</span>
-                      <span class="badge bg-secondary-subtle text-secondary-emphasis">Reject 0</span>
+                      <span class="badge bg-secondary-subtle text-secondary-emphasis">Ditolak 0</span>
                     </div>
                   </div>
                 <?php endif; ?>
               </div>
             </div>
           </div>
-          <!-- /STATUS REVIEWER -->
         </div>
       </div>
 
@@ -420,7 +405,6 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .pdf-frame{ width:100%; height:100%; border:0; }
 .empty-hint{ color:#567; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.8rem 1rem; font-weight:600; }
 
-/* Hasil Akhir – style baru */
 .result-card{ background:#fff; }
 .result-head{
   background:linear-gradient(135deg, rgba(59,130,246,.12), rgba(59,130,246,.02));
@@ -442,7 +426,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 }
 .progress{ background:#f1f5f9; }
 
-/* Fallback utk project yang belum Bootstrap 5.3 (subtle/emphasis) */
+/* Fallback utk project yang belum Bootstrap 5.3 */
 .bg-success-subtle{ background:#eaf7ef!important; }
 .bg-warning-subtle{ background:#fff6db!important; }
 .bg-danger-subtle { background:#fde2e1!important; }
@@ -510,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
 
-  // NEW: mini toast sekali tampil untuk upload_kind (flashdata)
+  // Mini toast untuk jenis upload (flashdata)
   const uploadKind = "<?= esc(strtoupper((string)($upload_kind ?? ''))) ?>";
   if (uploadKind) {
     const box = document.getElementById('miniToast');
