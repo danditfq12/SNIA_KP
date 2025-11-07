@@ -9,7 +9,16 @@ class PendingRegistrationModel extends Model
     protected $primaryKey = 'id';
 
     protected $allowedFields = [
-        'nama_lengkap','email','password_hash','role',
-        'otp_code','otp_expired','created_at','updated_at'
+        'nama_lengkap',
+        'email',
+        'password_hash',
+        'role',
+        'no_hp',
+        'institusi',
+        'jenis_peserta',
+        'otp_code',
+        'otp_expired',
+        'created_at',
+        'updated_at'
     ];
 }

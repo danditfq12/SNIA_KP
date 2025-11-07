@@ -11,70 +11,78 @@ $fmtDT = fn($s)=> $s ? date('d M Y H:i', strtotime($s)) : '-';
 <div id="content">
   <main class="flex-fill" style="padding-top:70px;">
     <div class="container-fluid p-3 p-md-4">
+      
       <!-- Header Section -->
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h3 class="mb-1"><?= esc($title) ?></h3>
-          <p class="text-muted mb-0">Kelola dan unduh sertifikat Anda</p>
-        </div>
-        <div class="d-none d-md-block">
-          <span class="badge bg-info fs-6">
-            <i class="bi bi-award me-1"></i>
-            <?= count($certs) ?> Sertifikat
-          </span>
+      <div class="page-header mb-4">
+        <div class="header-content">
+          <div class="header-left">
+            <div class="header-icon">
+              <i class="bi bi-award"></i>
+            </div>
+            <div>
+              <h1 class="page-title"><?= esc($title) ?></h1>
+              <p class="page-subtitle">Kelola dan unduh sertifikat Anda</p>
+            </div>
+          </div>
+          <div class="header-right d-none d-md-flex">
+            <div class="stat-badge">
+              <div class="stat-number"><?= count($certs) ?></div>
+              <div class="stat-label">Sertifikat</div>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- Alert Messages -->
       <?php if (session('error')): ?>
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-          <i class="bi bi-exclamation-triangle me-2"></i>
-          <?= esc(session('error')) ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="alert-modern alert-danger">
+          <i class="bi bi-exclamation-circle-fill"></i>
+          <span><?= esc(session('error')) ?></span>
+          <button type="button" class="alert-close" onclick="this.parentElement.remove()">
+            <i class="bi bi-x"></i>
+          </button>
         </div>
       <?php endif; ?>
       
       <?php if (session('success')): ?>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-          <i class="bi bi-check-circle me-2"></i>
-          <?= esc(session('success')) ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="alert-modern alert-success">
+          <i class="bi bi-check-circle-fill"></i>
+          <span><?= esc(session('success')) ?></span>
+          <button type="button" class="alert-close" onclick="this.parentElement.remove()">
+            <i class="bi bi-x"></i>
+          </button>
         </div>
       <?php endif; ?>
 
-      <!-- Mobile Stats (visible on mobile only) -->
+      <!-- Mobile Stats -->
       <div class="d-md-none mb-3">
-        <div class="card border-0 bg-light">
-          <div class="card-body text-center py-2">
-            <small class="text-muted">Total Sertifikat: </small>
-            <strong><?= count($certs) ?></strong>
-          </div>
+        <div class="mobile-stat">
+          <span class="text-muted">Total Sertifikat:</span>
+          <strong class="ms-2"><?= count($certs) ?></strong>
         </div>
       </div>
 
       <!-- Certificates Content -->
       <?php if (empty($certs)): ?>
         <!-- Empty State -->
-        <div class="row justify-content-center">
-          <div class="col-12 col-md-8 col-lg-6">
-            <div class="text-center p-4 p-md-5 border rounded-3 bg-light-subtle">
-              <div class="mb-3">
-                <i class="bi bi-award display-1 text-secondary opacity-50"></i>
-              </div>
-              <h5 class="fw-semibold mb-2">Belum ada sertifikat</h5>
-              <p class="text-muted mb-3">
-                Sertifikat akan muncul di sini setelah Anda mengikuti event dan dokumen diverifikasi oleh panitia.
-              </p>
-              <div class="small text-muted">
-                <i class="bi bi-info-circle me-1"></i>
-                Pastikan Anda telah melakukan pembayaran dan mengikuti event hingga selesai
-              </div>
+        <div class="empty-state-container">
+          <div class="empty-state-card">
+            <div class="empty-icon">
+              <i class="bi bi-award"></i>
+            </div>
+            <h4 class="empty-title">Belum ada sertifikat</h4>
+            <p class="empty-text">
+              Sertifikat akan muncul di sini setelah Anda mengikuti event dan dokumen diverifikasi oleh panitia.
+            </p>
+            <div class="empty-info">
+              <i class="bi bi-info-circle me-2"></i>
+              Pastikan Anda telah melakukan pembayaran dan mengikuti event hingga selesai
             </div>
           </div>
         </div>
       <?php else: ?>
         <!-- Certificates Grid -->
-        <div class="row g-3 g-md-4">
+        <div class="certificates-grid">
           <?php foreach ($certs as $c): ?>
             <?php
               $id   = (int)($c[$pk] ?? 0);
@@ -84,119 +92,81 @@ $fmtDT = fn($s)=> $s ? date('d M Y H:i', strtotime($s)) : '-';
               $ev   = trim((string)($c['event_title'] ?? ''));
               $uploadDate = $c['uploaded_at'] ?? null;
               
-              // Determine file extension for icon
               $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
               $iconClass = match($ext) {
-                'pdf' => 'bi-filetype-pdf text-danger',
-                'jpg', 'jpeg' => 'bi-filetype-jpg text-primary',
-                'png' => 'bi-filetype-png text-info',
+                'pdf' => 'bi-file-pdf text-danger',
+                'jpg', 'jpeg' => 'bi-file-image text-primary',
+                'png' => 'bi-file-image text-info',
                 default => 'bi-file-earmark text-secondary'
               };
             ?>
-            <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
-              <div class="card h-100 shadow-sm border-0 certificate-card">
-                <div class="card-body d-flex flex-column p-3">
-                  <!-- File Icon and Type -->
-                  <div class="text-center mb-3">
-                    <i class="<?= $iconClass ?> display-6"></i>
-                    <div class="small text-muted mt-1"><?= strtoupper($ext) ?></div>
+            <div class="cert-card">
+              <div class="cert-card-body">
+                <!-- File Icon -->
+                <div class="cert-icon-wrapper">
+                  <div class="cert-icon">
+                    <i class="<?= $iconClass ?>"></i>
                   </div>
+                  <div class="cert-type"><?= strtoupper($ext) ?></div>
+                </div>
 
-                  <!-- Certificate Name -->
-                  <div class="fw-semibold mb-2 text-center" style="font-size: 0.95rem;">
-                    <div class="text-truncate" title="<?= esc($name) ?>">
-                      <?= esc($name) ?>
-                    </div>
+                <!-- Certificate Name -->
+                <div class="cert-name" title="<?= esc($name) ?>">
+                  <?= esc($name) ?>
+                </div>
+
+                <!-- Event Badge -->
+                <?php if ($ev !== ''): ?>
+                  <div class="cert-event">
+                    <i class="bi bi-calendar-event"></i>
+                    <span><?= esc($ev) ?></span>
                   </div>
-
-                  <!-- Event Information -->
-                  <?php if ($ev !== ''): ?>
-                    <div class="mb-2">
-                      <div class="badge bg-primary-subtle text-primary w-100 text-wrap py-2" style="font-size: 0.75rem;">
-                        <i class="bi bi-calendar-event me-1"></i>
-                        <?= esc($ev) ?>
-                      </div>
-                    </div>
-                  <?php else: ?>
-                    <div class="mb-2">
-                      <div class="badge bg-secondary-subtle text-secondary w-100 py-2" style="font-size: 0.75rem;">
-                        <i class="bi bi-question-circle me-1"></i>
-                        Event tidak diketahui
-                      </div>
-                    </div>
-                  <?php endif; ?>
-
-                  <!-- Upload Date -->
-                  <div class="small text-muted text-center mb-3">
-                    <i class="bi bi-clock me-1"></i>
-                    <?= esc($fmtDT($uploadDate)) ?>
+                <?php else: ?>
+                  <div class="cert-event no-event">
+                    <i class="bi bi-question-circle"></i>
+                    <span>Event tidak diketahui</span>
                   </div>
+                <?php endif; ?>
 
-                  <!-- Action Buttons -->
-                  <div class="mt-auto">
-                    <!-- Desktop Buttons -->
-                    <div class="d-none d-sm-block">
-                      <div class="d-grid gap-2">
-                        <a class="btn btn-outline-primary btn-sm" href="<?= $pv ?>" target="_blank" rel="noopener">
-                          <i class="bi bi-eye me-1"></i> Preview
-                        </a>
-                        <a class="btn btn-primary btn-sm" href="<?= $dl ?>">
-                          <i class="bi bi-download me-1"></i> Download
-                        </a>
-                      </div>
-                    </div>
-                    
-                    <!-- Mobile Buttons -->
-                    <div class="d-sm-none">
-                      <div class="row g-1">
-                        <div class="col-6">
-                          <a class="btn btn-outline-primary btn-sm w-100" href="<?= $pv ?>" target="_blank" rel="noopener">
-                            <i class="bi bi-eye"></i>
-                            <div class="small">Preview</div>
-                          </a>
-                        </div>
-                        <div class="col-6">
-                          <a class="btn btn-primary btn-sm w-100" href="<?= $dl ?>">
-                            <i class="bi bi-download"></i>
-                            <div class="small">Download</div>
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                <!-- Upload Date -->
+                <div class="cert-date">
+                  <i class="bi bi-clock"></i>
+                  <?= esc($fmtDT($uploadDate)) ?>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="cert-actions">
+                  <a class="btn-cert btn-preview" href="<?= $pv ?>" target="_blank" rel="noopener">
+                    <i class="bi bi-eye"></i>
+                    <span>Preview</span>
+                  </a>
+                  <a class="btn-cert btn-download" href="<?= $dl ?>">
+                    <i class="bi bi-download"></i>
+                    <span>Download</span>
+                  </a>
                 </div>
               </div>
             </div>
           <?php endforeach; ?>
         </div>
 
-        <!-- Summary Info (Desktop) -->
-        <div class="d-none d-md-block mt-4">
-          <div class="row">
-            <div class="col-12">
-              <div class="card border-0 bg-light-subtle">
-                <div class="card-body py-3">
-                  <div class="row text-center">
-                    <div class="col-4">
-                      <div class="fw-semibold"><?= count($certs) ?></div>
-                      <div class="small text-muted">Total Sertifikat</div>
-                    </div>
-                    <div class="col-4">
-                      <div class="fw-semibold">
-                        <?= count(array_filter($certs, fn($c) => !empty($c['event_title']))) ?>
-                      </div>
-                      <div class="small text-muted">Dengan Info Event</div>
-                    </div>
-                    <div class="col-4">
-                      <div class="fw-semibold">
-                        <?= count(array_filter($certs, fn($c) => strtotime($c['uploaded_at'] ?? '') > strtotime('-1 month'))) ?>
-                      </div>
-                      <div class="small text-muted">Bulan Ini</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+        <!-- Summary Stats -->
+        <div class="summary-stats d-none d-md-block mt-4">
+          <div class="stat-item">
+            <div class="stat-value"><?= count($certs) ?></div>
+            <div class="stat-title">Total Sertifikat</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">
+              <?= count(array_filter($certs, fn($c) => !empty($c['event_title']))) ?>
             </div>
+            <div class="stat-title">Dengan Info Event</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">
+              <?= count(array_filter($certs, fn($c) => strtotime($c['uploaded_at'] ?? '') > strtotime('-1 month'))) ?>
+            </div>
+            <div class="stat-title">Bulan Ini</div>
           </div>
         </div>
       <?php endif; ?>
@@ -204,58 +174,445 @@ $fmtDT = fn($s)=> $s ? date('d M Y H:i', strtotime($s)) : '-';
   </main>
 </div>
 
-<!-- Custom Styles -->
 <style>
-.certificate-card {
-  transition: all 0.2s ease-in-out;
+:root {
+  --primary-blue: #2563eb;
+  --light-blue: #3b82f6;
+  --pale-blue: #dbeafe;
+  --bg-blue: #eff6ff;
+  --dark-blue: #1e3a8a;
+  --text-dark: #1e293b;
+  --text-gray: #64748b;
+  --text-light: #94a3b8;
+  --white: #ffffff;
+  --success: #10b981;
+  --danger: #ef4444;
+  --border: #e2e8f0;
+  --shadow: rgba(15, 23, 42, 0.08);
 }
 
-.certificate-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+body {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  min-height: 100vh;
 }
 
-@media (max-width: 576px) {
-  .container-fluid {
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
+/* === PAGE HEADER === */
+.page-header {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.15);
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-icon {
+  width: 56px;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  font-size: 1.5rem;
+}
+
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--white);
+  margin: 0 0 0.25rem 0;
+}
+
+.page-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.stat-badge {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 0.75rem 1.5rem;
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 0.25rem;
+}
+
+/* === MOBILE STAT === */
+.mobile-stat {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+/* === ALERTS === */
+.alert-modern {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  border: 1px solid;
+}
+
+.alert-modern i {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.alert-modern span {
+  flex: 1;
+}
+
+.alert-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font-size: 1.25rem;
+  opacity: 0.6;
+}
+
+.alert-close:hover {
+  opacity: 1;
+}
+
+.alert-success {
+  background: #d1fae5;
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.alert-danger {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+/* === EMPTY STATE === */
+.empty-state-container {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.empty-state-card {
+  max-width: 500px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1.5rem;
+  background: var(--bg-blue);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-blue);
+  font-size: 2.5rem;
+}
+
+.empty-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 0.75rem;
+}
+
+.empty-text {
+  color: var(--text-gray);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.empty-info {
+  background: var(--bg-blue);
+  color: var(--text-gray);
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* === CERTIFICATES GRID === */
+.certificates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.cert-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.cert-card:hover {
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+}
+
+.cert-card-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cert-icon-wrapper {
+  text-align: center;
+}
+
+.cert-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 0.5rem;
+  background: var(--bg-blue);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+}
+
+.cert-type {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-gray);
+  text-transform: uppercase;
+}
+
+.cert-name {
+  font-weight: 600;
+  color: var(--text-dark);
+  font-size: 0.95rem;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cert-event {
+  background: var(--pale-blue);
+  color: var(--primary-blue);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cert-event.no-event {
+  background: #f1f5f9;
+  color: var(--text-gray);
+}
+
+.cert-event i {
+  flex-shrink: 0;
+}
+
+.cert-event span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cert-date {
+  font-size: 0.875rem;
+  color: var(--text-gray);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+}
+
+/* === ACTIONS === */
+.cert-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: auto;
+}
+
+.btn-cert {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+  border: 1px solid;
+}
+
+.btn-cert i {
+  font-size: 1.1rem;
+}
+
+.btn-preview {
+  background: var(--white);
+  color: var(--primary-blue);
+  border-color: var(--primary-blue);
+}
+
+.btn-preview:hover {
+  background: var(--bg-blue);
+  color: var(--primary-blue);
+}
+
+.btn-download {
+  background: var(--primary-blue);
+  color: var(--white);
+  border-color: var(--primary-blue);
+}
+
+.btn-download:hover {
+  background: var(--dark-blue);
+  color: var(--white);
+}
+
+/* === SUMMARY STATS === */
+.summary-stats {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 1rem;
+  background: var(--bg-blue);
+  border-radius: 12px;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary-blue);
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+.stat-title {
+  font-size: 0.875rem;
+  color: var(--text-gray);
+  font-weight: 500;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+  .page-header {
+    padding: 1.5rem;
   }
-  
-  .card-body {
-    padding: 1rem !important;
+
+  .header-content {
+    flex-direction: column;
+    gap: 1rem;
   }
-  
-  h3 {
+
+  .header-left {
+    width: 100%;
+  }
+
+  .header-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 1.25rem;
+  }
+
+  .page-title {
     font-size: 1.5rem;
   }
-}
 
-/* Ensure equal height cards */
-.certificate-card {
-  height: 100%;
-}
-
-/* Better mobile spacing */
-@media (max-width: 767px) {
-  main {
-    padding-top: 60px !important;
+  .certificates-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
   }
-  
-  .row.g-3 {
-    --bs-gutter-x: 0.75rem;
-    --bs-gutter-y: 0.75rem;
+
+  .cert-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .empty-state-card {
+    padding: 2rem 1.5rem;
+  }
+
+  .empty-icon {
+    width: 64px;
+    height: 64px;
+    font-size: 2rem;
   }
 }
 
-/* Improve text readability */
-.badge.text-wrap {
-  white-space: normal;
-  line-height: 1.2;
+@media (min-width: 576px) and (max-width: 991px) {
+  .certificates-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
-/* Loading state for images */
-.certificate-card img {
-  transition: opacity 0.3s ease;
+@media (min-width: 992px) {
+  .certificates-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1400px) {
+  .certificates-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 </style>
 
@@ -263,32 +620,27 @@ $fmtDT = fn($s)=> $s ? date('d M Y H:i', strtotime($s)) : '-';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Add loading state for download links
-    document.querySelectorAll('a[href*="download"]').forEach(function(link) {
-        link.addEventListener('click', function() {
-            const icon = this.querySelector('i');
-            const originalClass = icon.className;
-            icon.className = 'bi bi-hourglass-split me-1';
-            
-            setTimeout(function() {
-                icon.className = originalClass;
-            }, 2000);
-        });
+  // Auto-dismiss alerts after 5 seconds
+  setTimeout(function() {
+    const alerts = document.querySelectorAll('.alert-modern');
+    alerts.forEach(function(alert) {
+      alert.style.transition = 'opacity 0.3s';
+      alert.style.opacity = '0';
+      setTimeout(() => alert.remove(), 300);
     });
-    
-    // Auto-dismiss alerts after 5 seconds
-    setTimeout(function() {
-        const alerts = document.querySelectorAll('.alert-dismissible');
-        alerts.forEach(function(alert) {
-            const bsAlert = new bootstrap.Alert(alert);
-            bsAlert.close();
-        });
-    }, 5000);
-    
-    // Add tooltips for better UX
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+  }, 5000);
+
+  // Add loading state for download buttons
+  document.querySelectorAll('.btn-download').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const icon = this.querySelector('i');
+      const originalClass = icon.className;
+      icon.className = 'bi bi-hourglass-split';
+      
+      setTimeout(function() {
+        icon.className = originalClass;
+      }, 2000);
     });
+  });
 });
 </script>

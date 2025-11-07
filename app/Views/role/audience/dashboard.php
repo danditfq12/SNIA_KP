@@ -16,113 +16,166 @@ $activities      = $activities      ?? [];
     <div class="container-fluid p-3 p-md-4">
 
       <!-- HEADER -->
-      <div class="header-section header-blue mb-4 d-flex justify-content-between align-items-center">
-        <div>
-          <h2 class="welcome-text mb-1"><i class="bi bi-speedometer2"></i> Dashboard Audience</h2>
-          <div class="text-white-50">Ringkasan & aktivitas terbaru</div>
-        </div>
-        <div class="text-end d-none d-md-block">
-          <small class="text-white-50 d-block">Hari ini</small>
-          <strong class="text-white"><?= date('d M Y') ?></strong>
+      <div class="dashboard-header mb-4">
+        <div class="header-content">
+          <div class="header-left">
+            <div class="header-icon">
+              <i class="bi bi-grid-1x2"></i>
+            </div>
+            <div>
+              <h1 class="header-title">Dashboard Audience</h1>
+              <p class="header-subtitle">Kelola event dan aktivitas Anda</p>
+            </div>
+          </div>
+          <div class="header-right">
+            <div class="date-box">
+              <div class="date-day"><?= date('d') ?></div>
+              <div class="date-month"><?= date('M Y') ?></div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- ===== PROGRESS EVENT (gaya Presenter, versi Audience: 4 langkah) ===== -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-          <strong>Progress Event</strong>
-          <small class="text-muted">Pantau tahapan hingga Selesai</small>
+      <!-- PROGRESS EVENT -->
+      <div class="card-modern mb-4">
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="header-icon-small bg-blue">
+              <i class="bi bi-bar-chart-line"></i>
+            </div>
+            <div>
+              <h3 class="card-title">Progress Event</h3>
+              <p class="card-subtitle">Pantau tahapan event Anda</p>
+            </div>
+          </div>
         </div>
         <div class="card-body">
           <?php if (empty($progressEvents)): ?>
-            <div class="text-muted text-center py-3">Tidak ada progres yang perlu dilengkapi. Semua event telah selesai</div>
+            <div class="empty-state">
+              <i class="bi bi-check-circle-fill"></i>
+              <p>Tidak ada progres yang perlu dilengkapi</p>
+              <small>Semua event telah selesai</small>
+            </div>
           <?php else: ?>
-            <div class="vstack gap-4">
+            <div class="progress-grid">
               <?php foreach ($progressEvents as $p): ?>
                 <?php
                   $title     = (string)($p['title'] ?? '-');
                   $eventId   = (int)($p['event_id'] ?? 0);
                   $dateLabel = !empty($p['event_date']) ? date('d F Y', strtotime($p['event_date'])) : '';
 
-                  // status langkah langsung dari controller (done/current/todo)
                   $s1 = $p['steps']['daftar']     ?? 'todo';
                   $s2 = $p['steps']['bayar']      ?? 'todo';
                   $s3 = $p['steps']['verifikasi'] ?? 'todo';
-                  $s4 = ($s3 === 'done') ? 'done' : 'todo'; // Selesai jika verifikasi done
+                  $s4 = ($s3 === 'done') ? 'done' : 'todo';
 
-                  $doneCount = 0; foreach ([$s1,$s2,$s3,$s4] as $s) if ($s==='done') $doneCount++;
+                  $doneCount = 0; 
+                  foreach ([$s1,$s2,$s3,$s4] as $s) if ($s==='done') $doneCount++;
 
                   $paySt = strtolower($p['labels']['pay_status'] ?? '');
-                  // Pesan & CTA
-                  $alertCls = 'alert-secondary';
+                  $alertCls = 'alert-default';
                   $alertMsg = 'Lengkapi tahapan di atas untuk mengakses fitur event.';
                   $ctaHref  = "/audience/events/detail/{$eventId}";
                   $ctaText  = 'Lihat Detail Event';
+                  $alertIcon = 'info-circle';
 
                   if ($paySt === 'verified') {
                       $alertCls = 'alert-success';
                       $alertMsg = 'Pembayaran terverifikasi: Semua fitur event tersedia.';
                       $ctaHref  = "/audience/absensi/event/{$eventId}";
-                      $ctaText  = 'Akses Event / Absen';
+                      $ctaText  = 'Akses Event';
+                      $alertIcon = 'check-circle';
                   } elseif ($paySt === 'pending') {
                       $alertCls = 'alert-info';
                       $alertMsg = 'Pembayaran menunggu verifikasi.';
                       $ctaHref  = "/audience/pembayaran";
                       $ctaText  = 'Lihat Pembayaran';
+                      $alertIcon = 'clock';
                   } elseif ($s2 !== 'done') {
                       $alertCls = 'alert-primary';
                       $alertMsg = 'Silakan lakukan pembayaran untuk melanjutkan.';
                       $ctaHref  = "/audience/pembayaran";
-                      $ctaText  = 'Instruksi Pembayaran';
+                      $ctaText  = 'Bayar Sekarang';
+                      $alertIcon = 'credit-card';
                   }
                 ?>
 
-                <div class="progress-card p-3 p-md-4 border rounded-3">
-                  <!-- Header judul + step badge -->
-                  <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div class="fw-semibold"><?= esc($title) ?></div>
-                    <span class="badge rounded-pill bg-success-subtle text-success">Step <?= $doneCount ?>/4</span>
+                <div class="progress-card">
+                  <div class="progress-card-header">
+                    <h4 class="progress-title"><?= esc($title) ?></h4>
+                    <span class="progress-indicator"><?= $doneCount ?>/4</span>
                   </div>
+                  
                   <?php if ($dateLabel): ?>
-                    <div class="text-muted small mb-3"><i class="bi bi-calendar-event me-1"></i><?= esc($dateLabel) ?></div>
+                    <div class="progress-date">
+                      <i class="bi bi-calendar3"></i>
+                      <?= esc($dateLabel) ?>
+                    </div>
                   <?php endif; ?>
 
-                  <!-- STEPPER (4 langkah) -->
-                  <div class="stepper my-3">
+                  <!-- STEPPER -->
+                  <div class="stepper">
                     <div class="step <?= $s1 ?>">
-                      <span class="dot"><i class="bi bi-person-add"></i></span>
-                      <div class="label">Daftar</div>
+                      <div class="step-icon">
+                        <?php if ($s1 === 'done'): ?>
+                          <i class="bi bi-check-lg"></i>
+                        <?php else: ?>
+                          <span class="step-number">1</span>
+                        <?php endif; ?>
+                      </div>
+                      <span class="step-text">Daftar</span>
                     </div>
-                    <div class="bar <?= ($s2==='done' || $s2==='current') ? 'on':'' ?>"></div>
+
+                    <div class="step-line <?= ($s2==='done' || $s2==='current') ? 'active':'' ?>"></div>
 
                     <div class="step <?= $s2 ?>">
-                      <span class="dot"><i class="bi bi-credit-card"></i></span>
-                      <div class="label">Bayar</div>
+                      <div class="step-icon">
+                        <?php if ($s2 === 'done'): ?>
+                          <i class="bi bi-check-lg"></i>
+                        <?php else: ?>
+                          <span class="step-number">2</span>
+                        <?php endif; ?>
+                      </div>
+                      <span class="step-text">Bayar</span>
                     </div>
-                    <div class="bar <?= ($s3==='done' || $s3==='current') ? 'on':'' ?>"></div>
+
+                    <div class="step-line <?= ($s3==='done' || $s3==='current') ? 'active':'' ?>"></div>
 
                     <div class="step <?= $s3 ?>">
-                      <span class="dot"><i class="bi bi-check2-circle"></i></span>
-                      <div class="label">Verifikasi</div>
+                      <div class="step-icon">
+                        <?php if ($s3 === 'done'): ?>
+                          <i class="bi bi-check-lg"></i>
+                        <?php else: ?>
+                          <span class="step-number">3</span>
+                        <?php endif; ?>
+                      </div>
+                      <span class="step-text">Verifikasi</span>
                     </div>
-                    <div class="bar <?= ($s4==='done') ? 'on':'' ?>"></div>
+
+                    <div class="step-line <?= ($s4==='done') ? 'active':'' ?>"></div>
 
                     <div class="step <?= $s4 ?>">
-                      <span class="dot"><i class="bi bi-star-fill"></i></span>
-                      <div class="label">Selesai</div>
+                      <div class="step-icon">
+                        <?php if ($s4 === 'done'): ?>
+                          <i class="bi bi-check-lg"></i>
+                        <?php else: ?>
+                          <span class="step-number">4</span>
+                        <?php endif; ?>
+                      </div>
+                      <span class="step-text">Selesai</span>
                     </div>
                   </div>
 
-                  <!-- ALERT + CTA -->
-                  <div class="alert <?= $alertCls ?> d-flex align-items-center mb-3" role="alert">
-                    <i class="bi bi-info-circle-fill me-2"></i>
-                    <div><?= $alertMsg ?></div>
+                  <!-- ALERT & CTA -->
+                  <div class="alert-box <?= $alertCls ?>">
+                    <i class="bi bi-<?= $alertIcon ?>-fill"></i>
+                    <span><?= $alertMsg ?></span>
                   </div>
-                  <div class="text-center">
-                    <a href="<?= esc($ctaHref) ?>" class="btn btn-success">
-                      <i class="bi bi-play-fill me-1"></i><?= esc($ctaText) ?>
-                    </a>
-                  </div>
+                  
+                  <a href="<?= esc($ctaHref) ?>" class="btn-primary">
+                    <?= esc($ctaText) ?>
+                    <i class="bi bi-arrow-right"></i>
+                  </a>
                 </div>
               <?php endforeach; ?>
             </div>
@@ -130,64 +183,87 @@ $activities      = $activities      ?? [];
         </div>
       </div>
 
-      <!-- ===== GRID: Jadwal 40% vs Aktivitas 60% (sama Presenter) ===== -->
+      <!-- GRID: Jadwal & Aktivitas -->
       <div class="row g-4">
-        <!-- Jadwal (kiri 40%) -->
+        <!-- Jadwal -->
         <div class="col-12 col-lg-5">
-          <div class="card shadow-sm h-100">
-            <div class="card-header bg-light"><strong>Jadwal Hari Ini</strong></div>
+          <div class="card-modern h-100">
+            <div class="card-header">
+              <div class="card-header-left">
+                <div class="header-icon-small bg-blue">
+                  <i class="bi bi-calendar-check"></i>
+                </div>
+                <div>
+                  <h3 class="card-title">Jadwal Hari Ini</h3>
+                </div>
+              </div>
+            </div>
             <div class="card-body">
               <?php if (empty($todaySchedule)): ?>
-                <p class="text-muted small mb-0">Tidak ada jadwal event hari ini.</p>
+                <div class="empty-state-small">
+                  <i class="bi bi-calendar-x"></i>
+                  <p>Tidak ada jadwal hari ini</p>
+                </div>
               <?php else: ?>
-                <ul class="list-group list-group-flush small clip-3">
+                <div class="list-items">
                   <?php foreach ($todaySchedule as $s): ?>
-                    <li class="list-group-item d-flex justify-content-between align-items-start">
-                      <div class="me-2">
-                        <div class="fw-semibold text-truncate" style="max-width: 360px;"><?= esc($s['title']) ?></div>
-                        <div class="text-muted"><?= esc($s['start'] ?: '-') ?> · <?= esc($s['where'] ?: '-') ?></div>
+                    <div class="schedule-item">
+                      <div class="schedule-info">
+                        <h5 class="schedule-name"><?= esc($s['title']) ?></h5>
+                        <div class="schedule-details">
+                          <span><i class="bi bi-clock"></i> <?= esc($s['start'] ?: '-') ?></span>
+                          <span><i class="bi bi-geo-alt"></i> <?= esc($s['where'] ?: '-') ?></span>
+                        </div>
                       </div>
-                      <a href="<?= esc($s['link']) ?>" class="btn btn-sm btn-primary">Absen</a>
-                    </li>
+                      <a href="<?= esc($s['link']) ?>" class="btn-small">Absen</a>
+                    </div>
                   <?php endforeach; ?>
-                </ul>
+                </div>
               <?php endif; ?>
             </div>
           </div>
         </div>
 
-        <!-- Aktivitas (kanan 60%) -->
+        <!-- Aktivitas -->
         <div class="col-12 col-lg-7">
-          <div class="card shadow-sm h-100">
-            <div class="card-header bg-white">
-              <h5 class="mb-0 text-dark"><i class="bi bi-bell me-2"></i>Aktivitas Terbaru</h5>
+          <div class="card-modern h-100">
+            <div class="card-header">
+              <div class="card-header-left">
+                <div class="header-icon-small bg-blue">
+                  <i class="bi bi-bell"></i>
+                </div>
+                <div>
+                  <h3 class="card-title">Aktivitas Terbaru</h3>
+                </div>
+              </div>
             </div>
             <div class="card-body">
               <?php if (empty($activities)): ?>
-                <div class="text-muted small">Belum ada aktivitas terbaru.</div>
+                <div class="empty-state-small">
+                  <i class="bi bi-inbox"></i>
+                  <p>Belum ada aktivitas</p>
+                </div>
               <?php else: ?>
-                <div class="clip-3">
-                  <ul class="list-group list-group-flush activity-list compact">
-                    <?php foreach ($activities as $a): ?>
-                      <li class="list-group-item d-flex align-items-start">
-                        <div class="activity-dot bg-<?= esc($a['badge']) ?>">
-                          <i class="bi <?= esc($a['icon']) ?>"></i>
+                <div class="list-items">
+                  <?php foreach ($activities as $a): ?>
+                    <div class="activity-item">
+                      <div class="activity-icon bg-<?= esc($a['badge']) ?>">
+                        <i class="bi <?= esc($a['icon']) ?>"></i>
+                      </div>
+                      <div class="activity-content">
+                        <div class="activity-header">
+                          <span class="activity-name"><?= esc($a['title']) ?></span>
+                          <span class="activity-time"><?= $a['time'] ? date('d M H:i', (int)$a['time']) : '' ?></span>
                         </div>
-                        <div class="ms-2 flex-fill">
-                          <div class="d-flex justify-content-between align-items-center">
-                            <div class="fw-semibold small"><?= esc($a['title']) ?></div>
-                            <small class="text-muted"><?= $a['time'] ? date('d M Y H:i', (int)$a['time']) : '' ?></small>
-                          </div>
-                          <?php if (!empty($a['desc'])): ?>
-                            <div class="text-muted xsmall mt-1"><?= esc($a['desc']) ?></div>
-                          <?php endif; ?>
-                          <?php if (!empty($a['link'])): ?>
-                            <a class="btn btn-xs btn-outline-primary mt-2" href="<?= esc($a['link']) ?>">Lihat</a>
-                          <?php endif; ?>
-                        </div>
-                      </li>
-                    <?php endforeach; ?>
-                  </ul>
+                        <?php if (!empty($a['desc'])): ?>
+                          <p class="activity-desc"><?= esc($a['desc']) ?></p>
+                        <?php endif; ?>
+                        <?php if (!empty($a['link'])): ?>
+                          <a class="activity-link" href="<?= esc($a['link']) ?>">Lihat detail →</a>
+                        <?php endif; ?>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
                 </div>
               <?php endif; ?>
             </div>
@@ -196,39 +272,49 @@ $activities      = $activities      ?? [];
 
         <!-- Event Terdaftar -->
         <div class="col-12">
-          <div class="card shadow-sm">
-            <div class="card-header bg-light"><strong>Event Terdaftar</strong></div>
+          <div class="card-modern">
+            <div class="card-header">
+              <div class="card-header-left">
+                <div class="header-icon-small bg-blue">
+                  <i class="bi bi-bookmark-check"></i>
+                </div>
+                <div>
+                  <h3 class="card-title">Event Terdaftar</h3>
+                </div>
+              </div>
+            </div>
             <div class="card-body">
               <?php if (empty($registrations)): ?>
-                <p class="text-muted mb-0 small">Belum ada event terdaftar.</p>
+                <div class="empty-state-small">
+                  <i class="bi bi-calendar-plus"></i>
+                  <p>Belum ada event terdaftar</p>
+                </div>
               <?php else: ?>
-                <div class="clip-3">
-                  <ul class="list-group list-group-flush small">
-                    <?php foreach ($registrations as $r): ?>
-                      <?php
-                        $dateStr = !empty($r['event_date'])
-                          ? date('d M Y', strtotime($r['event_date'])) . (!empty($r['event_time']) ? ' · ' . $r['event_time'] : '')
-                          : '-';
-                        $badge = $r['badge'] ?? 'secondary';
-                      ?>
-                      <li class="list-group-item d-flex justify-content-between align-items-start py-2">
-                        <div class="me-2">
-                          <div class="text-truncate">
-                            <i class="bi bi-calendar-event me-2"></i><?= esc($r['event_title'] ?? ($r['title'] ?? '-')) ?>
-                          </div>
-                          <div class="text-muted"><?= esc($dateStr) ?></div>
-                        </div>
-                        <span class="badge bg-<?= esc($badge) ?> ms-2 align-self-center"><?= esc($r['status'] ?? '-') ?></span>
-                      </li>
-                    <?php endforeach; ?>
-                  </ul>
+                <div class="list-items">
+                  <?php foreach ($registrations as $r): ?>
+                    <?php
+                      $dateStr = !empty($r['event_date'])
+                        ? date('d M Y', strtotime($r['event_date'])) . (!empty($r['event_time']) ? ' · ' . $r['event_time'] : '')
+                        : '-';
+                      $badge = $r['badge'] ?? 'secondary';
+                    ?>
+                    <div class="registration-item">
+                      <div class="registration-icon">
+                        <i class="bi bi-calendar-event"></i>
+                      </div>
+                      <div class="registration-info">
+                        <h5 class="registration-name"><?= esc($r['event_title'] ?? ($r['title'] ?? '-')) ?></h5>
+                        <p class="registration-date"><?= esc($dateStr) ?></p>
+                      </div>
+                      <span class="badge badge-<?= esc($badge) ?>"><?= esc($r['status'] ?? '-') ?></span>
+                    </div>
+                  <?php endforeach; ?>
                 </div>
               <?php endif; ?>
             </div>
           </div>
         </div>
-
-      </div><!-- /row -->
+      </div>
 
     </div>
   </main>
@@ -237,70 +323,627 @@ $activities      = $activities      ?? [];
 <?= $this->include('partials/footer') ?>
 
 <style>
-  :root{ --primary:#2563eb; --ring:#eef2f7; --ok:#10b981; --muted:#cbd5e1; }
-  body{ background:#f9fafb; }
-
-  .header-section.header-blue{
-    background: linear-gradient(135deg, var(--primary), #1e40af);
-    color:#fff; padding:22px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12);
-  }
-  .welcome-text{ font-weight:700; font-size:1.35rem; }
-
-  .clip-3{ max-height: 200px; overflow:auto; -webkit-overflow-scrolling:touch; }
-  .clip-x{ overflow:auto; -webkit-overflow-scrolling:touch; }
-  .minw-700{ min-width:700px; }
-
-  /* ====== STEPPER LINEAR (4 langkah) ====== */
-  .progress-card{ background:#fff; }
-  .stepper{
-    display:grid;
-    grid-template-columns: repeat(7, 1fr); /* 4 steps + 3 bars */
-    align-items:center; gap:8px;
-  }
-  .stepper .step{ text-align:center; }
-  .stepper .dot{
-    width:44px; height:44px; border-radius:50%;
-    display:grid; place-items:center;
-    border:2px solid var(--muted);
-    color:#64748b; background:#fff; margin:0 auto;
-    transition:.2s;
-  }
-  .stepper .label{ margin-top:6px; font-size:.85rem; color:#111827; }
-  .stepper .bar{ height:4px; background:var(--muted); border-radius:4px; transition:.2s; }
-  .stepper .bar.on{ background:var(--ok); }
-
-  .stepper .step.done .dot{
-    background:rgba(16,185,129,.15); border-color:var(--ok); color:var(--ok);
-  }
-  .stepper .step.current .dot{
-    background:rgba(37,99,235,.1); border-color:#2563eb; color:#2563eb;
-  }
-  .stepper .step.todo .dot{
-    background:#fff; border-color:var(--muted); color:#94a3b8;
+  :root {
+    --primary-blue: #1d4ed8;
+    --light-blue: #2563eb;
+    --lighter-blue: #3b82f6;
+    --pale-blue: #dbeafe;
+    --bg-blue: #eff6ff;
+    --dark-blue: #1e3a8a;
+    --text-dark: #1e293b;
+    --text-gray: #64748b;
+    --text-light: #94a3b8;
+    --white: #ffffff;
+    --success: #10b981;
+    --info: #0ea5e9;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --border: #e2e8f0;
+    --shadow: rgba(15, 23, 42, 0.08);
   }
 
-  .activity-list.compact .list-group-item{
-    border:0; border-bottom:1px solid var(--ring);
-    padding:.55rem .6rem;
-  }
-  .activity-dot{
-    width:30px; height:30px; border-radius:8px;
-    display:flex; align-items:center; justify-content:center;
-    color:#fff; flex:0 0 30px; font-size:14px;
+  body { 
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); 
+    min-height: 100vh; 
   }
 
-  .alert-success   { background:#d1fae5; color:#065f46; border:0; }
-  .alert-primary   { background:#e0e7ff; color:#3730a3; border:0; }
-  .alert-info      { background:#cffafe; color:#155e75; border:0; }
-  .alert-warning   { background:#fef3c7; color:#92400e; border:0; }
-  .alert-danger    { background:#fee2e2; color:#991b1b; border:0; }
-  .alert-secondary { background:#f1f5f9; color:#334155; border:0; }
+  /* === HEADER === */
+  .dashboard-header {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(37, 99, 235, 0.15);
+    border: none;
+  }
 
-  @media (max-width: 768px){
-    .header-section.header-blue{ padding:18px; }
-    .welcome-text{ font-size:1.2rem; }
-    .clip-3{ max-height:190px; }
-    .stepper .dot{ width:40px; height:40px; }
-    .stepper .label{ font-size:.8rem; }
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .header-icon {
+    width: 56px;
+    height: 56px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--white);
+    font-size: 1.5rem;
+  }
+
+  .header-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--white);
+    margin: 0 0 0.25rem 0;
+  }
+
+  .header-subtitle {
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0;
+    font-size: 0.95rem;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+  }
+
+  .date-box {
+    text-align: center;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 0.75rem 1.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .date-day {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1;
+  }
+
+  .date-month {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.8);
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* === CARD === */
+  .card-modern {
+    background: var(--white);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px var(--shadow);
+    border: 1px solid var(--border);
+  }
+
+  .card-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .header-icon-small {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--white);
+    font-size: 1.1rem;
+  }
+
+  .header-icon-small.bg-blue {
+    background: #2563eb;
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin: 0;
+  }
+
+  .card-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-gray);
+    margin: 0.25rem 0 0 0;
+  }
+
+  .card-body {
+    padding: 1.5rem;
+  }
+
+  /* === PROGRESS CARD === */
+  .progress-grid {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .progress-card {
+    background: var(--bg-blue);
+    border: 1px solid var(--pale-blue);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+
+  .progress-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+
+  .progress-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin: 0;
+  }
+
+  .progress-indicator {
+    background: var(--primary-blue);
+    color: var(--white);
+    padding: 0.375rem 0.875rem;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.875rem;
+  }
+
+  .progress-date {
+    color: var(--text-gray);
+    font-size: 0.875rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .progress-date i {
+    color: var(--primary-blue);
+    margin-right: 0.375rem;
+  }
+
+  /* === STEPPER === */
+  .stepper {
+    display: grid;
+    grid-template-columns: auto 1fr auto 1fr auto 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 1.5rem 0;
+  }
+
+  .step {
+    text-align: center;
+  }
+
+  .step-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 0.5rem;
+    font-size: 1rem;
+    background: var(--white);
+    border: 2px solid var(--border);
+    color: var(--text-light);
+    font-weight: 700;
+  }
+
+  .step.done .step-icon {
+    background: var(--success);
+    border-color: var(--success);
+    color: var(--white);
+  }
+
+  .step.current .step-icon {
+    background: var(--primary-blue);
+    border-color: var(--primary-blue);
+    color: var(--white);
+  }
+
+  .step-number {
+    font-size: 0.875rem;
+  }
+
+  .step-text {
+    font-size: 0.8rem;
+    color: var(--text-gray);
+    font-weight: 600;
+    display: block;
+  }
+
+  .step-line {
+    height: 2px;
+    background: var(--border);
+  }
+
+  .step-line.active {
+    background: var(--success);
+  }
+
+  /* === ALERT === */
+  .alert-box {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 10px;
+    margin: 1.5rem 0 1rem 0;
+    font-size: 0.875rem;
+    border: 1px solid;
+  }
+
+  .alert-box i {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .alert-success {
+    background: #d1fae5;
+    color: #065f46;
+    border-color: #a7f3d0;
+  }
+
+  .alert-primary {
+    background: var(--pale-blue);
+    color: var(--dark-blue);
+    border-color: #93c5fd;
+  }
+
+  .alert-info {
+    background: #e0f2fe;
+    color: #075985;
+    border-color: #bae6fd;
+  }
+
+  .alert-default {
+    background: #f1f5f9;
+    color: var(--text-gray);
+    border-color: var(--border);
+  }
+
+  /* === BUTTONS === */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: var(--primary-blue);
+    color: var(--white);
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 0.9375rem;
+    width: 100%;
+  }
+
+  .btn-primary:hover {
+    background: var(--dark-blue);
+    color: var(--white);
+  }
+
+  .btn-small {
+    background: var(--primary-blue);
+    color: var(--white);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  .btn-small:hover {
+    background: var(--dark-blue);
+    color: var(--white);
+  }
+
+  /* === LIST ITEMS === */
+  .list-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* Schedule */
+  .schedule-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: var(--bg-blue);
+    border-radius: 10px;
+    border: 1px solid var(--pale-blue);
+  }
+
+  .schedule-name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin: 0 0 0.375rem 0;
+  }
+
+  .schedule-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.8125rem;
+    color: var(--text-gray);
+  }
+
+  .schedule-details i {
+    color: var(--primary-blue);
+    margin-right: 0.25rem;
+  }
+
+  /* Activity */
+  .activity-item {
+    display: flex;
+    gap: 1rem;
+    padding: 0.75rem;
+  }
+
+  .activity-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--white);
+    flex-shrink: 0;
+    font-size: 1.125rem;
+  }
+
+  .activity-icon.bg-primary { background: var(--primary-blue); }
+  .activity-icon.bg-success { background: var(--success); }
+  .activity-icon.bg-info { background: var(--info); }
+  .activity-icon.bg-warning { background: var(--warning); }
+  .activity-icon.bg-danger { background: var(--danger); }
+
+  .activity-content {
+    flex: 1;
+  }
+
+  .activity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+  }
+
+  .activity-name {
+    font-weight: 600;
+    color: var(--text-dark);
+    font-size: 0.9375rem;
+  }
+
+  .activity-time {
+    font-size: 0.8125rem;
+    color: var(--text-light);
+  }
+
+  .activity-desc {
+    color: var(--text-gray);
+    font-size: 0.875rem;
+    margin: 0 0 0.5rem 0;
+  }
+
+  .activity-link {
+    color: var(--primary-blue);
+    font-size: 0.875rem;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .activity-link:hover {
+    text-decoration: underline;
+  }
+
+  /* Registration */
+  .registration-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--bg-blue);
+    border-radius: 10px;
+    border: 1px solid var(--pale-blue);
+  }
+
+  .registration-icon {
+    width: 48px;
+    height: 48px;
+    background: #2563eb;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--white);
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .registration-info {
+    flex: 1;
+  }
+
+  .registration-name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin: 0 0 0.25rem 0;
+  }
+
+  .registration-date {
+    font-size: 0.8125rem;
+    color: var(--text-gray);
+    margin: 0;
+  }
+
+  .badge {
+    padding: 0.375rem 0.875rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.8125rem;
+  }
+
+  .badge-primary { background: var(--pale-blue); color: var(--dark-blue); }
+  .badge-success { background: #d1fae5; color: #065f46; }
+  .badge-warning { background: #fef3c7; color: #92400e; }
+  .badge-info { background: #e0f2fe; color: #075985; }
+  .badge-secondary { background: #f1f5f9; color: #475569; }
+
+  /* === EMPTY STATE === */
+  .empty-state, .empty-state-small {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-light);
+  }
+
+  .empty-state-small {
+    padding: 2rem 1rem;
+  }
+
+  .empty-state i, .empty-state-small i {
+    font-size: 3rem;
+    color: var(--text-light);
+    display: block;
+    margin-bottom: 1rem;
+  }
+
+  .empty-state p, .empty-state-small p {
+    margin: 0.5rem 0 0 0;
+    font-weight: 600;
+    color: var(--text-gray);
+  }
+
+  .empty-state small {
+    color: var(--text-light);
+    font-size: 0.875rem;
+  }
+
+  /* === RESPONSIVE === */
+  @media (max-width: 768px) {
+    .dashboard-header {
+      padding: 1.5rem;
+    }
+
+    .header-content {
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .header-left {
+      width: 100%;
+    }
+
+    .header-icon {
+      width: 48px;
+      height: 48px;
+      font-size: 1.25rem;
+    }
+
+    .header-title {
+      font-size: 1.5rem;
+    }
+
+    .date-box {
+      width: 100%;
+    }
+
+    .stepper {
+      gap: 0.5rem;
+    }
+
+    .step-icon {
+      width: 36px;
+      height: 36px;
+      font-size: 0.875rem;
+    }
+
+    .step-text {
+      font-size: 0.7rem;
+    }
+
+    .step-line {
+      min-width: 20px;
+    }
+
+    .progress-card {
+      padding: 1.25rem;
+    }
+
+    .progress-title {
+      font-size: 1rem;
+    }
+
+    .progress-indicator {
+      padding: 0.3rem 0.7rem;
+      font-size: 0.8125rem;
+    }
+
+    .card-title {
+      font-size: 1rem;
+    }
+
+    .schedule-item,
+    .registration-item {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .btn-small {
+      width: 100%;
+      text-align: center;
+    }
+
+    .badge {
+      align-self: flex-start;
+    }
+  }
+
+  /* === SCROLLBAR === */
+  .list-items {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .list-items::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .list-items::-webkit-scrollbar-track {
+    background: var(--bg-blue);
+    border-radius: 10px;
+  }
+
+  .list-items::-webkit-scrollbar-thumb {
+    background: var(--pale-blue);
+    border-radius: 10px;
+  }
+
+  .list-items::-webkit-scrollbar-thumb:hover {
+    background: var(--lighter-blue);
   }
 </style>

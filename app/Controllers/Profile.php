@@ -148,7 +148,7 @@ class Profile extends BaseController
 
         $data = [
             'nama_lengkap' => (string) $this->request->getPost('nama_lengkap'),
-            'nim'          => (string) $this->request->getPost('nim'),
+            'jenis_peserta' => (string) $this->request->getPost('jenis_peserta'),
             'institusi'    => (string) $this->request->getPost('institusi'),
             'no_hp'        => (string) $this->request->getPost('no_hp'),
             'updated_at'   => date('Y-m-d H:i:s'),

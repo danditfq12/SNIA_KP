@@ -100,6 +100,7 @@
     /* ===== Tabs ===== */
     .nav-tabs{
       gap:.25rem; border:0; position:sticky; top:calc(var(--topbar-h) - 1px); z-index: 900;
+      background:var(--bg); padding-top:4px;
     }
     .nav-tabs .nav-link{
       border:1px solid transparent; border-bottom:3px solid transparent; border-radius:12px 12px 0 0;
@@ -183,7 +184,20 @@
             </div>
             <div class="col-md">
               <h4 class="mb-1"><?= esc($user['nama_lengkap'] ?? '-') ?></h4>
-              <div class="text-muted small"><?= esc($user['email'] ?? '-') ?></div>
+              <div class="text-muted small mb-1"><?= esc($user['email'] ?? '-') ?></div>
+              <?php if(!empty($user['jenis_peserta'])): ?>
+                <span class="badge bg-primary"><?= esc(ucfirst($user['jenis_peserta'])) ?></span>
+              <?php endif; ?>
+              <?php if(!empty($user['institusi'])): ?>
+                <div class="text-muted small mt-2">
+                  <i class="bi bi-building me-1"></i><?= esc($user['institusi']) ?>
+                </div>
+              <?php endif; ?>
+              <?php if(!empty($user['no_hp'])): ?>
+                <div class="text-muted small">
+                  <i class="bi bi-telephone me-1"></i><?= esc($user['no_hp']) ?>
+                </div>
+              <?php endif; ?>
               <div class="mt-3">
                 <form action="<?= site_url('profile/upload-photo') ?>" method="post" enctype="multipart/form-data" class="d-inline-block">
                   <?= csrf_field() ?>
@@ -225,10 +239,16 @@
 
         <!-- ===== Flash ===== -->
         <?php if (session('success')): ?>
-          <div class="alert alert-success shadow-sm"><?= esc(session('success')) ?></div>
+          <div class="alert alert-success shadow-sm alert-dismissible fade show">
+            <?= esc(session('success')) ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
         <?php endif; ?>
         <?php if (session('error')): ?>
-          <div class="alert alert-danger shadow-sm"><?= esc(session('error')) ?></div>
+          <div class="alert alert-danger shadow-sm alert-dismissible fade show">
+            <?= esc(session('error')) ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
         <?php endif; ?>
 
         <!-- ===== TAB PANES ===== -->
@@ -241,50 +261,68 @@
                   <div class="card card-soft">
                     <div class="card-header"><strong><i class="bi bi-award me-2"></i>LOA</strong></div>
                     <div class="card-body">
-                      <?php if (!empty($docs['loa'])): foreach ($docs['loa'] as $f): ?>
-                        <div class="file-row">
-                          <div class="file-name">
-                            <i class="bi bi-file-earmark-text"></i>
-                            <span><?= esc($f['name']) ?></span>
-                            <?php if(!empty($f['created_at'])): ?>
-                              <span class="file-meta ms-2"><?= date('d M Y', strtotime($f['created_at'])) ?></span>
-                            <?php endif; ?>
-                          </div>
-                          <div class="ms-3">
-                            <a class="btn btn-sm btn-outline-primary" href="<?= site_url($f['path']) ?>" target="_blank" rel="noopener">
-                              <i class="bi bi-download"></i>
-                            </a>
-                          </div>
+                      <?php if (!empty($docs['loa'])): ?>
+                        <div class="d-flex flex-column gap-2">
+                          <?php foreach ($docs['loa'] as $f): ?>
+                            <div class="file-row">
+                              <div class="file-name">
+                                <i class="bi bi-file-earmark-text text-primary"></i>
+                                <div>
+                                  <div><?= esc($f['name']) ?></div>
+                                  <?php if(!empty($f['created_at'])): ?>
+                                    <small class="file-meta"><?= date('d M Y', strtotime($f['created_at'])) ?></small>
+                                  <?php endif; ?>
+                                </div>
+                              </div>
+                              <div class="ms-3">
+                                <a class="btn btn-sm btn-outline-primary" href="<?= site_url($f['path']) ?>" target="_blank" rel="noopener" title="Download">
+                                  <i class="bi bi-download"></i>
+                                </a>
+                              </div>
+                            </div>
+                          <?php endforeach; ?>
                         </div>
-                      <?php endforeach; else: ?>
-                        <div class="text-muted">Belum ada LOA.</div>
+                      <?php else: ?>
+                        <div class="text-muted text-center py-3">
+                          <i class="bi bi-inbox fs-1 d-block mb-2 opacity-25"></i>
+                          Belum ada LOA.
+                        </div>
                       <?php endif; ?>
                     </div>
                   </div>
                 </div>
               <?php endif; ?>
 
-              <div class="col-lg-6">
+              <div class="<?= $role === 'presenter' ? 'col-lg-6' : 'col-12' ?>">
                 <div class="card card-soft">
                   <div class="card-header"><strong><i class="bi bi-patch-check me-2"></i>Sertifikat</strong></div>
                   <div class="card-body">
-                    <?php if (!empty($docs['sertifikat'])): foreach ($docs['sertifikat'] as $f): ?>
-                      <div class="file-row">
-                        <div class="file-name">
-                          <i class="bi bi-file-earmark-text"></i>
-                          <span><?= esc($f['name']) ?></span>
-                          <?php if(!empty($f['created_at'])): ?>
-                            <span class="file-meta ms-2"><?= date('d M Y', strtotime($f['created_at'])) ?></span>
-                          <?php endif; ?>
-                        </div>
-                        <div class="ms-3">
-                          <a class="btn btn-sm btn-outline-primary" href="<?= site_url($f['path']) ?>" target="_blank" rel="noopener">
-                            <i class="bi bi-download"></i>
-                          </a>
-                        </div>
+                    <?php if (!empty($docs['sertifikat'])): ?>
+                      <div class="d-flex flex-column gap-2">
+                        <?php foreach ($docs['sertifikat'] as $f): ?>
+                          <div class="file-row">
+                            <div class="file-name">
+                              <i class="bi bi-file-earmark-text text-success"></i>
+                              <div>
+                                <div><?= esc($f['name']) ?></div>
+                                <?php if(!empty($f['created_at'])): ?>
+                                  <small class="file-meta"><?= date('d M Y', strtotime($f['created_at'])) ?></small>
+                                <?php endif; ?>
+                              </div>
+                            </div>
+                            <div class="ms-3">
+                              <a class="btn btn-sm btn-outline-primary" href="<?= site_url($f['path']) ?>" target="_blank" rel="noopener" title="Download">
+                                <i class="bi bi-download"></i>
+                              </a>
+                            </div>
+                          </div>
+                        <?php endforeach; ?>
                       </div>
-                    <?php endforeach; else: ?>
-                      <div class="text-muted">Belum ada sertifikat.</div>
+                    <?php else: ?>
+                      <div class="text-muted text-center py-3">
+                        <i class="bi bi-inbox fs-1 d-block mb-2 opacity-25"></i>
+                        Belum ada sertifikat.
+                      </div>
                     <?php endif; ?>
                   </div>
                 </div>
@@ -299,33 +337,47 @@
               <div class="card-body">
                 <form action="<?= site_url('profile/update') ?>" method="post" enctype="multipart/form-data" class="row g-3">
                   <?= csrf_field() ?>
+                  
                   <div class="col-md-6">
-                    <label class="form-label">Nama Lengkap</label>
+                    <label class="form-label">Nama Lengkap <span class="text-danger">*</span></label>
                     <input type="text" name="nama_lengkap" class="form-control" value="<?= esc($user['nama_lengkap'] ?? '') ?>" required>
                   </div>
+                  
                   <div class="col-md-6">
-                    <label class="form-label">Email (tidak dapat diubah)</label>
+                    <label class="form-label">Email <small class="text-muted">(tidak dapat diubah)</small></label>
                     <input type="email" class="form-control" value="<?= esc($user['email'] ?? '') ?>" disabled>
                   </div>
+                  
                   <div class="col-md-6">
-                    <label class="form-label">NIM</label>
-                    <input type="text" name="nim" class="form-control" value="<?= esc($user['nim'] ?? '') ?>">
+                    <label class="form-label">Jenis Peserta <span class="text-danger">*</span></label>
+                    <select name="jenis_peserta" class="form-select" required>
+                      <option value="">-- Pilih Jenis Peserta --</option>
+                      <option value="mahasiswa" <?= ($user['jenis_peserta'] ?? '') === 'mahasiswa' ? 'selected' : '' ?>>Mahasiswa</option>
+                      <option value="dosen" <?= ($user['jenis_peserta'] ?? '') === 'dosen' ? 'selected' : '' ?>>Dosen</option>
+                      <option value="peneliti" <?= ($user['jenis_peserta'] ?? '') === 'peneliti' ? 'selected' : '' ?>>Peneliti</option>
+                      <option value="umum" <?= ($user['jenis_peserta'] ?? '') === 'umum' ? 'selected' : '' ?>>Umum</option>
+                      <option value="lainnya" <?= ($user['jenis_peserta'] ?? '') === 'lainnya' ? 'selected' : '' ?>>Lainnya</option>
+                    </select>
                   </div>
+                  
                   <div class="col-md-6">
                     <label class="form-label">Institusi</label>
-                    <input type="text" name="institusi" class="form-control" value="<?= esc($user['institusi'] ?? '') ?>">
+                    <input type="text" name="institusi" class="form-control" value="<?= esc($user['institusi'] ?? '') ?>" placeholder="Nama universitas/instansi">
                   </div>
+                  
                   <div class="col-md-6">
                     <label class="form-label">No. HP</label>
-                    <input type="text" name="no_hp" class="form-control" value="<?= esc($user['no_hp'] ?? '') ?>">
+                    <input type="tel" name="no_hp" class="form-control" value="<?= esc($user['no_hp'] ?? '') ?>" placeholder="081234567890">
                   </div>
+                  
                   <div class="col-md-6">
-                    <label class="form-label">Foto (opsional)</label>
+                    <label class="form-label">Foto Profil <small class="text-muted">(opsional)</small></label>
                     <input type="file" name="foto" accept=".jpg,.jpeg,.png,.webp" class="form-control">
-                    <small class="text-muted">Maks 2MB</small>
+                    <small class="text-muted">Format: JPG, PNG, WEBP. Maksimal 2MB</small>
                   </div>
+                  
                   <div class="col-12">
-                    <button class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary">
                       <i class="bi bi-save me-1"></i> Simpan Perubahan
                     </button>
                   </div>
@@ -341,8 +393,9 @@
               <div class="card-body">
                 <form id="passwordForm" action="<?= site_url('profile/change-password') ?>" method="post" class="row g-3">
                   <?= csrf_field() ?>
+                  
                   <div class="col-md-4">
-                    <label class="form-label">Password Lama</label>
+                    <label class="form-label">Password Lama <span class="text-danger">*</span></label>
                     <div class="input-group">
                       <input type="password" name="old_password" id="old_password" class="form-control" required>
                       <button class="btn btn-outline-secondary toggle-pass" type="button" data-target="old_password" aria-label="Tampilkan/Sembunyikan">
@@ -350,17 +403,20 @@
                       </button>
                     </div>
                   </div>
+                  
                   <div class="col-md-4">
-                    <label class="form-label">Password Baru</label>
+                    <label class="form-label">Password Baru <span class="text-danger">*</span></label>
                     <div class="input-group">
                       <input type="password" name="new_password" id="new_password" class="form-control" minlength="6" required>
                       <button class="btn btn-outline-secondary toggle-pass" type="button" data-target="new_password" aria-label="Tampilkan/Sembunyikan">
                         <i class="bi bi-eye"></i>
                       </button>
                     </div>
+                    <small class="text-muted">Minimal 6 karakter</small>
                   </div>
+                  
                   <div class="col-md-4">
-                    <label class="form-label">Konfirmasi Password</label>
+                    <label class="form-label">Konfirmasi Password <span class="text-danger">*</span></label>
                     <div class="input-group">
                       <input type="password" name="confirm_password" id="confirm_password" class="form-control" minlength="6" required>
                       <button class="btn btn-outline-secondary toggle-pass" type="button" data-target="confirm_password" aria-label="Tampilkan/Sembunyikan">
@@ -368,9 +424,10 @@
                       </button>
                     </div>
                   </div>
+                  
                   <div class="col-12">
-                    <div class="text-danger small d-none" id="pwdError"></div>
-                    <button class="btn btn-warning">
+                    <div class="text-danger small d-none mb-2" id="pwdError"></div>
+                    <button type="submit" class="btn btn-warning">
                       <i class="bi bi-key me-1"></i> Ubah Password
                     </button>
                   </div>
@@ -380,7 +437,7 @@
           </div>
         </div><!-- /tab-content -->
 
-        <footer class="text-center text-muted small mt-4">&copy; <?= date('Y') ?> — SNIA</footer>
+        <footer class="text-center text-muted small mt-5 mb-3">&copy; <?= date('Y') ?> SNIA Conference</footer>
       </div>
     </main>
   </div>
@@ -413,26 +470,36 @@
       });
     });
 
-    // Validasi ringan password
+    // Validasi password
     document.getElementById('passwordForm')?.addEventListener('submit', (e)=>{
       const oldP = document.getElementById('old_password').value.trim();
       const newP = document.getElementById('new_password').value.trim();
       const cfmP = document.getElementById('confirm_password').value.trim();
       const err  = document.getElementById('pwdError');
 
+      err.classList.add('d-none');
+
       if (!oldP || !newP || !cfmP) {
-        e.preventDefault(); err.textContent = 'Semua field password wajib diisi.'; err.classList.remove('d-none'); return;
+        e.preventDefault(); 
+        err.textContent = 'Semua field password wajib diisi.'; 
+        err.classList.remove('d-none'); 
+        return;
       }
       if (newP.length < 6) {
-        e.preventDefault(); err.textContent = 'Panjang password minimal 6 karakter.'; err.classList.remove('d-none'); return;
+        e.preventDefault(); 
+        err.textContent = 'Panjang password minimal 6 karakter.'; 
+        err.classList.remove('d-none'); 
+        return;
       }
       if (newP !== cfmP) {
-        e.preventDefault(); err.textContent = 'Password baru dan konfirmasi harus sama.'; err.classList.remove('d-none'); return;
+        e.preventDefault(); 
+        err.textContent = 'Password baru dan konfirmasi harus sama.'; 
+        err.classList.remove('d-none'); 
+        return;
       }
-      err.classList.add('d-none');
     });
 
-    // Konfirmasi Logout (POST + CSRF) dengan SweetAlert (fallback auto-load)
+    // Konfirmasi Logout dengan SweetAlert
     document.addEventListener('click', function(e){
       const btn = e.target.closest('.js-logout');
       if (!btn) return;
@@ -445,10 +512,11 @@
         title: 'Keluar dari akun?',
         text: 'Anda yakin ingin logout sekarang?',
         showCancelButton: true,
-        confirmButtonText: 'Ya, logout',
+        confirmButtonText: 'Ya, Logout',
         cancelButtonText: 'Batal',
         reverseButtons: true,
-        focusCancel: true
+        focusCancel: true,
+        buttonsStyling: true
       }).then(res => { if (res.isConfirmed) submitLogout(); });
 
       if (window.Swal) {

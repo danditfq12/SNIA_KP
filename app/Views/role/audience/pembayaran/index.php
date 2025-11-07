@@ -1,7 +1,7 @@
 <?php
 // =========================================
 //  Enhanced Pembayaran - Index (Audience) with Midtrans Support
-//  Controller mengirim: $payments, $eventMap, $badgeMap, $aktif, $riwayat
+//  Simple Blue & White Theme
 // =========================================
 $title = $title ?? 'Pembayaran Saya';
 $eventMap = $eventMap ?? [];
@@ -14,31 +14,25 @@ $fmtRp = fn($n)=> 'Rp ' . number_format((float)$n, 0, ',', '.');
 
 // Helper untuk payment method display
 $getPaymentMethodInfo = function($method, $reference = null) {
-    if ($method === 'midtrans') {
-        return [
-            'icon' => 'bi-credit-card',
-            'label' => 'Digital Payment',
-            'badge' => 'bg-primary',
-            'description' => $reference ? "ID: " . substr($reference, -8) : 'Midtrans'
-        ];
-    }
-    
-    $methodLabels = [
-        'transfer_bank' => 'Transfer Bank',
-        'internet_banking' => 'Internet Banking', 
-        'mobile_banking' => 'Mobile Banking',
-        'atm' => 'ATM',
-        'setor_tunai' => 'Setor Tunai',
-        'lainnya' => 'Lainnya'
-    ];
-    
+    // Semua pembayaran menggunakan Midtrans (Digital Payment)
     return [
-        'icon' => 'bi-bank',
-        'label' => $methodLabels[$method] ?? ucfirst(str_replace('_', ' ', $method)),
-        'badge' => 'bg-secondary',
-        'description' => 'Manual Transfer'
+        'icon' => 'bi-credit-card-fill',
+        'label' => 'Digital Payment',
+        'badge' => 'bg-primary',
+        'description' => $reference ? "Order ID: " . substr($reference, -12) : 'Midtrans Payment Gateway'
     ];
 };
+
+// Gabungkan semua pembayaran untuk statistik
+$allPayments = array_merge($aktif, $riwayat);
+
+// Debug mode - Uncomment untuk cek data
+// echo '<div class="alert alert-info">DEBUG: Aktif=' . count($aktif) . ', Riwayat=' . count($riwayat) . '</div>';
+// if (!empty($riwayat)) {
+//     echo '<pre>Riwayat Status: '; 
+//     foreach($riwayat as $r) echo $r['status'] . ', ';
+//     echo '</pre>';
+// }
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -50,114 +44,111 @@ $getPaymentMethodInfo = function($method, $reference = null) {
     <div class="container-fluid p-3 p-md-4">
 
       <!-- Header Section -->
-      <div class="header-section header-blue d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h3 class="welcome-text mb-1">
-            <i class="bi bi-wallet2 me-2"></i>Pembayaran Saya
-          </h3>
-          <div class="text-white-50">Kelola & pantau status pembayaran event</div>
-        </div>
-        <div class="text-end d-none d-md-block">
-          <small class="text-white-50 d-block">Total Pembayaran</small>
-          <strong class="text-white"><?= count($aktif) + count($riwayat) ?></strong>
+      <div class="page-header mb-4">
+        <div class="header-content">
+          <div class="header-left">
+            <div class="header-icon">
+              <i class="bi bi-wallet2"></i>
+            </div>
+            <div>
+              <h1 class="page-title">Pembayaran Saya</h1>
+              <p class="page-subtitle">Kelola & pantau status pembayaran event Anda</p>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- Quick Stats -->
-      <?php if (!empty($aktif) || !empty($riwayat)): ?>
-      <div class="row g-3 mb-4">
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-pending">
-            <div class="stat-icon">
-              <i class="bi bi-hourglass-split"></i>
-            </div>
-            <div class="stat-content">
-              <div class="stat-number"><?= count($aktif) ?></div>
-              <div class="stat-label">Menunggu</div>
-            </div>
+      <?php if (!empty($allPayments)): ?>
+      <div class="stats-grid mb-4">
+        <div class="stat-card stat-pending">
+          <div class="stat-icon">
+            <i class="bi bi-hourglass-split"></i>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value"><?= count($aktif) ?></div>
+            <div class="stat-label">Menunggu</div>
           </div>
         </div>
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-verified">
-            <div class="stat-icon">
-              <i class="bi bi-check-circle-fill"></i>
+        <div class="stat-card stat-verified">
+          <div class="stat-icon">
+            <i class="bi bi-check-circle-fill"></i>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">
+              <?= count(array_filter($allPayments, fn($r) => ($r['status'] ?? '') === 'verified')) ?>
             </div>
-            <div class="stat-content">
-              <div class="stat-number">
-                <?= count(array_filter($riwayat, fn($r) => $r['status'] === 'verified')) ?>
-              </div>
-              <div class="stat-label">Terverifikasi</div>
-            </div>
+            <div class="stat-label">Terverifikasi</div>
           </div>
         </div>
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-digital">
-            <div class="stat-icon">
-              <i class="bi bi-credit-card"></i>
+        <div class="stat-card stat-digital">
+          <div class="stat-icon">
+            <i class="bi bi-credit-card-fill"></i>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">
+              <?= count(array_filter($allPayments, fn($r) => ($r['metode'] ?? '') === 'midtrans')) ?>
             </div>
-            <div class="stat-content">
-              <div class="stat-number">
-                <?= count(array_filter(array_merge($aktif, $riwayat), fn($r) => $r['metode'] === 'midtrans')) ?>
-              </div>
-              <div class="stat-label">Digital</div>
-            </div>
+            <div class="stat-label">Digital</div>
           </div>
         </div>
-        <div class="col-6 col-md-3">
-          <div class="stat-card stat-total">
-            <div class="stat-icon">
-              <i class="bi bi-currency-dollar"></i>
+        <div class="stat-card stat-total">
+          <div class="stat-icon">
+            <i class="bi bi-cash-stack"></i>
+          </div>
+          <div class="stat-content">
+            <div class="stat-value stat-value-small">
+              <?= $fmtRp(array_sum(array_column(array_filter($allPayments, fn($r) => ($r['status'] ?? '') === 'verified'), 'jumlah'))) ?>
             </div>
-            <div class="stat-content">
-              <div class="stat-number text-truncate" style="font-size: 0.9rem;">
-                <?= $fmtRp(array_sum(array_column(array_filter(array_merge($aktif, $riwayat), fn($r) => $r['status'] === 'verified'), 'jumlah'))) ?>
-              </div>
-              <div class="stat-label">Total Bayar</div>
-            </div>
+            <div class="stat-label">Total Bayar</div>
           </div>
         </div>
       </div>
       <?php endif; ?>
 
-      <?php if (empty($aktif) && empty($riwayat)): ?>
+      <?php if (empty($allPayments)): ?>
         <!-- Empty State -->
-        <div class="empty-state">
-          <div class="empty-icon">
-            <i class="bi bi-wallet2"></i>
+        <div class="empty-state-container">
+          <div class="empty-state-card">
+            <div class="empty-icon">
+              <i class="bi bi-wallet2"></i>
+            </div>
+            <h4 class="empty-title">Belum Ada Pembayaran</h4>
+            <p class="empty-text">Pembayaran Anda akan muncul di sini setelah mendaftar event</p>
+            <a href="<?= site_url('audience/events') ?>" class="btn-primary-custom">
+              <i class="bi bi-calendar2-event"></i>
+              <span>Lihat Event Tersedia</span>
+            </a>
           </div>
-          <h5 class="empty-title">Belum Ada Pembayaran</h5>
-          <p class="empty-subtitle">Pembayaran Anda akan muncul di sini setelah mendaftar event dan mengunggah bukti pembayaran</p>
-          <a href="<?= site_url('audience/events') ?>" class="btn btn-primary">
-            <i class="bi bi-calendar2-event me-2"></i>Lihat Event Tersedia
-          </a>
         </div>
       <?php else: ?>
 
         <!-- ========== PEMBAYARAN AKTIF (Pending) ========== -->
         <?php if (!empty($aktif)): ?>
-        <div class="card shadow-sm mb-4 border-0">
-          <div class="card-header bg-gradient-primary text-white">
-            <div class="d-flex align-items-center justify-content-between">
-              <h5 class="mb-0">
-                <i class="bi bi-hourglass-split me-2"></i>Menunggu Verifikasi
-              </h5>
-              <span class="badge bg-warning text-dark"><?= count($aktif) ?></span>
+        <div class="content-card mb-4">
+          <div class="card-header-custom">
+            <div class="header-left">
+              <div class="header-icon-small bg-warning">
+                <i class="bi bi-hourglass-split"></i>
+              </div>
+              <span>Menunggu Verifikasi</span>
             </div>
+            <span class="badge-count badge-warning"><?= count($aktif) ?></span>
           </div>
-          <div class="card-body p-0">
+          <div class="card-body-custom">
 
             <!-- Desktop View -->
             <div class="d-none d-lg-block">
-              <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                  <thead class="table-light">
+              <div class="table-wrapper">
+                <table class="table-modern">
+                  <thead>
                     <tr>
                       <th style="width:50px">#</th>
                       <th>Event</th>
-                      <th style="width:140px">Metode</th>
-                      <th style="width:120px">Jumlah</th>
-                      <th style="width:140px">Tanggal</th>
-                      <th style="width:100px">Status</th>
+                      <th style="width:160px">Metode</th>
+                      <th style="width:140px">Jumlah</th>
+                      <th style="width:160px">Tanggal</th>
+                      <th style="width:120px">Status</th>
                       <th style="width:100px"></th>
                     </tr>
                   </thead>
@@ -166,37 +157,38 @@ $getPaymentMethodInfo = function($method, $reference = null) {
                       $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['payment_reference'] ?? null);
                     ?>
                     <tr>
-                      <td><?= $i+1 ?></td>
+                      <td><span class="row-number"><?= $i+1 ?></span></td>
                       <td>
-                        <div class="fw-semibold text-truncate" style="max-width:300px;">
-                          <?= esc($eventMap[(int)$row['event_id']] ?? 'Event') ?>
+                        <div class="event-info">
+                          <div class="event-name"><?= esc($eventMap[(int)($row['event_id'] ?? 0)] ?? 'Event') ?></div>
+                          <?php if (!empty($row['participation_type'])): ?>
+                          <div class="event-type"><?= ucfirst($row['participation_type']) ?></div>
+                          <?php endif; ?>
                         </div>
-                        <?php if (!empty($row['participation_type'])): ?>
-                        <small class="text-muted"><?= ucfirst($row['participation_type']) ?></small>
-                        <?php endif; ?>
                       </td>
                       <td>
-                        <span class="badge <?= $methodInfo['badge'] ?> d-flex align-items-center gap-1">
+                        <span class="method-badge <?= $methodInfo['badge'] ?>">
                           <i class="<?= $methodInfo['icon'] ?>"></i>
-                          <span class="d-none d-xl-inline"><?= $methodInfo['label'] ?></span>
-                        </span>
-                        <?php if ($methodInfo['description'] !== $methodInfo['label']): ?>
-                        <div class="small text-muted mt-1"><?= $methodInfo['description'] ?></div>
-                        <?php endif; ?>
-                      </td>
-                      <td class="fw-semibold"><?= $fmtRp($row['jumlah'] ?? 0) ?></td>
-                      <td>
-                        <div><?= esc(date('d M Y', strtotime($row['tanggal_bayar']))) ?></div>
-                        <small class="text-muted"><?= esc(date('H:i', strtotime($row['tanggal_bayar']))) ?></small>
-                      </td>
-                      <td>
-                        <span class="badge bg-<?= $badgeMap[$row['status']] ?? 'secondary' ?>">
-                          <?= ucfirst(esc($row['status'])) ?>
+                          <?= $methodInfo['label'] ?>
                         </span>
                       </td>
+                      <td><span class="payment-amount"><?= $fmtRp($row['jumlah'] ?? 0) ?></span></td>
                       <td>
-                        <a class="btn btn-sm btn-primary" 
-                           href="<?= site_url('audience/pembayaran/detail/'.(int)$row['id_pembayaran']) ?>">
+                        <div class="date-info">
+                          <div class="date-main"><?= esc(date('d M Y', strtotime($row['tanggal_bayar'] ?? 'now'))) ?></div>
+                          <div class="date-time"><?= esc(date('H:i', strtotime($row['tanggal_bayar'] ?? 'now'))) ?> WIB</div>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="status-badge status-pending">
+                          <i class="bi bi-clock"></i>
+                          Pending
+                        </span>
+                      </td>
+                      <td>
+                        <a class="btn-action" 
+                           href="<?= site_url('audience/pembayaran/detail/'.(int)($row['id_pembayaran'] ?? 0)) ?>">
+                          <i class="bi bi-eye"></i>
                           Detail
                         </a>
                       </td>
@@ -208,52 +200,49 @@ $getPaymentMethodInfo = function($method, $reference = null) {
             </div>
 
             <!-- Mobile View -->
-            <div class="d-block d-lg-none p-3">
-              <div class="row g-3">
+            <div class="d-block d-lg-none">
+              <div class="mobile-cards">
                 <?php foreach ($aktif as $row): 
                   $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['payment_reference'] ?? null);
                 ?>
-                <div class="col-12">
-                  <div class="payment-card payment-pending">
-                    <div class="payment-card-header">
-                      <div class="d-flex align-items-start justify-content-between">
-                        <div class="flex-grow-1 me-2">
-                          <h6 class="payment-event-title mb-1">
-                            <?= esc($eventMap[(int)$row['event_id']] ?? 'Event') ?>
-                          </h6>
-                          <div class="payment-meta">
-                            <span class="badge <?= $methodInfo['badge'] ?> me-2">
-                              <i class="<?= $methodInfo['icon'] ?> me-1"></i><?= $methodInfo['label'] ?>
-                            </span>
-                            <?php if (!empty($row['participation_type'])): ?>
-                            <span class="badge bg-light text-dark">
-                              <?= ucfirst($row['participation_type']) ?>
-                            </span>
-                            <?php endif; ?>
-                          </div>
-                        </div>
-                        <span class="badge bg-<?= $badgeMap[$row['status']] ?? 'secondary' ?>">
-                          <?= ucfirst(esc($row['status'])) ?>
-                        </span>
-                      </div>
+                <div class="payment-mobile-card">
+                  <div class="mobile-card-header">
+                    <h6 class="mobile-card-title"><?= esc($eventMap[(int)($row['event_id'] ?? 0)] ?? 'Event') ?></h6>
+                    <span class="mobile-status status-pending">
+                      <i class="bi bi-clock"></i>
+                      Pending
+                    </span>
+                  </div>
+                  
+                  <div class="mobile-info-list">
+                    <div class="mobile-info-item">
+                      <span class="mobile-label">
+                        <i class="bi bi-credit-card"></i>
+                        Metode
+                      </span>
+                      <span class="mobile-value"><?= $methodInfo['label'] ?></span>
                     </div>
-                    
-                    <div class="payment-card-body">
-                      <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="text-muted small">Jumlah</span>
-                        <span class="fw-bold"><?= $fmtRp($row['jumlah'] ?? 0) ?></span>
-                      </div>
-                      <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="text-muted small">Tanggal</span>
-                        <span class="small"><?= esc($fmtDate($row['tanggal_bayar'] ?? null)) ?></span>
-                      </div>
-                      
-                      <a href="<?= site_url('audience/pembayaran/detail/'.(int)$row['id_pembayaran']) ?>" 
-                         class="btn btn-primary btn-sm w-100">
-                        <i class="bi bi-eye me-1"></i>Lihat Detail
-                      </a>
+                    <div class="mobile-info-item">
+                      <span class="mobile-label">
+                        <i class="bi bi-cash-stack"></i>
+                        Jumlah
+                      </span>
+                      <span class="mobile-value"><?= $fmtRp($row['jumlah'] ?? 0) ?></span>
+                    </div>
+                    <div class="mobile-info-item">
+                      <span class="mobile-label">
+                        <i class="bi bi-calendar-event"></i>
+                        Tanggal
+                      </span>
+                      <span class="mobile-value"><?= esc($fmtDate($row['tanggal_bayar'] ?? null)) ?></span>
                     </div>
                   </div>
+                  
+                  <a href="<?= site_url('audience/pembayaran/detail/'.(int)($row['id_pembayaran'] ?? 0)) ?>" 
+                     class="btn-mobile-action">
+                    <i class="bi bi-eye"></i>
+                    Lihat Detail
+                  </a>
                 </div>
                 <?php endforeach; ?>
               </div>
@@ -265,68 +254,89 @@ $getPaymentMethodInfo = function($method, $reference = null) {
 
         <!-- ========== RIWAYAT PEMBAYARAN ========== -->
         <?php if (!empty($riwayat)): ?>
-        <div class="card shadow-sm border-0">
-          <div class="card-header bg-gradient-secondary text-white">
-            <div class="d-flex align-items-center justify-content-between">
-              <h5 class="mb-0">
-                <i class="bi bi-clock-history me-2"></i>Riwayat Pembayaran
-              </h5>
-              <span class="badge bg-light text-dark"><?= count($riwayat) ?></span>
+        <div class="content-card">
+          <div class="card-header-custom">
+            <div class="header-left">
+              <div class="header-icon-small bg-secondary">
+                <i class="bi bi-clock-history"></i>
+              </div>
+              <span>Riwayat Pembayaran</span>
             </div>
+            <span class="badge-count badge-secondary"><?= count($riwayat) ?></span>
           </div>
-          <div class="card-body p-0">
+          <div class="card-body-custom">
 
             <!-- Desktop View -->
             <div class="d-none d-lg-block">
-              <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                  <thead class="table-light">
+              <div class="table-wrapper">
+                <table class="table-modern">
+                  <thead>
                     <tr>
                       <th style="width:50px">#</th>
                       <th>Event</th>
-                      <th style="width:140px">Metode</th>
-                      <th style="width:120px">Jumlah</th>
-                      <th style="width:140px">Tanggal</th>
-                      <th style="width:100px">Status</th>
+                      <th style="width:160px">Metode</th>
+                      <th style="width:140px">Jumlah</th>
+                      <th style="width:160px">Tanggal</th>
+                      <th style="width:120px">Status</th>
                       <th style="width:100px"></th>
                     </tr>
                   </thead>
                   <tbody>
                     <?php foreach ($riwayat as $i => $row): 
                       $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['payment_reference'] ?? null);
+                      $status = $row['status'] ?? 'pending';
+                      $statusClass = match($status) {
+                        'verified' => 'status-verified',
+                        'rejected' => 'status-rejected',
+                        'canceled' => 'status-canceled',
+                        default => 'status-other'
+                      };
+                      $statusIcon = match($status) {
+                        'verified' => 'bi-check-circle-fill',
+                        'rejected' => 'bi-x-circle-fill',
+                        'canceled' => 'bi-dash-circle-fill',
+                        default => 'bi-clock'
+                      };
+                      $statusLabel = match($status) {
+                        'verified' => 'Verified',
+                        'rejected' => 'Rejected',
+                        'canceled' => 'Canceled',
+                        default => ucfirst($status)
+                      };
                     ?>
                     <tr>
-                      <td><?= $i+1 ?></td>
+                      <td><span class="row-number"><?= $i+1 ?></span></td>
                       <td>
-                        <div class="fw-semibold text-truncate" style="max-width:300px;">
-                          <?= esc($eventMap[(int)$row['event_id']] ?? 'Event') ?>
+                        <div class="event-info">
+                          <div class="event-name"><?= esc($eventMap[(int)($row['event_id'] ?? 0)] ?? 'Event') ?></div>
+                          <?php if (!empty($row['participation_type'])): ?>
+                          <div class="event-type"><?= ucfirst($row['participation_type']) ?></div>
+                          <?php endif; ?>
                         </div>
-                        <?php if (!empty($row['participation_type'])): ?>
-                        <small class="text-muted"><?= ucfirst($row['participation_type']) ?></small>
-                        <?php endif; ?>
                       </td>
                       <td>
-                        <span class="badge <?= $methodInfo['badge'] ?> d-flex align-items-center gap-1">
+                        <span class="method-badge <?= $methodInfo['badge'] ?>">
                           <i class="<?= $methodInfo['icon'] ?>"></i>
-                          <span class="d-none d-xl-inline"><?= $methodInfo['label'] ?></span>
-                        </span>
-                        <?php if ($methodInfo['description'] !== $methodInfo['label']): ?>
-                        <div class="small text-muted mt-1"><?= $methodInfo['description'] ?></div>
-                        <?php endif; ?>
-                      </td>
-                      <td class="fw-semibold"><?= $fmtRp($row['jumlah'] ?? 0) ?></td>
-                      <td>
-                        <div><?= esc(date('d M Y', strtotime($row['tanggal_bayar']))) ?></div>
-                        <small class="text-muted"><?= esc(date('H:i', strtotime($row['tanggal_bayar']))) ?></small>
-                      </td>
-                      <td>
-                        <span class="badge bg-<?= $badgeMap[$row['status']] ?? 'secondary' ?>">
-                          <?= ucfirst(esc($row['status'])) ?>
+                          <?= $methodInfo['label'] ?>
                         </span>
                       </td>
+                      <td><span class="payment-amount"><?= $fmtRp($row['jumlah'] ?? 0) ?></span></td>
                       <td>
-                        <a class="btn btn-sm btn-outline-primary" 
-                           href="<?= site_url('audience/pembayaran/detail/'.(int)$row['id_pembayaran']) ?>">
+                        <div class="date-info">
+                          <div class="date-main"><?= esc(date('d M Y', strtotime($row['tanggal_bayar'] ?? 'now'))) ?></div>
+                          <div class="date-time"><?= esc(date('H:i', strtotime($row['tanggal_bayar'] ?? 'now'))) ?> WIB</div>
+                        </div>
+                      </td>
+                      <td>
+                        <span class="status-badge <?= $statusClass ?>">
+                          <i class="<?= $statusIcon ?>"></i>
+                          <?= $statusLabel ?>
+                        </span>
+                      </td>
+                      <td>
+                        <a class="btn-action btn-outline" 
+                           href="<?= site_url('audience/pembayaran/detail/'.(int)($row['id_pembayaran'] ?? 0)) ?>">
+                          <i class="bi bi-eye"></i>
                           Detail
                         </a>
                       </td>
@@ -338,58 +348,68 @@ $getPaymentMethodInfo = function($method, $reference = null) {
             </div>
 
             <!-- Mobile View -->
-            <div class="d-block d-lg-none p-3">
-              <div class="row g-3">
+            <div class="d-block d-lg-none">
+              <div class="mobile-cards">
                 <?php foreach ($riwayat as $row): 
                   $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['payment_reference'] ?? null);
-                  $statusClass = match($row['status']) {
-                    'verified' => 'payment-verified',
-                    'rejected' => 'payment-rejected', 
-                    'canceled' => 'payment-canceled',
-                    default => 'payment-other'
+                  $status = $row['status'] ?? 'pending';
+                  $statusClass = match($status) {
+                    'verified' => 'status-verified',
+                    'rejected' => 'status-rejected',
+                    'canceled' => 'status-canceled',
+                    default => 'status-other'
+                  };
+                  $statusIcon = match($status) {
+                    'verified' => 'bi-check-circle-fill',
+                    'rejected' => 'bi-x-circle-fill',
+                    'canceled' => 'bi-dash-circle-fill',
+                    default => 'bi-clock'
+                  };
+                  $statusLabel = match($status) {
+                    'verified' => 'Verified',
+                    'rejected' => 'Rejected',
+                    'canceled' => 'Canceled',
+                    default => ucfirst($status)
                   };
                 ?>
-                <div class="col-12">
-                  <div class="payment-card <?= $statusClass ?>">
-                    <div class="payment-card-header">
-                      <div class="d-flex align-items-start justify-content-between">
-                        <div class="flex-grow-1 me-2">
-                          <h6 class="payment-event-title mb-1">
-                            <?= esc($eventMap[(int)$row['event_id']] ?? 'Event') ?>
-                          </h6>
-                          <div class="payment-meta">
-                            <span class="badge <?= $methodInfo['badge'] ?> me-2">
-                              <i class="<?= $methodInfo['icon'] ?> me-1"></i><?= $methodInfo['label'] ?>
-                            </span>
-                            <?php if (!empty($row['participation_type'])): ?>
-                            <span class="badge bg-light text-dark">
-                              <?= ucfirst($row['participation_type']) ?>
-                            </span>
-                            <?php endif; ?>
-                          </div>
-                        </div>
-                        <span class="badge bg-<?= $badgeMap[$row['status']] ?? 'secondary' ?>">
-                          <?= ucfirst(esc($row['status'])) ?>
-                        </span>
-                      </div>
+                <div class="payment-mobile-card">
+                  <div class="mobile-card-header">
+                    <h6 class="mobile-card-title"><?= esc($eventMap[(int)($row['event_id'] ?? 0)] ?? 'Event') ?></h6>
+                    <span class="mobile-status <?= $statusClass ?>">
+                      <i class="<?= $statusIcon ?>"></i>
+                      <?= $statusLabel ?>
+                    </span>
+                  </div>
+                  
+                  <div class="mobile-info-list">
+                    <div class="mobile-info-item">
+                      <span class="mobile-label">
+                        <i class="bi bi-credit-card"></i>
+                        Metode
+                      </span>
+                      <span class="mobile-value"><?= $methodInfo['label'] ?></span>
                     </div>
-                    
-                    <div class="payment-card-body">
-                      <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="text-muted small">Jumlah</span>
-                        <span class="fw-bold"><?= $fmtRp($row['jumlah'] ?? 0) ?></span>
-                      </div>
-                      <div class="d-flex justify-content-between align-items-center mb-3">
-                        <span class="text-muted small">Tanggal</span>
-                        <span class="small"><?= esc($fmtDate($row['tanggal_bayar'] ?? null)) ?></span>
-                      </div>
-                      
-                      <a href="<?= site_url('audience/pembayaran/detail/'.(int)$row['id_pembayaran']) ?>" 
-                         class="btn btn-outline-primary btn-sm w-100">
-                        <i class="bi bi-eye me-1"></i>Lihat Detail
-                      </a>
+                    <div class="mobile-info-item">
+                      <span class="mobile-label">
+                        <i class="bi bi-cash-stack"></i>
+                        Jumlah
+                      </span>
+                      <span class="mobile-value"><?= $fmtRp($row['jumlah'] ?? 0) ?></span>
+                    </div>
+                    <div class="mobile-info-item">
+                      <span class="mobile-label">
+                        <i class="bi bi-calendar-event"></i>
+                        Tanggal
+                      </span>
+                      <span class="mobile-value"><?= esc($fmtDate($row['tanggal_bayar'] ?? null)) ?></span>
                     </div>
                   </div>
+                  
+                  <a href="<?= site_url('audience/pembayaran/detail/'.(int)($row['id_pembayaran'] ?? 0)) ?>" 
+                     class="btn-mobile-action btn-outline-mobile">
+                    <i class="bi bi-eye"></i>
+                    Lihat Detail
+                  </a>
                 </div>
                 <?php endforeach; ?>
               </div>
@@ -408,159 +428,688 @@ $getPaymentMethodInfo = function($method, $reference = null) {
 <?= $this->include('partials/footer') ?>
 
 <style>
-  :root{
-    --primary-color:#2563eb; --info-color:#06b6d4; --success-color:#10b981; 
-    --warning-color:#f59e0b; --danger-color:#ef4444; --secondary:#64748b;
+:root {
+  --primary-blue: #2563eb;
+  --light-blue: #3b82f6;
+  --pale-blue: #dbeafe;
+  --bg-blue: #eff6ff;
+  --dark-blue: #1e3a8a;
+  --text-dark: #1e293b;
+  --text-gray: #64748b;
+  --text-light: #94a3b8;
+  --white: #ffffff;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --border: #e2e8f0;
+  --shadow: rgba(15, 23, 42, 0.08);
+}
+
+body {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  min-height: 100vh;
+}
+
+/* === PAGE HEADER === */
+.page-header {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.15);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-icon {
+  width: 56px;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  font-size: 1.5rem;
+}
+
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--white);
+  margin: 0 0 0.25rem 0;
+}
+
+.page-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* === STATS GRID === */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.stat-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 0.25rem;
+}
+
+.stat-value-small {
+  font-size: 1.1rem;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: var(--text-gray);
+  font-weight: 500;
+}
+
+.stat-pending .stat-icon {
+  background: #fef3c7;
+  color: #d97706;
+}
+.stat-pending .stat-value { color: #d97706; }
+
+.stat-verified .stat-icon {
+  background: #d1fae5;
+  color: #059669;
+}
+.stat-verified .stat-value { color: #059669; }
+
+.stat-digital .stat-icon {
+  background: var(--pale-blue);
+  color: var(--primary-blue);
+}
+.stat-digital .stat-value { color: var(--primary-blue); }
+
+.stat-total .stat-icon {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+.stat-total .stat-value { color: #7c3aed; }
+
+/* === CONTENT CARD === */
+.content-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+.card-header-custom {
+  padding: 1.25rem 1.5rem;
+  background: var(--bg-blue);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-icon-small {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  font-size: 1rem;
+}
+
+.header-icon-small.bg-warning {
+  background: #f59e0b;
+}
+
+.header-icon-small.bg-secondary {
+  background: var(--text-gray);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  font-size: 1rem;
+}
+
+.badge-count {
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.badge-warning { background: #fed7aa; color: #92400e; }
+.badge-secondary { background: var(--border); color: #374151; }
+
+.card-body-custom {
+  padding: 1.5rem;
+}
+
+/* === TABLE === */
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.table-modern {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-modern thead th {
+  background: var(--bg-blue);
+  color: var(--text-gray);
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.table-modern tbody td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.table-modern tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.row-number {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  background: var(--pale-blue);
+  color: var(--primary-blue);
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.event-info .event-name {
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 0.25rem;
+}
+
+.event-info .event-type {
+  font-size: 0.813rem;
+  color: var(--text-gray);
+}
+
+.method-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.813rem;
+  font-weight: 600;
+}
+
+.method-badge.bg-primary {
+  background: var(--primary-blue);
+  color: var(--white);
+}
+
+.method-badge.bg-secondary {
+  background: var(--border);
+  color: var(--text-gray);
+}
+
+.payment-amount {
+  font-weight: 700;
+  color: var(--text-dark);
+  font-size: 0.938rem;
+}
+
+.date-info .date-main {
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 0.125rem;
+  font-size: 0.875rem;
+}
+
+.date-info .date-time {
+  font-size: 0.813rem;
+  color: var(--text-gray);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.813rem;
+  font-weight: 600;
+}
+
+.status-badge.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.status-verified {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.status-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge.status-canceled,
+.status-badge.status-other {
+  background: var(--border);
+  color: var(--text-gray);
+}
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+  background: var(--primary-blue);
+  color: var(--white);
+}
+
+.btn-action.btn-outline {
+  background: var(--white);
+  color: var(--primary-blue);
+  border: 1px solid var(--primary-blue);
+}
+
+.btn-action:hover {
+  background: var(--dark-blue);
+  color: var(--white);
+}
+
+.btn-action.btn-outline:hover {
+  background: var(--bg-blue);
+  color: var(--primary-blue);
+}
+
+/* === MOBILE CARDS === */
+.mobile-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.payment-mobile-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  border-left: 4px solid var(--primary-blue);
+}
+
+.mobile-card-header {
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 0.75rem;
+  background: var(--bg-blue);
+  border-bottom: 1px solid var(--border);
+}
+
+.mobile-card-title {
+  font-weight: 700;
+  color: var(--text-dark);
+  font-size: 0.938rem;
+  margin: 0;
+  flex: 1;
+}
+
+.mobile-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.313rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mobile-status.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.mobile-status.status-verified {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.mobile-status.status-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.mobile-status.status-canceled,
+.mobile-status.status-other {
+  background: var(--border);
+  color: var(--text-gray);
+}
+
+.mobile-info-list {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mobile-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mobile-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-gray);
+  font-weight: 500;
+}
+
+.mobile-label i {
+  color: var(--primary-blue);
+  font-size: 1rem;
+}
+
+.mobile-value {
+  font-weight: 700;
+  color: var(--text-dark);
+  font-size: 0.875rem;
+}
+
+.btn-mobile-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: calc(100% - 2rem);
+  margin: 0 1rem 1rem 1rem;
+  padding: 0.75rem;
+  background: var(--primary-blue);
+  color: var(--white);
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.btn-mobile-action.btn-outline-mobile {
+  background: var(--white);
+  color: var(--primary-blue);
+  border: 1px solid var(--primary-blue);
+}
+
+.btn-mobile-action:hover {
+  background: var(--dark-blue);
+  color: var(--white);
+}
+
+.btn-mobile-action.btn-outline-mobile:hover {
+  background: var(--bg-blue);
+  color: var(--primary-blue);
+}
+
+/* === EMPTY STATE === */
+.empty-state-container {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.empty-state-card {
+  max-width: 500px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1.5rem;
+  background: var(--bg-blue);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-blue);
+  font-size: 2.5rem;
+}
+
+.empty-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 0.75rem;
+}
+
+.empty-text {
+  color: var(--text-gray);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.btn-primary-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--primary-blue);
+  color: var(--white);
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.938rem;
+}
+
+.btn-primary-custom:hover {
+  background: var(--dark-blue);
+  color: var(--white);
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 992px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
-  
-  body{ background:#f8fafc; }
-  
-  .header-section.header-blue{
-    background:linear-gradient(135deg,var(--primary-color),#1e40af);
-    color:#fff; padding:24px; border-radius:16px; 
-    box-shadow:0 8px 28px rgba(0,0,0,.12);
-  }
-  .welcome-text{ font-weight:700; }
-  
-  .bg-gradient-primary{ 
-    background:linear-gradient(135deg,var(--primary-color),var(--info-color))!important; 
-  }
-  .bg-gradient-secondary{ 
-    background:linear-gradient(135deg,var(--secondary),#475569)!important; 
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    padding: 1.5rem;
   }
 
-  /* Stats Cards */
-  .stat-card {
-    background: white;
-    border-radius: 12px;
-    padding: 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    border: 1px solid #f1f5f9;
-    transition: all 0.2s ease;
+  .header-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 1.25rem;
   }
-  
-  .stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+
+  .page-title {
+    font-size: 1.5rem;
+  }
+
+  .page-subtitle {
+    font-size: 0.875rem;
+  }
+
+  .stat-card {
+    padding: 1rem;
   }
 
   .stat-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
+    width: 42px;
+    height: 42px;
+    font-size: 1.25rem;
   }
 
-  .stat-pending .stat-icon { background: #fef3c7; color: #d97706; }
-  .stat-verified .stat-icon { background: #d1fae5; color: #059669; }
-  .stat-digital .stat-icon { background: #dbeafe; color: #2563eb; }
-  .stat-total .stat-icon { background: #f3e8ff; color: #7c3aed; }
-
-  .stat-number {
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1;
-    color: #1f2937;
+  .stat-value {
+    font-size: 1.25rem;
   }
 
   .stat-label {
-    font-size: 0.875rem;
-    color: #6b7280;
-    margin-top: 2px;
+    font-size: 0.813rem;
   }
 
-  /* Empty State */
-  .empty-state {
+  .card-header-custom {
+    padding: 1rem;
+  }
+
+  .card-body-custom {
+    padding: 1rem;
+  }
+
+  .mobile-cards {
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .page-header {
+    padding: 1.25rem;
+  }
+
+  .header-content {
+    flex-direction: column;
     text-align: center;
-    padding: 60px 20px;
-    background: white;
-    border-radius: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  .header-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 1.125rem;
+  }
+
+  .page-title {
+    font-size: 1.25rem;
+  }
+
+  .page-subtitle {
+    font-size: 0.813rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .stat-card {
+    padding: 0.875rem;
+    gap: 0.75rem;
+  }
+
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1.125rem;
+  }
+
+  .stat-value {
+    font-size: 1.125rem;
+  }
+
+  .stat-value-small {
+    font-size: 0.938rem;
+  }
+
+  .empty-state-card {
+    padding: 2.5rem 1.5rem;
   }
 
   .empty-icon {
-    width: 80px;
-    height: 80px;
-    background: #f3f4f6;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 24px;
+    width: 70px;
+    height: 70px;
     font-size: 2rem;
-    color: #9ca3af;
   }
 
   .empty-title {
-    color: #374151;
-    margin-bottom: 8px;
+    font-size: 1.125rem;
   }
 
-  .empty-subtitle {
-    color: #6b7280;
-    margin-bottom: 24px;
-    max-width: 400px;
-    margin-left: auto;
-    margin-right: auto;
+  .empty-text {
+    font-size: 0.875rem;
   }
+}
 
-  /* Payment Cards (Mobile) */
-  .payment-card {
-    background: white;
-    border-radius: 12px;
-    border: 1px solid #e5e7eb;
-    overflow: hidden;
-    transition: all 0.2s ease;
-  }
+/* === SCROLLBAR === */
+.table-wrapper::-webkit-scrollbar {
+  height: 6px;
+}
 
-  .payment-card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    transform: translateY(-1px);
-  }
+.table-wrapper::-webkit-scrollbar-track {
+  background: var(--bg-blue);
+  border-radius: 10px;
+}
 
-  .payment-card-header {
-    padding: 16px 16px 0;
-  }
+.table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--pale-blue);
+  border-radius: 10px;
+}
 
-  .payment-card-body {
-    padding: 0 16px 16px;
-  }
-
-  .payment-event-title {
-    font-weight: 600;
-    color: #1f2937;
-    line-height: 1.3;
-    margin: 0;
-  }
-
-  .payment-meta {
-    margin-top: 8px;
-  }
-
-  /* Payment Status Colors */
-  .payment-pending { border-left: 4px solid var(--warning-color); }
-  .payment-verified { border-left: 4px solid var(--success-color); }
-  .payment-rejected { border-left: 4px solid var(--danger-color); }
-  .payment-canceled { border-left: 4px solid var(--secondary); }
-
-  /* Responsive adjustments */
-  @media (max-width: 767.98px){
-    .header-section.header-blue{ padding: 20px; }
-    .stat-card { padding: 14px; gap: 10px; }
-    .stat-icon { width: 40px; height: 40px; font-size: 1.25rem; }
-    .stat-number { font-size: 1.25rem; }
-  }
-
-  @media (max-width: 575.98px){
-    .stat-card { padding: 12px; }
-    .stat-icon { width: 36px; height: 36px; font-size: 1.1rem; }
-    .empty-state { padding: 40px 16px; }
-    .empty-icon { width: 64px; height: 64px; font-size: 1.75rem; }
-  }
+.table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--light-blue);
+}
 </style>
