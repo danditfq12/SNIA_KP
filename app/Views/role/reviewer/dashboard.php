@@ -74,7 +74,7 @@ $fmtDate = fn($d,$withTime=false) => $d ? date($withTime?'d M Y H:i':'d M Y', st
       <div class="row g-3">
         <!-- TUGAS MASUK (PERLU KONFIRMASI) -->
         <div class="col-12 col-lg-8">
-          <div class="card shadow-sm h-100">
+          <div class="card shadow-sm h-100" id="incoming">
             <div class="card-header d-flex align-items-center justify-content-between">
               <h5 class="card-title mb-0">
                 <i class="bi bi-inbox me-2 text-primary"></i>Tugas Masuk (Perlu Konfirmasi)
@@ -169,9 +169,7 @@ $fmtDate = fn($d,$withTime=false) => $d ? date($withTime?'d M Y H:i':'d M Y', st
                 <?php if (!empty($notifs)): ?>
                   <div class="notification-list">
                     <?php foreach ($notifs as $n): ?>
-                      <?php
-                        $iconClass = 'bi-exclamation-triangle text-warning';
-                      ?>
+                      <?php $iconClass = 'bi-exclamation-triangle text-warning'; ?>
                       <div class="notification-item <?= !empty($n['read']) ? 'read' : 'unread' ?>">
                         <div class="notification-icon"><i class="bi <?= $iconClass ?>"></i></div>
                         <div class="notification-content">

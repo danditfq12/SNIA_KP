@@ -73,6 +73,7 @@ class Dashboard extends BaseController
         return $fallback;
     }
 
+    /** COALESCE(expr...) + alias (untuk SELECT biasa). */
     private function buildCoalesceChecked(string $tablePhys, string $tableAlias, array $cands, string $alias): string
     {
         $ok = [];
@@ -84,6 +85,19 @@ class Dashboard extends BaseController
         if (!$ok) return "NULL AS {$alias}";
         if (count($ok) === 1) return $ok[0] . " AS {$alias}";
         return 'COALESCE(' . implode(',', $ok) . ") AS {$alias}";
+    }
+
+    /** COALESCE(expr...) tanpa alias (aman dipakai dalam MIN/MAX). */
+    private function buildCoalesceExpr(string $tablePhys, string $tableAlias, array $cands): string
+    {
+        $ok = [];
+        foreach ($cands as $c) {
+            if ($this->colExists($tablePhys, $c)) {
+                $ok[] = $this->db->protectIdentifiers("$tableAlias.$c");
+            }
+        }
+        if (!$ok) return 'NULL';
+        return count($ok) === 1 ? $ok[0] : 'COALESCE(' . implode(',', $ok) . ')';
     }
 
     private function dateExpr(string $tableAlias, string $col): string
@@ -204,7 +218,7 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Progress events — tidak tampilkan event yang sudah mulai/berjalan.
+     * Event yang masih proses (belum dimulai).
      */
     private function getProgressEvents(int $uid): array
     {
@@ -397,7 +411,67 @@ class Dashboard extends BaseController
         return $out;
     }
 
-    /* ====== Aktivitas / Notifikasi (tambah Full Paper & per reviewer) ====== */
+    /* ====== Pendaftaran / Registrasi per event ====== */
+
+    /**
+     * Cari waktu "terdaftar" pada suatu event untuk user:
+     * - Prioritas: tabel pendaftaran (registrations/peserta_event/enrollments/pendaftaran).
+     * - Fallback: MIN(ts) dari unggahan abstrak user per event.
+     */
+    private function getRegistrationEvents(int $uid): array
+    {
+        $out = [];
+
+        // kandidat tabel pendaftaran
+        $cand = ['registrations','peserta_event','enrollments','pendaftaran'];
+        foreach ($cand as $t) {
+            if (!$this->tableExists($t)) continue;
+
+            $pkEvent = $this->pickCol($t, ['event_id','id_event'],'event_id');
+            $pkUser  = $this->pickCol($t, ['user_id','id_user'],'id_user');
+            $tsCol   = $this->pickCol($t, ['created_at','registered_at','enrolled_at','tanggal_daftar','timestamp'],'created_at');
+
+            $rows = $this->db->table($t)
+                ->select("$pkEvent AS event_id, MIN($tsCol) AS ts", false)
+                ->where($pkUser, $uid)
+                ->groupBy($pkEvent)
+                ->get()->getResultArray() ?: [];
+
+            foreach ($rows as $r) {
+                if (!empty($r['event_id']) && !empty($r['ts'])) {
+                    $out[(int)$r['event_id']] = [
+                        'event_id' => (int)$r['event_id'],
+                        'time'     => strtotime((string)$r['ts']),
+                    ];
+                }
+            }
+            if ($out) return $out; // sudah ketemu di tabel pendaftaran
+        }
+
+        // Fallback: pakai waktu abstrak paling awal per event
+        if ($this->tableExists('abstrak')) {
+            $tsExpr = $this->buildCoalesceExpr('abstrak','a', ['created_at','tanggal_upload','updated_at']);
+
+            $rows = $this->db->table('abstrak a')
+                ->select("event_id, MIN($tsExpr) AS ts", false)
+                ->where('id_user', $uid)
+                ->groupBy('event_id')
+                ->get()->getResultArray();
+
+            foreach ($rows as $r) {
+                if (!empty($r['event_id']) && !empty($r['ts'])) {
+                    $out[(int)$r['event_id']] = [
+                        'event_id' => (int)$r['event_id'],
+                        'time'     => strtotime((string)$r['ts']),
+                    ];
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /* ====== Aktivitas / Notifikasi (lengkap, termasuk “Daftar Event” & “Upload Abstrak”) ====== */
     private function getActivities(int $uid, int $limit = 12): array
     {
         $items = [];
@@ -426,8 +500,31 @@ class Dashboard extends BaseController
             }
         }
 
-        // Abstrak
+        // ===== Abstrak: "berhasil diunggah" (setiap unggahan) + status final =====
         if ($this->tableExists('abstrak')) {
+            // 1) unggahan abstrak
+            $tsUp = $this->buildCoalesceChecked('abstrak','a',
+                ['tanggal_upload','created_at','updated_at'],
+                'ts'
+            );
+            $rowsUp = $this->db->table('abstrak a')
+                ->select("a.event_id, {$tsUp}, e.title", false)
+                ->join('events e','e.id=a.event_id','left')
+                ->where('a.id_user',$uid)
+                ->orderBy('ts','DESC')->get()->getResultArray();
+            foreach ($rowsUp as $r) {
+                if (empty($r['ts'])) continue;
+                $items[] = [
+                    'time'  => strtotime((string)$r['ts']),
+                    'title' => 'Abstrak berhasil diunggah',
+                    'desc'  => 'Event: ' . (string)($r['title'] ?? '-'),
+                    'link'  => '/presenter/abstrak',
+                    'badge' => 'primary',
+                    'icon'  => 'bi-upload',
+                ];
+            }
+
+            // 2) status abstrak (accepted/revisi/rejected)
             $tsAbs = $this->buildCoalesceChecked('abstrak','a',
                 ['updated_at','tanggal_upload','created_at'],
                 'ts'
@@ -453,6 +550,31 @@ class Dashboard extends BaseController
                     'link'  => '/presenter/abstrak',
                     'badge' => $badge,
                     'icon'  => $icon,
+                ];
+            }
+        }
+
+        // ===== Terdaftar di event (pendaftaran) =====
+        $reg = $this->getRegistrationEvents($uid);
+        if ($reg) {
+            // ambil judul event
+            $titles = [];
+            if ($this->tableExists('events')) {
+                $ids = array_map(fn($x)=>$x['event_id'], $reg);
+                if ($ids) {
+                    foreach ($this->db->table('events')->select('id,title')->whereIn('id',$ids)->get()->getResultArray() as $e) {
+                        $titles[(int)$e['id']] = (string)($e['title'] ?? '-');
+                    }
+                }
+            }
+            foreach ($reg as $r) {
+                $items[] = [
+                    'time'  => (int)$r['time'],
+                    'title' => 'Berhasil terdaftar di event',
+                    'desc'  => 'Event: ' . ($titles[(int)$r['event_id']] ?? '-'),
+                    'link'  => '/presenter/event/' . (int)$r['event_id'],
+                    'badge' => 'info',
+                    'icon'  => 'bi-person-check',
                 ];
             }
         }
@@ -626,8 +748,8 @@ class Dashboard extends BaseController
 
         $stats          = $this->getStats($uid);
         $progressEvents = $this->getProgressEvents($uid);
-        $todaySchedule  = $this->getTodaySchedule($uid);   // <— ABSENSI: sudah difilter paid
-        $activities     = $this->getActivities($uid);      // <— Notifikasi FP & Reviewer
+        $todaySchedule  = $this->getTodaySchedule($uid);   // ABSENSI: sudah difilter paid
+        $activities     = $this->getActivities($uid);      // Notifikasi FP, Abstrak, Pendaftaran, Reviewer
         $monthEvents    = $this->getMonthEvents($uid);
 
         return view('role/presenter/dashboard', [

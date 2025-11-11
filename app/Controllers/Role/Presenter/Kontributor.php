@@ -28,15 +28,22 @@ class Kontributor extends BaseController
         $userId  = (int) session()->get('id_user');
 
         $event = $this->eventModel->find($eventId);
-        if (!$event) return redirect()->to('/presenter/events')->with('error', 'Event tidak ditemukan.');
+        if (!$event) {
+            return redirect()->to('/presenter/events')->with('error', 'Event tidak ditemukan.');
+        }
 
         $reg = $this->regModel->findUserReg($eventId, $userId);
-        if (!$reg) return redirect()->to('/presenter/events/detail/'.$eventId)->with('error', 'Anda belum mendaftar pada event ini.');
+        if (!$reg) {
+            return redirect()->to('/presenter/events/detail/'.$eventId)->with('error', 'Anda belum mendaftar pada event ini.');
+        }
 
         $user = $this->userModel->find($userId);
 
+        // ---- Prefill identitas presenter utama ----
         $presenterEmail = trim((string)($user['email'] ?? ''));
-        if ($presenterEmail === '' && !empty($reg['email'])) $presenterEmail = trim((string)$reg['email']);
+        if ($presenterEmail === '' && !empty($reg['email'])) {
+            $presenterEmail = trim((string)$reg['email']);
+        }
 
         $presenterName =
             trim((string)($user['nama_lengkap'] ?? '')) ?:
@@ -50,15 +57,28 @@ class Kontributor extends BaseController
             $presenterName = ucwords(preg_replace('/\s+/', ' ', trim($local)));
         }
 
-        $afiliasi = (string)($reg['afiliasi'] ?? '');
-        $phone    = (string)($reg['phone']    ?? '');
+        // ---- Prefill dari users bila di registrasi kosong ----
+        $userInstitusi = trim((string)($user['institusi'] ?? ''));
+        $userPhone     = trim((string)($user['no_hp']     ?? ''));
 
+        $afiliasi = trim((string)($reg['afiliasi'] ?? ''));
+        $phone    = trim((string)($reg['phone']    ?? ''));
+
+        if ($afiliasi === '' && $userInstitusi !== '') {
+            $afiliasi = $userInstitusi; // ambil dari users.institusi
+        }
+        if ($phone === '' && $userPhone !== '') {
+            $phone = $userPhone; // ambil dari users.no_hp
+        }
+
+        // ---- Co-authors ----
         $coauthors = [];
         if (!empty($reg['coauthors_json'])) {
             $decoded = json_decode((string)$reg['coauthors_json'], true);
             if (is_array($decoded)) $coauthors = $decoded;
         }
 
+        // ---- Flag apakah sudah pernah update ----
         $isUpdate = ($afiliasi !== '' || $phone !== '' || !empty($coauthors));
         foreach (['contributor_done','kontributor_done','profile_completed','is_profile_completed'] as $flag) {
             if (!empty($reg[$flag])) { $isUpdate = true; break; }
@@ -84,10 +104,12 @@ class Kontributor extends BaseController
         $userId  = (int) session()->get('id_user');
 
         $reg = $this->regModel->findUserReg($eventId, $userId);
-        if (!$reg) return redirect()->to('/presenter/events/detail/'.$eventId)->with('error', 'Registrasi tidak ditemukan.');
+        if (!$reg) {
+            return redirect()->to('/presenter/events/detail/'.$eventId)->with('error', 'Registrasi tidak ditemukan.');
+        }
 
-        $afiliasi = trim((string)$this->request->getPost('afiliasi'));
-        $phone    = trim((string)$this->request->getPost('phone'));
+        $afiliasi = trim((string)$this->request->getPost('afiliasi')); // di-commit juga ke users.institusi
+        $phone    = trim((string)$this->request->getPost('phone'));    // di-commit juga ke users.no_hp
 
         $coNames  = (array)$this->request->getPost('co_name');
         $coEmails = (array)$this->request->getPost('co_email');
@@ -104,9 +126,10 @@ class Kontributor extends BaseController
         }
 
         if ($afiliasi === '') {
-            return redirect()->back()->withInput()->with('error', 'Afiliasi wajib diisi.');
+            return redirect()->back()->withInput()->with('error', 'Afiliasi/Institusi wajib diisi.');
         }
 
+        // ---- Simpan ke tabel registrasi ----
         $payload = [
             'afiliasi' => $afiliasi,
             'phone'    => $phone,
@@ -127,6 +150,23 @@ class Kontributor extends BaseController
         }
 
         $this->regModel->update((int)$reg['id'], $payload);
+
+        // ---- Sinkron ke tabel users ----
+        // Hanya update jika kolomnya ada dan ada nilai yang dikirim
+        $uPayload = [];
+        if ($afiliasi !== '' && $this->columnExists($this->userModel->getTable(), 'institusi')) {
+            $uPayload['institusi'] = $afiliasi;
+        }
+        if ($phone !== '' && $this->columnExists($this->userModel->getTable(), 'no_hp')) {
+            $uPayload['no_hp'] = $phone;
+        }
+        if (!empty($uPayload)) {
+            try {
+                $this->userModel->update($userId, $uPayload);
+            } catch (\Throwable $e) {
+                log_message('warning', '[Kontributor] Gagal sync users: ' . $e->getMessage());
+            }
+        }
 
         $go = (string)($this->request->getPost('goto') ?? 'stay');
         if ($go === 'to_abstract') {

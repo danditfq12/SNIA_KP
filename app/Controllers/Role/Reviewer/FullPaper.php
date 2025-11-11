@@ -146,10 +146,55 @@ class FullPaper extends BaseController
         }
     }
 
-    /* ======================= Query Helpers ======================= */
+    /* ======================= Query Helpers (BARU: baca dari review/reviews) ======================= */
+
+    private function reviewTableName(): ?string
+    {
+        if ($this->db->tableExists('review'))  return 'review';
+        if ($this->db->tableExists('reviews')) return 'reviews';
+        return null;
+    }
+
+    private function pickColFrom(string $table, array $cands): ?string
+    {
+        $fields = array_map('strtolower', $this->db->getFieldNames($table) ?: []);
+        foreach ($cands as $c) if (in_array(strtolower($c), $fields, true)) return $c;
+        return null;
+    }
+
+    private function getTaskStatusFromReviews(int $submissionId, int $reviewerId): ?array
+    {
+        $rt = $this->reviewTableName();
+        if (!$rt) return null;
+
+        $subFk = $this->pickColFrom($rt, ['id_submission','submission_id']);
+        $rid   = $this->pickColFrom($rt, ['id_reviewer','reviewer_id','user_id']);
+        if (!$subFk || !$rid) return null;
+
+        $asg   = $this->pickColFrom($rt, ['status_tugas','tugas_status','assignment_status','konfirmasi_status']);
+        $rsn   = $this->pickColFrom($rt, ['decline_reason','alasan_tolak','alasan','reason']);
+
+        $row = $this->db->table($rt)
+            ->where($subFk, $submissionId)
+            ->where($rid,   $reviewerId)
+            ->orderBy($this->pickColFrom($rt, ['id','id_review']) ?? 'id', 'DESC')
+            ->get()->getRowArray();
+
+        if (!$row) return null;
+
+        return [
+            'status' => $this->normalizeAssign($asg ? ($row[$asg] ?? 'pending') : 'pending'),
+            'reason' => $rsn ? ($row[$rsn] ?? null) : null,
+        ];
+    }
 
     private function getTaskStatus(int $submissionId, int $reviewerId): array
     {
+        // 1) Prioritas: status dari tabel review/reviews (dipakai Dashboard::confirm)
+        $fromReviews = $this->getTaskStatusFromReviews($submissionId, $reviewerId);
+        if ($fromReviews) return $fromReviews;
+
+        // 2) Fallback: dari pivot fullpaper_reviewers
         $t = $this->pivotTable(); $P = $this->pivotCols();
         if (!$this->db->tableExists($t) || !$P['submission'] || !$P['reviewer']) {
             return ['status'=>'pending','reason'=>null];
@@ -581,6 +626,7 @@ class FullPaper extends BaseController
             ->with('success', 'Review tersimpan. Status agregat saat ini: '.$final);
     }
 
+    /* ====== Endpoint lama (opsional) – dibiarkan untuk kompatibilitas ====== */
     public function action()
     {
         if (!$this->requireReviewer()) {

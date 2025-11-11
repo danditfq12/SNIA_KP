@@ -7,232 +7,248 @@ use App\Models\UserModel;
 use App\Models\AbstrakModel;
 use App\Models\PembayaranModel;
 use App\Models\EventModel;
+use App\Models\LogAktivitasModel;
 
 class Dashboard extends BaseController
 {
-    protected $userModel;
-    protected $abstrakModel;
-    protected $pembayaranModel;
-    protected $eventModel;
-    protected $db;
+    protected UserModel $userModel;
+    protected AbstrakModel $abstrakModel;
+    protected PembayaranModel $pembayaranModel;
+    protected EventModel $eventModel;
+    protected LogAktivitasModel $logModel;
+    protected \CodeIgniter\Database\BaseConnection $db;
 
     public function __construct()
     {
-        $this->userModel      = new UserModel();
-        $this->abstrakModel   = new AbstrakModel();
-        $this->pembayaranModel= new PembayaranModel();
-        $this->eventModel     = new EventModel();
-        $this->db             = \Config\Database::connect();
+        $this->userModel       = new UserModel();
+        $this->abstrakModel    = new AbstrakModel();
+        $this->pembayaranModel = new PembayaranModel();
+        $this->eventModel      = new EventModel();
+        $this->logModel        = new LogAktivitasModel();
+        $this->db              = \Config\Database::connect();
     }
 
     public function index()
     {
         try {
-            $data = [
-                // === KPI untuk view ===
-                'pembayaran_pending' => $this->pembayaranModel->where('status', 'pending')->countAllResults(),
-                'abstrak_masuk'      => $this->abstrakModel->countAll(),
-                // anggap "belum ditugaskan" = status menunggu (tanpa info tabel assignment)
-                'abstrak_unassigned' => $this->abstrakModel->where('status', 'menunggu')->countAllResults(),
-                'total_event'        => $this->eventModel->countAll(),
+            // === KPI ringkas ===
+            $kpi = [
+                'pembayaran_pending'       => $this->pembayaranModel->where('status', 'pending')->countAllResults(),
+                'abstrak_unassigned'       => $this->countUnassignedAbstrak(),
+                'fullpaper_unassigned'     => $this->countUnassignedFullPaper(),
+                'pembayaran_terverifikasi' => $this->pembayaranModel->where('status', 'verified')->countAllResults(),
+            ];
 
-                // === Ringkasan / list untuk cards ===
-                'pendingPayments' => $this->getPendingPayments(), // << tampil di dashboard
-                'recent_abstrak'  => $this->getRecentAbstraks(),
-                'recent_events'   => $this->getRecentEvents(),
+            $data = [
+                'title' => 'Admin Dashboard',
+
+                // KPI
+                'kpi' => $kpi,
+
+                // Panels
+                'pendingPayments' => $this->getPendingPayments(6),
+                'recentActivities'=> $this->getUnifiedRecentActivities(12), // feed gabungan
+                'logs'            => $this->logModel->getRecentActivities(12),
+
+                // lists penugasan
+                'unassigned_abstrak'   => $this->getUnassignedAbstrak(6),
+                'unassigned_fullpaper' => $this->getUnassignedFullPaper(6),
             ];
 
             return view('role/admin/dashboard', $data);
-
-        } catch (\Exception $e) {
-            log_message('error', 'Admin dashboard error: ' . $e->getMessage());
-            return view('role/admin/dashboard', $this->getDefaultData());
+        } catch (\Throwable $e) {
+            log_message('error', 'Dashboard index error: ' . $e->getMessage());
+            return view('role/admin/dashboard', [
+                'title' => 'Admin Dashboard',
+                'kpi' => [
+                    'pembayaran_pending' => 0,
+                    'abstrak_unassigned' => 0,
+                    'fullpaper_unassigned' => 0,
+                    'pembayaran_terverifikasi' => 0,
+                ],
+                'pendingPayments' => [],
+                'recentActivities'=> [],
+                'logs' => [],
+                'unassigned_abstrak' => [],
+                'unassigned_fullpaper' => [],
+            ]);
         }
     }
 
-    /**
-     * List pembayaran yang MASIH pending (limit 5) + info user & event
-     * field yang dipakai view: id_pembayaran, nama_lengkap, event_title, jumlah, tanggal_bayar
-     */
-    private function getPendingPayments(): array
+    /* ====================== Sections helpers ====================== */
+
+    private function getPendingPayments(int $limit = 6): array
     {
         try {
             return $this->db->table('pembayaran p')
-                ->select('p.id_pembayaran, p.jumlah, p.status, p.tanggal_bayar, u.nama_lengkap, u.email, e.title AS event_title')
+                ->select('p.id_pembayaran, p.jumlah, p.status, p.tanggal_bayar, p.metode,
+                          u.nama_lengkap, u.email, e.title AS event_title')
                 ->join('users u', 'u.id_user = p.id_user', 'left')
                 ->join('events e', 'e.id = p.event_id', 'left')
                 ->where('p.status', 'pending')
                 ->orderBy('p.tanggal_bayar', 'DESC')
-                ->limit(5)
+                ->limit($limit)
                 ->get()->getResultArray();
         } catch (\Throwable $e) {
-            log_message('error', 'Error getting pending payments: ' . $e->getMessage());
             return [];
         }
     }
 
     /**
-     * Abstrak terbaru + alias-kan tanggal ke created_at supaya match view
+     * Feed gabungan: pembayaran (baru/verified/pending), user register, abstrak submit, fullpaper submit
+     * Disatukan & diurutkan terbaru (desc)
      */
-    private function getRecentAbstraks(): array
+    private function getUnifiedRecentActivities(int $limit = 12): array
     {
-        try {
-            return $this->db->query("
-                SELECT 
-                    a.id_abstrak,
-                    a.judul,
-                    a.status,
-                    a.tanggal_upload AS created_at, -- alias untuk view
-                    u.nama_lengkap,
-                    u.email
-                FROM abstrak a
-                LEFT JOIN users u ON u.id_user = a.id_user
-                ORDER BY a.tanggal_upload DESC
-                LIMIT 5
-            ")->getResultArray();
-        } catch (\Exception $e) {
-            log_message('error', 'Error getting recent abstracts: ' . $e->getMessage());
-            return [];
-        }
-    }
+        $items = [];
 
-    /**
-     * Event terbaru
-     */
-    private function getRecentEvents(): array
-    {
+        // 1) Pembayaran (verified/pending terbaru)
         try {
-            return $this->eventModel
-                ->select('id, title, event_date, event_time, format, is_active, created_at')
+            $rows = $this->db->table('pembayaran p')
+                ->select("p.id_pembayaran AS id, p.status, p.jumlah, p.tanggal_bayar AS happened_at,
+                          u.nama_lengkap, e.title AS event_title, 'payment' AS kind")
+                ->join('users u', 'u.id_user = p.id_user', 'left')
+                ->join('events e', 'e.id = p.event_id', 'left')
+                ->orderBy('p.tanggal_bayar', 'DESC')
+                ->limit($limit)
+                ->get()->getResultArray();
+            foreach ($rows as $r) { $items[] = $r; }
+        } catch (\Throwable $e) {}
+
+        // 2) User Registrations
+        try {
+            $rows = $this->userModel
+                ->select("id_user AS id, nama_lengkap, email, role, created_at AS happened_at, 'user' AS kind")
                 ->orderBy('created_at', 'DESC')
-                ->limit(5)
+                ->limit($limit)
                 ->findAll();
-        } catch (\Exception $e) {
-            log_message('error', 'Error getting recent events: ' . $e->getMessage());
-            return [];
-        }
-    }
+            foreach ($rows as $r) { $items[] = $r; }
+        } catch (\Throwable $e) {}
 
-    /**
-     * Data default bila error
-     */
-    private function getDefaultData(): array
-    {
-        return [
-            'pembayaran_pending' => 0,
-            'abstrak_masuk'      => 0,
-            'abstrak_unassigned' => 0,
-            'total_event'        => 0,
-            'pendingPayments'    => [],
-            'recent_abstrak'     => [],
-            'recent_events'      => [],
-        ];
-    }
-
-    /**
-     * Endpoint ringkasan statistik (opsional untuk AJAX)
-     */
-    public function getStats()
-    {
-        if (!$this->request->isAJAX()) {
-            return $this->response->setStatusCode(400);
-        }
-
+        // 3) Abstrak submit
         try {
-            $stats = [
-                'users' => [
-                    'total'     => $this->userModel->countAll(),
-                    'active'    => $this->userModel->where('status', 'aktif')->countAllResults(),
-                    'presenters'=> $this->userModel->where('role', 'presenter')->countAllResults(),
-                    'reviewers' => $this->userModel->where('role', 'reviewer')->countAllResults(),
-                    'audience'  => $this->userModel->where('role', 'audience')->countAllResults()
-                ],
-                'abstracts' => [
-                    'total'    => $this->abstrakModel->countAll(),
-                    'pending'  => $this->abstrakModel->where('status', 'menunggu')->countAllResults(),
-                    'accepted' => $this->abstrakModel->where('status', 'diterima')->countAllResults(),
-                    'rejected' => $this->abstrakModel->where('status', 'ditolak')->countAllResults(),
-                    'revision' => $this->abstrakModel->where('status', 'revisi')->countAllResults()
-                ],
-                'payments' => [
-                    'total'    => $this->pembayaranModel->countAll(),
-                    'pending'  => $this->pembayaranModel->where('status', 'pending')->countAllResults(),
-                    'verified' => $this->pembayaranModel->where('status', 'verified')->countAllResults(),
-                    'rejected' => $this->pembayaranModel->where('status', 'rejected')->countAllResults()
-                ],
-                'events' => [
-                    'total'    => $this->eventModel->countAll(),
-                    'active'   => $this->eventModel->where('is_active', true)->countAllResults(),
-                    'upcoming' => $this->eventModel->where('event_date >=', date('Y-m-d'))->countAllResults()
-                ]
-            ];
+            $rows = $this->db->table('abstrak a')
+                ->select("a.id_abstrak AS id, a.judul, a.status, a.tanggal_upload AS happened_at,
+                          u.nama_lengkap, 'abstract' AS kind")
+                ->join('users u', 'u.id_user = a.id_user', 'left')
+                ->orderBy('a.tanggal_upload', 'DESC')
+                ->limit($limit)
+                ->get()->getResultArray();
+            foreach ($rows as $r) { $items[] = $r; }
+        } catch (\Throwable $e) {}
 
-            return $this->response->setJSON([
-                'success'   => true,
-                'stats'     => $stats,
-                'timestamp' => time()
-            ]);
+        // 4) Full paper submit (nama tabel menyesuaikan)
+        try {
+            // ganti nama tabel/kolom sesuai skema Anda
+            $rows = $this->db->table('full_paper f')
+                ->select("f.id_fullpaper AS id, f.judul, f.status, f.tanggal_upload AS happened_at,
+                          u.nama_lengkap, 'fullpaper' AS kind")
+                ->join('users u', 'u.id_user = f.id_user', 'left')
+                ->orderBy('f.tanggal_upload', 'DESC')
+                ->limit($limit)
+                ->get()->getResultArray();
+            foreach ($rows as $r) { $items[] = $r; }
+        } catch (\Throwable $e) {}
 
-        } catch (\Exception $e) {
-            log_message('error', 'Error getting dashboard stats: ' . $e->getMessage());
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Error getting statistics'
-            ]);
-        }
+        // sort by happened_at desc & slice
+        usort($items, function($a, $b) {
+            $ta = isset($a['happened_at']) ? strtotime((string) $a['happened_at']) : 0;
+            $tb = isset($b['happened_at']) ? strtotime((string) $b['happened_at']) : 0;
+            return $tb <=> $ta;
+        });
+
+        return array_slice($items, 0, $limit);
     }
 
-    /**
-     * Data chart (opsional)
-     */
-    public function getChartData()
+    /* ========== Unassigned: fallback by status jika tabel assignment tidak ada ========== */
+
+    private function countUnassignedAbstrak(): int
     {
-        if (!$this->request->isAJAX()) {
-            return $this->response->setStatusCode(400);
-        }
-
         try {
-            $abstractStats = [
-                'menunggu' => $this->abstrakModel->where('status', 'menunggu')->countAllResults(),
-                'diterima' => $this->abstrakModel->where('status', 'diterima')->countAllResults(),
-                'ditolak'  => $this->abstrakModel->where('status', 'ditolak')->countAllResults(),
-                'revisi'   => $this->abstrakModel->where('status', 'revisi')->countAllResults()
-            ];
-
-            $monthlyData = [];
-            for ($i = 5; $i >= 0; $i--) {
-                $month     = date('Y-m', strtotime("-$i months"));
-                $monthName = date('M Y', strtotime("-$i months"));
-
-                $monthlyData[] = [
-                    'month'    => $monthName,
-                    'users'    => $this->userModel->like('created_at', $month)->countAllResults(),
-                    'abstracts'=> $this->abstrakModel->like('tanggal_upload', $month)->countAllResults()
-                ];
+            // Jika ada tabel assignment: LEFT JOIN dan cek NULL
+            // Ubah nama tabel/kolom assignment jika berbeda
+            if ($this->db->tableExists('abstrak_reviewer')) {
+                return (int) $this->db->table('abstrak a')
+                    ->select('COUNT(a.id_abstrak) AS c')
+                    ->join('abstrak_reviewer ar', 'ar.id_abstrak = a.id_abstrak', 'left')
+                    ->where('ar.id_abstrak', null)
+                    ->get()->getRow('c');
             }
 
-            $paymentMethods = $this->db->query("
-                SELECT metode, COUNT(*) AS count
-                FROM pembayaran
-                WHERE status = 'verified'
-                GROUP BY metode
-            ")->getResultArray();
+            // fallback: status 'menunggu' dianggap belum ditugaskan
+            return (int) $this->abstrakModel->where('status', 'menunggu')->countAllResults();
+        } catch (\Throwable $e) {
+            return 0;
+        }
+    }
 
-            return $this->response->setJSON([
-                'success' => true,
-                'data' => [
-                    'abstract_stats'  => $abstractStats,
-                    'monthly_trends'  => $monthlyData,
-                    'payment_methods' => $paymentMethods
-                ]
-            ]);
+    private function getUnassignedAbstrak(int $limit = 6): array
+    {
+        try {
+            if ($this->db->tableExists('abstrak_reviewer')) {
+                return $this->db->table('abstrak a')
+                    ->select('a.id_abstrak, a.judul, a.status, a.tanggal_upload AS created_at, u.nama_lengkap')
+                    ->join('users u', 'u.id_user = a.id_user', 'left')
+                    ->join('abstrak_reviewer ar', 'ar.id_abstrak = a.id_abstrak', 'left')
+                    ->where('ar.id_abstrak', null)
+                    ->orderBy('a.tanggal_upload', 'DESC')
+                    ->limit($limit)
+                    ->get()->getResultArray();
+            }
 
-        } catch (\Exception $e) {
-            log_message('error', 'Error getting chart data: ' . $e->getMessage());
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Error getting chart data'
-            ]);
+            return $this->db->table('abstrak a')
+                ->select('a.id_abstrak, a.judul, a.status, a.tanggal_upload AS created_at, u.nama_lengkap')
+                ->join('users u', 'u.id_user = a.id_user', 'left')
+                ->where('a.status', 'menunggu')
+                ->orderBy('a.tanggal_upload', 'DESC')
+                ->limit($limit)
+                ->get()->getResultArray();
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    private function countUnassignedFullPaper(): int
+    {
+        try {
+            if ($this->db->tableExists('fullpaper_reviewer')) {
+                return (int) $this->db->table('full_paper f')
+                    ->select('COUNT(f.id_fullpaper) AS c')
+                    ->join('fullpaper_reviewer fr', 'fr.id_fullpaper = f.id_fullpaper', 'left')
+                    ->where('fr.id_fullpaper', null)
+                    ->get()->getRow('c');
+            }
+
+            // fallback: status 'menunggu'
+            return (int) $this->db->table('full_paper')->where('status', 'menunggu')->countAllResults();
+        } catch (\Throwable $e) {
+            return 0;
+        }
+    }
+
+    private function getUnassignedFullPaper(int $limit = 6): array
+    {
+        try {
+            if ($this->db->tableExists('fullpaper_reviewer')) {
+                return $this->db->table('full_paper f')
+                    ->select('f.id_fullpaper, f.judul, f.status, f.tanggal_upload AS created_at, u.nama_lengkap')
+                    ->join('users u', 'u.id_user = f.id_user', 'left')
+                    ->join('fullpaper_reviewer fr', 'fr.id_fullpaper = f.id_fullpaper', 'left')
+                    ->where('fr.id_fullpaper', null)
+                    ->orderBy('f.tanggal_upload', 'DESC')
+                    ->limit($limit)
+                    ->get()->getResultArray();
+            }
+
+            return $this->db->table('full_paper f')
+                ->select('f.id_fullpaper, f.judul, f.status, f.tanggal_upload AS created_at, u.nama_lengkap')
+                ->join('users u', 'u.id_user = f.id_user', 'left')
+                ->where('f.status', 'menunggu')
+                ->orderBy('f.tanggal_upload', 'DESC')
+                ->limit($limit)
+                ->get()->getResultArray();
+        } catch (\Throwable $e) {
+            return [];
         }
     }
 }

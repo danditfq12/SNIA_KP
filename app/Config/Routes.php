@@ -152,19 +152,15 @@ $routes->group('admin', [
 
     // ===== KELOLA PAPER (INDEX/DETAIL) =====
     $routes->group('kelola-paper', static function ($routes) {
-        $routes->get('',                 'KelolaPaper::index');        // /admin/kelola-paper
-        $routes->get('detail/(:num)',    'KelolaPaper::detail/$1');    // /admin/kelola-paper/detail/{eventId}
-
-        // Detail entitas via path kelola-paper (tetap pakai controller lama)
-        $routes->get('abstrak/(:num)',   'Abstrak::detail/$1');        // /admin/kelola-paper/abstrak/{id_abstrak}
-        $routes->get('fullpaper/(:num)', 'FullPaper::detail/$1');      // /admin/kelola-paper/fullpaper/{id_submission}
-
-        // kompat rute lama (opsional)
+        $routes->get('',                 'KelolaPaper::index');
+        $routes->get('detail/(:num)',    'KelolaPaper::detail/$1');
+        $routes->get('abstrak/(:num)',   'Abstrak::detail/$1');
+        $routes->get('fullpaper/(:num)', 'FullPaper::detail/$1');
         $routes->get('event/(:num)',     'KelolaPaper::detail/$1');
     });
 
     // ===== ABSTRAK (DETAIL & AKSI) =====
-    // (detail lama tetap ada agar link lama tidak 404)
+    // (detail lama tetap ada)
     $routes->get ('abstrak/detail/(:num)',   'Abstrak::detail/$1');
     $routes->post('abstrak/assign/(:num)',   'Abstrak::assign/$1');
     $routes->post('abstrak/update-status',   'Abstrak::updateStatus');
@@ -173,8 +169,8 @@ $routes->group('admin', [
 
     // File handling (tetap di namespace abstrak)
     $routes->get ('abstrak/download/(:num)', 'Abstrak::downloadFile/$1');
-    $routes->get ('abstrak/view/(:num)',     'Abstrak::view/$1');   // preview iframe
-    $routes->get ('abstrak/blob/(:num)',     'Abstrak::blob/$1');   // preview via fetch blob
+    $routes->get ('abstrak/view/(:num)',     'Abstrak::view/$1');
+    $routes->get ('abstrak/blob/(:num)',     'Abstrak::blob/$1');
 
     // Reviewer helper (AJAX)
     $routes->get ('reviewer/by-category/(:num)',          'Abstrak::getReviewersByCategory/$1');
@@ -196,11 +192,20 @@ $routes->group('admin', [
     });
 
     // ===== KATEGORI ABSTRAK =====
-    $routes->get  ('kategori',                       'Kategori::index');
-    $routes->post ('kategori/store',                 'Kategori::store');
-    $routes->get  ('kategori/show/(:num)',           'Kategori::show/$1');
-    $routes->post ('kategori/update/(:num)',         'Kategori::update/$1');
+    $routes->get  ('kategori',                        'Kategori::index');             // semua (default)
+    $routes->get  ('kategori/aktif',                  'Kategori::index/aktif');       // hanya aktif
+    $routes->get  ('kategori/nonaktif',               'Kategori::index/nonaktif');    // hanya nonaktif
+
+    $routes->post ('kategori/store',                  'Kategori::store');
+    $routes->get  ('kategori/show/(:num)',            'Kategori::show/$1');
+    $routes->post ('kategori/update/(:num)',          'Kategori::update/$1');
     $routes->match(['post','delete'], 'kategori/delete/(:num)', 'Kategori::delete/$1');
+
+    // === tambahan untuk ON/OFF ===
+    $routes->post ('kategori/toggle/(:num)',          'Kategori::toggle/$1');         // toggle satu item
+    $routes->post ('kategori/activate/(:num)',        'Kategori::activate/$1');       // pakai jika mau aksi eksplisit
+    $routes->post ('kategori/deactivate/(:num)',      'Kategori::deactivate/$1');     // pakai jika mau aksi eksplisit
+    $routes->post ('kategori/bulk',                    'Kategori::bulk');
 
     // ===== REVIEWER =====
     $routes->get ('reviewer',                      'Reviewer::index');

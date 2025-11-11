@@ -6,6 +6,25 @@ $pembayaran_pending  = (int)($pembayaran_pending  ?? 0);
 $pembayaran_verified = (int)($pembayaran_verified ?? 0);
 $pembayaran_rejected = (int)($pembayaran_rejected ?? 0);
 $total_revenue       = (int)($total_revenue ?? 0);
+
+if (!function_exists('money_id')) {
+  function money_id($n){ return 'Rp '.number_format((int)$n, 0, ',', '.'); }
+}
+// Fallback mb_substr jika ekstensi mbstring tidak aktif
+if (!function_exists('mb_substr')) {
+  function mb_substr($s, $start, $len = null, $enc = null) { return substr($s, $start, $len ?? 1); }
+}
+// Util untuk inisial avatar (2 huruf, mis. “Budi Santoso” => “BS”)
+if (!function_exists('name_initials')) {
+  function name_initials(string $name): string {
+    $name = trim(preg_replace('/\s+/u',' ',$name));
+    if ($name === '') return 'U';
+    $parts = explode(' ', $name, 3);
+    $a = strtoupper(mb_substr($parts[0] ?? '', 0, 1, 'UTF-8'));
+    $b = strtoupper(mb_substr($parts[1] ?? $parts[0] ?? '', 0, 1, 'UTF-8'));
+    return $a.$b;
+  }
+}
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -13,76 +32,78 @@ $total_revenue       = (int)($total_revenue ?? 0);
 <?= $this->include('partials/alerts') ?>
 
 <div id="content">
-  <main class="flex-fill" style="padding-top: 70px;">
-    <div class="container-fluid px-3 px-md-4 py-4">
+  <main class="flex-fill page-wrap-blue" style="padding-top: 70px;">
+    <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- Header Section -->
-      <div class="header-section d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h2 class="header-title mb-2">
-            <i class="bi bi-credit-card me-3"></i><?= esc($title) ?>
-          </h2>
-          <p class="header-subtitle mb-0">Kelola dan verifikasi pembayaran dari peserta</p>
-        </div>
-        <div class="text-end">
-          <small class="text-light d-block opacity-75">Terakhir update</small>
-          <strong class="text-white"><?= date('d M Y, H:i') ?></strong>
+      <!-- HERO: Title + Search (pencarian dipindah ke sini) -->
+      <div class="card-hero mb-4">
+        <div class="hero-body">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+              <h3 class="hero-title mb-1">
+                <i class="bi bi-credit-card me-2"></i><?= esc($title) ?>
+              </h3>
+              <div class="text-white-70 small">Kelola & verifikasi pembayaran peserta.</div>
+            </div>
+            <div class="hero-meta text-end">
+              <small class="text-white-70 d-block">Terakhir update</small>
+              <div class="fw-bold"><?= date('d M Y, H:i') ?></div>
+            </div>
+          </div>
+
+          <div class="hero-tools flex-grow-1 mt-3" style="max-width:820px;">
+            <div class="input-group input-group-lg hero-search">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input id="searchInput" type="text" class="form-control" placeholder="Cari nama, email, event, metode, status…">
+              <button id="clearSearch" type="button" class="btn btn-light d-none"><i class="bi bi-x-circle"></i></button>
+            </div>
+            <div class="mt-2 small text-white-70" id="resultCounter" aria-live="polite"></div>
+          </div>
         </div>
       </div>
 
-      <!-- Statistics Cards -->
-      <section aria-label="Ringkasan Pembayaran" class="mb-5">
-        <div class="row g-4">
+      <!-- KPI Ringkas -->
+      <section aria-label="Ringkasan Pembayaran" class="mb-3">
+        <div class="row g-3">
           <div class="col-6 col-lg-3">
-            <div class="stat-card pending">
+            <div class="stat-card">
               <div class="stat-content">
-                <div class="stat-icon bg-warning">
-                  <i class="bi bi-clock"></i>
-                </div>
-                <div class="stat-info">
-                  <div class="stat-number"><?= number_format($pembayaran_pending) ?></div>
+                <div class="stat-icon bg-warning"><i class="bi bi-clock"></i></div>
+                <div class="stat-info min-w-0">
+                  <div class="stat-number" data-countup="<?= $pembayaran_pending ?>"><?= number_format($pembayaran_pending) ?></div>
                   <div class="stat-label">Pending</div>
                 </div>
               </div>
             </div>
           </div>
-
           <div class="col-6 col-lg-3">
-            <div class="stat-card verified">
+            <div class="stat-card">
               <div class="stat-content">
-                <div class="stat-icon bg-success">
-                  <i class="bi bi-check2-circle"></i>
-                </div>
-                <div class="stat-info">
-                  <div class="stat-number"><?= number_format($pembayaran_verified) ?></div>
+                <div class="stat-icon bg-success"><i class="bi bi-check2-circle"></i></div>
+                <div class="stat-info min-w-0">
+                  <div class="stat-number" data-countup="<?= $pembayaran_verified ?>"><?= number_format($pembayaran_verified) ?></div>
                   <div class="stat-label">Terverifikasi</div>
                 </div>
               </div>
             </div>
           </div>
-
           <div class="col-6 col-lg-3">
-            <div class="stat-card rejected">
+            <div class="stat-card">
               <div class="stat-content">
-                <div class="stat-icon bg-danger">
-                  <i class="bi bi-x-circle"></i>
-                </div>
-                <div class="stat-info">
-                  <div class="stat-number"><?= number_format($pembayaran_rejected) ?></div>
+                <div class="stat-icon bg-danger"><i class="bi bi-x-circle"></i></div>
+                <div class="stat-info min-w-0">
+                  <div class="stat-number" data-countup="<?= $pembayaran_rejected ?>"><?= number_format($pembayaran_rejected) ?></div>
                   <div class="stat-label">Ditolak</div>
                 </div>
               </div>
             </div>
           </div>
-
           <div class="col-6 col-lg-3">
-            <div class="stat-card revenue">
+            <div class="stat-card">
               <div class="stat-content">
-                <div class="stat-icon bg-info">
-                  <i class="bi bi-cash-coin"></i>
-                </div>
-                <div class="stat-info">
-                  <div class="stat-number small-text">Rp <?= number_format($total_revenue, 0, ',', '.') ?></div>
+                <div class="stat-icon bg-info"><i class="bi bi-cash-coin"></i></div>
+                <div class="stat-info min-w-0">
+                  <div class="stat-number small-text"><?= money_id($total_revenue) ?></div>
                   <div class="stat-label">Total Revenue</div>
                 </div>
               </div>
@@ -91,76 +112,15 @@ $total_revenue       = (int)($total_revenue ?? 0);
         </div>
       </section>
 
-      <!-- Filter Section -->
-      <section class="filter-section mb-4" aria-label="Filter Pembayaran">
-        <div class="filter-card">
-          <div class="filter-header">
-            <h5 class="filter-title">
-              <i class="bi bi-funnel me-2"></i>Filter & Pencarian
-            </h5>
-          </div>
-          <div class="filter-body">
-            <div class="row g-3 align-items-end">
-              <div class="col-md-4">
-                <label class="form-label">Pencarian</label>
-                <div class="search-input-wrapper">
-                  <input type="text" class="form-control search-input" id="searchInput" 
-                         placeholder="Cari nama, email, atau metode...">
-                  <i class="bi bi-search search-icon"></i>
-                </div>
-              </div>
-
-              <div class="col-md-2">
-                <label class="form-label">Status</label>
-                <select class="form-select" id="statusFilter" aria-label="Filter status">
-                  <option value="">Semua Status</option>
-                  <option value="pending">Pending</option>
-                  <option value="verified">Terverifikasi</option>
-                  <option value="rejected">Ditolak</option>
-                </select>
-              </div>
-
-              <div class="col-md-2">
-                <label class="form-label">Role</label>
-                <select class="form-select" id="roleFilter" aria-label="Filter role">
-                  <option value="">Semua Role</option>
-                  <option value="presenter">Presenter</option>
-                  <option value="audience">Audience</option>
-                </select>
-              </div>
-
-              <div class="col-md-2">
-                <label class="form-label">Partisipasi</label>
-                <select class="form-select" id="participationFilter" aria-label="Filter partisipasi">
-                  <option value="">Semua Partisipasi</option>
-                  <option value="online">Online</option>
-                  <option value="offline">Offline</option>
-                </select>
-              </div>
-
-              <div class="col-md-2">
-                <button class="btn btn-outline-secondary w-100" id="btnResetFilter">
-                  <i class="bi bi-arrow-counterclockwise me-2"></i>Reset
-                </button>
-              </div>
-            </div>
-
-            <div class="filter-results mt-3">
-              <small id="resultCounter" class="result-counter"></small>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Payment Cards Grid -->
+      <!-- Grid Kartu Pembayaran -->
       <section aria-label="Daftar Pembayaran">
-        <div class="section-header mb-4">
+        <div class="section-header mb-2">
           <h4 class="section-title">Daftar Pembayaran</h4>
         </div>
 
-        <div class="row g-4" id="paymentContainer">
+        <div class="row g-3" id="paymentContainer">
           <?php if (!empty($pembayarans)): ?>
-            <?php foreach ($pembayarans as $p): 
+            <?php foreach ($pembayarans as $p):
               $status = $p['status'] ?? 'pending';
               $role   = $p['role'] ?? '';
               $part   = $p['participation_type'] ?? '';
@@ -168,7 +128,8 @@ $total_revenue       = (int)($total_revenue ?? 0);
               $email  = $p['email'] ?? '-';
               $metode = $p['metode'] ?? '-';
               $amount = (int)($p['jumlah'] ?? 0);
-              $evt    = $p['event_title'] ?? null;
+              $evt    = $p['event_title'] ?? '';
+              $paidAt = !empty($p['tanggal_bayar']) ? date('d/m/Y H:i', strtotime($p['tanggal_bayar'])) : '-';
 
               $statusClass = match($status){
                 'pending'  => 'status-pending',
@@ -176,7 +137,6 @@ $total_revenue       = (int)($total_revenue ?? 0);
                 'rejected' => 'status-rejected',
                 default    => 'status-default'
               };
-
               $statusText = match($status){
                 'pending'  => 'Pending',
                 'verified' => 'Terverifikasi',
@@ -184,59 +144,53 @@ $total_revenue       = (int)($total_revenue ?? 0);
                 default    => ucfirst($status)
               };
 
-              $searchStr = strtolower(($name.' '.$email.' '.$metode));
+              // string pencarian gabungan
+              $searchStr = strtolower(preg_replace('/\s+/', ' ', trim("$name $email $evt $metode $status $role $part")));
             ?>
-              <div class="col-lg-6 col-xl-4"
+              <div class="col-12 col-md-6 col-xl-4"
                    data-status="<?= esc($status) ?>"
                    data-role="<?= esc($role) ?>"
                    data-participation="<?= esc($part) ?>"
                    data-search="<?= esc($searchStr) ?>">
-                
                 <article class="payment-card" aria-label="Kartu pembayaran">
-                  
                   <!-- Payment Header -->
                   <div class="payment-header">
-                    <div class="user-info">
-                      <div class="user-avatar">
-                        <?= strtoupper(substr($name, 0, 1)) ?>
-                      </div>
-                      <div class="user-details">
-                        <div class="user-name"><?= esc($name) ?></div>
-                        <div class="user-email"><?= esc($email) ?></div>
-                        <?php if (!empty($evt)): ?>
+                    <div class="user-info min-w-0">
+                      <div class="user-avatar" aria-hidden="true"><?= name_initials($name) ?></div>
+                      <div class="user-details min-w-0">
+                        <div class="user-name text-wrap break-anywhere"><?= esc($name) ?></div>
+                        <div class="user-email text-wrap break-anywhere"><?= esc($email) ?></div>
+                        <?php if ($evt): ?>
                           <div class="event-badge-wrapper">
-                            <span class="event-badge"><?= esc($evt) ?></span>
+                            <span class="event-badge text-wrap break-anywhere"><?= esc($evt) ?></span>
                           </div>
                         <?php endif; ?>
                       </div>
                     </div>
-                    <div class="status-badge <?= $statusClass ?>">
+                    <div class="status-badge <?= $statusClass ?> text-center" role="status" aria-label="Status pembayaran: <?= $statusText ?>">
                       <?= $statusText ?>
                     </div>
                   </div>
 
                   <!-- Payment Body -->
                   <div class="payment-body">
-                    
-                    <!-- Payment Details -->
                     <div class="payment-details">
                       <div class="detail-row">
                         <div class="detail-item">
                           <label class="detail-label">Metode</label>
-                          <div class="detail-value"><?= esc($metode) ?></div>
+                          <div class="detail-value text-wrap break-anywhere"><?= esc($metode) ?></div>
                         </div>
                         <div class="detail-item">
                           <label class="detail-label">Jumlah</label>
-                          <div class="detail-value amount">Rp <?= number_format($amount, 0, ',', '.') ?></div>
+                          <div class="detail-value amount"><?= money_id($amount) ?></div>
                         </div>
                       </div>
-
                       <div class="detail-row">
                         <div class="detail-item">
                           <label class="detail-label">Role & Partisipasi</label>
                           <div class="badge-group">
-                            <span class="role-badge <?= $role === 'presenter' ? 'role-presenter' : 'role-audience' ?>">
-                              <?= ucfirst($role ?: '-') ?>
+                            <span class="role-badge <?= $role==='presenter' ? 'role-presenter' : 'role-audience' ?>">
+                              <?= $role ? ucfirst($role) : '-' ?>
                             </span>
                             <?php if (!empty($part)): ?>
                               <span class="participation-badge"><?= ucfirst($part) ?></span>
@@ -245,34 +199,28 @@ $total_revenue       = (int)($total_revenue ?? 0);
                         </div>
                         <div class="detail-item">
                           <label class="detail-label">Tanggal Bayar</label>
-                          <div class="detail-value">
-                            <?= !empty($p['tanggal_bayar']) ? date('d/m/Y H:i', strtotime($p['tanggal_bayar'])) : '-' ?>
-                          </div>
+                          <div class="detail-value"><?= $paidAt ?></div>
                         </div>
                       </div>
                     </div>
 
-                    <!-- Voucher Info -->
                     <?php if (!empty($p['voucher_info'])):
                       $v = $p['voucher_info'];
                       $pot = ($v['tipe'] ?? '') === 'percentage'
-                          ? ($v['nilai'] ?? 0).'%'
-                          : 'Rp '.number_format((int)($v['nilai'] ?? 0), 0, ',', '.');
+                        ? (int)($v['nilai'] ?? 0).'%'
+                        : money_id($v['nilai'] ?? 0);
                     ?>
                       <div class="voucher-info">
                         <div class="voucher-label">Voucher digunakan:</div>
-                        <div class="voucher-details">
+                        <div class="voucher-details text-wrap break-anywhere">
                           <?= esc($v['kode_voucher'] ?? '-') ?> (<?= $pot ?>)
                         </div>
                       </div>
                     <?php endif; ?>
 
-                    <!-- Verification Info -->
                     <?php if (!empty($p['verified_at'])): ?>
                       <div class="verification-info">
-                        <small class="verification-text">
-                          Diverifikasi: <?= date('d/m/Y H:i', strtotime($p['verified_at'])) ?>
-                        </small>
+                        <small class="verification-text">Diverifikasi: <?= date('d/m/Y H:i', strtotime($p['verified_at'])) ?></small>
                       </div>
                     <?php endif; ?>
                   </div>
@@ -280,10 +228,8 @@ $total_revenue       = (int)($total_revenue ?? 0);
                   <!-- Payment Footer -->
                   <div class="payment-footer">
                     <div class="action-buttons">
-                      
-                      <!-- Primary Actions -->
                       <div class="primary-actions">
-                        <a class="btn btn-outline-info btn-sm" 
+                        <a class="btn btn-outline-info btn-sm"
                            href="<?= site_url('admin/pembayaran/detail/'.(int)$p['id_pembayaran']) ?>">
                           <i class="bi bi-eye me-1"></i>Detail
                         </a>
@@ -295,7 +241,6 @@ $total_revenue       = (int)($total_revenue ?? 0);
                         <?php endif; ?>
                       </div>
 
-                      <!-- Verification Actions -->
                       <?php if ($status === 'pending'): ?>
                         <div class="verification-actions">
                           <button class="btn btn-success btn-sm btn-open-verif"
@@ -318,9 +263,7 @@ $total_revenue       = (int)($total_revenue ?? 0);
           <?php else: ?>
             <div class="col-12">
               <div class="empty-state">
-                <div class="empty-icon">
-                  <i class="bi bi-credit-card"></i>
-                </div>
+                <div class="empty-icon"><i class="bi bi-credit-card"></i></div>
                 <h5 class="empty-title">Belum Ada Pembayaran</h5>
                 <p class="empty-text">Belum ada pembayaran yang perlu diverifikasi saat ini.</p>
               </div>
@@ -328,7 +271,6 @@ $total_revenue       = (int)($total_revenue ?? 0);
           <?php endif; ?>
         </div>
 
-        <!-- Load More Button -->
         <?php if (!empty($pembayarans) && count($pembayarans) >= 50): ?>
           <div class="load-more-section">
             <button class="btn btn-outline-primary btn-lg" id="btnLoadMore">
@@ -344,885 +286,284 @@ $total_revenue       = (int)($total_revenue ?? 0);
 
 <!-- Bukti Modal -->
 <div class="modal fade" id="buktiModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">
-          <i class="bi bi-image me-2"></i>Bukti Pembayaran
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
-      </div>
-      <div class="modal-body text-center">
-        <img id="buktiImage" src="" class="img-fluid rounded shadow-sm" alt="Bukti Pembayaran">
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-      </div>
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title"><i class="bi bi-image me-2"></i>Bukti Pembayaran</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
     </div>
-  </div>
+    <div class="modal-body text-center">
+      <img id="buktiImage" src="" class="img-fluid rounded shadow-sm" alt="Bukti Pembayaran">
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+    </div>
+  </div></div>
 </div>
 
 <!-- Verifikasi Modal -->
 <div class="modal fade" id="verifikasiModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="verifikasiTitle">
-          <i class="bi bi-check2-circle me-2"></i>Verifikasi Pembayaran
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
-      </div>
-      
-      <form id="verifikasiForm" method="POST">
-        <?= csrf_field() ?>
-        <div class="modal-body">
-          <div class="alert alert-info">
-            <i class="bi bi-info-circle me-2"></i>
-            Pastikan bukti pembayaran sudah sesuai sebelum melakukan verifikasi.
-          </div>
-          
-          <div class="form-group">
-            <label class="form-label">Keterangan Verifikasi</label>
-            <textarea class="form-control" name="keterangan" rows="3" 
-                      placeholder="Tambahkan keterangan (opsional)..."></textarea>
-          </div>
-          
-          <input type="hidden" name="status" id="verifikasiStatus">
-        </div>
-        
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-          <button type="submit" class="btn btn-primary" id="verifikasiSubmit">
-            <i class="bi bi-save me-2"></i>Proses
-          </button>
-        </div>
-      </form>
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title" id="verifikasiTitle"><i class="bi bi-check2-circle me-2"></i>Verifikasi Pembayaran</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
     </div>
-  </div>
+    <form id="verifikasiForm" method="POST">
+      <?= csrf_field() ?>
+      <div class="modal-body">
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle me-2"></i>Pastikan bukti pembayaran sudah sesuai sebelum verifikasi.
+        </div>
+        <div class="form-group">
+          <label class="form-label">Keterangan Verifikasi</label>
+          <textarea class="form-control" name="keterangan" rows="3" placeholder="Tambahkan keterangan (opsional)…"></textarea>
+        </div>
+        <input type="hidden" name="status" id="verifikasiStatus">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+        <button type="submit" class="btn btn-primary" id="verifikasiSubmit"><i class="bi bi-save me-2"></i>Proses</button>
+      </div>
+    </form>
+  </div></div>
 </div>
 
 <?= $this->include('partials/footer') ?>
 
 <style>
-/* ========================================
-   CSS VARIABLES & CONFIGURATION
-   ======================================== */
-:root {
-  --primary-color: #2563eb;
-  --success-color: #10b981;
-  --warning-color: #f59e0b;
-  --danger-color: #ef4444;
-  --info-color: #06b6d4;
-  --secondary-color: #6b7280;
-  
-  --light-bg: #f8fafc;
-  --border-color: #e2e8f0;
-  --text-primary: #1e293b;
-  --text-secondary: #64748b;
-  
-  --border-radius: 12px;
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16);
-}
-
-/* ========================================
-   GLOBAL STYLES
-   ======================================== */
-body {
-  background: linear-gradient(135deg, var(--light-bg) 0%, #e2e8f0 100%);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  color: var(--text-primary);
-}
-
-#content main > .container-fluid {
-  margin-top: 0;
-}
-
-/* ========================================
-   HEADER SECTION
-   ======================================== */
-.header-section {
-  background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
-  color: white;
-  padding: 2rem 2rem 2.5rem;
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow-lg);
-  position: relative;
-  overflow: hidden;
-}
-
-.header-section::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 200px;
-  height: 200px;
-  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-  transform: translate(50%, -50%);
-}
-
-.header-title {
-  font-weight: 800;
-  font-size: 2.25rem;
-  margin-bottom: 0.5rem;
-  position: relative;
-}
-
-.header-subtitle {
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 1.1rem;
-  font-weight: 400;
-}
-
-/* ========================================
-   STATISTICS CARDS
-   ======================================== */
-.stat-card {
-  background: white;
-  border-radius: var(--border-radius);
-  padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-color);
-  transition: all 0.3s ease;
-  height: 100%;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.stat-content {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.stat-icon {
-  width: 3.5rem;
-  height: 3.5rem;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 1.5rem;
-  flex-shrink: 0;
-}
-
-.stat-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.stat-number {
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--text-primary);
-  line-height: 1;
-  margin-bottom: 0.25rem;
-}
-
-.stat-number.small-text {
-  font-size: 1.5rem;
-}
-
-.stat-label {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-/* ========================================
-   FILTER SECTION
-   ======================================== */
-.filter-section {
-  margin-bottom: 2rem;
-}
-
-.filter-card {
-  background: white;
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-color);
-  overflow: hidden;
-}
-
-.filter-header {
-  background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.filter-title {
-  color: var(--text-primary);
-  font-weight: 700;
-  font-size: 1rem;
-  margin: 0;
-}
-
-.filter-body {
-  padding: 1.5rem;
-}
-
-.search-input-wrapper {
-  position: relative;
-}
-
-.search-input {
-  padding-left: 2.5rem;
-}
-
-.search-icon {
-  position: absolute;
-  left: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-secondary);
-  pointer-events: none;
-}
-
-.filter-results {
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-color);
-}
-
-.result-counter {
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-/* ========================================
-   SECTION HEADERS
-   ======================================== */
-.section-title {
-  color: var(--text-primary);
-  font-weight: 700;
-  font-size: 1.5rem;
-  margin-bottom: 0;
-}
-
-/* ========================================
-   PAYMENT CARDS
-   ======================================== */
-.payment-card {
-  background: white;
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-  overflow: hidden;
-  transition: all 0.3s ease;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-sm);
-}
-
-.payment-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.payment-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-  background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.user-avatar {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary-color), var(--info-color));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  color: white;
-  font-size: 1.2rem;
-  flex-shrink: 0;
-}
-
-.user-details {
-  flex: 1;
-  min-width: 0;
-}
-
-.user-name {
-  font-weight: 700;
-  color: var(--text-primary);
-  font-size: 1rem;
-  margin-bottom: 0.25rem;
-}
-
-.user-email {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  margin-bottom: 0.5rem;
-}
-
-.event-badge-wrapper {
-  margin-top: 0.5rem;
-}
-
-.event-badge {
-  background: rgba(6, 182, 212, 0.1);
-  color: #0369a1;
-  border: 1px solid rgba(6, 182, 212, 0.2);
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.status-badge {
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-  flex-shrink: 0;
-}
-
-.status-pending {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.status-verified {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.status-rejected {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.status-default {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.payment-body {
-  padding: 1.5rem;
-  flex: 1;
-}
-
-.payment-details {
-  margin-bottom: 1rem;
-}
-
-.detail-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.detail-row:last-child {
-  margin-bottom: 0;
-}
-
-.detail-item {
-  display: flex;
-  flex-direction: column;
-}
-
-.detail-label {
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-  margin-bottom: 0.25rem;
-}
-
-.detail-value {
-  color: var(--text-primary);
-  font-weight: 600;
-  font-size: 0.875rem;
-}
-
-.detail-value.amount {
-  color: var(--success-color);
-  font-weight: 700;
-  font-size: 1rem;
-}
-
-.badge-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-
-.role-badge {
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-}
-
-.role-presenter {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.role-audience {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.participation-badge {
-  background: #f9fafb;
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.voucher-info {
-  background: linear-gradient(145deg, #f0fdf4 0%, #ecfdf5 100%);
-  border: 1px solid #bbf7d0;
-  border-radius: 8px;
-  padding: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.voucher-label {
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  margin-bottom: 0.25rem;
-}
-
-.voucher-details {
-  color: var(--success-color);
-  font-weight: 700;
-  font-size: 0.875rem;
-}
-
-.verification-info {
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--border-color);
-}
-
-.verification-text {
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-}
-
-.payment-footer {
-  padding: 1rem 1.5rem;
-  background: #f8fafc;
-  border-top: 1px solid var(--border-color);
-  margin-top: auto;
-}
-
-.action-buttons {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.primary-actions,
-.verification-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-/* ========================================
-   EMPTY STATE
-   ======================================== */
-.empty-state {
-  text-align: center;
-  padding: 4rem 2rem;
-  background: white;
-  border-radius: var(--border-radius);
-  border: 2px dashed var(--border-color);
-  margin: 2rem 0;
-}
-
-.empty-icon {
-  font-size: 4rem;
-  color: var(--text-secondary);
-  margin-bottom: 1rem;
-}
-
-.empty-title {
-  color: var(--text-primary);
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-}
-
-.empty-text {
-  color: var(--text-secondary);
-  margin-bottom: 0;
-}
-
-/* ========================================
-   LOAD MORE SECTION
-   ======================================== */
-.load-more-section {
-  text-align: center;
-  margin-top: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid var(--border-color);
-}
-
-/* ========================================
-   MODAL STYLES
-   ======================================== */
-.modal-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
-  color: white;
-  border-bottom: none;
-}
-
-.modal-title {
-  font-weight: 700;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-/* ========================================
-   BUTTON STYLES
-   ======================================== */
-.btn {
-  font-weight: 600;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-.btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
-}
-
-.btn-lg {
-  padding: 0.75rem 1.5rem;
-  font-size: 1.1rem;
-}
-
-.btn:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-
-/* ========================================
-   UTILITY CLASSES
-   ======================================== */
-.text-primary { 
-  color: var(--primary-color) !important; 
-}
-
-.text-success { 
-  color: var(--success-color) !important; 
-}
-
-.text-warning { 
-  color: var(--warning-color) !important; 
-}
-
-.text-danger { 
-  color: var(--danger-color) !important; 
-}
-
-.text-info { 
-  color: var(--info-color) !important; 
-}
-
-/* ========================================
-   RESPONSIVE DESIGN
-   ======================================== */
-@media (max-width: 768px) {
-  .header-section {
-    padding: 1.5rem;
-    text-align: center;
-  }
-  
-  .header-title {
-    font-size: 1.75rem;
-  }
-  
-  .stat-content {
-    flex-direction: column;
-    text-align: center;
-    gap: 0.75rem;
-  }
-  
-  .detail-row {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-  }
-  
-  .action-buttons {
-    justify-content: center;
-    flex-direction: column;
-  }
-  
-  .primary-actions,
-  .verification-actions {
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-@media (max-width: 576px) {
-  .user-info {
-    flex-direction: column;
-    text-align: center;
-    gap: 0.75rem;
-  }
+/* ====== Anti horizontal scroll & wrapping ====== */
+html, body { overflow-x: hidden; }
+* { word-wrap: break-word; }
+.break-anywhere { overflow-wrap:anywhere; word-break:break-word; }
+.text-wrap { white-space: normal !important; }
+
+/* ====== Theme ====== */
+:root{
+  --primary-color:#2563eb; --blue-800:#1e40af;
+  --success-color:#10b981; --warning-color:#f59e0b; --danger-color:#ef4444; --info-color:#06b6d4;
+  --ink:#0f172a; --muted:#64748b;
+  --light-bg:#f8fafc; --border:#e2e8f0;
+  --radius:14px;
+  --shadow-sm:0 2px 8px rgba(0,0,0,.08);
+  --shadow-md:0 6px 18px rgba(0,0,0,.12);
+  --shadow-lg:0 12px 32px rgba(0,0,0,.16);
+}
+.container-xxl{ max-width: min(100%,1560px); margin-inline:auto; padding-inline:clamp(1rem,2.3vw,2rem)!important; }
+.page-wrap-blue{
+  min-height:100vh;
+  background:
+    radial-gradient(1000px 380px at 10% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
+    radial-gradient(1000px 380px at 90% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--light-bg), #fff 42%);
+}
+
+/* ====== HERO ====== */
+.card-hero{ border:0; border-radius:18px; overflow:hidden; box-shadow:var(--shadow-lg); }
+.card-hero .hero-body{ background:linear-gradient(135deg,var(--primary-color),var(--blue-800)); color:#fff; padding:1.6rem 1.2rem; }
+.hero-title{ font-weight:900; letter-spacing:.2px; margin-bottom:.2rem; font-size:1.35rem; }
+.text-white-70{ color:rgba(255,255,255,.9)!important; }
+.hero-tools .input-group .input-group-text{ background:#fff; border:0; }
+.hero-tools .form-control{ border:0; }
+.hero-tools .btn{ border:0; }
+.hero-search{ border-radius:12px; overflow:hidden; }
+
+/* ====== KPI ====== */
+.stat-card{ background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow-sm); height:100%; }
+.stat-content{ display:flex; align-items:center; gap:12px; }
+.stat-icon{ width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:20px; }
+.stat-number{ font-weight:900; font-size:1.6rem; line-height:1.1; color:var(--ink); }
+.stat-number.small-text{ font-size:1.1rem; }
+.stat-label{ color:var(--muted); font-weight:700; font-size:.84rem; }
+
+/* ====== Section header ====== */
+.section-title{ font-weight:800; color:var(--ink); }
+
+/* ====== Payment card ====== */
+.payment-card{ background:#fff; border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); display:flex; flex-direction:column; height:100%; }
+.payment-card:hover{ transform:translateY(-2px); box-shadow:var(--shadow-md); transition:.2s ease; }
+.payment-header{ padding:14px; border-bottom:1px solid var(--border); background:linear-gradient(145deg,#f8fafc,#f1f5f9);
+  display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.user-info{ display:flex; align-items:center; gap:12px; }
+.user-avatar{
+  width:44px; height:44px; aspect-ratio:1/1; border-radius:50%;
+  background:linear-gradient(135deg,var(--primary-color),var(--info-color));
+  display:flex; align-items:center; justify-content:center; color:#fff; font-weight:900; font-size:.95rem; flex-shrink:0;
+}
+.user-name{ font-weight:900; color:var(--ink); font-size:1rem; }
+.user-email{ color:var(--muted); font-size:.86rem; }
+.event-badge{ background:rgba(6,182,212,.12); color:#0369a1; border:1px solid rgba(6,182,212,.25); padding:.22rem .5rem; border-radius:6px; font-size:.75rem; font-weight:600; }
+
+.status-badge{
+  padding:.42rem .8rem; border-radius:999px; font-size:.72rem; font-weight:800; letter-spacing:.02em; text-transform:uppercase;
+  white-space:normal; min-width:110px; text-align:center;
+}
+.status-pending{ background:#fef3c7; color:#92400e; }
+.status-verified{ background:#d1fae5; color:#065f46; }
+.status-rejected{ background:#fee2e2; color:#991b1b; }
+.status-default{ background:#f3f4f6; color:#374151; }
+
+.payment-body{ padding:14px; flex:1; }
+.detail-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px; }
+.detail-item{ display:flex; flex-direction:column; }
+.detail-label{ color:var(--muted); font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+.detail-value{ color:var(--ink); font-weight:800; }
+.detail-value.amount{ color:var(--success-color); font-size:1rem; }
+
+.badge-group{ display:flex; flex-wrap:wrap; gap:6px; }
+.role-badge{ padding:.22rem .48rem; border-radius:6px; font-size:.72rem; font-weight:800; text-transform:uppercase; }
+.role-presenter{ background:#dbeafe; color:#1e40af; }
+.role-audience{ background:#f3f4f6; color:#374151; }
+.participation-badge{ background:#f9fafb; color:var(--muted); border:1px solid var(--border); padding:.22rem .48rem; border-radius:6px; font-size:.72rem; font-weight:700; }
+
+.voucher-info{ background:linear-gradient(145deg,#f0fdf4,#ecfdf5); border:1px solid #bbf7d0; border-radius:8px; padding:.6rem .7rem; margin-bottom:10px; }
+.voucher-label{ color:var(--muted); font-size:.75rem; }
+.voucher-details{ color:var(--success-color); font-weight:800; }
+
+.verification-info{ margin-top:6px; padding-top:6px; border-top:1px solid var(--border); }
+.verification-text{ color:var(--muted); font-size:.76rem; }
+
+.payment-footer{ padding:12px 14px; background:#f8fafc; border-top:1px solid var(--border); }
+.action-buttons{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.primary-actions,.verification-actions{ display:flex; gap:8px; }
+
+/* ====== Empty ====== */
+.empty-state{ text-align:center; padding:2.4rem 1.2rem; background:#fff; border:2px dashed var(--border); border-radius:12px; }
+.empty-icon{ font-size:3rem; color:var(--muted); }
+.empty-title{ font-weight:800; color:var(--ink); }
+.empty-text{ color:var(--muted); }
+
+/* ====== Modal ====== */
+.modal-header{ background:linear-gradient(135deg,var(--primary-color),var(--blue-800)); color:#fff; border-bottom:0; }
+.modal-title{ font-weight:800; }
+
+/* ====== Buttons ====== */
+.btn{ font-weight:700; border-radius:8px; }
+.btn:hover{ transform:translateY(-1px); box-shadow:var(--shadow-sm); transition:.15s ease; }
+
+/* ====== Responsive ====== */
+@media (max-width: 768px){
+  .card-hero .hero-body{ padding:1.2rem 1rem; }
+  .detail-row{ grid-template-columns:1fr; }
+  .action-buttons{ flex-direction:column; align-items:stretch; }
+  .primary-actions,.verification-actions{ width:100%; justify-content:center; flex-wrap:wrap; }
+  .payment-header{ flex-direction:column; align-items:stretch; }
+  .status-badge{ align-self:flex-start; }
 }
 </style>
 
 <script>
-// ========================================
-// PAYMENT VERIFICATION MANAGEMENT SCRIPT
-// ========================================
-
-(function() {
+(() => {
   'use strict';
 
-  // ===== DOM Selectors =====
-  const $ = (selector, context = document) => context.querySelector(selector);
-  const $$ = (selector, context = document) => Array.from(context.querySelectorAll(selector));
+  // Helpers
+  const $ = (s, c=document) => c.querySelector(s);
+  const $$ = (s, c=document) => Array.from(c.querySelectorAll(s));
 
-  // ===== Filter Elements =====
-  const searchInput = $('#searchInput');
-  const statusFilter = $('#statusFilter');
-  const roleFilter = $('#roleFilter');
-  const participationFilter = $('#participationFilter');
-  const resetButton = $('#btnResetFilter');
-  const resultCounter = $('#resultCounter');
+  // Count-up KPI (respect reduced motion)
+  const prefersReduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!prefersReduced) {
+    $$('.stat-number[data-countup]').forEach(el=>{
+      const target = parseInt(el.dataset.countup||'0',10);
+      let now=0, step=Math.max(1, Math.ceil(target/40));
+      const tick=()=>{ now=Math.min(now+step,target); el.textContent=new Intl.NumberFormat('id-ID').format(now); if(now<target) requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    });
+  }
 
-  // ===== Modal Elements =====
+  // ===== Pencarian di HERO =====
+  const input = $('#searchInput');
+  const clearBtn = $('#clearSearch');
+  const counter = $('#resultCounter');
+  const cards = () => $$('#paymentContainer > div');
+
+  function applySearch(q){
+    const query = (q||'').trim().toLowerCase();
+    let shown = 0;
+    cards().forEach(col=>{
+      const hay = (col.getAttribute('data-search') || '').toLowerCase();
+      const show = !query || hay.includes(query);
+      col.classList.toggle('d-none', !show);
+      if (show) shown++;
+    });
+    clearBtn?.classList.toggle('d-none', !query);
+    if (counter){
+      counter.textContent = `Menampilkan ${new Intl.NumberFormat('id-ID').format(shown)} dari ${cards().length} pembayaran`;
+    }
+    sessionStorage.setItem('paySearch', query);
+  }
+
+  // restore last query
+  const last = sessionStorage.getItem('paySearch') || '';
+  if (input){ input.value = last; }
+  applySearch(last);
+
+  input?.addEventListener('input', e => applySearch(e.target.value));
+  clearBtn?.addEventListener('click', ()=>{
+    input.value = '';
+    applySearch('');
+    input.focus();
+  });
+
+  // ===== Modals =====
   const buktiModal = new bootstrap.Modal($('#buktiModal'));
   const verifikasiModal = new bootstrap.Modal($('#verifikasiModal'));
 
-  // ===== Filter Functionality =====
-  function applyFilters() {
-    const searchQuery = (searchInput?.value || '').toLowerCase();
-    const statusValue = statusFilter?.value || '';
-    const roleValue = roleFilter?.value || '';
-    const participationValue = participationFilter?.value || '';
-    
-    const paymentCards = $$('#paymentContainer > div');
-    let visibleCount = 0;
-
-    paymentCards.forEach(card => {
-      const searchData = (card.getAttribute('data-search') || '').toLowerCase();
-      const statusData = card.getAttribute('data-status') || '';
-      const roleData = card.getAttribute('data-role') || '';
-      const participationData = card.getAttribute('data-participation') || '';
-
-      const matchesSearch = !searchQuery || searchData.includes(searchQuery);
-      const matchesStatus = !statusValue || statusData === statusValue;
-      const matchesRole = !roleValue || roleData === roleValue;
-      const matchesParticipation = !participationValue || participationData === participationValue;
-
-      const shouldShow = matchesSearch && matchesStatus && matchesRole && matchesParticipation;
-      
-      card.style.display = shouldShow ? '' : 'none';
-      if (shouldShow) visibleCount++;
-    });
-
-    // Update counter
-    if (resultCounter) {
-      resultCounter.textContent = `Menampilkan ${visibleCount} dari ${paymentCards.length} pembayaran`;
-    }
-  }
-
-  function resetFilters() {
-    if (searchInput) searchInput.value = '';
-    if (statusFilter) statusFilter.value = '';
-    if (roleFilter) roleFilter.value = '';
-    if (participationFilter) participationFilter.value = '';
-    applyFilters();
-  }
-
-  // ===== Event Listeners for Filters =====
-  searchInput?.addEventListener('input', applyFilters);
-  statusFilter?.addEventListener('change', applyFilters);
-  roleFilter?.addEventListener('change', applyFilters);
-  participationFilter?.addEventListener('change', applyFilters);
-  resetButton?.addEventListener('click', resetFilters);
-
-  // ===== Bukti Modal Functionality =====
-  $$('.btn-view-bukti').forEach(button => {
-    button.addEventListener('click', () => {
-      const buktiUrl = button.getAttribute('data-bukti-url');
-      const buktiImage = $('#buktiImage');
-      
-      if (buktiImage && buktiUrl) {
-        buktiImage.src = buktiUrl;
-        buktiModal.show();
-      }
-    });
-  });
-
-  // ===== Verifikasi Modal Functionality =====
-  $$('.btn-open-verif').forEach(button => {
-    button.addEventListener('click', () => {
-      const paymentId = button.getAttribute('data-id');
-      const status = button.getAttribute('data-status');
-      const isVerification = status === 'verified';
-
-      // Update modal title
-      const title = $('#verifikasiTitle');
-      if (title) {
-        title.innerHTML = isVerification 
-          ? '<i class="bi bi-check2-circle me-2"></i>Verifikasi Pembayaran'
-          : '<i class="bi bi-x-circle me-2"></i>Tolak Pembayaran';
-      }
-
-      // Set hidden status field
-      const statusField = $('#verifikasiStatus');
-      if (statusField) {
-        statusField.value = status;
-      }
-
-      // Update form action
-      const form = $('#verifikasiForm');
-      if (form) {
-        form.action = `<?= site_url('admin/pembayaran/verifikasi') ?>/${paymentId}`;
-      }
-
-      // Update submit button
-      const submitButton = $('#verifikasiSubmit');
-      if (submitButton) {
-        submitButton.className = `btn btn-${isVerification ? 'success' : 'danger'}`;
-        submitButton.innerHTML = `<i class="bi bi-save me-2"></i>${isVerification ? 'Verifikasi' : 'Tolak'}`;
-      }
-
-      verifikasiModal.show();
-    });
-  });
-
-  // ===== Auto Refresh for Pending Payments =====
-  function autoRefreshPendingPayments() {
-    const hasPendingPayments = document.querySelector('[data-status="pending"]');
-    
-    if (!hasPendingPayments) return;
-
-    fetch(window.location.href, {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(response => response.text())
-    .then(html => {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const newContainer = doc.querySelector('#paymentContainer');
-      
-      if (newContainer) {
-        const currentContainer = $('#paymentContainer');
-        if (currentContainer) {
-          currentContainer.innerHTML = newContainer.innerHTML;
-          // Re-bind event listeners after refresh
-          bindEventListeners();
-          applyFilters();
-        }
-      }
-    })
-    .catch(error => {
-      console.error('Auto refresh failed:', error);
-    });
-  }
-
-  // ===== Re-bind Event Listeners =====
-  function bindEventListeners() {
-    // Re-bind bukti modal buttons
-    $$('.btn-view-bukti').forEach(button => {
-      button.addEventListener('click', () => {
-        const buktiUrl = button.getAttribute('data-bukti-url');
-        const buktiImage = $('#buktiImage');
-        
-        if (buktiImage && buktiUrl) {
-          buktiImage.src = buktiUrl;
+  function bindButtons(root=document){
+    $$('.btn-view-bukti', root).forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const url = btn.getAttribute('data-bukti-url');
+        const img = $('#buktiImage');
+        if (url && img){
+          img.onerror = () => {
+            img.alt = 'Bukti tidak dapat dimuat';
+            img.src = 'data:image/svg+xml;charset=UTF-8,' +
+              encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#6b7280" font-family="Arial" font-size="20">Bukti tidak tersedia</text></svg>');
+          };
+          img.src = url;
           buktiModal.show();
         }
       });
     });
 
-    // Re-bind verification modal buttons
-    $$('.btn-open-verif').forEach(button => {
-      button.addEventListener('click', () => {
-        const paymentId = button.getAttribute('data-id');
-        const status = button.getAttribute('data-status');
-        const isVerification = status === 'verified';
+    $$('.btn-open-verif', root).forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const id = btn.getAttribute('data-id');
+        const status = btn.getAttribute('data-status');
+        const isOK = status==='verified';
 
-        const title = $('#verifikasiTitle');
-        if (title) {
-          title.innerHTML = isVerification 
-            ? '<i class="bi bi-check2-circle me-2"></i>Verifikasi Pembayaran'
-            : '<i class="bi bi-x-circle me-2"></i>Tolak Pembayaran';
-        }
+        $('#verifikasiTitle').innerHTML = isOK
+          ? '<i class="bi bi-check2-circle me-2"></i>Verifikasi Pembayaran'
+          : '<i class="bi bi-x-circle me-2"></i>Tolak Pembayaran';
+        $('#verifikasiStatus').value = status;
+        $('#verifikasiForm').action = `<?= site_url('admin/pembayaran/verifikasi') ?>/${id}`;
 
-        const statusField = $('#verifikasiStatus');
-        if (statusField) {
-          statusField.value = status;
-        }
-
-        const form = $('#verifikasiForm');
-        if (form) {
-          form.action = `<?= site_url('admin/pembayaran/verifikasi') ?>/${paymentId}`;
-        }
-
-        const submitButton = $('#verifikasiSubmit');
-        if (submitButton) {
-          submitButton.className = `btn btn-${isVerification ? 'success' : 'danger'}`;
-          submitButton.innerHTML = `<i class="bi bi-save me-2"></i>${isVerification ? 'Verifikasi' : 'Tolak'}`;
-        }
+        const submit = $('#verifikasiSubmit');
+        submit.className = `btn btn-${isOK?'success':'danger'}`;
+        submit.innerHTML = `<i class="bi bi-save me-2"></i>${isOK?'Verifikasi':'Tolak'}`;
 
         verifikasiModal.show();
       });
     });
   }
+  bindButtons();
 
-  // ===== Load More Functionality =====
-  const loadMoreButton = $('#btnLoadMore');
-  if (loadMoreButton) {
-    loadMoreButton.addEventListener('click', () => {
-      // Implement load more functionality here
-      console.log('Load more payments...');
-    });
+  // ===== Auto refresh pending (opsional) =====
+  function autoRefreshPending(){
+    if (!document.querySelector('[data-status="pending"]')) return;
+    fetch(window.location.href, { headers:{'X-Requested-With':'XMLHttpRequest'} })
+      .then(r=>r.text()).then(html=>{
+        const doc = new DOMParser().parseFromString(html,'text/html');
+        const fresh = doc.querySelector('#paymentContainer');
+        if (!fresh) return;
+        const cur = $('#paymentContainer');
+        cur.innerHTML = fresh.innerHTML;
+        bindButtons(cur);
+        applySearch(sessionStorage.getItem('paySearch')||'');
+      }).catch(()=>{ /* silent */ });
   }
+  setInterval(autoRefreshPending, 30000);
 
-  // ===== Initialize =====
-  function initialize() {
-    // Apply initial filters
-    applyFilters();
-    
-    // Set up auto refresh every 30 seconds
-    setInterval(autoRefreshPendingPayments, 30000);
-  }
-
-  // Start the application when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initialize);
-  } else {
-    initialize();
-  }
+  // Load more (placeholder)
+  $('#btnLoadMore')?.addEventListener('click', ()=> console.log('Load more payments…'));
 
 })();
 </script>

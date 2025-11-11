@@ -376,7 +376,11 @@ class Abstrak extends BaseController
             }
         }
 
-        $kategoriList = $this->kategoriModel->orderBy('nama_kategori','ASC')->findAll();
+        // === HANYA KATEGORI AKTIF ===
+        $kategoriList = $this->kategoriModel
+            ->where('is_active', true)
+            ->orderBy('nama_kategori','ASC')
+            ->findAll();
 
         return view('role/presenter/abstrak/create', [
             'title'           => 'Kirim Abstrak',
@@ -440,6 +444,22 @@ class Abstrak extends BaseController
             return redirect()->to('/presenter/abstrak')
                 ->with('error','Masih ada abstrak aktif untuk event ini.')
                 ->with('swal', ['icon'=>'warning','title'=>'Tidak Bisa Upload','text'=>'Masih ada abstrak aktif untuk event ini.']);
+        }
+
+        // === VALIDASI: kategori harus ada & aktif ===
+        $katRow = $this->kategoriModel
+            ->select('id_kategori, is_active, nama_kategori')
+            ->where('id_kategori', $idKategori)
+            ->first();
+
+        if (!$katRow || !(bool)$katRow['is_active']) {
+            return redirect()->back()->withInput()
+                ->with('error','Kategori tidak valid/ nonaktif.')
+                ->with('swal', [
+                    'icon'=>'warning',
+                    'title'=>'Kategori Tidak Tersedia',
+                    'text'=>'Pilih kategori yang masih aktif.'
+                ]);
         }
 
         if (!$file || !$file->isValid()) {

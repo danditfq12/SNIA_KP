@@ -142,7 +142,7 @@ $current_tipe  = $current_tipe ?? '';
                     elseif(in_array($ext,['doc','docx'])){ $icon='bi-file-earmark-word'; $icColor='text-primary'; }
                     elseif(in_array($ext,['jpg','jpeg','png'])){ $icon='bi-file-earmark-image'; $icColor='text-success'; }
                 ?>
-                  <tr>
+                  <tr data-row-id="<?= $id ?>">
                     <td><?= $no++ ?></td>
                     <td><?= $type==='loa'
                       ? '<span class="badge bg-success"><i class="bi bi-file-earmark-arrow-up me-1"></i> LOA</span>'
@@ -166,8 +166,20 @@ $current_tipe  = $current_tipe ?? '';
                     <td>
                       <div class="action-buttons">
                         <a href="<?= site_url('admin/dokumen/download/'.$id) ?>" class="btn-action btn-soft-info" data-bs-toggle="tooltip" data-bs-title="Download"><i class="bi bi-download"></i></a>
-                        <button type="button" class="btn-action btn-soft-danger" data-bs-toggle="tooltip" data-bs-title="Hapus" onclick="deleteDocument(<?= $id ?>)"><i class="bi bi-trash3"></i></button>
+
+                        <button type="button"
+                                class="btn-action btn-soft-danger js-del"
+                                data-id="<?= $id ?>"
+                                data-bs-toggle="tooltip"
+                                data-bs-title="Hapus">
+                          <i class="bi bi-trash3"></i>
+                        </button>
                       </div>
+
+                      <!-- Fallback POST (non-AJAX) -->
+                      <form class="d-none" id="del-form-<?= $id ?>" method="POST" action="<?= site_url('admin/dokumen/delete/'.$id) ?>">
+                        <?= csrf_field() ?>
+                      </form>
                     </td>
                   </tr>
                 <?php endforeach; ?>
@@ -206,13 +218,12 @@ $current_tipe  = $current_tipe ?? '';
   #documentsTable td, #documentsTable th { padding:8px 12px; vertical-align:middle; border-bottom:1px solid #dee2e6; }
   #documentsTable tbody tr:hover { background:#f8f9fa; }
   .table-responsive { overflow-x:auto; }
-  .spin { animation: spin 0.8s linear infinite; }
-  @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
-  /* PICK LIST */
   .picklist-item { cursor:pointer; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; background:#fff; transition: .15s ease; }
   .picklist-item:hover { box-shadow:0 8px 18px rgba(15,23,42,.08); transform: translateY(-1px); }
-  .picklist-item.disabled { opacity:.55; }
+  .picklist-item.disabled { opacity:1; }
   .picklist-item.active { outline:2px solid var(--primary-color); }
+  .badge-fp-accepted { background: rgba(16,185,129,.12); color:#065f46; border:1px solid rgba(16,185,129,.25); }
+  .badge-fp-other    { background: #f1f5f9; color:#475569; border:1px solid #e2e8f0; }
 </style>
 
 <!-- ====== SCRIPTS ====== -->
@@ -224,16 +235,29 @@ $current_tipe  = $current_tipe ?? '';
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
 
 <script>
+  // Tooltips
   function initTooltips(scope=document){
     return [].slice.call(scope.querySelectorAll('[data-bs-toggle="tooltip"]'))
       .map(el => new bootstrap.Tooltip(el));
   }
+
+  // CSRF
+  const CSRF_NAME = '<?= csrf_token() ?>';
+  let   CSRF_HASH = '<?= csrf_hash() ?>';
+  function refreshCsrf(newHash){
+    if(!newHash) return;
+    CSRF_HASH = newHash;
+    document.querySelectorAll('input[name="'+CSRF_NAME+'"]').forEach(i => i.value = newHash);
+  }
+
+  // DataTable init
+  let dt;
   $(function(){
     const $table = $('#documentsTable');
     const hasDocuments = <?= !empty($documents) ? 'true' : 'false' ?>;
     if (hasDocuments && $table.length && typeof $.fn.DataTable !== 'undefined') {
       if ($.fn.DataTable.isDataTable('#documentsTable')) $('#documentsTable').DataTable().destroy();
-      $('#documentsTable').DataTable({
+      dt = $('#documentsTable').DataTable({
         paging:true,lengthChange:true,searching:true,ordering:true,info:true,autoWidth:false,responsive:true,
         pageLength:25,lengthMenu:[[10,25,50,-1],[10,25,50,'Semua']],order:[[5,'desc']],
         columnDefs:[{orderable:false,targets:[6]},{searchable:false,targets:[0]}],
@@ -244,27 +268,240 @@ $current_tipe  = $current_tipe ?? '';
     initTooltips();
   });
 
-  // ===== DELETE via hidden form =====
-  function deleteDocument(id){
-    Swal.fire({
-      title:'Hapus Dokumen?', text:'File akan dihapus permanen dari server dan database.',
-      icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', cancelButtonColor:'#6b7280',
-      confirmButtonText:'Ya, Hapus', cancelButtonText:'Batal'
-    }).then(r => {
-      if(r.isConfirmed){
-        const f=document.createElement('form'); f.method='POST'; f.action='<?= site_url('admin/dokumen/delete/') ?>'+encodeURIComponent(id);
-        const csrfName='<?= csrf_token() ?>', csrfVal='<?= csrf_hash() ?>';
-        const i=document.createElement('input'); i.type='hidden'; i.name=csrfName; i.value=csrfVal; f.appendChild(i);
-        document.body.appendChild(f); f.submit();
+  // ====== DELETE (AJAX + fallback) ======
+  async function performDelete(id){
+    const url = '<?= site_url('admin/dokumen/delete/') ?>'+encodeURIComponent(id);
+    try{
+      const fd = new FormData();
+      fd.append(CSRF_NAME, CSRF_HASH);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {'X-Requested-With':'XMLHttpRequest'},
+        body: fd,
+        credentials: 'same-origin'
+      });
+      const data = await res.json().catch(()=>null);
+      if (data && data.csrf_hash) refreshCsrf(data.csrf_hash);
+
+      if (data && data.status === 'success') {
+        const tr = document.querySelector('tr[data-row-id="'+id+'"]');
+        if (tr && dt) dt.row(tr).remove().draw(false);
+        else if (tr) tr.remove();
+        Swal.fire({icon:'success',title:'Dokumen berhasil dihapus',timer:1200,showConfirmButton:false});
+        return;
       }
+      throw new Error('Not success');
+    }catch(err){
+      // fallback POST biasa (untuk non-AJAX/redirect)
+      const form = document.getElementById('del-form-'+id);
+      if (form){
+        const input = form.querySelector('input[name="'+CSRF_NAME+'"]');
+        if (input) input.value = CSRF_HASH;
+        form.submit();
+      }
+    }
+  }
+
+  // Delegasi klik (aman saat DataTables redraw/responsive)
+  $(document).on('click', '.js-del', function(e){
+    e.preventDefault();
+    const id = $(this).data('id');
+    Swal.fire({
+      title:'Hapus Dokumen?',
+      text:'File akan dihapus permanen dari server dan database.',
+      icon:'warning',
+      showCancelButton:true,
+      confirmButtonColor:'#d33',
+      cancelButtonColor:'#6b7280',
+      confirmButtonText:'Ya, Hapus',
+      cancelButtonText:'Batal'
+    }).then(r => { if (r.isConfirmed) performDelete(id); });
+  });
+
+  // ====== PICK LIST LOA ======
+  const $loaEvent  = $('#loaEventId');
+  const $loaWrap   = $('#loaUserListWrap');
+  const $loaHidden = $('#loaUserIdHidden');
+  const $loaCount  = $('#loaCountBadge');
+
+  function escapeHtml(str){ return (str||'').replace(/[&<>"']/g, s=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#039;' }[s])); }
+
+  function renderLoaUsers(items){
+    $loaWrap.empty();
+    $loaHidden.val('');
+    if(!items || !items.length){
+      $loaWrap.html('<div class="text-muted small">Tidak ada user pada event ini.</div>');
+      $loaCount.addClass('d-none').text('0 ditemukan');
+      return;
+    }
+    $loaCount.removeClass('d-none').text(items.length+' ditemukan');
+
+    items.forEach(u=>{
+      const hasLoa   = !!u.has_loa;
+      const role     = (u.role||'').toString();
+      const fpStatus = (u.fp_status||'').toString().toLowerCase();
+      const eligible = !!u.eligible;
+
+      const badgeLoa = hasLoa
+        ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Sudah dapat LOA</span>'
+        : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Belum dapat LOA</span>';
+
+      const isAccepted = fpStatus === 'accepted';
+      const textFp = isAccepted ? 'FP Accepted' : (fpStatus ? ('FP '+fpStatus.charAt(0).toUpperCase()+fpStatus.slice(1)) : 'FP belum accepted');
+      const badgeFp = `<span class="badge ${isAccepted ? 'badge-fp-accepted' : 'badge-fp-other'} ms-1">${textFp}</span>`;
+
+      const badgeRole = role ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${role}</span>` : '';
+
+      const $row = $(`
+        <div class="picklist-item d-flex justify-content-between align-items-start mb-2" data-id="${u.id_user}">
+          <div>
+            <div class="fw-semibold">${escapeHtml(u.nama_lengkap||'-')}</div>
+            <div class="small text-muted">${escapeHtml(u.email||'')}</div>
+          </div>
+          <div class="text-end">
+            ${badgeLoa} ${badgeFp} ${badgeRole}
+          </div>
+        </div>
+      `);
+
+      $row.on('click', function(){
+        if(hasLoa){ Swal.fire('Info','User ini sudah punya LOA.','info'); return; }
+        if(!eligible){ Swal.fire('Tidak memenuhi syarat','LOA hanya untuk Presenter dengan Full Paper ACCEPTED.','warning'); return; }
+        $('.picklist-item', $loaWrap).removeClass('active');
+        $(this).addClass('active');
+        $loaHidden.val($(this).data('id'));
+      });
+
+      $loaWrap.append($row);
     });
   }
-  window.deleteDocument = deleteDocument;
+
+  $loaEvent.on('change', function(){
+    const id = $(this).val();
+    $loaWrap.html('<div class="text-muted small">Memuat user...</div>');
+    $loaHidden.val('');
+    $loaCount.addClass('d-none').text('0 ditemukan');
+    if(!id){ $loaWrap.html('<div class="text-muted small">Pilih event terlebih dahulu.</div>'); return; }
+    $.get('<?= site_url('admin/dokumen/users-for-loa/') ?>'+encodeURIComponent(id))
+      .done(res => { if(res && res.status==='success'){ renderLoaUsers(res.data||[]); } else { $loaWrap.html('<div class="text-danger small">Gagal memuat user.</div>'); } })
+      .fail(()=> $loaWrap.html('<div class="text-danger small">Gagal memuat user.</div>'));
+  });
+
+  // ====== PICK LIST SERTIFIKAT ======
+  const $sertEvent   = $('#sertifikatEventId');
+  const $sertWrap    = $('#sertifikatUserListWrap');
+  const $sertHidden  = $('#sertifikatUserIdHidden');
+  const $sertCount   = $('#sertifikatCountBadge');
+
+  function renderCertificateUsers(items){
+    $sertWrap.empty();
+    $sertHidden.val('');
+    if(!items || !items.length){
+      $sertWrap.html('<div class="text-muted small">Belum ada pendaftar pada event ini.</div>');
+      $sertCount.addClass('d-none').text('0 ditemukan');
+      return;
+    }
+    $sertCount.removeClass('d-none').text(items.length+' ditemukan');
+
+    items.forEach(u=>{
+      const attended = !!u.attended;
+      const hasCert  = !!(u.has_cert ?? u.has_certificate);
+      const role     = (u.role||'').toString();
+
+      const badgeAttend = attended
+        ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Hadir</span>'
+        : '<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Belum Absen</span>';
+
+      const badgeCert = hasCert
+        ? '<span class="badge bg-info-subtle text-info border border-info-subtle ms-1">Sudah ada Sertifikat</span>'
+        : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">Belum ada Sertifikat</span>';
+
+      const badgeRole = role ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${role}</span>` : '';
+
+      const $row = $(`
+        <div class="picklist-item d-flex justify-content-between align-items-start mb-2" data-id="${u.id_user}">
+          <div>
+            <div class="fw-semibold">${escapeHtml(u.nama_lengkap||'-')}</div>
+            <div class="small text-muted">${escapeHtml(u.email||'')}</div>
+          </div>
+          <div class="text-end">
+            ${badgeAttend} ${badgeCert} ${badgeRole}
+          </div>
+        </div>
+      `);
+
+      $row.on('click', function(){
+        if(hasCert){ Swal.fire('Info','User ini sudah punya sertifikat.','info'); return; }
+        if(!attended){ Swal.fire('Tidak memenuhi syarat','Sertifikat hanya untuk peserta yang hadir.','warning'); return; }
+        $('.picklist-item', $sertWrap).removeClass('active');
+        $(this).addClass('active');
+        $sertHidden.val($(this).data('id'));
+      });
+
+      $sertWrap.append($row);
+    });
+  }
+
+  $sertEvent.on('change', function(){
+    const id = $(this).val();
+    $sertWrap.html('<div class="text-muted small">Memuat user...</div>');
+    $sertHidden.val('');
+    $sertCount.addClass('d-none').text('0 ditemukan');
+    if(!id){ $sertWrap.html('<div class="text-muted small">Pilih event terlebih dahulu.</div>'); return; }
+    $.get('<?= site_url('admin/dokumen/users-for-certificate/') ?>' + encodeURIComponent(id))
+      .done(res => { if(res && res.status === 'success'){ renderCertificateUsers(res.data||[]); } else { $sertWrap.html('<div class="text-danger small">Gagal memuat peserta.</div>'); } })
+      .fail(() => { $sertWrap.html('<div class="text-danger small">Gagal memuat peserta.</div>'); });
+  });
+
+  // ====== Validasi Upload LOA ======
+  $('#loaForm').on('submit', function(e){
+    const eventId = $('#loaEventId').val();
+    const userId  = $('#loaUserIdHidden').val();
+    const fileInp = this.querySelector('input[name="loa_file"]');
+    const file    = fileInp && fileInp.files[0];
+
+    if (!eventId){ e.preventDefault(); Swal.fire('Error','Pilih event terlebih dahulu.','error'); return; }
+    if (!userId){ e.preventDefault(); Swal.fire('Error','Pilih user pada daftar.','error'); return; }
+    if (!file){ e.preventDefault(); Swal.fire('Error','Pilih file LOA.','error'); return; }
+    if (file.size > 5242880){ e.preventDefault(); Swal.fire('Error','Ukuran file tidak boleh lebih dari 5MB.','error'); return; }
+    const ext = (file.name.split('.').pop()||'').toLowerCase();
+    if (!['pdf','doc','docx'].includes(ext)){ e.preventDefault(); Swal.fire('Error','File harus PDF/DOC/DOCX.','error'); return; }
+
+    const btn = $('#loaSubmitBtn'); btn.prop('disabled',true).find('span').text('Memproses...');
+  });
+
+  // ====== Validasi Upload Sertifikat ======
+  $('#sertifikatForm').on('submit', function(e){
+    const eventId = $('#sertifikatEventId').val();
+    const userId  = $('#sertifikatUserIdHidden').val();
+    const fileInp = this.querySelector('input[name="sertifikat_file"]');
+    const file    = fileInp && fileInp.files[0];
+
+    if (!eventId){ e.preventDefault(); Swal.fire('Error','Pilih event terlebih dahulu.','error'); return; }
+    if (!userId){ e.preventDefault(); Swal.fire('Error','Pilih user pada daftar.','error'); return; }
+    if (!file){ e.preventDefault(); Swal.fire('Error','Pilih file Sertifikat.','error'); return; }
+    if (file.size > 5242880){ e.preventDefault(); Swal.fire('Error','Ukuran file tidak boleh lebih dari 5MB.','error'); return; }
+    const ext = (file.name.split('.').pop()||'').toLowerCase();
+    if (!['pdf','jpg','jpeg','png'].includes(ext)){ e.preventDefault(); Swal.fire('Error','File harus PDF/JPG/PNG.','error'); return; }
+
+    const btn = $('#sertifikatSubmitBtn'); btn.prop('disabled',true).find('span').text('Memproses...');
+  });
+
+  // Flash
+  <?php if ($msg = session()->getFlashdata('success')): ?>
+    Swal.fire({ icon:'success', title:'Berhasil!', text:'<?= esc($msg) ?>', timer:3000, showConfirmButton:false });
+  <?php endif; ?>
+  <?php if ($msg = session()->getFlashdata('error')): ?>
+    Swal.fire({ icon:'error', title:'Error!', text:'<?= esc($msg) ?>' });
+  <?php endif; ?>
+  <?php if ($errors = session()->getFlashdata('errors')): ?>
+    Swal.fire({ icon:'error', title:'Validasi gagal', html:'<ul style="text-align:left; margin:0; padding-left:18px;"><?php foreach((array)$errors as $e){ echo "<li>".esc($e)."</li>"; } ?></ul>' });
+  <?php endif; ?>
 </script>
 
 <!-- ================= MODALS ================= -->
 
-<!-- Upload LOA (CENTERED) -->
+<!-- Upload LOA -->
 <div class="modal fade" id="uploadLoaModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <form action="<?= site_url('admin/dokumen/uploadLoa') ?>" method="POST" enctype="multipart/form-data" id="loaForm" class="modal-content">
@@ -293,7 +530,6 @@ $current_tipe  = $current_tipe ?? '';
 
         <hr class="my-3">
 
-        <!-- List user dinamis -->
         <input type="hidden" name="user_id" id="loaUserIdHidden" required>
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h6 class="mb-0"><i class="bi bi-people me-2"></i>Pilih User pada event</h6>
@@ -302,7 +538,10 @@ $current_tipe  = $current_tipe ?? '';
         <div id="loaUserListWrap" class="border rounded p-2" style="max-height:330px; overflow:auto;">
           <div class="text-muted small">Pilih event terlebih dahulu.</div>
         </div>
-        <div class="form-text mt-1">User yang sudah punya LOA tetap ditampilkan dengan label <em>“Sudah dapat LOA”</em>. Mengirim ulang akan ditolak oleh sistem.</div>
+        <div class="form-text mt-1">
+          LOA hanya untuk <strong>Presenter</strong> dengan <strong>Full Paper diterima (ACCEPTED)</strong>.
+          User yang sudah punya LOA tetap ditampilkan (akan ditolak saat kirim).
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
@@ -312,7 +551,7 @@ $current_tipe  = $current_tipe ?? '';
   </div>
 </div>
 
-<!-- Upload Sertifikat (STYLE SAMA SEPERTI LOA) -->
+<!-- Upload Sertifikat -->
 <div class="modal fade" id="uploadSertifikatModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <form action="<?= site_url('admin/dokumen/uploadSertifikat') ?>" method="POST" enctype="multipart/form-data" id="sertifikatForm" class="modal-content">
@@ -341,7 +580,6 @@ $current_tipe  = $current_tipe ?? '';
 
         <hr class="my-3">
 
-        <!-- Picklist user (semua pendaftar) -->
         <input type="hidden" name="user_id" id="sertifikatUserIdHidden" required>
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h6 class="mb-0"><i class="bi bi-people me-2"></i>Pilih User pada event</h6>
@@ -351,8 +589,8 @@ $current_tipe  = $current_tipe ?? '';
           <div class="text-muted small">Pilih event terlebih dahulu.</div>
         </div>
         <div class="form-text mt-1">
-          Menampilkan semua pendaftar event. Yang <strong>belum absen</strong> akan diberi label <em>“Belum Absen”</em>.
-          Jika sudah punya sertifikat akan diberi label <em>“Sudah ada Sertifikat”</em>. Mengirim ulang akan ditolak oleh sistem.
+          Menampilkan semua pendaftar event. Yang <strong>belum absen</strong> diberi label <em>“Belum Absen”</em>.
+          Jika sudah punya sertifikat diberi label <em>“Sudah ada Sertifikat”</em>.
         </div>
       </div>
       <div class="modal-footer">
@@ -382,7 +620,7 @@ $current_tipe  = $current_tipe ?? '';
             <?php endforeach; ?>
           </select>
         </div>
-        <div class="alert alert-info mb-0"><i class="bi bi-info-circle me-1"></i>LOA digenerate untuk presenter dengan pembayaran terverifikasi.</div>
+        <div class="alert alert-info mb-0"><i class="bi bi-info-circle me-1"></i>LOA digenerate untuk presenter dengan Full Paper diterima.</div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
@@ -439,28 +677,46 @@ $current_tipe  = $current_tipe ?? '';
     $loaCount.removeClass('d-none').text(items.length+' ditemukan');
 
     items.forEach(u=>{
-      const hasLoa = !!u.has_loa;
-      const pay = (u.pay_status||'').toUpperCase();
+      const hasLoa   = !!u.has_loa;
+      const role     = (u.role||'').toString();
+      const fpStatus = (u.fp_status||'').toString().toLowerCase();
+      const eligible = !!u.eligible;
+
+      // badge LOA
       const badgeLoa = hasLoa
         ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Sudah dapat LOA</span>'
         : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Belum dapat LOA</span>';
-      const badgePay = pay
-        ? `<span class="badge ${pay==='VERIFIED'?'bg-success':'bg-outline-secondary'} ms-1">${pay}</span>` : '';
-      const role = u.role ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${u.role}</span>` : '';
+
+      // badge FP (hijau kalau accepted, abu jika selain itu/kosong)
+      const isAccepted = fpStatus === 'accepted';
+      const textFp = isAccepted ? 'FP Accepted' : (fpStatus ? ('FP '+fpStatus.charAt(0).toUpperCase()+fpStatus.slice(1)) : 'FP belum accepted');
+      const badgeFp = `<span class="badge ${isAccepted ? 'badge-fp-accepted' : 'badge-fp-other'} ms-1">${textFp}</span>`;
+
+      const badgeRole = role
+        ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${role}</span>`
+        : '';
 
       const $row = $(`
-        <div class="picklist-item d-flex justify-content-between align-items-start mb-2 ${hasLoa?'disabled':''}" data-id="${u.id_user}">
+        <div class="picklist-item d-flex justify-content-between align-items-start mb-2" data-id="${u.id_user}">
           <div>
             <div class="fw-semibold">${escapeHtml(u.nama_lengkap||'-')}</div>
             <div class="small text-muted">${escapeHtml(u.email||'')}</div>
           </div>
           <div class="text-end">
-            ${badgeLoa} ${badgePay} ${role}
+            ${badgeLoa} ${badgeFp} ${badgeRole}
           </div>
         </div>
       `);
 
       $row.on('click', function(){
+        if(hasLoa){
+          Swal.fire('Info','User ini sudah punya LOA.','info');
+          return;
+        }
+        if(!eligible){
+          Swal.fire('Tidak memenuhi syarat','LOA hanya untuk Presenter dengan Full Paper ACCEPTED.','warning');
+          return;
+        }
         $('.picklist-item', $loaWrap).removeClass('active');
         $(this).addClass('active');
         $loaHidden.val($(this).data('id'));
@@ -504,7 +760,7 @@ $current_tipe  = $current_tipe ?? '';
 
     items.forEach(u=>{
       const attended = !!u.attended;
-      const hasCert  = !!(u.has_cert ?? u.has_certificate); // kompat nama key
+      const hasCert  = !!(u.has_cert ?? u.has_certificate);
       const role     = (u.role||'').toString();
 
       const badgeAttend = attended
@@ -520,7 +776,7 @@ $current_tipe  = $current_tipe ?? '';
         : '';
 
       const $row = $(`
-        <div class="picklist-item d-flex justify-content-between align-items-start mb-2 ${hasCert?'disabled':''}" data-id="${u.id_user}">
+        <div class="picklist-item d-flex justify-content-between align-items-start mb-2" data-id="${u.id_user}">
           <div>
             <div class="fw-semibold">${escapeHtml(u.nama_lengkap||'-')}</div>
             <div class="small text-muted">${escapeHtml(u.email||'')}</div>
@@ -532,6 +788,14 @@ $current_tipe  = $current_tipe ?? '';
       `);
 
       $row.on('click', function(){
+        if(hasCert){
+          Swal.fire('Info','User ini sudah punya sertifikat.','info');
+          return;
+        }
+        if(!attended){
+          Swal.fire('Tidak memenuhi syarat','Sertifikat hanya untuk peserta yang hadir.','warning');
+          return;
+        }
         $('.picklist-item', $sertWrap).removeClass('active');
         $(this).addClass('active');
         $sertHidden.val($(this).data('id'));

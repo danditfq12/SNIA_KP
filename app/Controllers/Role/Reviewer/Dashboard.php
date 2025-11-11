@@ -45,7 +45,7 @@ class Dashboard extends BaseController
         $ts        = $this->pickCol($rt, ['tanggal_review','updated_at','created_at']);
         $type      = $this->pickCol($rt, ['type','review_type']);
 
-        $asgStatus = $this->pickCol($rt, ['status_tugas','tugas_status','assignment_status','konfirmasi_status']);
+        $asgStatus = $this->pickCol($rt, ['status_tugas','tugas_status','assignment_status','konfirmasi_status','status']);
         $asgReason = $this->pickCol($rt, ['alasan_tolak','alasan','decline_reason','reason']);
         $asgAccAt  = $this->pickCol($rt, ['accepted_at','confirmed_at','konfirmasi_at']);
         $asgDecAt  = $this->pickCol($rt, ['declined_at','rejected_at']);
@@ -67,8 +67,6 @@ class Dashboard extends BaseController
             'uploaded' => $this->pickCol($t, ['tanggal_upload','created_at']),
             'event_id' => $this->pickCol($t, ['event_id','id_event']),
             'status'   => $this->pickCol($t, ['status']) ?? 'status',
-            'user_id'  => $this->pickCol($t, ['id_user','user_id']),
-            'category' => $this->pickCol($t, ['id_kategori']),
         ];
     }
 
@@ -110,12 +108,25 @@ class Dashboard extends BaseController
     {
         if (!$datetime) return '—';
         $diff = time() - strtotime($datetime);
-        if ($diff < 60)     return 'baru saja';
-        if ($diff < 3600)   return floor($diff/60).' menit lalu';
-        if ($diff < 86400)  return floor($diff/3600).' jam lalu';
-        if ($diff < 2592000)return floor($diff/86400).' hari lalu';
+        if ($diff < 60)      return 'baru saja';
+        if ($diff < 3600)    return floor($diff/60).' menit lalu';
+        if ($diff < 86400)   return floor($diff/3600).' jam lalu';
+        if ($diff < 2592000) return floor($diff/86400).' hari lalu';
         if ($diff < 31536000)return floor($diff/2592000).' bulan lalu';
         return floor($diff/31536000).' tahun lalu';
+    }
+
+    /** Helper: kondisi “pending” yang aman untuk PG/MySQL */
+    private function wherePending($builder, string $col)
+    {
+        $pendingVals= ["pending","menunggu","requested","assigned","awaiting","waiting","new"];
+        // TRIM + LOWER untuk tangani spasi/uppercase
+        $lc = "LOWER(TRIM($col))";
+        return $builder->groupStart()
+            ->where("$col IS NULL", null, false)
+            ->orWhere("$lc = ''", null, false)
+            ->orWhereIn("$lc", $pendingVals)
+        ->groupEnd();
     }
 
     /* =============================== Dashboard =============================== */
@@ -154,45 +165,38 @@ class Dashboard extends BaseController
                 ->countAllResults();
         }
 
-        // Incoming: tugas dengan status tugas NULL/pending
         $incoming   = [];
         $hasAssign  = (bool) $R['asgStatus'];
-        $pendingVals= ["pending","menunggu","requested","assigned","awaiting","waiting","new"];
 
         if ($hasAssign) {
-            // ABSTRAK
-            if ($A['exists'] && $R['abstrakFk']) {
-                $sel = [
-                    "r.{$R['pk']} AS review_id",
-                    "a.{$A['pk']} AS id_abstrak",
-                    "a.{$A['title']} AS judul",
-                ];
-                if ($A['uploaded']) $sel[] = "a.{$A['uploaded']} AS tanggal_upload";
-                if ($E['exists'] && $A['event_id']) {
-                    $sel[] = "e.{$E['title']} AS event_title";
-                    $sel[] = "e.{$E['date']}  AS event_date";
-                }
+            $col = "r.{$R['asgStatus']}";
 
+            /* ---------- ABSTRAK (LEFT JOIN; tetap tampil kalau data master tak ada) ---------- */
+            if ($A['exists'] && $R['abstrakFk']) {
                 $b = $this->db->table("$rt r")
-                    ->select(implode(', ', $sel))
-                    ->join("{$A['table']} a", "a.{$A['pk']} = r.{$R['abstrakFk']}", 'inner')
+                    ->select("
+                        r.{$R['pk']} AS review_id,
+                        r.{$R['abstrakFk']} AS id_abstrak,
+                        a.{$A['title']} AS judul,
+                        a.{$A['uploaded']} AS tanggal_upload,
+                        e.{$E['title']} AS event_title
+                    ")
+                    ->join("{$A['table']} a", "a.{$A['pk']} = r.{$R['abstrakFk']}", 'left')
                     ->where("r.{$R['reviewer']}", $idReviewer)
-                    ->where("r.{$R['abstrakFk']} IS NOT NULL", null, false)
-                    ->groupStart()
-                        ->where("r.{$R['asgStatus']} IS NULL", null, false)
-                        ->orWhere("LOWER(r.{$R['asgStatus']}) IN ('".implode("','",$pendingVals)."')", null, false)
-                    ->groupEnd();
+                    ->where("r.{$R['abstrakFk']} IS NOT NULL", null, false);
+
+                $this->wherePending($b, $col);
 
                 if ($E['exists'] && $A['event_id']) {
                     $b->join("{$E['table']} e", "e.{$E['pk']} = a.{$A['event_id']}", 'left');
                 }
 
-                foreach ($b->get()->getResultArray() as $row) {
+                foreach ($b->orderBy("r.{$R['pk']}",'DESC')->get()->getResultArray() as $row) {
                     $incoming[] = [
                         'task_type'      => 'abstrak',
                         'review_id'      => $row['review_id'],
                         'id_abstrak'     => (int)($row['id_abstrak'] ?? 0),
-                        'judul'          => $row['judul'] ?? '—',
+                        'judul'          => $row['judul'] ?: '(Tanpa judul)',
                         'event_title'    => $row['event_title'] ?? null,
                         'tanggal_upload' => $row['tanggal_upload'] ?? null,
                         'time_ago'       => $this->timeAgo($row['tanggal_upload'] ?? null),
@@ -200,42 +204,56 @@ class Dashboard extends BaseController
                 }
             }
 
-            // FULL PAPER
+            /* ---------- FULL PAPER (LEFT JOIN) ---------- */
             if ($S['exists'] && $R['subFk']) {
-                $sel = [
-                    "r.{$R['pk']} AS review_id",
-                    "s.{$S['pk']} AS id_submission",
-                    "s.{$S['title']} AS judul",
-                ];
-                if ($S['uploaded']) $sel[] = "s.{$S['uploaded']} AS tanggal_upload";
-                if ($E['exists'] && $S['event_id']) {
-                    $sel[] = "e.{$E['title']} AS event_title";
-                    $sel[] = "e.{$E['date']}  AS event_date";
-                }
-
                 $b = $this->db->table("$rt r")
-                    ->select(implode(', ', $sel))
-                    ->join("{$S['table']} s", "s.{$S['pk']} = r.{$R['subFk']}", 'inner')
+                    ->select("
+                        r.{$R['pk']} AS review_id,
+                        r.{$R['subFk']} AS id_submission,
+                        s.{$S['title']} AS judul,
+                        s.{$S['uploaded']} AS tanggal_upload,
+                        e.{$E['title']} AS event_title
+                    ")
+                    ->join("{$S['table']} s", "s.{$S['pk']} = r.{$R['subFk']}", 'left')
                     ->where("r.{$R['reviewer']}", $idReviewer)
-                    ->where("r.{$R['subFk']} IS NOT NULL", null, false)
-                    ->groupStart()
-                        ->where("r.{$R['asgStatus']} IS NULL", null, false)
-                        ->orWhere("LOWER(r.{$R['asgStatus']}) IN ('".implode("','",$pendingVals)."')", null, false)
-                    ->groupEnd();
+                    ->where("r.{$R['subFk']} IS NOT NULL", null, false);
+
+                $this->wherePending($b, $col);
 
                 if ($E['exists'] && $S['event_id']) {
                     $b->join("{$E['table']} e", "e.{$E['pk']} = s.{$S['event_id']}", 'left');
                 }
 
-                foreach ($b->get()->getResultArray() as $row) {
+                foreach ($b->orderBy("r.{$R['pk']}",'DESC')->get()->getResultArray() as $row) {
                     $incoming[] = [
                         'task_type'      => 'fullpaper',
                         'review_id'      => $row['review_id'],
                         'id_submission'  => (int)($row['id_submission'] ?? 0),
-                        'judul'          => $row['judul'] ?? '—',
+                        'judul'          => $row['judul'] ?: '(Tanpa judul)',
                         'event_title'    => $row['event_title'] ?? null,
                         'tanggal_upload' => $row['tanggal_upload'] ?? null,
                         'time_ago'       => $this->timeAgo($row['tanggal_upload'] ?? null),
+                    ];
+                }
+            }
+
+            /* ---------- FALLBACK (kalau tabel master tidak ada sama sekali) ---------- */
+            if (empty($incoming)) {
+                $b = $this->db->table("$rt r")
+                    ->select("r.{$R['pk']} AS review_id, r.{$R['abstrakFk']} AS id_abstrak, r.{$R['subFk']} AS id_submission")
+                    ->where("r.{$R['reviewer']}", $idReviewer);
+                $this->wherePending($b, $col);
+
+                foreach ($b->orderBy("r.{$R['pk']}",'DESC')->get()->getResultArray() as $row) {
+                    $incoming[] = [
+                        'task_type'      => ($row['id_submission'] ? 'fullpaper' : 'abstrak'),
+                        'review_id'      => $row['review_id'],
+                        'id_abstrak'     => (int)($row['id_abstrak'] ?? 0),
+                        'id_submission'  => (int)($row['id_submission'] ?? 0),
+                        'judul'          => '(Data belum lengkap)',
+                        'event_title'    => null,
+                        'tanggal_upload' => null,
+                        'time_ago'       => '—',
                     ];
                 }
             }
@@ -281,7 +299,6 @@ class Dashboard extends BaseController
         $st = $this->submissionTable();
         $S  = $this->submissionCols($st);
 
-        // Tentukan FK yang dipakai
         $where = [$R['reviewer'] => $idReviewer];
         if ($type === 'abstrak') {
             if (!$R['abstrakFk']) return $this->respondConfirm($isAjax, false, 'Kolom id_abstrak tidak tersedia.');
@@ -294,10 +311,8 @@ class Dashboard extends BaseController
         $row = $this->db->table($rt)->where($where)->orderBy($R['pk'],'DESC')->get()->getRowArray();
         if (!$row) return $this->respondConfirm($isAjax, false, 'Tugas tidak ditemukan.');
 
-        // DECLINE → hapus row assignment + rollback status entitas ke 'menunggu'
         if ($action === 'decline') {
             $this->db->transStart();
-
             $ok = (bool)$this->db->table($rt)->where($R['pk'], $row[$R['pk']])->delete();
             if ($ok) {
                 if ($type === 'abstrak' && $A['exists']) {
@@ -306,7 +321,6 @@ class Dashboard extends BaseController
                     $this->db->table($S['table'])->where($S['pk'], $id)->set($S['status'], 'menunggu')->update();
                 }
             }
-
             $this->db->transComplete();
 
             return $this->respondConfirm($isAjax, $ok, $ok
@@ -314,7 +328,6 @@ class Dashboard extends BaseController
                 : 'Gagal melepas tugas.');
         }
 
-        // ACCEPT → tandai accepted bila kolom ada
         if ($R['asgStatus']) {
             $payload = [ $R['asgStatus'] => 'accepted' ];
             if ($R['asgReason']) $payload[$R['asgReason']] = null;
@@ -345,15 +358,13 @@ class Dashboard extends BaseController
     private function buildReviewerNotifs(int $uid, string $rt, array $R): array
     {
         if (!$R['asgStatus']) return [];
-        $pendingVals = ["pending","menunggu","requested","assigned","awaiting","waiting","new"];
+        $col = $R['asgStatus'];
 
-        $count = $this->db->table($rt)
-            ->where($R['reviewer'], $uid)
-            ->groupStart()
-                ->where("{$R['asgStatus']}", null)
-                ->orWhere("LOWER({$R['asgStatus']}) IN ('".implode("','",$pendingVals)."')", null, false)
-            ->groupEnd()
-            ->countAllResults();
+        $b = $this->db->table($rt)
+            ->where($R['reviewer'], $uid);
+        $this->wherePending($b, $col);
+
+        $count = $b->countAllResults();
 
         if ($count <= 0) return [];
         return [[
