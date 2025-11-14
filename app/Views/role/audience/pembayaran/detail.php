@@ -1,5 +1,17 @@
 <?php
-// Enhanced Pembayaran Detail (Audience) - Midtrans Only  
+/**
+ * Enhanced Pembayaran Detail (Audience) - WITH WAVE INFO
+ * 
+ * Features:
+ * - ✅ Wave information display (Gelombang 1, 2, 3)
+ * - ✅ Proper payment method display (BCA VA, GoPay, dll)
+ * - ✅ Auto-verification support
+ * - Midtrans payment only
+ * 
+ * @version 3.1 - Wave Info & Payment Method Enhanced
+ * @date 2025-01-14
+ */
+
 $title = $title ?? 'Detail Pembayaran';
 $pay   = $pay   ?? [];
 $event = $event ?? [];
@@ -21,6 +33,7 @@ $settlementTime = $pay['midtrans_settlement_time'] ?? null;
 
 $payId = (int)($pay['id_pembayaran'] ?? 0);
 $regId = $reg ? (int)($reg['id'] ?? 0) : 0;
+$eventId = (int)($event['id'] ?? 0);
 
 $badge = match($status) {
     'pending' => 'warning',
@@ -34,9 +47,79 @@ $badge = match($status) {
 $evTitle = $event['title'] ?? 'Event';
 $evDate  = isset($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-';
 $evTime  = $event['event_time'] ?? '-';
-$evId    = (int)($event['id'] ?? 0);
 
 $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
+
+// ✅ GET PAYMENT METHOD INFO
+$paymentMethodInfo = [
+    'icon' => 'credit-card',
+    'label' => 'Digital Payment',
+    'color' => '#2563eb',
+    'category' => 'Midtrans'
+];
+
+if (!empty($paymentType)) {
+    $paymentMethodMap = [
+        // E-Wallet
+        'dana' => ['icon' => 'wallet2', 'label' => 'DANA', 'color' => '#118eea'],
+        'gopay' => ['icon' => 'wallet2', 'label' => 'GoPay', 'color' => '#00aa13'],
+        'shopeepay' => ['icon' => 'wallet2', 'label' => 'ShopeePay', 'color' => '#ee4d2d'],
+        'ovo' => ['icon' => 'wallet2', 'label' => 'OVO', 'color' => '#4b2d83'],
+        
+        // Virtual Account
+        'bca_va' => ['icon' => 'building', 'label' => 'BCA Virtual Account', 'color' => '#003087'],
+        'bni_va' => ['icon' => 'building', 'label' => 'BNI Virtual Account', 'color' => '#ed7203'],
+        'bri_va' => ['icon' => 'building', 'label' => 'BRI Virtual Account', 'color' => '#003d7a'],
+        'mandiri_va' => ['icon' => 'building', 'label' => 'Mandiri Virtual Account', 'color' => '#003d79'],
+        'permata_va' => ['icon' => 'building', 'label' => 'Permata Virtual Account', 'color' => '#00a84f'],
+        
+        // Others
+        'qris' => ['icon' => 'qr-code', 'label' => 'QRIS', 'color' => '#d32f2f'],
+        'credit_card' => ['icon' => 'credit-card', 'label' => 'Kartu Kredit', 'color' => '#6b7280'],
+        'bank_transfer' => ['icon' => 'bank', 'label' => 'Bank Transfer', 'color' => '#1e40af'],
+        'echannel' => ['icon' => 'bank', 'label' => 'Mandiri Bill Payment', 'color' => '#003d79'],
+        'indomaret' => ['icon' => 'shop', 'label' => 'Indomaret', 'color' => '#d91e27'],
+        'alfamart' => ['icon' => 'shop', 'label' => 'Alfamart', 'color' => '#ed1c24'],
+    ];
+    
+    $paymentMethodInfo = $paymentMethodMap[$paymentType] ?? [
+        'icon' => 'credit-card',
+        'label' => ucwords(str_replace('_', ' ', $paymentType)),
+        'color' => '#2563eb'
+    ];
+}
+
+// ✅ GET WAVE INFO from Event Model
+$eventModel = new \App\Models\EventModel();
+$currentWave = $eventModel->getCurrentWave($eventId);
+$waveNumber = $currentWave['wave_number'] ?? null;
+$waveName = $currentWave['wave_name'] ?? null;
+
+// Try to determine which wave was used for this payment
+$waveUsed = null;
+if ($tanggal && $event) {
+    $paymentDate = strtotime($tanggal);
+    $waves = $event['registration_waves'] ?? [];
+    
+    if (is_string($waves)) {
+        $waves = json_decode($waves, true);
+    }
+    
+    if (is_array($waves)) {
+        foreach ($waves as $idx => $wave) {
+            $start = strtotime($wave['registration_start'] ?? '');
+            $end = strtotime($wave['registration_deadline'] ?? '');
+            
+            if ($start && $end && $paymentDate >= $start && $paymentDate <= $end) {
+                $waveUsed = [
+                    'number' => $idx + 1,
+                    'name' => $wave['wave_name'] ?? "Gelombang " . ($idx + 1)
+                ];
+                break;
+            }
+        }
+    }
+}
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -77,7 +160,20 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
                 <div class="pay-tags">
                   <span class="pay-tag"><i class="bi bi-calendar-event"></i> <?= esc($evDate) ?></span>
                   <span class="pay-tag"><i class="bi bi-clock"></i> <?= esc($evTime) ?></span>
-                  <span class="pay-tag"><i class="bi bi-credit-card"></i> Digital Payment</span>
+                  
+                  <!-- ✅ WAVE INFO TAG -->
+                  <?php if ($waveUsed): ?>
+                  <span class="pay-tag wave-tag">
+                    <i class="bi bi-speedometer2"></i> 
+                    <?= esc($waveUsed['name']) ?>
+                  </span>
+                  <?php endif; ?>
+                  
+                  <!-- ✅ PAYMENT METHOD TAG -->
+                  <span class="pay-tag payment-method-tag" style="background: <?= $paymentMethodInfo['color'] ?>20; border-color: <?= $paymentMethodInfo['color'] ?>40; color: <?= $paymentMethodInfo['color'] ?>;">
+                    <i class="bi bi-<?= $paymentMethodInfo['icon'] ?>"></i> 
+                    <?= esc($paymentMethodInfo['label']) ?>
+                  </span>
                 </div>
               </div>
               <div class="text-md-end">
@@ -115,30 +211,37 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
                       <div class="detail-group">
                         <label class="detail-label">Metode Pembayaran</label>
                         <div class="detail-value">
-                          <span class="badge bg-primary">
-                            <i class="bi bi-credit-card me-1"></i>Midtrans Digital
+                          <span class="payment-badge" style="background: <?= $paymentMethodInfo['color'] ?>; color: white;">
+                            <i class="bi bi-<?= $paymentMethodInfo['icon'] ?> me-1"></i>
+                            <?= esc($paymentMethodInfo['label']) ?>
                           </span>
                         </div>
                       </div>
 
+                      <!-- ✅ WAVE INFO -->
+                      <?php if ($waveUsed): ?>
+                      <div class="detail-group">
+                        <label class="detail-label">Gelombang Pendaftaran</label>
+                        <div class="detail-value">
+                          <span class="badge bg-info">
+                            <i class="bi bi-speedometer2 me-1"></i>
+                            <?= esc($waveUsed['name']) ?>
+                          </span>
+                        </div>
+                      </div>
+                      <?php endif; ?>
+
                       <?php if ($orderId): ?>
                       <div class="detail-group">
                         <label class="detail-label">Order ID</label>
-                        <div class="detail-value font-monospace"><?= esc($orderId) ?></div>
+                        <div class="detail-value font-monospace small"><?= esc($orderId) ?></div>
                       </div>
                       <?php endif; ?>
 
                       <?php if ($transactionId): ?>
                       <div class="detail-group">
                         <label class="detail-label">Transaction ID</label>
-                        <div class="detail-value font-monospace"><?= esc($transactionId) ?></div>
-                      </div>
-                      <?php endif; ?>
-
-                      <?php if ($paymentType): ?>
-                      <div class="detail-group">
-                        <label class="detail-label">Payment Type</label>
-                        <div class="detail-value"><?= esc(ucwords(str_replace('_', ' ', $paymentType))) ?></div>
+                        <div class="detail-value font-monospace small"><?= esc($transactionId) ?></div>
                       </div>
                       <?php endif; ?>
                     </div>
@@ -159,7 +262,7 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
                       
                       <div class="detail-group">
                         <label class="detail-label">Total Dibayar</label>
-                        <div class="detail-value fw-bold fs-5">Rp <?= number_format($amount, 0, ',', '.') ?></div>
+                        <div class="detail-value fw-bold fs-5 text-primary">Rp <?= number_format($amount, 0, ',', '.') ?></div>
                       </div>
                     </div>
 
@@ -263,7 +366,7 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
                         <?php endif; ?>
                         <?php if ($canRetry): ?>
                         <div class="mt-2">
-                          <a href="<?= site_url('audience/events/detail/'.$evId) ?>" class="btn btn-sm btn-primary">
+                          <a href="<?= site_url('audience/events/detail/'.$eventId) ?>" class="btn btn-sm btn-primary">
                             <i class="bi bi-arrow-repeat me-1"></i>Coba Bayar Lagi
                           </a>
                         </div>
@@ -275,7 +378,7 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
                         Pembayaran kedaluwarsa. Silakan lakukan pembayaran baru.
                         <?php if ($canRetry): ?>
                         <div class="mt-2">
-                          <a href="<?= site_url('audience/events/detail/'.$evId) ?>" class="btn btn-sm btn-primary">
+                          <a href="<?= site_url('audience/events/detail/'.$eventId) ?>" class="btn btn-sm btn-primary">
                             <i class="bi bi-arrow-repeat me-1"></i>Bayar Ulang
                           </a>
                         </div>
@@ -377,13 +480,13 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
             </a>
             
             <?php if ($status === 'verified'): ?>
-            <a href="<?= site_url('audience/events/detail/'.$evId) ?>" class="btn btn-success">
+            <a href="<?= site_url('audience/events/detail/'.$eventId) ?>" class="btn btn-success">
               <i class="bi bi-calendar-check me-1"></i>Detail Event
             </a>
             <?php endif; ?>
 
             <?php if ($canRetry): ?>
-            <a href="<?= site_url('audience/events/detail/'.$evId) ?>" class="btn btn-primary">
+            <a href="<?= site_url('audience/events/detail/'.$eventId) ?>" class="btn btn-primary">
               <i class="bi bi-arrow-repeat me-1"></i>Coba Lagi
             </a>
             <?php endif; ?>
@@ -400,16 +503,26 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
 
 <style>
   .pay-hero{
-    background: linear-gradient(90deg,#2563eb,#60a5fa);
-    border-radius: 16px; color:#fff; padding: 16px 20px;
-    box-shadow: 0 6px 20px rgba(37,99,235,.18);
+    background: linear-gradient(135deg,#2563eb,#60a5fa);
+    border-radius: 16px; color:#fff; padding: 20px 24px;
+    box-shadow: 0 8px 24px rgba(37,99,235,.2);
   }
   .pay-title{ font-weight:800; line-height:1.25; font-size: clamp(18px, 4.2vw, 24px); }
-  .pay-tags{ display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.2rem; }
+  .pay-tags{ display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem; }
   .pay-tag{
-    background: rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.22);
-    color:#fff; border-radius:999px; padding:.28rem .6rem; font-size: .85rem;
+    background: rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.3);
+    color:#fff; border-radius:999px; padding:.35rem .75rem; font-size: .875rem;
     display:inline-flex; align-items:center; gap:.45rem;
+  }
+  
+  .wave-tag {
+    background: rgba(255,255,255,.3);
+    border: 1px solid rgba(255,255,255,.4);
+    font-weight: 600;
+  }
+  
+  .payment-method-tag {
+    font-weight: 600;
   }
 
   .detail-group {
@@ -421,11 +534,21 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
     color: #6b7280;
     margin-bottom: 0.25rem;
     display: block;
+    font-weight: 500;
   }
 
   .detail-value {
     font-weight: 500;
     color: #374151;
+  }
+  
+  .payment-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.375rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
   }
 
   .voucher-card {
@@ -566,8 +689,8 @@ $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
     font-weight: 600;
   }
 
-  @media (min-width: 576px){
-    .pay-hero{ padding: 20px 24px; border-radius:18px; }
+  @media (max-width: 768px){
+    .pay-hero{ padding: 16px 20px; }
   }
 </style>
 

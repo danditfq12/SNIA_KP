@@ -763,7 +763,7 @@
                         <div class="feature-icon mb-3">
                             <i class="fas fa-users"></i>
                         </div>
-                        <h4 class="fw-bold">Audience Offline</h4>
+                        <h4 class="fw-bold">Peserta Offline</h4>
                         <div class="price">Rp <?= number_format($activeEvent['audience_fee_offline'], 0, ',', '.') ?></div>
                     </div>
                     <ul class="list-unstyled mb-4">
@@ -782,7 +782,7 @@
                         <div class="feature-icon mb-3">
                             <i class="fas fa-laptop"></i>
                         </div>
-                        <h4 class="fw-bold">Audience Online</h4>
+                        <h4 class="fw-bold">Peserta Online</h4>
                         <div class="price">Rp <?= number_format($activeEvent['audience_fee_online'], 0, ',', '.') ?></div>
                     </div>
                     <ul class="list-unstyled mb-4">

@@ -1,13 +1,28 @@
 <?php
-  $title   = 'Pilih Mode Kehadiran';
-  $event   = $event ?? [];
-  $options = $options ?? [];    // contoh: ['online','offline']
-  $pricing = $pricing ?? [];    // ['audience'=>['online'=>..., 'offline'=>...]]
-  $rupiah  = function($n){ return ($n===null||$n==='') ? '—' : 'Rp '.number_format((float)$n,0,',','.'); };
-  $priceOnline  = $pricing['audience']['online']  ?? null;
-  $priceOffline = $pricing['audience']['offline'] ?? null;
-  
-  $eventFormat = strtolower($event['format'] ?? '');
+/**
+ * Audience Choose Mode View - NO VOUCHER, Wave-Based Pricing
+ * 
+ * Features:
+ * - Wave-based pricing display (early bird, regular, etc)
+ * - NO voucher system
+ * - Direct to payment with wave pricing
+ * - Full integration with EventModel waves
+ * 
+ * @version 3.1 - No Voucher Edition (Payment Info Removed)
+ * @date 2025-11-14
+ */
+
+$title   = 'Pilih Mode Kehadiran';
+$event   = $event ?? [];
+$options = $options ?? [];
+$pricing = $pricing ?? [];
+$waveInfo = $waveInfo ?? null; // Wave info from controller
+$rupiah  = function($n){ return ($n===null||$n==='') ? '—' : 'Rp '.number_format((float)$n,0,',','.'); };
+
+$priceOnline  = $pricing['audience']['online']  ?? null;
+$priceOffline = $pricing['audience']['offline'] ?? null;
+
+$eventFormat = strtolower($event['format'] ?? '');
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_audience') ?>
@@ -24,6 +39,44 @@
           <span>Kembali ke Detail Event</span>
         </a>
       </div>
+
+      <!-- ===== Wave Info Card ===== -->
+      <?php if (!empty($waveInfo)): ?>
+      <div class="wave-info-card mb-4">
+        <div class="wave-badge <?= isset($waveInfo['wave_number']) && $waveInfo['wave_number'] == 1 ? 'badge-early' : 'badge-regular' ?>">
+          <i class="bi bi-lightning-charge-fill"></i>
+          <span>
+            <?php if(isset($waveInfo['wave_number']) && $waveInfo['wave_number'] == 1): ?>
+              EARLY BIRD - Wave <?= $waveInfo['wave_number'] ?>
+            <?php else: ?>
+              WAVE <?= $waveInfo['wave_number'] ?? '1' ?>
+            <?php endif; ?>
+          </span>
+        </div>
+        
+        <div class="wave-content">
+          <div class="wave-title">
+            <i class="bi bi-hourglass-split"></i>
+            <strong>Registrasi Ditutup:</strong>
+            <?= date('d M Y, H:i', strtotime($waveInfo['deadline'])) ?>
+          </div>
+          
+          <?php 
+          $now = time();
+          $deadline = strtotime($waveInfo['deadline']);
+          $daysLeft = ceil(($deadline - $now) / 86400);
+          if ($daysLeft > 0):
+          ?>
+          <div class="wave-countdown">
+            <i class="bi bi-clock-fill"></i>
+            <span class="countdown-text">
+              Sisa waktu: <strong><?= $daysLeft ?> hari</strong>
+            </span>
+          </div>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endif; ?>
 
       <!-- Event Summary Card -->
       <div class="event-summary-card mb-4">
@@ -116,7 +169,6 @@
                 <?php foreach ($options as $opt): 
                   $price = $pricing['audience'][$opt] ?? null;
                   
-                  // Skip jika harga tidak tersedia (null, empty, atau 0)
                   if ($price === null || $price === '' || (float)$price == 0) continue;
                   
                   $icon  = $opt === 'online' ? 'bi-wifi' : 'bi-people-fill';
@@ -124,30 +176,82 @@
                 ?>
                 <label class="mode-option-card <?= $colorClass ?>" for="mode_<?= esc($opt) ?>">
                   <div class="option-radio">
-                    <input class="form-check-input" type="radio" name="mode_kehadiran"
-                           id="mode_<?= esc($opt) ?>" value="<?= esc($opt) ?>" required>
+                    <input class="form-check-input mode-radio" 
+                           type="radio" 
+                           name="mode_kehadiran"
+                           id="mode_<?= esc($opt) ?>" 
+                           value="<?= esc($opt) ?>" 
+                           data-price="<?= $price ?>"
+                           required>
                   </div>
                   
-                  <div class="option-icon">
-                    <i class="bi <?= $icon ?>"></i>
-                  </div>
-                  
-                  <div class="option-content">
-                    <div class="option-title"><?= esc(ucfirst($opt)) ?></div>
-                    <div class="option-price">
-                      <span class="price-amount"><?= $rupiah($price) ?></span>
+                  <div class="option-main">
+                    <div class="option-icon">
+                      <i class="bi <?= $icon ?>"></i>
                     </div>
-                    <div class="option-description">
+                    
+                    <div class="option-content">
+                      <div class="option-title"><?= esc(ucfirst($opt)) ?></div>
+                      <div class="option-price">
+                        <span class="price-amount"><?= $rupiah($price) ?></span>
+                      </div>
+                      <div class="option-description">
+                        <?php if($opt === 'online'): ?>
+                          Ikuti event secara virtual dari mana saja
+                        <?php else: ?>
+                          Hadir langsung di lokasi event
+                        <?php endif; ?>
+                      </div>
+                    </div>
+                    
+                    <div class="option-check">
+                      <i class="bi bi-check-circle-fill"></i>
+                    </div>
+                  </div>
+
+                  <!-- Benefits List -->
+                  <div class="option-benefits">
+                    <div class="benefits-title">
+                      <i class="bi bi-gift-fill"></i>
+                      <span>Apa yang Anda dapatkan:</span>
+                    </div>
+                    <ul class="benefits-list">
                       <?php if($opt === 'online'): ?>
-                        Ikuti event secara virtual dari mana saja
+                        <li>
+                          <i class="bi bi-check2"></i>
+                          <span><strong>Live Streaming</strong> - Akses streaming real-time</span>
+                        </li>
+                        <li>
+                          <i class="bi bi-check2"></i>
+                          <span><strong>Digital Certificate</strong> - E-sertifikat resmi</span>
+                        </li>
+                        <li>
+                          <i class="bi bi-check2"></i>
+                          <span><strong>Recording Access</strong> - Akses rekaman 7 hari</span>
+                        </li>
+                        <li>
+                          <i class="bi bi-check2"></i>
+                          <span><strong>Q&A Session</strong> - Interaksi via chat langsung</span>
+                        </li>
                       <?php else: ?>
-                        Hadir langsung di lokasi event
+                        <li>
+                          <i class="bi bi-check2"></i>
+                          <span><strong>Attend Seminar</strong> - Hadir langsung di venue acara</span>
+                        </li>
+                        <li>
+                          <i class="bi bi-check2"></i>
+                          <span><strong>Certificate</strong> - Sertifikat fisik & digital</span>
+                        </li>
+                        <li>
+                          <i class="bi bi-check2"></i>
+                          <span><strong>Lunch & Coffee</strong> - Makan siang dan snack</span>
+                        </li>
+                        <li>
+                          <i class="bi bi-check2"></i>
+                          <span><strong>Networking</strong> - Bertemu langsung dengan peserta lain</span>
+                        </li>
                       <?php endif; ?>
-                    </div>
-                  </div>
-                  
-                  <div class="option-check">
-                    <i class="bi bi-check-circle-fill"></i>
+                    </ul>
                   </div>
                 </label>
                 <?php endforeach; ?>
@@ -181,6 +285,7 @@
     --blue-200: #bfdbfe;
     --success: #10b981;
     --warning: #f59e0b;
+    --danger: #ef4444;
     --gray-50: #f9fafb;
     --gray-100: #f3f4f6;
     --gray-200: #e5e7eb;
@@ -194,7 +299,71 @@
     min-height: 100vh; 
   }
 
-  /* BACK BUTTON */
+  /* ===== Wave Info Card ===== */
+  .wave-info-card {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 2px solid #fbbf24;
+    border-radius: 14px;
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 4px 15px rgba(251, 191, 36, 0.2);
+  }
+  .wave-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .wave-badge.badge-early {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+  }
+  .wave-badge.badge-regular {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+  }
+  .wave-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .wave-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    color: #92400e;
+  }
+  .wave-title i {
+    color: #d97706;
+  }
+  .wave-countdown {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #92400e;
+  }
+  .wave-countdown i {
+    color: #d97706;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
   .btn-back {
     display: inline-flex;
     align-items: center;
@@ -217,7 +386,6 @@
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
   }
 
-  /* EVENT SUMMARY CARD */
   .event-summary-card {
     background: white;
     border-radius: 16px;
@@ -334,7 +502,6 @@
     font-size: 1rem;
   }
 
-  /* MODE SELECTION CARD */
   .mode-selection-card {
     background: white;
     border-radius: 16px;
@@ -362,16 +529,15 @@
     padding: 1.5rem;
   }
 
-  /* MODE OPTIONS */
   .mode-options {
     display: grid;
-    gap: 1rem;
+    gap: 1.25rem;
     margin-bottom: 1.5rem;
   }
   .mode-option-card {
     position: relative;
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 1rem;
     padding: 1.5rem;
     border: 3px solid;
@@ -401,7 +567,6 @@
     box-shadow: 0 12px 30px rgba(251, 191, 36, 0.2);
   }
   
-  /* Checked state */
   .mode-option-card:has(input:checked) {
     transform: translateY(-4px);
   }
@@ -421,6 +586,12 @@
   }
   .mode-option-card:has(input:checked) .option-icon {
     transform: scale(1.1);
+  }
+
+  .option-main {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
   }
 
   .option-radio {
@@ -493,7 +664,64 @@
     transition: all 0.3s ease;
   }
 
-  /* ALERT EMPTY */
+  /* BENEFITS LIST */
+  .option-benefits {
+    padding-top: 1rem;
+    border-top: 2px dashed var(--gray-200);
+  }
+  .benefits-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .benefits-title i {
+    color: var(--primary-blue);
+    font-size: 1rem;
+  }
+  .option-online .benefits-title i {
+    color: var(--primary-blue);
+  }
+  .option-offline .benefits-title i {
+    color: #d97706;
+  }
+  .benefits-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+  .benefits-list li {
+    display: flex;
+    align-items: start;
+    gap: 0.65rem;
+    font-size: 0.85rem;
+    color: var(--gray-700);
+    line-height: 1.5;
+  }
+  .benefits-list li i {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+  .option-online .benefits-list li i {
+    color: var(--primary-blue);
+  }
+  .option-offline .benefits-list li i {
+    color: #d97706;
+  }
+  .benefits-list li strong {
+    color: var(--gray-900);
+    font-weight: 700;
+  }
+
   .alert-empty {
     display: flex;
     align-items: start;
@@ -519,7 +747,6 @@
     font-size: 0.9rem;
   }
 
-  /* FORM ACTIONS */
   .form-actions {
     display: flex;
     gap: 1rem;
@@ -561,7 +788,6 @@
     color: var(--gray-900);
   }
 
-  /* RESPONSIVE */
   @media (max-width: 768px) {
     .event-title h4 {
       font-size: 1.25rem;
@@ -600,10 +826,22 @@
     .btn-cancel {
       width: 100%;
     }
+    .wave-info-card {
+      flex-direction: column;
+      align-items: stretch;
+      text-align: center;
+    }
+    .wave-badge {
+      justify-content: center;
+    }
+    .wave-title,
+    .wave-countdown {
+      justify-content: center;
+    }
   }
 
   @media (max-width: 576px) {
-    .mode-option-card {
+    .option-main {
       gap: 0.75rem;
     }
     .option-content {
@@ -614,10 +852,26 @@
       height: 28px;
       font-size: 1rem;
     }
+    .benefits-list li {
+      font-size: 0.8rem;
+    }
   }
 </style>
 
 <script>
+// ===== SIMPLE JAVASCRIPT WITHOUT VOUCHER =====
+
+let selectedPrice = 0;
+
+// Update price display when mode is selected
+document.querySelectorAll('.mode-radio').forEach(radio => {
+  radio.addEventListener('change', function() {
+    selectedPrice = parseFloat(this.dataset.price) || 0;
+    console.log('Selected price:', selectedPrice);
+  });
+});
+
+// Submit handler
 document.getElementById('btnSubmit')?.addEventListener('click', function(){
   const f = document.getElementById('regForm');
   const selectedMode = f.querySelector('input[name="mode_kehadiran"]:checked');
@@ -639,24 +893,47 @@ document.getElementById('btnSubmit')?.addEventListener('click', function(){
 
   const go = ()=> f.submit();
   const modeName = selectedMode.value.toUpperCase();
+  const amount = parseFloat(selectedMode.dataset.price) || 0;
+  
+  function formatNumber(num) {
+    return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  
+  let confirmHtml = `<div style="margin:1rem 0;line-height:1.8;color:#6b7280;text-align:left;">
+    <p style="margin-bottom:0.75rem;">
+      <strong style="color:#2563eb;">Mode Kehadiran:</strong> ${modeName}
+    </p>
+    <p style="margin-bottom:0;padding-top:0.75rem;border-top:2px solid #e5e7eb;">
+      <strong style="color:#2563eb;font-size:1.1rem;">Total Bayar:</strong> 
+      <strong style="color:#2563eb;font-size:1.1rem;">Rp ${formatNumber(amount)}</strong>
+    </p>
+  </div>`;
   
   if (window.Swal) {
     Swal.fire({
       title: 'Konfirmasi Pendaftaran',
-      html: `<div style="margin:1rem 0;line-height:1.6;color:#6b7280;">
-        <p>Anda memilih mode kehadiran: <strong style="color:#2563eb;">${modeName}</strong></p>
-        <p>Lanjut ke pembayaran untuk menyelesaikan registrasi.</p>
-      </div>`,
+      html: confirmHtml,
       icon: 'question',
       iconColor: '#2563eb',
       showCancelButton: true,
-      confirmButtonText: '<i class="bi bi-check-circle me-2"></i>Ya, Lanjutkan',
+      confirmButtonText: '<i class="bi bi-check-circle me-2"></i>Ya, Lanjutkan ke Pembayaran',
       cancelButtonText: '<i class="bi bi-x-circle me-2"></i>Batal',
       confirmButtonColor: '#2563eb',
-      cancelButtonColor: '#6b7280'
+      cancelButtonColor: '#6b7280',
+      width: '500px'
     }).then(r=>{ if(r.isConfirmed) go(); });
   } else {
-    if (confirm(`Anda memilih ${modeName}. Lanjut ke pembayaran?`)) go();
+    if (confirm(`Mode: ${modeName}\nTotal: Rp ${formatNumber(amount)}\n\nLanjut ke pembayaran?`)) go();
+  }
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+  // Select first option if only one available
+  const modeRadios = document.querySelectorAll('.mode-radio');
+  if (modeRadios.length === 1) {
+    modeRadios[0].checked = true;
+    selectedPrice = parseFloat(modeRadios[0].dataset.price) || 0;
   }
 });
 </script>

@@ -22,20 +22,35 @@ class CreateEventsTable extends Migration
                 'type' => 'TEXT',
                 'null' => true,
             ],
+            // Event date & time (support multi-day events)
             'event_date' => [
                 'type' => 'DATE',
+                'comment' => 'Event start date',
             ],
             'event_time' => [
                 'type' => 'TIME',
+                'comment' => 'Event start time',
             ],
+            'event_end_date' => [
+                'type' => 'DATE',
+                'null' => true,
+                'comment' => 'Event end date (for multi-day events)',
+            ],
+            'event_end_time' => [
+                'type' => 'TIME',
+                'null' => true,
+                'comment' => 'Event end time',
+            ],
+            // Event format
             'format' => [
                 'type'       => 'VARCHAR',
                 'constraint' => 20,
-                'default'    => 'offline',
+                'default'    => 'both',
+                'comment'    => 'online, offline, or both',
             ],
             'location' => [
                 'type'       => 'VARCHAR',
-                'constraint' => 255,
+                'constraint' => 500,
                 'null'       => true,
             ],
             'zoom_link' => [
@@ -43,22 +58,30 @@ class CreateEventsTable extends Migration
                 'constraint' => 500,
                 'null'       => true,
             ],
-            'registration_fee' => [
-                'type'       => 'NUMERIC',
-                'constraint' => '10,2',
-                'default'    => 0,
-            ],
-            'max_participants' => [
-                'type'     => 'INT',
-                'null'     => true,
-            ],
-            'registration_deadline' => [
-                'type' => 'TIMESTAMP',
+            // Registration waves (JSON format)
+            'registration_waves' => [
+                'type' => 'JSONB',
                 'null' => true,
+                'default' => '[]',
+                'comment' => 'Registration waves with prices for each role and type',
             ],
+            // Deadlines
             'abstract_deadline' => [
                 'type' => 'TIMESTAMP',
                 'null' => true,
+            ],
+            'abstract_revision_deadline' => [
+                'type' => 'TIMESTAMP',
+                'null' => true,
+            ],
+            'full_paper_deadline' => [
+                'type' => 'TIMESTAMP',
+                'null' => true,
+            ],
+            // Settings
+            'max_participants' => [
+                'type'     => 'INT',
+                'null'     => true,
             ],
             'registration_active' => [
                 'type'    => 'BOOLEAN',
@@ -66,12 +89,21 @@ class CreateEventsTable extends Migration
             ],
             'abstract_submission_active' => [
                 'type'    => 'BOOLEAN',
-                'default' => true,
+                'default' => false,
+            ],
+            'abstract_revision_active' => [
+                'type'    => 'BOOLEAN',
+                'default' => false,
+            ],
+            'full_paper_submission_active' => [
+                'type'    => 'BOOLEAN',
+                'default' => false,
             ],
             'is_active' => [
                 'type'    => 'BOOLEAN',
                 'default' => true,
             ],
+            // Timestamps
             'created_at' => [
                 'type'    => 'TIMESTAMP',
                 'default' => new RawSql('CURRENT_TIMESTAMP'),
@@ -87,8 +119,10 @@ class CreateEventsTable extends Migration
 
         // Create indexes for better performance
         $this->db->query('CREATE INDEX idx_events_date ON events(event_date)');
+        $this->db->query('CREATE INDEX idx_events_end_date ON events(event_end_date)');
         $this->db->query('CREATE INDEX idx_events_active ON events(is_active)');
         $this->db->query('CREATE INDEX idx_events_format ON events(format)');
+        $this->db->query('CREATE INDEX idx_events_registration_waves ON events USING gin(registration_waves)');
         
         // Create trigger for updated_at
         $this->db->query("
@@ -107,6 +141,11 @@ class CreateEventsTable extends Migration
             FOR EACH ROW
             EXECUTE PROCEDURE update_events_updated_at();
         ");
+
+        // Add comment to table
+        $this->db->query("
+            COMMENT ON TABLE events IS 'Events table with support for multi-day events and registration waves';
+        ");
     }
 
     public function down()
@@ -117,8 +156,10 @@ class CreateEventsTable extends Migration
         
         // Drop indexes
         $this->db->query('DROP INDEX IF EXISTS idx_events_date');
+        $this->db->query('DROP INDEX IF EXISTS idx_events_end_date');
         $this->db->query('DROP INDEX IF EXISTS idx_events_active');
         $this->db->query('DROP INDEX IF EXISTS idx_events_format');
+        $this->db->query('DROP INDEX IF EXISTS idx_events_registration_waves');
         
         $this->forge->dropTable('events');
     }

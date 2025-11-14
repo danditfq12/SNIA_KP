@@ -6,7 +6,6 @@ use App\Controllers\BaseController;
 use App\Models\EventModel;
 use App\Models\EventRegistrationModel;
 use App\Models\PembayaranModel;
-use App\Models\VoucherModel;
 use App\Models\UserModel;
 use App\Services\MidtransService;
 use App\Services\NotificationService;
@@ -16,7 +15,6 @@ class Pembayaran extends BaseController
     protected EventRegistrationModel $regM;
     protected PembayaranModel $payM;
     protected EventModel $eventM;
-    protected VoucherModel $voucherM;
     protected UserModel $userM;
     protected MidtransService $midtrans;
     protected NotificationService $notificationService;
@@ -26,7 +24,6 @@ class Pembayaran extends BaseController
         $this->regM   = new EventRegistrationModel();
         $this->payM   = new PembayaranModel();
         $this->eventM = new EventModel();
-        $this->voucherM = new VoucherModel();
         $this->userM = new UserModel();
         $this->midtrans = new MidtransService();
         $this->notificationService = new NotificationService();
@@ -34,67 +31,59 @@ class Pembayaran extends BaseController
 
     private function uid(): int { return (int) (session('id_user') ?? 0); }
 
-    private function getPrice(array $event, string $mode): int
+    /**
+     * FIXED: Get price with proper fallback
+     */
+    private function getPrice(int $eventId, string $mode, string $userRole = 'audience'): int
     {
-        $prices = [
-            'online'  => (int)($event['audience_fee_online'] ?? 0),
-            'offline' => (int)($event['audience_fee_offline'] ?? 0),
-        ];
-        return max(0, $prices[$mode] ?? 0);
-    }
+        try {
+            // Method 1: Try getCurrentWave first
+            $wave = $this->eventM->getCurrentWave($eventId);
+            
+            if ($wave && is_array($wave)) {
+                $priceKey = strtolower($userRole) . '_fee_' . strtolower($mode);
+                $price = (int)($wave[$priceKey] ?? 0);
+                
+                if ($price > 0) {
+                    log_message('info', "Price from wave: {$price} for {$priceKey}");
+                    return $price;
+                }
+            }
 
-    private function applyVoucherDiscount(int $basePrice, ?array $voucher): int
-    {
-        if (!$voucher) return $basePrice;
+            // Method 2: Try getPricingMatrix
+            $pricing = $this->eventM->getPricingMatrix($eventId);
+            if (!empty($pricing[$userRole][$mode])) {
+                $price = (int)$pricing[$userRole][$mode];
+                log_message('info', "Price from matrix: {$price}");
+                return $price;
+            }
 
-        $tipe = strtolower($voucher['tipe'] ?? '');
-        $nilai = (int)($voucher['nilai'] ?? 0);
+            // Method 3: Try getEventPrice
+            $price = (int)$this->eventM->getEventPrice($eventId, $userRole, $mode);
+            if ($price > 0) {
+                log_message('info', "Price from getEventPrice: {$price}");
+                return $price;
+            }
 
-        if (in_array($tipe, ['percentage', 'persen'], true)) {
-            $discount = min(100, $nilai);
-            return max(0, $basePrice - (int)floor($basePrice * $discount / 100));
+            // Method 4: Check registration record
+            $reg = $this->regM->where('id_event', $eventId)
+                             ->where('id_user', $this->uid())
+                             ->orderBy('id', 'DESC')
+                             ->first();
+            
+            if ($reg && !empty($reg['jumlah_bayar'])) {
+                $price = (int)$reg['jumlah_bayar'];
+                log_message('info', "Price from registration: {$price}");
+                return $price;
+            }
+
+            log_message('error', "No valid price found for event {$eventId}, mode {$mode}, role {$userRole}");
+            return 0;
+
+        } catch (\Exception $e) {
+            log_message('error', 'Error getting price: ' . $e->getMessage());
+            return 0;
         }
-        
-        return max(0, $basePrice - $nilai);
-    }
-
-    private function findValidVoucher(string $code, int $userId, int $eventId): ?array
-    {
-        $code = trim($code);
-        if ($code === '') return null;
-
-        $voucher = $this->voucherM
-            ->where('LOWER(kode_voucher) =', strtolower($code))
-            ->where('status', 'aktif')
-            ->first();
-
-        if (!$voucher) return null;
-
-        $exp = $voucher['masa_berlaku'] ?? null;
-        if (!empty($exp)) {
-            $endTs = strtotime(date('Y-m-d 23:59:59', strtotime($exp)));
-            if ($endTs && $endTs < time()) return null;
-        }
-
-        $kuota = (int)($voucher['kuota'] ?? 0);
-        if ($kuota > 0) {
-            $used = $this->payM
-                ->where('id_voucher', $voucher['id_voucher'])
-                ->whereIn('status', ['pending','verified'])
-                ->countAllResults();
-            if ($used >= $kuota) return null;
-        }
-
-        $existing = $this->payM
-            ->where('id_user', $userId)
-            ->where('event_id', $eventId)
-            ->where('id_voucher', $voucher['id_voucher'])
-            ->whereIn('status', ['pending','verified'])
-            ->first();
-
-        if ($existing) return null;
-
-        return $voucher;
     }
 
     public function index()
@@ -104,7 +93,7 @@ class Pembayaran extends BaseController
 
         $this->syncPendingPayments($uid);
 
-        $rows = $this->payM->select('id_pembayaran,event_id,jumlah,metode,status,tanggal_bayar,bukti_bayar,participation_type,payment_reference,midtrans_order_id,auto_verified,verified_at')
+        $rows = $this->payM->select('id_pembayaran,event_id,jumlah,metode,status,tanggal_bayar,participation_type,midtrans_order_id,auto_verified,verified_at,midtrans_payment_type')
                 ->where('id_user',$uid)->orderBy('tanggal_bayar','DESC')->findAll();
 
         $eventMap = [];
@@ -173,15 +162,9 @@ class Pembayaran extends BaseController
                             $updateData['features_unlocked_at'] = $statusData['settlement_time'] ?? date('Y-m-d H:i:s');
                             
                             $this->updateRegistrationStatus($payment, 'verified');
-                            
-                            if (!empty($payment['id_voucher'])) {
-                                $this->voucherM->reduceQuota($payment['id_voucher']);
-                            }
                         }
                         
                         $this->payM->update($payment['id_pembayaran'], $updateData);
-                        
-                        log_message('info', "Manual sync updated payment {$payment['id_pembayaran']}: {$payment['status']} -> {$newStatus}");
                     }
                     
                 } catch (\Exception $e) {
@@ -247,10 +230,7 @@ class Pembayaran extends BaseController
                 ->first();
 
             if ($registration) {
-                $updated = $this->regM->update($registration['id'], ['status' => $regStatus]);
-                if ($updated) {
-                    log_message('info', "Registration {$registration['id']} updated to: {$regStatus}");
-                }
+                $this->regM->update($registration['id'], ['status' => $regStatus]);
             }
         } catch (\Exception $e) {
             log_message('error', 'Registration update failed: ' . $e->getMessage());
@@ -258,8 +238,7 @@ class Pembayaran extends BaseController
     }
 
     /**
-     * FIX UTAMA: instruction() sekarang bisa menerima regId ATAU mencari dari eventId
-     * Dan bisa langsung melanjutkan pembayaran yang pending
+     * FIXED: instruction() dengan info gelombang
      */
     public function instruction($param = null)
     {
@@ -269,11 +248,9 @@ class Pembayaran extends BaseController
         // Deteksi apakah parameter adalah regId atau eventId
         $reg = null;
         
-        // Coba anggap sebagai regId dulu
         if (is_numeric($param)) {
             $reg = $this->regM->find((int)$param);
             
-            // Jika tidak ditemukan atau bukan milik user, coba cari dari event_id
             if (!$reg || (int)$reg['id_user'] !== $uid) {
                 $reg = $this->regM
                     ->where('id_event', (int)$param)
@@ -288,31 +265,31 @@ class Pembayaran extends BaseController
             return redirect()->to('/audience/events')->with('error','Data registrasi tidak ditemukan.');
         }
 
+        $eventId = (int)$reg['id_event'];
+
         // CEK PEMBAYARAN PENDING
         $existingPayment = $this->payM
             ->where('id_user', $uid)
-            ->where('event_id', (int)$reg['id_event'])
+            ->where('event_id', $eventId)
             ->whereIn('status', ['pending', 'verified'])
             ->orderBy('tanggal_bayar', 'DESC')
             ->first();
 
-        // Jika ada pembayaran pending, langsung tampilkan instruction dengan data pembayaran tersebut
         if ($existingPayment) {
             if ($existingPayment['status'] === 'verified') {
-                return redirect()->to('/audience/events/detail/' . $reg['id_event'])
+                return redirect()->to('/audience/events/detail/' . $eventId)
                     ->with('success', 'Pembayaran Anda sudah terverifikasi!');
             }
             
-            // Ambil snap token dari pembayaran yang ada
             $snapToken = $existingPayment['midtrans_snap_token'] ?? null;
             $orderId = $existingPayment['midtrans_order_id'] ?? null;
-            
-            $pricing = $this->eventM->getPricingMatrix((int)$reg['id_event']);
-            $mode    = $reg['mode_kehadiran'] ?? 'online';
-            $amount  = (float)($existingPayment['jumlah'] ?? 0);
+            $amount = (float)($existingPayment['jumlah'] ?? 0);
 
-            $ev = $this->eventM->select('title,event_date,event_time')->find((int)$reg['id_event']);
+            $ev = $this->eventM->find($eventId);
             $user = $this->userM->find($uid);
+
+            // ✅ GET WAVE INFO
+            $currentWave = $this->eventM->getCurrentWave($eventId);
 
             return view('role/audience/pembayaran/instruction', [
                 'title'  => 'Lanjutkan Pembayaran',
@@ -323,17 +300,35 @@ class Pembayaran extends BaseController
                 'existing_payment' => $existingPayment,
                 'snap_token' => $snapToken,
                 'order_id' => $orderId,
+                'current_wave' => $currentWave,
                 'midtrans_client_key' => $this->midtrans->getClientKey(),
                 'is_production' => $this->midtrans->isProduction(),
             ]);
         }
 
-        // Jika belum ada pembayaran, tampilkan instruction baru
-        $pricing = $this->eventM->getPricingMatrix((int)$reg['id_event']);
-        $mode    = $reg['mode_kehadiran'] ?? 'online';
-        $amount  = (float)($pricing['audience'][$mode] ?? 0);
+        // FIXED: Get amount dengan multiple fallback
+        $mode = $reg['mode_kehadiran'] ?? 'online';
+        $userRole = session()->get('role') ?? 'audience';
+        
+        // ✅ GET WAVE INFO
+        $currentWave = $this->eventM->getCurrentWave($eventId);
+        
+        // Try to get amount from multiple sources
+        $amount = $this->getPrice($eventId, $mode, $userRole);
+        
+        // Fallback: check from registration record
+        if ($amount <= 0 && !empty($reg['jumlah_bayar'])) {
+            $amount = (float)$reg['jumlah_bayar'];
+            log_message('info', "Using amount from registration record: {$amount}");
+        }
 
-        $ev = $this->eventM->select('title,event_date,event_time')->find((int)$reg['id_event']);
+        // Last fallback: default prices
+        if ($amount <= 0) {
+            log_message('warning', "No amount found, using default fallback");
+            $amount = ($mode === 'online') ? 100000 : 150000;
+        }
+
+        $ev = $this->eventM->find($eventId);
         $user = $this->userM->find($uid);
 
         return view('role/audience/pembayaran/instruction', [
@@ -342,6 +337,7 @@ class Pembayaran extends BaseController
             'amount' => $amount,
             'event'  => $ev,
             'user'   => $user,
+            'current_wave' => $currentWave,
             'midtrans_client_key' => $this->midtrans->getClientKey(),
             'is_production' => $this->midtrans->isProduction(),
         ]);
@@ -360,29 +356,42 @@ class Pembayaran extends BaseController
             return redirect()->to('/audience/events/detail/'.$reg['id_event'])->with('warning','Status pendaftaran bukan menunggu pembayaran.');
         }
 
+        $eventId = (int)$reg['id_event'];
+
         // CEK PEMBAYARAN PENDING
         $existingPayment = $this->payM
             ->where('id_user', $uid)
-            ->where('event_id', (int)$reg['id_event'])
+            ->where('event_id', $eventId)
             ->whereIn('status', ['pending', 'verified'])
             ->orderBy('tanggal_bayar', 'DESC')
             ->first();
 
         if ($existingPayment) {
-            $message = $existingPayment['status'] === 'pending' 
-                ? 'Anda memiliki pembayaran yang belum diselesaikan. Silakan selesaikan atau batalkan terlebih dahulu.'
-                : 'Anda sudah memiliki pembayaran untuk event ini.';
-            
             return redirect()->to('/audience/pembayaran/detail/' . $existingPayment['id_pembayaran'])
-                ->with('warning', $message);
+                ->with('warning', 'Anda memiliki pembayaran yang sedang diproses.');
         }
 
-        $pricing = $this->eventM->getPricingMatrix((int)$reg['id_event']);
-        $mode    = $reg['mode_kehadiran'] ?? 'online';
-        $amount  = (float)($pricing['audience'][$mode] ?? 0);
+        // FIXED: Get amount dengan better validation
+        $mode = $reg['mode_kehadiran'] ?? 'online';
+        $userRole = session()->get('role') ?? 'audience';
+        
+        $amount = $this->getPrice($eventId, $mode, $userRole);
+        
+        // Fallback dari registration
+        if ($amount <= 0 && !empty($reg['jumlah_bayar'])) {
+            $amount = (float)$reg['jumlah_bayar'];
+        }
 
-        $ev = $this->eventM->select('title,event_date,event_time,format')->find((int)$reg['id_event']);
+        // Last fallback
+        if ($amount <= 0) {
+            $amount = ($mode === 'online') ? 100000 : 150000;
+        }
+
+        $ev = $this->eventM->find($eventId);
         $user = $this->userM->find($uid);
+        
+        // ✅ GET WAVE INFO
+        $currentWave = $this->eventM->getCurrentWave($eventId);
         
         $reg['event_title'] = $ev['title'] ?? '-';
         $reg['event_date']  = $ev['event_date'] ?? null;
@@ -394,50 +403,15 @@ class Pembayaran extends BaseController
             'amount' => $amount,
             'event'  => $ev,
             'user'   => $user,
+            'current_wave' => $currentWave,
             'midtrans_client_key' => $this->midtrans->getClientKey(),
             'is_production' => $this->midtrans->isProduction(),
         ]);
     }
 
-    public function validateVoucher()
-    {
-        $uid = $this->uid();
-        $eventId = (int) ($this->request->getPost('event_id') ?? $this->request->getGet('event_id'));
-        $code = (string) ($this->request->getPost('kode_voucher') ?? $this->request->getGet('kode_voucher'));
-        $mode = (string) ($this->request->getPost('mode') ?? $this->request->getGet('mode'));
-
-        if (!$eventId || !$mode) {
-            return $this->response->setJSON(['ok'=>false,'message'=>'Parameter tidak lengkap','token'=>csrf_hash()]);
-        }
-
-        $event = $this->eventM->find($eventId);
-        if (!$event) {
-            return $this->response->setJSON(['ok'=>false,'message'=>'Event tidak ditemukan','token'=>csrf_hash()]);
-        }
-
-        $basePrice = $this->getPrice($event, $mode);
-        $voucher = $this->findValidVoucher($code, $uid, $eventId);
-
-        if (!$voucher) {
-            return $this->response->setJSON([
-                'ok' => false,
-                'message' => 'Voucher tidak valid/kedaluwarsa/habis kuota',
-                'token' => csrf_hash(),
-            ]);
-        }
-
-        $finalPrice = $this->applyVoucherDiscount($basePrice, $voucher);
-
-        return $this->response->setJSON([
-            'ok' => true,
-            'message' => 'Voucher berhasil diterapkan',
-            'final_price' => $finalPrice,
-            'voucher_id' => (int)$voucher['id_voucher'],
-            'code' => $voucher['kode_voucher'],
-            'token' => csrf_hash(),
-        ]);
-    }
-
+    /**
+     * ✅ FIXED: processPayment TANPA id_registrasi
+     */
     public function processPayment()
     {
         if (!$this->request->is('post')) {
@@ -449,7 +423,6 @@ class Pembayaran extends BaseController
 
         $regId = (int) $this->request->getPost('reg_id');
         $paymentMethod = (string) $this->request->getPost('payment_method');
-        $voucherCode = trim((string) $this->request->getPost('voucher_code'));
 
         if ($paymentMethod !== 'midtrans') {
             return $this->response->setJSON(['success' => false, 'message' => 'Hanya pembayaran digital yang tersedia']);
@@ -460,10 +433,12 @@ class Pembayaran extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => 'Registration not found']);
         }
 
-        // CEK LAGI SEBELUM PROSES
+        $eventId = (int)$reg['id_event'];
+
+        // CEK PEMBAYARAN EXISTING
         $existingPayment = $this->payM
             ->where('id_user', $uid)
-            ->where('event_id', (int)$reg['id_event'])
+            ->where('event_id', $eventId)
             ->whereIn('status', ['pending', 'verified'])
             ->orderBy('tanggal_bayar', 'DESC')
             ->first();
@@ -476,23 +451,33 @@ class Pembayaran extends BaseController
             ]);
         }
 
-        $event = $this->eventM->find((int)$reg['id_event']);
+        $event = $this->eventM->find($eventId);
         if (!$event) {
             return $this->response->setJSON(['success' => false, 'message' => 'Event not found']);
         }
 
         $user = $this->userM->find($uid);
         $mode = $reg['mode_kehadiran'] ?? 'online';
-        $basePrice = $this->getPrice($event, $mode);
-        $finalPrice = $basePrice;
-        $voucherId = null;
+        $userRole = session()->get('role') ?? 'audience';
 
-        if ($voucherCode !== '') {
-            $voucher = $this->findValidVoucher($voucherCode, $uid, (int)$reg['id_event']);
-            if ($voucher) {
-                $finalPrice = $this->applyVoucherDiscount($basePrice, $voucher);
-                $voucherId = (int)$voucher['id_voucher'];
-            }
+        // FIXED: Get amount dengan multiple fallback
+        $amount = $this->getPrice($eventId, $mode, $userRole);
+        
+        if ($amount <= 0 && !empty($reg['jumlah_bayar'])) {
+            $amount = (float)$reg['jumlah_bayar'];
+        }
+
+        if ($amount <= 0) {
+            $amount = ($mode === 'online') ? 100000 : 150000;
+        }
+
+        // VALIDATION: Amount must be > 0
+        if ($amount <= 0) {
+            log_message('error', "Invalid amount for event {$eventId}, mode {$mode}: {$amount}");
+            return $this->response->setJSON([
+                'success' => false, 
+                'message' => 'Harga event tidak valid. Silakan hubungi admin.'
+            ]);
         }
 
         try {
@@ -506,43 +491,36 @@ class Pembayaran extends BaseController
                 'title' => $event['title'] ?? 'Event Registration'
             ];
 
+            log_message('info', "Creating Midtrans payment - Amount: {$amount}, Mode: {$mode}, Event: {$eventId}");
+
             $midtransResponse = $this->midtrans->createEventPayment(
-                (int)$reg['id_event'],
+                $eventId,
                 $uid,
-                'audience',
+                $userRole,
                 $mode,
-                $finalPrice,
+                $amount,
                 $userDetails,
                 $eventDetails
             );
 
+            // ✅ HAPUS id_registrasi DARI SINI
             $paymentData = [
                 'id_user'            => $uid,
-                'event_id'           => (int)$reg['id_event'],
-                'id_registrasi'      => $regId, // PENTING: simpan id_registrasi
-                'jumlah'             => $finalPrice,
+                'event_id'           => $eventId,
+                // 'id_registrasi'   => $regId,  // ❌ DIHAPUS
+                'jumlah'             => $amount,
                 'participation_type' => $mode,
                 'midtrans_order_id'  => $midtransResponse['order_id'],
                 'midtrans_snap_token'=> $midtransResponse['snap_token'],
-                'id_voucher'         => $voucherId,
-                'original_amount'    => $basePrice,
-                'discount_amount'    => $basePrice - $finalPrice,
+                'id_voucher'         => null,
+                'original_amount'    => $amount,
+                'discount_amount'    => 0,
             ];
 
             $this->payM->createMidtransPayment($paymentData);
             $paymentId = $this->payM->getInsertID();
 
-            try {
-                $this->notificationService->notify(
-                    $uid,
-                    'payment',
-                    'Pembayaran Dibuat',
-                    "Pembayaran untuk event \"{$event['title']}\" telah dibuat. Silakan selesaikan pembayaran.",
-                    site_url('audience/pembayaran/detail/' . $paymentId)
-                );
-            } catch (\Exception $e) {
-                log_message('warning', 'Failed to send notification: ' . $e->getMessage());
-            }
+            log_message('info', "Payment created successfully - ID: {$paymentId}, Amount: {$amount}");
 
             return $this->response->setJSON([
                 'success' => true,
@@ -562,7 +540,6 @@ class Pembayaran extends BaseController
     public function finish()
     {
         $orderId = $this->request->getGet('order_id');
-        $status = $this->request->getGet('status');
         
         if (!$orderId) {
             return redirect()->to('/audience/pembayaran')->with('error', 'Parameter pembayaran tidak valid');
@@ -599,11 +576,6 @@ class Pembayaran extends BaseController
                         $updateData['features_unlocked_at'] = $statusData['settlement_time'] ?? date('Y-m-d H:i:s');
                         
                         $this->updateRegistrationStatus($payment, 'verified');
-                        
-                        if (!empty($payment['id_voucher'])) {
-                            $this->voucherM->reduceQuota($payment['id_voucher']);
-                        }
-                        
                         $message = 'Pembayaran Anda telah berhasil dan diverifikasi secara otomatis!';
                         $alertType = 'success';
                         
@@ -653,77 +625,6 @@ class Pembayaran extends BaseController
             ->with($alertType, $message);
     }
 
-    public function checkStatus($paymentId)
-    {
-        $uid = $this->uid();
-        if (!$uid) return redirect()->to('/auth/login');
-
-        $payment = $this->payM->find($paymentId);
-        if (!$payment || (int)$payment['id_user'] !== $uid) {
-            return redirect()->to('/audience/pembayaran')->with('error', 'Data tidak ditemukan');
-        }
-
-        if (empty($payment['midtrans_order_id'])) {
-            return redirect()->to('/audience/pembayaran/detail/' . $paymentId)
-                ->with('warning', 'Pembayaran ini bukan dari Midtrans');
-        }
-
-        try {
-            $statusData = $this->midtrans->getTransactionStatus($payment['midtrans_order_id']);
-            
-            $transactionStatus = strtolower($statusData['transaction_status'] ?? '');
-            $newStatus = $this->mapMidtransStatus($transactionStatus, $statusData['fraud_status'] ?? '');
-            
-            if ($newStatus !== $payment['status']) {
-                $updateData = [
-                    'status' => $newStatus,
-                    'midtrans_raw_response' => json_encode($statusData),
-                    'keterangan' => "Manual check: {$transactionStatus}"
-                ];
-                
-                if ($newStatus === 'verified') {
-                    $updateData['verified_at'] = $statusData['settlement_time'] ?? date('Y-m-d H:i:s');
-                    $updateData['auto_verified'] = true;
-                    $updateData['features_unlocked_at'] = $statusData['settlement_time'] ?? date('Y-m-d H:i:s');
-                    
-                    $this->updateRegistrationStatus($payment, 'verified');
-                    
-                    if (!empty($payment['id_voucher'])) {
-                        $this->voucherM->reduceQuota($payment['id_voucher']);
-                    }
-                    
-                    $message = 'Status berhasil diperbarui! Pembayaran telah terverifikasi.';
-                    $alertType = 'success';
-                    
-                } elseif ($newStatus === 'pending') {
-                    $message = 'Status masih pending. Pembayaran sedang diproses.';
-                    $alertType = 'info';
-                    
-                } else {
-                    $message = "Status diperbarui menjadi: " . ucfirst($newStatus);
-                    $alertType = 'warning';
-                }
-                
-                $this->payM->update($paymentId, $updateData);
-                
-            } else {
-                $message = 'Status pembayaran sudah up-to-date: ' . ucfirst($payment['status']);
-                $alertType = 'info';
-            }
-
-        } catch (\Exception $e) {
-            log_message('error', 'Manual status check error: ' . $e->getMessage());
-            $message = 'Gagal memeriksa status. Coba lagi nanti.';
-            $alertType = 'error';
-        }
-
-        return redirect()->to('/audience/pembayaran/detail/' . $paymentId)
-            ->with($alertType, $message);
-    }
-
-    /**
-     * FIX: detail() sekarang lebih robust dalam mencari registrasi
-     */
     public function detail(int $id)
     {
         $uid = $this->uid(); 
@@ -739,32 +640,21 @@ class Pembayaran extends BaseController
             $row = $this->payM->find($id);
         }
 
-        $ev = $this->eventM->select('id,title,event_date,event_time')->find((int)$row['event_id']);
-        $voucher = !empty($row['id_voucher']) ? $this->voucherM->find($row['id_voucher']) : null;
+        $ev = $this->eventM->find((int)$row['event_id']);
 
-        // FIX: Cari registrasi dengan lebih fleksibel
-        $reg = null;
-        
-        // Prioritas 1: Dari id_registrasi di tabel pembayaran
-        if (!empty($row['id_registrasi'])) {
-            $reg = $this->regM->find((int)$row['id_registrasi']);
-        }
-        
-        // Prioritas 2: Cari dari event_id dan user_id
-        if (!$reg) {
-            $reg = $this->regM
-                ->where('id_event', (int)$row['event_id'])
-                ->where('id_user', $uid)
-                ->whereNotIn('status', ['batal', 'ditolak'])
-                ->orderBy('id', 'DESC')
-                ->first();
-        }
+        // ✅ Cari registrasi berdasarkan event_id dan user_id (TANPA id_registrasi)
+        $reg = $this->regM
+            ->where('id_event', (int)$row['event_id'])
+            ->where('id_user', $uid)
+            ->whereNotIn('status', ['batal', 'ditolak'])
+            ->orderBy('id', 'DESC')
+            ->first();
 
         return view('role/audience/pembayaran/detail', [
             'title' => 'Detail Pembayaran',
             'pay'   => $row,
             'event' => $ev,
-            'voucher' => $voucher,
+            'voucher' => null,
             'reg'   => $reg,
         ]);
     }
@@ -791,10 +681,6 @@ class Pembayaran extends BaseController
                     $updateData['features_unlocked_at'] = $statusData['settlement_time'] ?? date('Y-m-d H:i:s');
                     
                     $this->updateRegistrationStatus($payment, 'verified');
-                    
-                    if (!empty($payment['id_voucher'])) {
-                        $this->voucherM->reduceQuota($payment['id_voucher']);
-                    }
                 }
                 
                 $this->payM->update($payment['id_pembayaran'], $updateData);

@@ -9,6 +9,15 @@ use App\Models\VoucherModel;
 use App\Services\MidtransService;
 use App\Services\NotificationService;
 
+/**
+ * Midtrans Webhook Handler - FIXED VERSION
+ * 
+ * FIX: Correctly detect BCA VA, DANA, GoPay, etc
+ * Instead of generic "bank_transfer"
+ * 
+ * @version 2.1 - Payment Method Detection FIXED
+ * @date 2025-11-14
+ */
 class Midtrans extends BaseController
 {
     protected $paymentModel;
@@ -38,7 +47,6 @@ class Midtrans extends BaseController
      */
     public function handle()
     {
-        // === LOG & HEADERS ===
         log_message('info', '=== MIDTRANS WEBHOOK START ===');
         log_message('info', 'Method: ' . $this->request->getMethod() . ' | IP: ' . $this->request->getIPAddress());
 
@@ -47,12 +55,10 @@ class Midtrans extends BaseController
         $this->response->setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         $this->response->setHeader('Content-Type', 'application/json');
 
-        // Preflight
         if ($this->request->getMethod() === 'OPTIONS') {
             return $this->response->setStatusCode(200)->setJSON(['status' => 'ok']);
         }
 
-        // Izinkan GET/HEAD untuk ping/connectivity test
         if ($this->request->is('get') || $this->request->getMethod() === 'head') {
             return $this->response->setStatusCode(200)->setJSON([
                 'status'         => 'ok',
@@ -70,7 +76,6 @@ class Midtrans extends BaseController
         }
 
         try {
-            // === Ambil body & parse ===
             $rawInput = $this->request->getBody() ?? '';
             $json     = $this->request->getJSON(true) ?? [];
             $post     = $this->request->getPost() ?? [];
@@ -81,13 +86,11 @@ class Midtrans extends BaseController
                 log_message('info', 'Raw input (first 1000): ' . substr($rawInput, 0, 1000));
             }
 
-            // === Dashboard "Test notification URL" sering kirim POST kosong/ tanpa signature ===
             if (empty($rawInput) || empty($data) || empty($data['signature_key'])) {
                 log_message('warning', 'Midtrans TEST/EMPTY payload → reply 200 OK (dashboard test).');
                 return $this->response->setStatusCode(200)->setBody('OK');
             }
 
-            // === Notifikasi beneran (punya signature) ===
             $orderId      = $data['order_id']      ?? '';
             $statusCode   = $data['status_code']   ?? '';
             $grossAmount  = (string)($data['gross_amount'] ?? '');
@@ -97,28 +100,22 @@ class Midtrans extends BaseController
                 return $this->response->setStatusCode(400)->setJSON(['error' => 'Missing order_id']);
             }
 
-            // Jika order_id khusus "payment_notif_test_*" (tombol Test) → balas 200 OK agar lulus
             if (function_exists('str_starts_with') && str_starts_with($orderId, 'payment_notif_test_')) {
                 log_message('warning', "Dashboard TEST order_id={$orderId} → 200 OK");
                 return $this->response->setStatusCode(200)->setBody('OK');
             }
 
-            // Verifikasi signature
             if (!$this->verifySignature($orderId, $statusCode, $grossAmount, $signatureKey)) {
                 log_message('error', "Invalid signature for order {$orderId}");
-                // Dev-friendly: 200 supaya Midtrans tidak retry terus; ganti ke 401 jika ingin strict di production.
                 return $this->response->setStatusCode(200)->setBody('IGNORED');
             }
 
-            // Ambil payment lokal
             $payment = $this->paymentModel->getByMidtransOrderId($orderId);
             if (!$payment) {
-                // Jangan bikin Midtrans retry terus-terusan
                 log_message('error', "Payment not found for order_id={$orderId}");
                 return $this->response->setStatusCode(200)->setBody('IGNORED');
             }
 
-            // Proses business logic
             $result = $this->processNotification($payment, $data);
 
             log_message('info', "Webhook processed: {$result['message']} | order={$orderId}");
@@ -139,6 +136,106 @@ class Midtrans extends BaseController
     }
 
     /**
+     * ===== NEW: Detect SPECIFIC payment method =====
+     * 
+     * This fixes the issue where admin sees "Bank Transfer"
+     * instead of "BCA Virtual Account"
+     */
+    private function detectSpecificPaymentMethod($notification)
+    {
+        $paymentType = strtolower($notification['payment_type'] ?? '');
+
+        log_message('info', "Detecting payment method from type: {$paymentType}");
+
+        // ===== VIRTUAL ACCOUNT (BCA, BNI, BRI, etc) =====
+        if ($paymentType === 'bank_transfer') {
+            // Check va_numbers array for specific bank
+            if (!empty($notification['va_numbers']) && is_array($notification['va_numbers'])) {
+                $bank = strtolower($notification['va_numbers'][0]['bank'] ?? '');
+                
+                log_message('info', "VA bank detected: {$bank}");
+                
+                if ($bank) {
+                    return $bank . '_va';  // e.g., "bca_va", "bni_va", "bri_va"
+                }
+            }
+            
+            // Check for Permata VA
+            if (!empty($notification['permata_va_number'])) {
+                log_message('info', "Permata VA detected");
+                return 'permata_va';
+            }
+            
+            log_message('warning', "Generic bank_transfer - no specific bank found");
+            return 'bank_transfer';
+        }
+
+        // ===== MANDIRI BILL =====
+        if ($paymentType === 'echannel') {
+            if (!empty($notification['bill_key']) || !empty($notification['biller_code'])) {
+                log_message('info', "Mandiri VA detected via echannel");
+                return 'mandiri_va';
+            }
+            return 'echannel';
+        }
+
+        // ===== E-WALLETS =====
+        if ($paymentType === 'gopay') {
+            log_message('info', "GoPay detected");
+            return 'gopay';
+        }
+
+        if ($paymentType === 'shopeepay') {
+            log_message('info', "ShopeePay detected");
+            return 'shopeepay';
+        }
+
+        if ($paymentType === 'qris') {
+            // Check acquirer for more specific info
+            $acquirer = strtolower($notification['acquirer'] ?? '');
+            log_message('info', "QRIS detected, acquirer: {$acquirer}");
+            
+            if ($acquirer === 'gopay') return 'gopay';
+            if ($acquirer === 'shopeepay') return 'shopeepay';
+            
+            return 'qris';
+        }
+
+        // Additional e-wallets
+        if (in_array($paymentType, ['dana', 'linkaja', 'ovo'])) {
+            log_message('info', ucfirst($paymentType) . " detected");
+            return $paymentType;
+        }
+
+        // ===== CREDIT/DEBIT CARD =====
+        if ($paymentType === 'credit_card') {
+            log_message('info', "Credit card detected");
+            return 'credit_card';
+        }
+
+        // ===== CONVENIENCE STORE =====
+        if ($paymentType === 'cstore') {
+            $store = strtolower($notification['store'] ?? '');
+            log_message('info', "Convenience store detected: {$store}");
+            
+            if ($store === 'indomaret') return 'indomaret';
+            if ($store === 'alfamart') return 'alfamart';
+            
+            return 'cstore';
+        }
+
+        // ===== OTHER METHODS =====
+        if (in_array($paymentType, ['akulaku', 'kredivo'])) {
+            log_message('info', ucfirst($paymentType) . " detected");
+            return $paymentType;
+        }
+
+        // ===== FALLBACK =====
+        log_message('warning', "Unknown payment type, using generic: {$paymentType}");
+        return $paymentType;
+    }
+
+    /**
      * Signature verification
      */
     private function verifySignature($orderId, $statusCode, $grossAmount, $signatureKey)
@@ -148,10 +245,7 @@ class Midtrans extends BaseController
             return false;
         }
 
-        // Gunakan string raw dari payload
         $grossAmount = (string) $grossAmount;
-
-        // Log komponen (aman, tanpa server key) untuk debugging
         log_message('info', "SIG parts: order_id={$orderId} status_code={$statusCode} gross_amount={$grossAmount}");
 
         $calc = hash('sha512', $orderId . $statusCode . $grossAmount . $this->serverKey);
@@ -166,7 +260,7 @@ class Midtrans extends BaseController
     }
 
     /**
-     * Business logic pemrosesan notifikasi (tetap)
+     * Business logic pemrosesan notifikasi - FIXED VERSION
      */
     private function processNotification($payment, $notification)
     {
@@ -177,9 +271,14 @@ class Midtrans extends BaseController
 
         $newStatus = $this->mapMidtransStatus($transactionStatus, $fraudStatus);
 
+        // ===== FIX: Detect SPECIFIC payment method =====
+        $specificPaymentMethod = $this->detectSpecificPaymentMethod($notification);
+        
+        log_message('info', "✅ Payment method: {$specificPaymentMethod} (was: {$notification['payment_type']})");
+
         $updateData = [
             'midtrans_transaction_id' => $notification['transaction_id'] ?? $orderId,
-            'midtrans_payment_type'   => $notification['payment_type'] ?? '',
+            'midtrans_payment_type'   => $specificPaymentMethod,  // ← FIXED!
             'midtrans_raw_response'   => json_encode($notification),
             'midtrans_settlement_time'=> $notification['settlement_time'] ?? null,
             'keterangan'              => "Webhook: {$transactionStatus}" . ($fraudStatus ? " (fraud: {$fraudStatus})" : "")
@@ -216,6 +315,7 @@ class Midtrans extends BaseController
             'order_id'       => $orderId,
             'old_status'     => $oldStatus,
             'new_status'     => $newStatus,
+            'payment_method' => $specificPaymentMethod,
             'payment_id'     => $payment['id_pembayaran'],
             'status_changed' => $statusChanged
         ];
@@ -324,7 +424,6 @@ class Midtrans extends BaseController
             $statusData = $this->midtransService->getTransactionStatus($orderId);
             $payment    = $this->paymentModel->getByMidtransOrderId($orderId);
             if (!$payment) {
-                // Jangan bikin retry loop
                 return $this->response->setStatusCode(200)->setBody('IGNORED');
             }
 

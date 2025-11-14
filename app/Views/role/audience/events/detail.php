@@ -1,10 +1,12 @@
 <?php
-  $title   = 'Detail Event';
-  $event   = $event  ?? [];
-  $isOpen  = $isOpen ?? false;
-  $myReg   = $myReg  ?? null;
-  $options = $options ?? [];
-  $pricing = $pricing ?? []; // matrix: ['audience'=>['online'=>..., 'offline'=>...]]
+  $title     = 'Detail Event';
+  $event     = $event  ?? [];
+  $isOpen    = $isOpen ?? false;
+  $myReg     = $myReg  ?? null;
+  $options   = $options ?? [];
+  $pricing   = $pricing ?? [];
+  $waveInfo  = $waveInfo ?? null;
+  $allWaves  = $allWaves ?? [];
 
   // === PATCH: pisahkan regId vs payId supaya link tidak salah ===
   $regId   = isset($myReg['id']) ? (int)$myReg['id'] : null;
@@ -18,11 +20,30 @@
   $fmtDate = function($d){ return $d ? date('d M Y', strtotime($d)) : '-'; };
   $rupiah  = function($n){ return ($n===null||$n==='') ? '—' : 'Rp '.number_format((float)$n,0,',','.'); };
 
+  // Helper untuk status gelombang
+  $now = time();
+  $getWaveStatus = function($wave) use ($now) {
+    $start = strtotime($wave['registration_start'] ?? '');
+    $end = strtotime($wave['registration_deadline'] ?? '');
+    if (!$start || !$end) return 'unknown';
+    if ($now < $start) return 'upcoming';
+    if ($now >= $start && $now <= $end) return 'active';
+    return 'closed';
+  };
+
   $priceOnline  = $pricing['audience']['online']  ?? null;
   $priceOffline = $pricing['audience']['offline'] ?? null;
 
   $isToday = isset($event['event_date']) && date('Y-m-d', strtotime($event['event_date'])) === date('Y-m-d');
   $eventFormat = strtolower($event['format'] ?? '');
+  
+  // Helper untuk nama gelombang
+  $getWaveName = function($waveNum) {
+    if ($waveNum === 1) return 'Gelombang 1 (Early Bird)';
+    if ($waveNum === 2) return 'Gelombang 2 (Normal)';
+    if ($waveNum === 3) return 'Gelombang 3 (Last Call)';
+    return 'Gelombang ' . $waveNum;
+  };
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_audience') ?>
@@ -78,6 +99,14 @@
                   <span>Hari Ini</span>
                 </div>
               <?php endif; ?>
+              
+              <!-- WAVE INFO BADGE -->
+              <?php if ($isOpen && $waveInfo && isset($waveInfo['wave_number'])): ?>
+                <div class="hero-badge badge-wave-<?= (int)$waveInfo['wave_number'] ?>">
+                  <i class="bi bi-lightning-charge-fill"></i>
+                  <span><?= $getWaveName($waveInfo['wave_number']) ?></span>
+                </div>
+              <?php endif; ?>
             </div>
             
             <div class="hero-status">
@@ -101,12 +130,23 @@
           </div>
 
           <h1 class="hero-title"><?= esc($event['title'] ?? 'Event') ?></h1>
+          
+          <!-- WAVE DEADLINE INFO -->
+          <?php if ($isOpen && $waveInfo && isset($waveInfo['deadline'])): ?>
+            <div class="wave-deadline-info">
+              <i class="bi bi-alarm-fill"></i>
+              <span>
+                Gelombang ini berakhir: 
+                <strong><?= date('d M Y, H:i', strtotime($waveInfo['deadline'])) ?></strong>
+              </span>
+            </div>
+          <?php endif; ?>
         </div>
       </div>
 
       <!-- GRID CONTENT -->
       <div class="row g-4">
-        <!-- Left Column: Description & Pricing -->
+        <!-- Left Column: Description, Benefits & Pricing -->
         <div class="col-12 col-lg-8">
           <!-- Description Card -->
           <div class="modern-card mb-4">
@@ -128,6 +168,136 @@
             </div>
           </div>
 
+          <!-- Benefits Card (NEW) -->
+          <div class="modern-card mb-4">
+            <div class="card-header-modern">
+              <div class="header-left">
+                <i class="bi bi-gift-fill"></i>
+                <strong>Fasilitas & Benefits</strong>
+              </div>
+            </div>
+            <div class="card-body p-4">
+              <div class="benefits-intro">
+                <i class="bi bi-star-fill"></i>
+                <p>Pilih mode partisipasi sesuai kebutuhan Anda. Berikut fasilitas yang akan Anda dapatkan:</p>
+              </div>
+              <div class="benefits-grid">
+                <!-- Offline Benefits -->
+                <?php if ($eventFormat === 'offline' || $eventFormat === 'hybrid'): ?>
+                <div class="benefit-column benefit-offline">
+                  <div class="benefit-header">
+                    <div class="benefit-icon">
+                      <i class="bi bi-people-fill"></i>
+                    </div>
+                    <div class="benefit-title">
+                      <h5>Peserta Offline</h5>
+                      <p>Hadir Langsung di Venue</p>
+                    </div>
+                  </div>
+                  <div class="benefit-list">
+                    <div class="benefit-item">
+                      <div class="benefit-check">
+                        <i class="bi bi-check-circle-fill"></i>
+                      </div>
+                      <div class="benefit-text">
+                        <strong>Attend Seminar</strong>
+                        <span>Hadir langsung di acara utama</span>
+                      </div>
+                    </div>
+                    <div class="benefit-item">
+                      <div class="benefit-check">
+                        <i class="bi bi-check-circle-fill"></i>
+                      </div>
+                      <div class="benefit-text">
+                        <strong>Certificate</strong>
+                        <span>Sertifikat fisik & digital</span>
+                      </div>
+                    </div>
+                    <div class="benefit-item">
+                      <div class="benefit-check">
+                        <i class="bi bi-check-circle-fill"></i>
+                      </div>
+                      <div class="benefit-text">
+                        <strong>Lunch & Coffee</strong>
+                        <span>Makan siang dan coffee break</span>
+                      </div>
+                    </div>
+                    <div class="benefit-item">
+                      <div class="benefit-check">
+                        <i class="bi bi-check-circle-fill"></i>
+                      </div>
+                      <div class="benefit-text">
+                        <strong>Networking</strong>
+                        <span>Kesempatan networking langsung</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <?php endif; ?>
+
+                <!-- Online Benefits -->
+                <?php if ($eventFormat === 'online' || $eventFormat === 'hybrid'): ?>
+                <div class="benefit-column benefit-online">
+                  <div class="benefit-header">
+                    <div class="benefit-icon">
+                      <i class="bi bi-wifi"></i>
+                    </div>
+                    <div class="benefit-title">
+                      <h5>Peserta Online</h5>
+                      <p>Ikuti dari Mana Saja</p>
+                    </div>
+                  </div>
+                  <div class="benefit-list">
+                    <div class="benefit-item">
+                      <div class="benefit-check">
+                        <i class="bi bi-check-circle-fill"></i>
+                      </div>
+                      <div class="benefit-text">
+                        <strong>Live Streaming</strong>
+                        <span>Akses streaming real-time</span>
+                      </div>
+                    </div>
+                    <div class="benefit-item">
+                      <div class="benefit-check">
+                        <i class="bi bi-check-circle-fill"></i>
+                      </div>
+                      <div class="benefit-text">
+                        <strong>Digital Certificate</strong>
+                        <span>E-sertifikat resmi</span>
+                      </div>
+                    </div>
+                    <div class="benefit-item">
+                      <div class="benefit-check">
+                        <i class="bi bi-check-circle-fill"></i>
+                      </div>
+                      <div class="benefit-text">
+                        <strong>Recording Access</strong>
+                        <span>Akses rekaman 7 hari</span>
+                      </div>
+                    </div>
+                    <div class="benefit-item">
+                      <div class="benefit-check">
+                        <i class="bi bi-check-circle-fill"></i>
+                      </div>
+                      <div class="benefit-text">
+                        <strong>Q&A Session</strong>
+                        <span>Interaksi via chat langsung</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <?php endif; ?>
+              </div>
+
+              <div class="benefits-note">
+                <i class="bi bi-info-circle-fill"></i>
+                <span>
+                  Semua peserta akan mendapatkan materi event dan akses eksklusif ke komunitas alumni.
+                </span>
+              </div>
+            </div>
+          </div>
+
           <!-- Pricing Card -->
           <div class="modern-card">
             <div class="card-header-modern">
@@ -135,6 +305,11 @@
                 <i class="bi bi-tags-fill"></i>
                 <strong>Harga Tiket</strong>
               </div>
+              <?php if ($isOpen && $waveInfo && isset($waveInfo['wave_number'])): ?>
+                <span class="wave-badge-small wave-<?= (int)$waveInfo['wave_number'] ?>">
+                  <?= $getWaveName($waveInfo['wave_number']) ?>
+                </span>
+              <?php endif; ?>
             </div>
             <div class="card-body p-4">
               <?php if ($isRegistered && !empty($myReg['mode_kehadiran'])): ?>
@@ -181,7 +356,7 @@
                   <?php endif; ?>
                 </div>
                 
-                <!-- Tampilkan juga harga lainnya untuk informasi (HANYA YANG ADA HARGANYA DAN > 0) -->
+                <!-- Tampilkan juga harga lainnya untuk informasi -->
                 <?php 
                   $hasOtherPrices = false;
                   if ($selectedMode !== 'online' && $priceOnline !== null && $priceOnline !== '' && (float)$priceOnline > 0) {
@@ -194,7 +369,7 @@
                 
                 <?php if ($hasOtherPrices): ?>
                 <div class="other-prices-section">
-                  <div class="other-prices-title">Harga Paket Lainnya (Info)</div>
+                  <div class="other-prices-title">Harga Paket Lainnya (Info Saja)</div>
                   <div class="other-prices-grid">
                     <?php if ($selectedMode !== 'online' && $priceOnline !== null && $priceOnline !== '' && (float)$priceOnline > 0): ?>
                       <div class="other-price-item">
@@ -215,13 +390,23 @@
                 <?php endif; ?>
                 
               <?php else: ?>
-                <!-- Jika belum terdaftar, tampilkan harga yang tersedia (HANYA YANG > 0) -->
+                <!-- Jika belum terdaftar, tampilkan harga yang tersedia -->
                 <?php 
                   $hasOnlinePrice = $priceOnline !== null && $priceOnline !== '' && (float)$priceOnline > 0;
                   $hasOfflinePrice = $priceOffline !== null && $priceOffline !== '' && (float)$priceOffline > 0;
                 ?>
                 
                 <?php if ($hasOnlinePrice || $hasOfflinePrice): ?>
+                  <?php if ($isOpen && $waveInfo): ?>
+                    <div class="pricing-note-top">
+                      <i class="bi bi-info-circle-fill"></i>
+                      <span>
+                        Harga di bawah adalah untuk <strong><?= $getWaveName($waveInfo['wave_number'] ?? 0) ?></strong>.
+                        Harga akan berubah setiap gelombang!
+                      </span>
+                    </div>
+                  <?php endif; ?>
+                  
                   <div class="pricing-grid">
                     <?php if ($hasOnlinePrice): ?>
                     <div class="price-card price-online">
@@ -231,6 +416,9 @@
                       <div class="price-info">
                         <div class="price-label">Partisipasi Online</div>
                         <div class="price-amount"><?= $rupiah($priceOnline) ?></div>
+                        <?php if ($waveInfo && isset($waveInfo['wave_number'])): ?>
+                          <div class="price-wave-tag">Gel. <?= $waveInfo['wave_number'] ?></div>
+                        <?php endif; ?>
                       </div>
                     </div>
                     <?php endif; ?>
@@ -243,14 +431,22 @@
                       <div class="price-info">
                         <div class="price-label">Partisipasi Offline</div>
                         <div class="price-amount"><?= $rupiah($priceOffline) ?></div>
+                        <?php if ($waveInfo && isset($waveInfo['wave_number'])): ?>
+                          <div class="price-wave-tag">Gel. <?= $waveInfo['wave_number'] ?></div>
+                        <?php endif; ?>
                       </div>
                     </div>
                     <?php endif; ?>
                   </div>
 
                   <div class="pricing-note">
-                    <i class="bi bi-info-circle-fill"></i>
-                    <span>Pilih mode partisipasi saat mendaftar sesuai preferensi Anda</span>
+                    <i class="bi bi-lightbulb-fill"></i>
+                    <span>
+                      Pilih mode partisipasi saat mendaftar sesuai preferensi Anda. 
+                      <?php if ($waveInfo && isset($waveInfo['wave_number']) && $waveInfo['wave_number'] < 3): ?>
+                        <strong>Tips:</strong> Daftar sekarang untuk dapat harga terbaik!
+                      <?php endif; ?>
+                    </span>
                   </div>
                 <?php else: ?>
                   <div class="empty-state-small">
@@ -285,14 +481,12 @@
                 </div>
 
                 <?php if ($payId && $payStat !== 'canceled'): ?>
-                  <!-- Jika sudah punya pembayaran yang belum dibatalkan -->
                   <a class="btn-action btn-primary" 
                      href="<?= site_url('audience/pembayaran/detail/'.$payId) ?>">
                     <i class="bi bi-receipt"></i>
                     <span>Lihat Detail Pembayaran</span>
                   </a>
                 <?php elseif ($regStatus === 'menunggu_pembayaran' && $regId): ?>
-                  <!-- Belum ada pembayaran atau pembayaran dibatalkan -->
                   <a class="btn-action btn-primary" 
                      href="<?= site_url('audience/pembayaran/instruction/'.$regId) ?>">
                     <i class="bi bi-credit-card-fill"></i>
@@ -326,6 +520,26 @@
                   </div>
                 <?php endif; ?>
                 
+                <!-- WAVE INFO IN ACTION CARD -->
+                <?php if ($waveInfo && isset($waveInfo['wave_number'])): ?>
+                  <div class="wave-info-card">
+                    <div class="wave-info-header">
+                      <i class="bi bi-lightning-fill"></i>
+                      <span><?= $getWaveName($waveInfo['wave_number']) ?></span>
+                    </div>
+                    <div class="wave-info-body">
+                      <div class="wave-info-item">
+                        <i class="bi bi-calendar-check"></i>
+                        <span>Dibuka: <?= date('d M, H:i', strtotime($waveInfo['start'])) ?></span>
+                      </div>
+                      <div class="wave-info-item">
+                        <i class="bi bi-alarm"></i>
+                        <span>Ditutup: <?= date('d M, H:i', strtotime($waveInfo['deadline'])) ?></span>
+                      </div>
+                    </div>
+                  </div>
+                <?php endif; ?>
+                
                 <button type="button" id="btnDaftar" class="btn-action btn-primary">
                   <i class="bi bi-calendar-check-fill"></i>
                   <span>Daftar Sekarang</span>
@@ -339,7 +553,12 @@
 
                 <div class="action-info">
                   <i class="bi bi-lightbulb-fill"></i>
-                  <p>Setelah mendaftar, pilih mode partisipasi (Online/Offline) dan lakukan pembayaran untuk konfirmasi</p>
+                  <p>
+                    Setelah mendaftar, pilih mode partisipasi (Online/Offline) dan lakukan pembayaran untuk konfirmasi.
+                    <?php if ($waveInfo && isset($waveInfo['wave_number']) && $waveInfo['wave_number'] === 1): ?>
+                      <br><strong class="text-warning">🔥 Daftar sekarang untuk harga Early Bird!</strong>
+                    <?php endif; ?>
+                  </p>
                 </div>
 
               <?php else: ?>
@@ -383,6 +602,9 @@
     --blue-900: #1e3a8a;
     --success: #10b981;
     --warning: #f59e0b;
+    --amber-50: #fffbeb;
+    --amber-100: #fef3c7;
+    --amber-500: #f59e0b;
     --gray-100: #f3f4f6;
     --gray-400: #9ca3af;
     --gray-600: #4b5563;
@@ -395,7 +617,6 @@
     min-height: 100vh; 
   }
 
-  /* BACK BUTTON */
   .btn-back {
     display: inline-flex;
     align-items: center;
@@ -416,7 +637,6 @@
     color: var(--blue-700);
   }
 
-  /* HERO CARD */
   .hero-card {
     background: linear-gradient(135deg, var(--blue-600), var(--blue-700));
     border-radius: 20px;
@@ -476,6 +696,42 @@
     background: linear-gradient(135deg, #fbbf24, #f59e0b);
     border-color: #fbbf24;
   }
+  
+  .badge-wave-1 {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border-color: #fbbf24;
+    color: #92400e;
+  }
+  .badge-wave-2 {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    border-color: #93c5fd;
+    color: var(--blue-700);
+  }
+  .badge-wave-3 {
+    background: linear-gradient(135deg, #fecaca, #fca5a5);
+    border-color: #f87171;
+    color: #991b1b;
+  }
+  
+  .wave-deadline-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.25rem;
+    background: rgba(251, 191, 36, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    border-radius: 20px;
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-top: 1rem;
+  }
+  .wave-deadline-info i {
+    font-size: 1.1rem;
+    color: #fbbf24;
+  }
+  
   .hero-status {
     display: flex;
     gap: 0.5rem;
@@ -512,7 +768,6 @@
     line-height: 1.3;
   }
 
-  /* MODERN CARD */
   .modern-card {
     background: white;
     border-radius: 16px;
@@ -524,6 +779,9 @@
     padding: 1.25rem 1.5rem;
     background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
     border-bottom: 2px solid var(--gray-100);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
   .header-left {
     display: flex;
@@ -536,15 +794,227 @@
     font-size: 1.3rem;
     color: var(--blue-600);
   }
+  
+  .wave-badge-small {
+    padding: 0.4rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .wave-badge-small.wave-1 {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #92400e;
+    border: 2px solid #fbbf24;
+  }
+  .wave-badge-small.wave-2 {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    color: var(--blue-700);
+    border: 2px solid #93c5fd;
+  }
+  .wave-badge-small.wave-3 {
+    background: linear-gradient(135deg, #fecaca, #fca5a5);
+    color: #991b1b;
+    border: 2px solid #f87171;
+  }
 
-  /* DESCRIPTION */
   .description-content {
     color: var(--gray-600);
     line-height: 1.8;
     font-size: 0.95rem;
   }
 
-  /* PRICING GRID */
+  /* BENEFITS INTRO */
+  .benefits-intro {
+    display: flex;
+    align-items: start;
+    gap: 0.75rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border: 2px solid #fbbf24;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+  }
+  .benefits-intro i {
+    font-size: 1.3rem;
+    color: #f59e0b;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+  .benefits-intro p {
+    margin: 0;
+    color: #92400e;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.6;
+  }
+
+  /* BENEFITS SECTION */
+  .benefits-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .benefit-column {
+    border-radius: 16px;
+    overflow: hidden;
+    border: 2px solid;
+    transition: all 0.3s ease;
+  }
+  .benefit-column:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+  }
+
+  .benefit-offline {
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    border-color: #fbbf24;
+  }
+  .benefit-online {
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    border-color: #60a5fa;
+  }
+
+  .benefit-header {
+    padding: 1.5rem;
+    background: white;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border-bottom: 2px solid;
+  }
+  .benefit-offline .benefit-header {
+    border-bottom-color: #fde68a;
+  }
+  .benefit-online .benefit-header {
+    border-bottom-color: #bfdbfe;
+  }
+
+  .benefit-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    font-size: 1.75rem;
+    flex-shrink: 0;
+  }
+  .benefit-offline .benefit-icon {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: white;
+  }
+  .benefit-online .benefit-icon {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+  }
+
+  .benefit-title h5 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--gray-900);
+  }
+  .benefit-title p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--gray-600);
+    font-weight: 500;
+  }
+
+  .benefit-list {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .benefit-item {
+    display: flex;
+    align-items: start;
+    gap: 0.875rem;
+    padding: 0.875rem;
+    background: white;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+  }
+  .benefit-item:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .benefit-check {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .benefit-offline .benefit-check {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #d97706;
+  }
+  .benefit-online .benefit-check {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    color: var(--blue-600);
+  }
+
+  .benefit-text {
+    flex: 1;
+  }
+  .benefit-text strong {
+    display: block;
+    color: var(--gray-900);
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+  }
+  .benefit-text span {
+    display: block;
+    color: var(--gray-600);
+    font-size: 0.825rem;
+    line-height: 1.4;
+  }
+
+  .benefits-note {
+    display: flex;
+    align-items: start;
+    gap: 0.75rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    border: 2px solid #86efac;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    color: #065f46;
+  }
+  .benefits-note i {
+    font-size: 1.2rem;
+    color: #10b981;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+
+  .pricing-note-top {
+    display: flex;
+    align-items: start;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border: 2px solid #fbbf24;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    color: #92400e;
+    margin-bottom: 1.5rem;
+  }
+  .pricing-note-top i {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    color: #f59e0b;
+  }
+
   .pricing-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -603,6 +1073,17 @@
     font-weight: 800;
     color: var(--gray-900);
   }
+  
+  .price-wave-tag {
+    display: inline-block;
+    padding: 0.25rem 0.6rem;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-top: 0.5rem;
+  }
+  
   .pricing-note {
     display: flex;
     align-items: start;
@@ -619,7 +1100,6 @@
     margin-top: 0.1rem;
   }
 
-  /* SELECTED PRICE CARD (untuk yang sudah terdaftar) */
   .selected-price-card {
     background: linear-gradient(135deg, #f0fdf4, #dcfce7);
     border: 3px solid #86efac;
@@ -703,7 +1183,6 @@
     font-size: 1.3rem;
   }
 
-  /* OTHER PRICES SECTION */
   .other-prices-section {
     padding: 1rem;
     background: var(--gray-100);
@@ -745,7 +1224,6 @@
     color: var(--gray-900);
   }
 
-  /* ACTION CARD */
   .action-card {
     background: white;
     border-radius: 16px;
@@ -773,6 +1251,40 @@
   .action-card-body {
     padding: 1.5rem;
   }
+  
+  .wave-info-card {
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    border: 2px solid #fbbf24;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+  }
+  .wave-info-header {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    color: white;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+  .wave-info-body {
+    padding: 1rem;
+  }
+  .wave-info-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    color: #92400e;
+    font-size: 0.85rem;
+  }
+  .wave-info-item i {
+    color: #f59e0b;
+    font-size: 1.1rem;
+  }
+  
   .info-alert {
     display: flex;
     align-items: start;
@@ -875,7 +1387,6 @@
     margin: 0;
   }
 
-  /* EMPTY STATE */
   .empty-state-small {
     text-align: center;
     padding: 2rem 1rem;
@@ -892,7 +1403,6 @@
     font-size: 0.95rem;
   }
 
-  /* RESPONSIVE */
   @media (max-width: 991px) {
     .action-card {
       position: relative;
@@ -917,7 +1427,7 @@
       flex: 1;
       justify-content: center;
     }
-    .pricing-grid {
+    .pricing-grid, .benefits-grid {
       grid-template-columns: 1fr;
     }
   }
@@ -948,6 +1458,13 @@
       gap: 1rem;
     }
     .selected-icon {
+      margin: 0 auto;
+    }
+    .benefit-item {
+      flex-direction: column;
+      text-align: center;
+    }
+    .benefit-check {
       margin: 0 auto;
     }
   }

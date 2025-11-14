@@ -4,15 +4,27 @@ $qRaw         = $q            ?? '';
 $fmt          = $format       ?? '';
 $isSearching  = $isSearching  ?? false;
 
-$openEvents   = $openEvents   ?? [];
-$closedEvents = $closedEvents ?? [];
-$myRegs       = $myRegs       ?? [];
+$openEvents     = $openEvents     ?? [];
+$pendingEvents  = $pendingEvents  ?? [];
+$closedEvents   = $closedEvents   ?? [];
+$finishedEvents = $finishedEvents ?? [];
+$myRegs         = $myRegs         ?? [];
 
-$totalAll     = $total_all    ?? (count($openEvents)+count($closedEvents));
-$totalOpen    = $total_open   ?? count($openEvents);
-$totalClosed  = $total_closed ?? count($closedEvents);
+$totalAll      = $total_all      ?? (count($openEvents)+count($pendingEvents)+count($closedEvents)+count($finishedEvents));
+$totalOpen     = $total_open     ?? count($openEvents);
+$totalPending  = $total_pending  ?? count($pendingEvents);
+$totalClosed   = $total_closed   ?? count($closedEvents);
+$totalFinished = $total_finished ?? count($finishedEvents);
 
 $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
+
+// Helper untuk nama gelombang
+$getWaveName = function($waveNum) {
+  if ($waveNum === 1) return 'Gelombang 1 (Early Bird)';
+  if ($waveNum === 2) return 'Gelombang 2 (Normal)';
+  if ($waveNum === 3) return 'Gelombang 3 (Last Call)';
+  return 'Gelombang ' . $waveNum;
+};
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -89,7 +101,9 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
                   <span>
                     <strong><?= (int)$totalAll ?></strong> event
                     (<span class="text-success"><?= (int)$totalOpen ?> terbuka</span>, 
-                    <span class="text-muted"><?= (int)$totalClosed ?> ditutup</span>)
+                    <span class="text-warning"><?= (int)$totalPending ?> segera</span>, 
+                    <span class="text-muted"><?= (int)$totalClosed ?> ditutup</span>, 
+                    <span class="text-secondary"><?= (int)$totalFinished ?> selesai</span>)
                   </span>
                 </div>
               </div>
@@ -117,8 +131,18 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
                   $fmtEvent   = strtolower($e['format'] ?? '');
                   $onlineOK   = in_array($fmtEvent, ['online','both'], true);
                   $offlineOK  = in_array($fmtEvent, ['offline','both'], true);
-                  $pOn        = (float)($e['audience_fee_online']  ?? 0);
-                  $pOff       = (float)($e['audience_fee_offline'] ?? 0);
+                  
+                  // Get prices from current wave
+                  $pOn        = null;
+                  $pOff       = null;
+                  $waveNum    = null;
+                  
+                  if (!empty($e['active_wave'])) {
+                    $wave = $e['active_wave'];
+                    $pOn  = (float)($wave['audience_fee_online'] ?? 0);
+                    $pOff = (float)($wave['audience_fee_offline'] ?? 0);
+                    $waveNum = $wave['wave_number'] ?? null;
+                  }
 
                   $regRaw        = $myRegs[$e['id']] ?? null;
                   $regStatus     = is_array($regRaw) ? ($regRaw['status'] ?? null)         : $regRaw;
@@ -165,6 +189,14 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
                     <!-- Title -->
                     <h5 class="event-title"><?= esc($e['title'] ?? 'Event') ?></h5>
 
+                    <!-- Wave Badge (NEW) -->
+                    <?php if ($waveNum !== null): ?>
+                      <div class="wave-indicator wave-<?= (int)$waveNum ?>">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                        <span><?= $getWaveName($waveNum) ?></span>
+                      </div>
+                    <?php endif; ?>
+
                     <!-- Info -->
                     <div class="event-info-group">
                       <div class="info-item">
@@ -179,18 +211,24 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
 
                     <!-- Price -->
                     <div class="price-section">
-                      <div class="price-label">Harga Audience</div>
+                      <div class="price-label">Harga Audience (Gelombang Aktif)</div>
                       <div class="price-badges">
-                        <?php if ($onlineOK): ?>
+                        <?php if ($onlineOK && $pOn > 0): ?>
                           <div class="price-badge price-online">
                             <i class="bi bi-wifi"></i>
-                            <span><?= $pOn>0 ? $rupiah($pOn) : 'Gratis' ?></span>
+                            <span><?= $rupiah($pOn) ?></span>
                           </div>
                         <?php endif; ?>
-                        <?php if ($offlineOK): ?>
+                        <?php if ($offlineOK && $pOff > 0): ?>
                           <div class="price-badge price-offline">
                             <i class="bi bi-geo-alt-fill"></i>
-                            <span><?= $pOff>0 ? $rupiah($pOff) : 'Gratis' ?></span>
+                            <span><?= $rupiah($pOff) ?></span>
+                          </div>
+                        <?php endif; ?>
+                        <?php if ((!$onlineOK || $pOn <= 0) && (!$offlineOK || $pOff <= 0)): ?>
+                          <div class="price-badge price-na">
+                            <i class="bi bi-info-circle"></i>
+                            <span>Belum tersedia</span>
                           </div>
                         <?php endif; ?>
                       </div>
@@ -293,6 +331,98 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
         </div>
         <?php endif; ?>
 
+        <!-- Segera Dibuka (Pending) -->
+        <?php if (!empty($pendingEvents)): ?>
+        <div class="modern-card mb-4">
+          <div class="card-header-modern header-warning">
+            <div class="header-left">
+              <i class="bi bi-clock-fill"></i>
+              <strong>Segera Dibuka</strong>
+            </div>
+            <span class="count-badge badge-warning"><?= (int)$totalPending ?></span>
+          </div>
+          <div class="card-body p-3 p-md-4">
+            <div class="row g-4">
+              <?php foreach ($pendingEvents as $e): ?>
+                <?php
+                  $fmtEvent   = strtolower($e['format'] ?? '');
+                  $nextStart  = $e['next_wave_start'] ?? null;
+                  
+                  $regRaw        = $myRegs[$e['id']] ?? null;
+                  $regStatus     = is_array($regRaw) ? ($regRaw['status'] ?? null) : $regRaw;
+                  $isRegistered  = ($regStatus !== null && $regStatus !== 'batal');
+
+                  $tgl = !empty($e['event_date']) ? date('d M Y', strtotime($e['event_date'])) : '-';
+                  $jam = $e['event_time'] ?? '-';
+                  $loc = $e['location'] ?? ($fmtEvent === 'online' ? 'Platform Online' : '-');
+                ?>
+                <div class="col-12 col-md-6 col-xl-4">
+                  <div class="event-card-modern event-pending">
+                    <!-- Header -->
+                    <div class="event-header">
+                      <div class="event-format-badge badge-warning">
+                        <i class="bi bi-clock-fill"></i> Segera Dibuka
+                      </div>
+                      <?php if ($isRegistered): ?>
+                        <div class="registered-badge">
+                          <i class="bi bi-check-circle-fill"></i>
+                        </div>
+                      <?php endif; ?>
+                    </div>
+
+                    <!-- Title -->
+                    <h5 class="event-title"><?= esc($e['title'] ?? 'Event') ?></h5>
+
+                    <!-- Countdown -->
+                    <?php if ($nextStart): ?>
+                      <div class="countdown-badge">
+                        <i class="bi bi-alarm-fill"></i>
+                        <span>Dibuka: <?= date('d M Y, H:i', strtotime($nextStart)) ?> WIB</span>
+                      </div>
+                    <?php endif; ?>
+
+                    <!-- Info -->
+                    <div class="event-info-group">
+                      <div class="info-item">
+                        <i class="bi bi-calendar-event"></i>
+                        <span><?= esc($tgl) ?> · <?= esc($jam) ?></span>
+                      </div>
+                      <div class="info-item">
+                        <i class="bi bi-geo-alt"></i>
+                        <span><?= esc($loc) ?></span>
+                      </div>
+                    </div>
+
+                    <!-- Status -->
+                    <?php if ($isRegistered): ?>
+                      <div class="status-badges-group">
+                        <span class="mini-badge badge-success">
+                          <i class="bi bi-check-circle-fill"></i>
+                          Terdaftar
+                        </span>
+                      </div>
+                    <?php endif; ?>
+
+                    <!-- Actions -->
+                    <div class="event-actions">
+                      <a href="<?= site_url('audience/events/detail/'.($e['id'] ?? 0)) ?>"
+                         class="btn-event btn-outline">
+                        <i class="bi bi-info-circle"></i>
+                        Detail Event
+                      </a>
+                      <button class="btn-event btn-disabled" disabled>
+                        <i class="bi bi-clock"></i>
+                        Belum Dibuka
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Ditutup / Selesai -->
         <?php if (!empty($closedEvents)): ?>
         <div class="modern-card">
@@ -310,8 +440,16 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
                   $fmtEvent   = strtolower($e['format'] ?? '');
                   $onlineOK   = in_array($fmtEvent, ['online','both'], true);
                   $offlineOK  = in_array($fmtEvent, ['offline','both'], true);
-                  $pOn        = (float)($e['audience_fee_online']  ?? 0);
-                  $pOff       = (float)($e['audience_fee_offline'] ?? 0);
+                  
+                  // Get prices from current wave (even if closed, may have active wave for display)
+                  $pOn        = null;
+                  $pOff       = null;
+                  
+                  if (!empty($e['active_wave'])) {
+                    $wave = $e['active_wave'];
+                    $pOn  = (float)($wave['audience_fee_online'] ?? 0);
+                    $pOff = (float)($wave['audience_fee_offline'] ?? 0);
+                  }
 
                   $regRaw        = $myRegs[$e['id']] ?? null;
                   $regStatus     = is_array($regRaw) ? ($regRaw['status'] ?? null) : $regRaw;
@@ -542,6 +680,10 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
     background: linear-gradient(135deg, #d1fae5, #a7f3d0);
     border-bottom-color: #6ee7b7;
   }
+  .header-warning {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border-bottom-color: #fcd34d;
+  }
   .header-secondary {
     background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
     border-bottom-color: #d1d5db;
@@ -563,6 +705,7 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
     font-size: 0.9rem;
   }
   .badge-success { background: #6ee7b7; color: #065f46; }
+  .badge-warning { background: #fbbf24; color: #92400e; }
   .badge-secondary { background: #d1d5db; color: #374151; }
 
   /* FILTER INPUT */
@@ -654,6 +797,10 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
   .event-open {
     border-left: 4px solid var(--success);
   }
+  .event-pending {
+    border-left: 4px solid var(--warning);
+    opacity: 0.95;
+  }
   .event-closed {
     border-left: 4px solid var(--gray-600);
     opacity: 0.85;
@@ -709,6 +856,62 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
   .event-title-muted {
     color: var(--gray-600);
   }
+
+  /* WAVE INDICATOR (NEW) */
+  .wave-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+  }
+  .wave-1 {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #92400e;
+    border: 2px solid #fbbf24;
+  }
+  .wave-1 i {
+    color: #f59e0b;
+  }
+  .wave-2 {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    color: var(--blue-700);
+    border: 2px solid #93c5fd;
+  }
+  .wave-2 i {
+    color: var(--blue-500);
+  }
+  .wave-3 {
+    background: linear-gradient(135deg, #fecaca, #fca5a5);
+    color: #991b1b;
+    border: 2px solid #f87171;
+  }
+  .wave-3 i {
+    color: #dc2626;
+  }
+
+  /* COUNTDOWN BADGE (NEW) */
+  .countdown-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border: 2px solid #fbbf24;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #92400e;
+    margin-bottom: 1rem;
+  }
+  .countdown-badge i {
+    color: #f59e0b;
+    font-size: 1rem;
+  }
+
   .event-info-group {
     display: flex;
     flex-direction: column;
@@ -732,7 +935,7 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
     margin-bottom: 1rem;
   }
   .price-label {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--gray-600);
     font-weight: 600;
     margin-bottom: 0.5rem;
@@ -762,6 +965,11 @@ $rupiah = function($n){ return 'Rp ' . number_format((float)$n, 0, ',', '.'); };
     background: linear-gradient(135deg, #fef3c7, #fde68a);
     color: #92400e;
     border: 2px solid #fcd34d;
+  }
+  .price-na {
+    background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+    color: var(--gray-600);
+    border: 2px solid #d1d5db;
   }
   .status-badges-group {
     display: flex;

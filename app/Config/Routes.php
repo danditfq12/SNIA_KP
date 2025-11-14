@@ -214,18 +214,19 @@ $routes->group('admin', [
     $routes->get ('reviewer/statistics',           'Reviewer::getStatistics');
 
     // ===== EVENT =====
-    $routes->get ('event',                             'Event::index');
-    $routes->post('event/store',                       'Event::store');
-    $routes->get ('event/edit/(:num)',                 'Event::edit/$1');
-    $routes->post('event/update/(:num)',               'Event::update/$1');
-    $routes->post('event/delete/(:num)',               'Event::delete/$1');
-    $routes->get ('event/detail/(:num)',               'Event::detail/$1');
-    $routes->post('event/toggle-registration/(:num)',  'Event::toggleRegistration/$1');
-    $routes->post('event/toggle-abstract-submission/(:num)','Event::toggleAbstractSubmission/$1');
-    $routes->post('event/toggle-fullpaper/(:num)',     'Event::toggleFullPaper/$1');
-    $routes->post('event/toggle-status/(:num)',        'Event::toggleStatus/$1');
-    $routes->get ('event/export',                      'Event::export');
-    $routes->get ('event/statistics',                  'Event::statistics');
+    $routes->get('event', 'Event::index');
+    $routes->get('event/detail/(:num)', 'Event::detail/$1');
+    
+    // Event CRUD
+    $routes->post('event/create', 'Event::create');
+    $routes->get('event/get/(:num)', 'Event::getEvent/$1');
+    $routes->post('event/update/(:num)', 'Event::update/$1');
+    $routes->post('event/toggle-status/(:num)', 'Event::toggleStatus/$1');
+    $routes->post('event/delete/(:num)', 'Event::delete/$1');
+    
+    // Registration Waves (Early Bird System)
+    $routes->get('event/get-waves/(:num)', 'Event::getWaves/$1');
+    $routes->post('event/update-waves/(:num)', 'Event::updateWaves/$1');
 
     // ===== PEMBAYARAN =====
     $routes->get ('pembayaran',                        'Pembayaran::index');

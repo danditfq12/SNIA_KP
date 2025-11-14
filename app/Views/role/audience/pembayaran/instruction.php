@@ -1,10 +1,24 @@
 <?php
-// Enhanced Pembayaran Instruction (Audience) - Midtrans Only
+/**
+ * Audience Payment Instruction View - WITH WAVE INFO
+ * 
+ * Features:
+ * - ✅ Wave-based pricing display
+ * - ✅ Show wave number (Gelombang 1, 2, 3, dll)
+ * - ✅ Wave deadline countdown
+ * - Midtrans payment only
+ * - Continue existing payment support
+ * 
+ * @version 3.1 - Wave Info Added
+ * @date 2025-11-14
+ */
+
 $title = $title ?? 'Instruksi Pembayaran';
 $reg   = $reg   ?? [];
 $event = $event ?? [];
 $user  = $user  ?? [];
 $amount = $amount ?? 0;
+$current_wave = $current_wave ?? null;
 
 // Check if continuing existing payment
 $existingPayment = $existing_payment ?? null;
@@ -27,6 +41,19 @@ $isProduction = $is_production ?? false;
 $snapScriptUrl = $isProduction 
     ? 'https://app.midtrans.com/snap/snap.js' 
     : 'https://app.sandbox.midtrans.com/snap/snap.js';
+
+// ✅ Wave info processing
+$waveNumber = $current_wave['wave_number'] ?? null;
+$waveName = $current_wave['wave_name'] ?? null;
+$waveDeadline = $current_wave['registration_deadline'] ?? null;
+$daysRemaining = null;
+
+if ($waveDeadline) {
+    $deadline = strtotime($waveDeadline);
+    $now = time();
+    $daysLeft = ceil(($deadline - $now) / 86400);
+    $daysRemaining = max(0, $daysLeft);
+}
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -52,24 +79,44 @@ $snapScriptUrl = $isProduction
           <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
       <?php endif; ?>
-      <?php if (session('warning')): ?>
-        <div class="alert alert-warning alert-dismissible fade show">
-          <?= esc(session('warning')) ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <?php endif; ?>
 
       <div class="card shadow-sm border-0">
         <div class="card-body p-4">
 
-          <!-- HERO Section -->
+          <!-- HERO Section with Wave Info -->
           <div class="payment-hero mb-4">
             <div class="row align-items-center">
               <div class="col-md-8">
+                <!-- ✅ Wave Badge -->
+                <?php if ($waveNumber): ?>
+                <div class="hero-badge mb-2 wave-badge">
+                  <i class="bi bi-speedometer2 me-2"></i>
+                  <?php if ($waveName): ?>
+                    <?= esc($waveName) ?> (Gelombang <?= $waveNumber ?>)
+                  <?php else: ?>
+                    Gelombang <?= $waveNumber ?>
+                  <?php endif; ?>
+                  
+                  <?php if ($daysRemaining !== null): ?>
+                    <span class="ms-2 badge bg-warning text-dark">
+                      <i class="bi bi-clock-fill me-1"></i>
+                      <?php if ($daysRemaining == 0): ?>
+                        Hari Terakhir!
+                      <?php elseif ($daysRemaining == 1): ?>
+                        1 Hari Lagi
+                      <?php else: ?>
+                        <?= $daysRemaining ?> Hari Lagi
+                      <?php endif; ?>
+                    </span>
+                  <?php endif; ?>
+                </div>
+                <?php else: ?>
                 <div class="hero-badge mb-2">
                   <i class="bi bi-credit-card me-2"></i>
                   <?= $isContinuing ? 'Lanjutkan Pembayaran' : 'Pembayaran Digital' ?>
                 </div>
+                <?php endif; ?>
+                
                 <h3 class="hero-title mb-2"><?= esc($eventTitle) ?></h3>
                 <div class="hero-meta">
                   <span><i class="bi bi-calendar-event me-1"></i><?= esc($eventDate) ?></span>
@@ -81,10 +128,39 @@ $snapScriptUrl = $isProduction
                 <div class="amount-box">
                   <div class="amount-label">Total Pembayaran</div>
                   <div class="amount-value">Rp <?= number_format($amount, 0, ',', '.') ?></div>
+                  <?php if ($waveNumber): ?>
+                  <div class="wave-price-note">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Harga Gelombang <?= $waveNumber ?>
+                  </div>
+                  <?php endif; ?>
                 </div>
               </div>
             </div>
           </div>
+
+          <!-- ✅ Wave Warning (if deadline near) -->
+          <?php if ($daysRemaining !== null && $daysRemaining <= 3 && $daysRemaining > 0): ?>
+          <div class="alert alert-warning mb-4">
+            <div class="d-flex align-items-start gap-2">
+              <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+              <div>
+                <strong>Gelombang <?= $waveNumber ?> akan berakhir dalam <?= $daysRemaining ?> hari!</strong>
+                <p class="mb-0 mt-1">Selesaikan pembayaran sebelum <?= date('d M Y, H:i', strtotime($waveDeadline)) ?> WIB untuk mendapatkan harga ini.</p>
+              </div>
+            </div>
+          </div>
+          <?php elseif ($daysRemaining === 0): ?>
+          <div class="alert alert-danger mb-4">
+            <div class="d-flex align-items-start gap-2">
+              <i class="bi bi-exclamation-circle-fill fs-5"></i>
+              <div>
+                <strong>HARI TERAKHIR Gelombang <?= $waveNumber ?>!</strong>
+                <p class="mb-0 mt-1">Batas waktu pembayaran: <?= date('d M Y, H:i', strtotime($waveDeadline)) ?> WIB</p>
+              </div>
+            </div>
+          </div>
+          <?php endif; ?>
 
           <?php if ($isContinuing): ?>
           <!-- Continue Existing Payment -->
@@ -220,6 +296,26 @@ $snapScriptUrl = $isProduction
                   </span>
                 </div>
 
+                <!-- ✅ Wave Info in Summary -->
+                <?php if ($waveNumber): ?>
+                <div class="summary-item">
+                  <span class="summary-label">Gelombang Pendaftaran</span>
+                  <span class="summary-value">
+                    <span class="badge bg-info">Gelombang <?= $waveNumber ?></span>
+                  </span>
+                </div>
+                <?php endif; ?>
+
+                <?php if ($waveDeadline && $daysRemaining !== null): ?>
+                <div class="summary-item">
+                  <span class="summary-label">Batas Pembayaran</span>
+                  <span class="summary-value text-danger">
+                    <i class="bi bi-clock-fill me-1"></i>
+                    <?= date('d M Y, H:i', strtotime($waveDeadline)) ?> WIB
+                  </span>
+                </div>
+                <?php endif; ?>
+
                 <div class="summary-item">
                   <span class="summary-label">Nama Peserta</span>
                   <span class="summary-value"><?= esc($userName) ?></span>
@@ -230,20 +326,6 @@ $snapScriptUrl = $isProduction
                 <div class="summary-item total">
                   <span class="summary-label">Total Pembayaran</span>
                   <span class="summary-value">Rp <?= number_format($amount, 0, ',', '.') ?></span>
-                </div>
-
-                <!-- Voucher Section (Optional - can be added later) -->
-                <div class="voucher-section mt-3">
-                  <button type="button" class="btn btn-sm btn-outline-secondary w-100" data-bs-toggle="collapse" data-bs-target="#voucherForm">
-                    <i class="bi bi-tag me-1"></i>Punya Kode Voucher?
-                  </button>
-                  <div class="collapse mt-2" id="voucherForm">
-                    <div class="input-group input-group-sm">
-                      <input type="text" class="form-control" id="voucherInput" placeholder="Masukkan kode voucher">
-                      <button class="btn btn-primary" type="button" id="applyVoucherBtn">Terapkan</button>
-                    </div>
-                    <div id="voucherMessage" class="small mt-1"></div>
-                  </div>
                 </div>
 
                 <div class="payment-action mt-4">
@@ -297,6 +379,12 @@ $snapScriptUrl = $isProduction
     font-weight: 500;
   }
 
+  .wave-badge {
+    background: rgba(255,255,255,0.3);
+    border: 1px solid rgba(255,255,255,0.4);
+    padding: 8px 16px;
+  }
+
   .hero-title {
     font-weight: 700;
     font-size: 1.75rem;
@@ -327,6 +415,12 @@ $snapScriptUrl = $isProduction
   .amount-value {
     font-size: 1.75rem;
     font-weight: 700;
+  }
+
+  .wave-price-note {
+    font-size: 0.75rem;
+    margin-top: 6px;
+    opacity: 0.85;
   }
 
   .instruction-box, .summary-box {
@@ -441,9 +535,6 @@ $snapScriptUrl = $isProduction
 // Global variables
 let snapToken = '<?= $snapToken ?? '' ?>';
 let regId = <?= $regId ?>;
-let voucherApplied = false;
-let voucherId = null;
-let originalAmount = <?= $amount ?>;
 let finalAmount = <?= $amount ?>;
 
 <?php if ($isContinuing && $snapToken): ?>
@@ -476,72 +567,6 @@ document.getElementById('continuePaymentBtn')?.addEventListener('click', functio
 
 <?php else: ?>
 // New payment
-document.getElementById('applyVoucherBtn')?.addEventListener('click', function() {
-  const code = document.getElementById('voucherInput').value.trim();
-  const messageEl = document.getElementById('voucherMessage');
-  
-  if (!code) {
-    messageEl.className = 'small mt-1 text-danger';
-    messageEl.textContent = 'Masukkan kode voucher';
-    return;
-  }
-
-  messageEl.className = 'small mt-1 text-muted';
-  messageEl.textContent = 'Memvalidasi...';
-
-  fetch('<?= site_url('audience/pembayaran/validate-voucher') ?>', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'X-Requested-With': 'XMLHttpRequest'
-    },
-    body: new URLSearchParams({
-      '<?= csrf_token() ?>': '<?= csrf_hash() ?>',
-      'event_id': '<?= $reg['id_event'] ?? 0 ?>',
-      'mode': '<?= $mode ?>',
-      'kode_voucher': code
-    })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.ok) {
-      voucherApplied = true;
-      voucherId = data.voucher_id;
-      finalAmount = data.final_price;
-      
-      messageEl.className = 'small mt-1 text-success';
-      messageEl.textContent = '✓ ' + data.message;
-      
-      // Update display
-      document.querySelector('.summary-item.total .summary-value').innerHTML = 
-        'Rp ' + new Intl.NumberFormat('id-ID').format(finalAmount);
-      
-      // Show discount
-      const discountAmount = originalAmount - finalAmount;
-      if (discountAmount > 0) {
-        const discountHtml = `
-          <div class="summary-item text-success">
-            <span class="summary-label">Diskon Voucher</span>
-            <span class="summary-value">-Rp ${new Intl.NumberFormat('id-ID').format(discountAmount)}</span>
-          </div>
-        `;
-        document.querySelector('.summary-item.total').insertAdjacentHTML('beforebegin', discountHtml);
-      }
-      
-      document.getElementById('voucherInput').disabled = true;
-      document.getElementById('applyVoucherBtn').disabled = true;
-    } else {
-      messageEl.className = 'small mt-1 text-danger';
-      messageEl.textContent = '✗ ' + data.message;
-    }
-  })
-  .catch(err => {
-    messageEl.className = 'small mt-1 text-danger';
-    messageEl.textContent = 'Terjadi kesalahan. Coba lagi.';
-    console.error(err);
-  });
-});
-
 document.getElementById('payButton')?.addEventListener('click', function() {
   const btn = this;
   btn.disabled = true;
@@ -550,8 +575,7 @@ document.getElementById('payButton')?.addEventListener('click', function() {
   const formData = new URLSearchParams({
     '<?= csrf_token() ?>': '<?= csrf_hash() ?>',
     'reg_id': regId,
-    'payment_method': 'midtrans',
-    'voucher_code': voucherApplied ? document.getElementById('voucherInput').value : ''
+    'payment_method': 'midtrans'
   });
 
   fetch('<?= site_url('audience/pembayaran/process-payment') ?>', {
@@ -593,19 +617,8 @@ document.getElementById('payButton')?.addEventListener('click', function() {
       btn.innerHTML = '<i class="bi bi-credit-card me-2"></i>Bayar Sekarang';
       
       if (data.redirect_url) {
-        if (window.Swal) {
-          Swal.fire({
-            icon: 'warning',
-            title: 'Perhatian',
-            text: data.message || 'Anda sudah memiliki pembayaran pending',
-            confirmButtonText: 'Lihat Detail'
-          }).then(() => {
-            window.location.href = data.redirect_url;
-          });
-        } else {
-          alert(data.message || 'Terjadi kesalahan');
-          window.location.href = data.redirect_url;
-        }
+        alert(data.message || 'Terjadi kesalahan');
+        window.location.href = data.redirect_url;
       } else {
         alert(data.message || 'Terjadi kesalahan');
       }

@@ -6,6 +6,95 @@ $pembayaran_pending  = (int)($pembayaran_pending  ?? 0);
 $pembayaran_verified = (int)($pembayaran_verified ?? 0);
 $pembayaran_rejected = (int)($pembayaran_rejected ?? 0);
 $total_revenue       = (int)($total_revenue ?? 0);
+
+// ===== HELPER FUNCTION: Get Payment Method Display =====
+function getPaymentMethodDisplay($payment) {
+    $metode = strtolower($payment['metode'] ?? '');
+    $paymentType = strtolower($payment['midtrans_payment_type'] ?? '');
+    
+    // Jika metode Midtrans, tampilkan detail payment type
+    if ($metode === 'midtrans' && !empty($paymentType)) {
+        // Mapping payment type Midtrans ke display yang user-friendly
+        $paymentMethodMap = [
+            // Bank Transfer
+            'bank_transfer' => ['icon' => 'bank', 'label' => 'Bank Transfer', 'color' => '#1e40af'],
+            'bca_va' => ['icon' => 'building', 'label' => 'BCA Virtual Account', 'color' => '#003087'],
+            'bni_va' => ['icon' => 'building', 'label' => 'BNI Virtual Account', 'color' => '#ed7203'],
+            'bri_va' => ['icon' => 'building', 'label' => 'BRI Virtual Account', 'color' => '#003d7a'],
+            'mandiri_va' => ['icon' => 'building', 'label' => 'Mandiri Virtual Account', 'color' => '#003d79'],
+            'permata_va' => ['icon' => 'building', 'label' => 'Permata Virtual Account', 'color' => '#00a84f'],
+            
+            // E-Wallet
+            'gopay' => ['icon' => 'wallet2', 'label' => 'GoPay', 'color' => '#00aa13'],
+            'shopeepay' => ['icon' => 'wallet2', 'label' => 'ShopeePay', 'color' => '#ee4d2d'],
+            'qris' => ['icon' => 'qr-code', 'label' => 'QRIS', 'color' => '#d32f2f'],
+            'dana' => ['icon' => 'wallet2', 'label' => 'DANA', 'color' => '#118eea'],
+            'linkaja' => ['icon' => 'wallet2', 'label' => 'LinkAja', 'color' => '#e31e24'],
+            'ovo' => ['icon' => 'wallet2', 'label' => 'OVO', 'color' => '#4b2d83'],
+            
+            // Credit Card
+            'credit_card' => ['icon' => 'credit-card', 'label' => 'Kartu Kredit', 'color' => '#6b7280'],
+            'debit_card' => ['icon' => 'credit-card-2-front', 'label' => 'Kartu Debit', 'color' => '#6b7280'],
+            
+            // Convenience Store
+            'cstore' => ['icon' => 'shop', 'label' => 'Indomaret/Alfamart', 'color' => '#0ea5e9'],
+            'indomaret' => ['icon' => 'shop', 'label' => 'Indomaret', 'color' => '#d91e27'],
+            'alfamart' => ['icon' => 'shop', 'label' => 'Alfamart', 'color' => '#ed1c24'],
+            
+            // Other
+            'akulaku' => ['icon' => 'credit-card', 'label' => 'Akulaku', 'color' => '#00a3ff'],
+        ];
+        
+        // Coba match dengan payment type
+        $displayInfo = $paymentMethodMap[$paymentType] ?? null;
+        
+        // Jika tidak ada match exact, coba cari partial match
+        if (!$displayInfo) {
+            foreach ($paymentMethodMap as $key => $info) {
+                if (strpos($paymentType, $key) !== false) {
+                    $displayInfo = $info;
+                    break;
+                }
+            }
+        }
+        
+        // Fallback jika masih tidak ketemu
+        if (!$displayInfo) {
+            $displayInfo = [
+                'icon' => 'credit-card', 
+                'label' => ucwords(str_replace('_', ' ', $paymentType)),
+                'color' => '#6b7280'
+            ];
+        }
+        
+        return [
+            'icon' => $displayInfo['icon'],
+            'label' => $displayInfo['label'],
+            'color' => $displayInfo['color'],
+            'badge' => 'Midtrans'
+        ];
+    }
+    
+    // Metode pembayaran manual/lainnya
+    $manualMethodMap = [
+        'transfer_bank' => ['icon' => 'bank', 'label' => 'Transfer Bank Manual', 'color' => '#059669'],
+        'cash' => ['icon' => 'cash-coin', 'label' => 'Tunai', 'color' => '#10b981'],
+        'other' => ['icon' => 'credit-card', 'label' => 'Lainnya', 'color' => '#6b7280'],
+    ];
+    
+    $displayInfo = $manualMethodMap[$metode] ?? [
+        'icon' => 'credit-card',
+        'label' => ucfirst($metode),
+        'color' => '#6b7280'
+    ];
+    
+    return [
+        'icon' => $displayInfo['icon'],
+        'label' => $displayInfo['label'],
+        'color' => $displayInfo['color'],
+        'badge' => null
+    ];
+}
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -166,9 +255,11 @@ $total_revenue       = (int)($total_revenue ?? 0);
               $part   = $p['participation_type'] ?? '';
               $name   = $p['nama_lengkap'] ?? '-';
               $email  = $p['email'] ?? '-';
-              $metode = $p['metode'] ?? '-';
               $amount = (int)($p['jumlah'] ?? 0);
               $evt    = $p['event_title'] ?? null;
+
+              // ===== GET PAYMENT METHOD DISPLAY INFO =====
+              $paymentDisplay = getPaymentMethodDisplay($p);
 
               $statusClass = match($status){
                 'pending'  => 'status-pending',
@@ -184,7 +275,7 @@ $total_revenue       = (int)($total_revenue ?? 0);
                 default    => ucfirst($status)
               };
 
-              $searchStr = strtolower(($name.' '.$email.' '.$metode));
+              $searchStr = strtolower(($name.' '.$email.' '.$paymentDisplay['label']));
             ?>
               <div class="col-lg-6 col-xl-4"
                    data-status="<?= esc($status) ?>"
@@ -220,14 +311,34 @@ $total_revenue       = (int)($total_revenue ?? 0);
                     
                     <!-- Payment Details -->
                     <div class="payment-details">
+                      <!-- ===== IMPROVED PAYMENT METHOD DISPLAY ===== -->
+                      <div class="detail-row mb-3">
+                        <div class="detail-item">
+                          <label class="detail-label">Metode Pembayaran</label>
+                          <div class="payment-method-display">
+                            <div class="payment-method-icon" style="background-color: <?= $paymentDisplay['color'] ?>;">
+                              <i class="bi bi-<?= $paymentDisplay['icon'] ?>"></i>
+                            </div>
+                            <div class="payment-method-info">
+                              <div class="payment-method-label"><?= esc($paymentDisplay['label']) ?></div>
+                              <?php if ($paymentDisplay['badge']): ?>
+                                <span class="payment-method-badge"><?= $paymentDisplay['badge'] ?></span>
+                              <?php endif; ?>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
                       <div class="detail-row">
                         <div class="detail-item">
-                          <label class="detail-label">Metode</label>
-                          <div class="detail-value"><?= esc($metode) ?></div>
+                          <label class="detail-label">Jumlah Bayar</label>
+                          <div class="detail-value amount">Rp <?= number_format($amount, 0, ',', '.') ?></div>
                         </div>
                         <div class="detail-item">
-                          <label class="detail-label">Jumlah</label>
-                          <div class="detail-value amount">Rp <?= number_format($amount, 0, ',', '.') ?></div>
+                          <label class="detail-label">Tanggal Bayar</label>
+                          <div class="detail-value">
+                            <?= !empty($p['tanggal_bayar']) ? date('d/m/Y H:i', strtotime($p['tanggal_bayar'])) : '-' ?>
+                          </div>
                         </div>
                       </div>
 
@@ -241,12 +352,6 @@ $total_revenue       = (int)($total_revenue ?? 0);
                             <?php if (!empty($part)): ?>
                               <span class="participation-badge"><?= ucfirst($part) ?></span>
                             <?php endif; ?>
-                          </div>
-                        </div>
-                        <div class="detail-item">
-                          <label class="detail-label">Tanggal Bayar</label>
-                          <div class="detail-value">
-                            <?= !empty($p['tanggal_bayar']) ? date('d/m/Y H:i', strtotime($p['tanggal_bayar'])) : '-' ?>
                           </div>
                         </div>
                       </div>
@@ -267,11 +372,22 @@ $total_revenue       = (int)($total_revenue ?? 0);
                       </div>
                     <?php endif; ?>
 
+                    <!-- Midtrans Transaction ID -->
+                    <?php if (!empty($p['midtrans_transaction_id'])): ?>
+                      <div class="transaction-id-info">
+                        <small class="transaction-id-label">Transaction ID:</small>
+                        <small class="transaction-id-value"><?= esc($p['midtrans_transaction_id']) ?></small>
+                      </div>
+                    <?php endif; ?>
+
                     <!-- Verification Info -->
                     <?php if (!empty($p['verified_at'])): ?>
                       <div class="verification-info">
                         <small class="verification-text">
                           Diverifikasi: <?= date('d/m/Y H:i', strtotime($p['verified_at'])) ?>
+                          <?php if (!empty($p['auto_verified']) && $p['auto_verified']): ?>
+                            <span class="auto-verified-badge">AUTO</span>
+                          <?php endif; ?>
                         </small>
                       </div>
                     <?php endif; ?>
@@ -404,9 +520,7 @@ $total_revenue       = (int)($total_revenue ?? 0);
 <?= $this->include('partials/footer') ?>
 
 <style>
-/* ========================================
-   CSS VARIABLES & CONFIGURATION
-   ======================================== */
+/* ========== Previous CSS (unchanged) ========== */
 :root {
   --primary-color: #2563eb;
   --success-color: #10b981;
@@ -426,9 +540,6 @@ $total_revenue       = (int)($total_revenue ?? 0);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16);
 }
 
-/* ========================================
-   GLOBAL STYLES
-   ======================================== */
 body {
   background: linear-gradient(135deg, var(--light-bg) 0%, #e2e8f0 100%);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -439,9 +550,92 @@ body {
   margin-top: 0;
 }
 
-/* ========================================
-   HEADER SECTION
-   ======================================== */
+/* ========== NEW: Payment Method Display Styles ========== */
+.payment-method-display {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.payment-method-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1rem;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.payment-method-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.payment-method-label {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  margin-bottom: 0.125rem;
+}
+
+.payment-method-badge {
+  display: inline-block;
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--primary-color);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.transaction-id-info {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.transaction-id-label {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.transaction-id-value {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-family: 'Courier New', monospace;
+  background: #f8fafc;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.auto-verified-badge {
+  display: inline-block;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success-color);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-left: 0.25rem;
+}
+
+/* ========== Previous Styles (unchanged) ========== */
 .header-section {
   background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
   color: white;
@@ -476,9 +670,6 @@ body {
   font-weight: 400;
 }
 
-/* ========================================
-   STATISTICS CARDS
-   ======================================== */
 .stat-card {
   background: white;
   border-radius: var(--border-radius);
@@ -535,9 +726,6 @@ body {
   font-weight: 500;
 }
 
-/* ========================================
-   FILTER SECTION
-   ======================================== */
 .filter-section {
   margin-bottom: 2rem;
 }
@@ -594,9 +782,6 @@ body {
   font-weight: 500;
 }
 
-/* ========================================
-   SECTION HEADERS
-   ======================================== */
 .section-title {
   color: var(--text-primary);
   font-weight: 700;
@@ -604,9 +789,6 @@ body {
   margin-bottom: 0;
 }
 
-/* ========================================
-   PAYMENT CARDS
-   ======================================== */
 .payment-card {
   background: white;
   border-radius: var(--border-radius);
@@ -848,9 +1030,6 @@ body {
   gap: 0.5rem;
 }
 
-/* ========================================
-   EMPTY STATE
-   ======================================== */
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
@@ -877,9 +1056,6 @@ body {
   margin-bottom: 0;
 }
 
-/* ========================================
-   LOAD MORE SECTION
-   ======================================== */
 .load-more-section {
   text-align: center;
   margin-top: 2rem;
@@ -887,9 +1063,6 @@ body {
   border-top: 1px solid var(--border-color);
 }
 
-/* ========================================
-   MODAL STYLES
-   ======================================== */
 .modal-header {
   background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
   color: white;
@@ -904,9 +1077,6 @@ body {
   margin-bottom: 1rem;
 }
 
-/* ========================================
-   BUTTON STYLES
-   ======================================== */
 .btn {
   font-weight: 600;
   border-radius: 8px;
@@ -928,32 +1098,6 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
-/* ========================================
-   UTILITY CLASSES
-   ======================================== */
-.text-primary { 
-  color: var(--primary-color) !important; 
-}
-
-.text-success { 
-  color: var(--success-color) !important; 
-}
-
-.text-warning { 
-  color: var(--warning-color) !important; 
-}
-
-.text-danger { 
-  color: var(--danger-color) !important; 
-}
-
-.text-info { 
-  color: var(--info-color) !important; 
-}
-
-/* ========================================
-   RESPONSIVE DESIGN
-   ======================================== */
 @media (max-width: 768px) {
   .header-section {
     padding: 1.5rem;
@@ -975,6 +1119,10 @@ body {
     gap: 0.75rem;
   }
   
+  .detail-row.mb-3 {
+    grid-template-columns: 1fr;
+  }
+  
   .action-buttons {
     justify-content: center;
     flex-direction: column;
@@ -993,22 +1141,22 @@ body {
     text-align: center;
     gap: 0.75rem;
   }
+  
+  .payment-method-display {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.5rem;
+  }
 }
 </style>
 
 <script>
-// ========================================
-// PAYMENT VERIFICATION MANAGEMENT SCRIPT
-// ========================================
-
 (function() {
   'use strict';
 
-  // ===== DOM Selectors =====
   const $ = (selector, context = document) => context.querySelector(selector);
   const $$ = (selector, context = document) => Array.from(context.querySelectorAll(selector));
 
-  // ===== Filter Elements =====
   const searchInput = $('#searchInput');
   const statusFilter = $('#statusFilter');
   const roleFilter = $('#roleFilter');
@@ -1016,11 +1164,9 @@ body {
   const resetButton = $('#btnResetFilter');
   const resultCounter = $('#resultCounter');
 
-  // ===== Modal Elements =====
   const buktiModal = new bootstrap.Modal($('#buktiModal'));
   const verifikasiModal = new bootstrap.Modal($('#verifikasiModal'));
 
-  // ===== Filter Functionality =====
   function applyFilters() {
     const searchQuery = (searchInput?.value || '').toLowerCase();
     const statusValue = statusFilter?.value || '';
@@ -1047,7 +1193,6 @@ body {
       if (shouldShow) visibleCount++;
     });
 
-    // Update counter
     if (resultCounter) {
       resultCounter.textContent = `Menampilkan ${visibleCount} dari ${paymentCards.length} pembayaran`;
     }
@@ -1061,14 +1206,12 @@ body {
     applyFilters();
   }
 
-  // ===== Event Listeners for Filters =====
   searchInput?.addEventListener('input', applyFilters);
   statusFilter?.addEventListener('change', applyFilters);
   roleFilter?.addEventListener('change', applyFilters);
   participationFilter?.addEventListener('change', applyFilters);
   resetButton?.addEventListener('click', resetFilters);
 
-  // ===== Bukti Modal Functionality =====
   $$('.btn-view-bukti').forEach(button => {
     button.addEventListener('click', () => {
       const buktiUrl = button.getAttribute('data-bukti-url');
@@ -1081,14 +1224,12 @@ body {
     });
   });
 
-  // ===== Verifikasi Modal Functionality =====
   $$('.btn-open-verif').forEach(button => {
     button.addEventListener('click', () => {
       const paymentId = button.getAttribute('data-id');
       const status = button.getAttribute('data-status');
       const isVerification = status === 'verified';
 
-      // Update modal title
       const title = $('#verifikasiTitle');
       if (title) {
         title.innerHTML = isVerification 
@@ -1096,19 +1237,16 @@ body {
           : '<i class="bi bi-x-circle me-2"></i>Tolak Pembayaran';
       }
 
-      // Set hidden status field
       const statusField = $('#verifikasiStatus');
       if (statusField) {
         statusField.value = status;
       }
 
-      // Update form action
       const form = $('#verifikasiForm');
       if (form) {
         form.action = `<?= site_url('admin/pembayaran/verifikasi') ?>/${paymentId}`;
       }
 
-      // Update submit button
       const submitButton = $('#verifikasiSubmit');
       if (submitButton) {
         submitButton.className = `btn btn-${isVerification ? 'success' : 'danger'}`;
@@ -1119,7 +1257,6 @@ body {
     });
   });
 
-  // ===== Auto Refresh for Pending Payments =====
   function autoRefreshPendingPayments() {
     const hasPendingPayments = document.querySelector('[data-status="pending"]');
     
@@ -1138,7 +1275,6 @@ body {
         const currentContainer = $('#paymentContainer');
         if (currentContainer) {
           currentContainer.innerHTML = newContainer.innerHTML;
-          // Re-bind event listeners after refresh
           bindEventListeners();
           applyFilters();
         }
@@ -1149,9 +1285,7 @@ body {
     });
   }
 
-  // ===== Re-bind Event Listeners =====
   function bindEventListeners() {
-    // Re-bind bukti modal buttons
     $$('.btn-view-bukti').forEach(button => {
       button.addEventListener('click', () => {
         const buktiUrl = button.getAttribute('data-bukti-url');
@@ -1164,7 +1298,6 @@ body {
       });
     });
 
-    // Re-bind verification modal buttons
     $$('.btn-open-verif').forEach(button => {
       button.addEventListener('click', () => {
         const paymentId = button.getAttribute('data-id');
@@ -1199,25 +1332,18 @@ body {
     });
   }
 
-  // ===== Load More Functionality =====
   const loadMoreButton = $('#btnLoadMore');
   if (loadMoreButton) {
     loadMoreButton.addEventListener('click', () => {
-      // Implement load more functionality here
       console.log('Load more payments...');
     });
   }
 
-  // ===== Initialize =====
   function initialize() {
-    // Apply initial filters
     applyFilters();
-    
-    // Set up auto refresh every 30 seconds
     setInterval(autoRefreshPendingPayments, 30000);
   }
 
-  // Start the application when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initialize);
   } else {

@@ -1,7 +1,7 @@
 <?php
 // =========================================
 //  Enhanced Pembayaran - Index (Audience) with Midtrans Support
-//  Simple Blue & White Theme
+//  FIXED: Proper JavaScript DOM handling
 // =========================================
 $title = $title ?? 'Pembayaran Saya';
 $eventMap = $eventMap ?? [];
@@ -13,26 +13,33 @@ $fmtDate = function($s){ return $s ? date('d M Y, H:i', strtotime($s)) : '-'; };
 $fmtRp = fn($n)=> 'Rp ' . number_format((float)$n, 0, ',', '.');
 
 // Helper untuk payment method display
-$getPaymentMethodInfo = function($method, $reference = null) {
-    // Semua pembayaran menggunakan Midtrans (Digital Payment)
+$getPaymentMethodInfo = function($method, $paymentType = null) {
+    if ($method === 'midtrans' && !empty($paymentType)) {
+        $methodMap = [
+            'dana' => ['icon' => 'wallet2', 'label' => 'DANA', 'color' => '#118eea'],
+            'gopay' => ['icon' => 'wallet2', 'label' => 'GoPay', 'color' => '#00aa13'],
+            'shopeepay' => ['icon' => 'wallet2', 'label' => 'ShopeePay', 'color' => '#ee4d2d'],
+            'bca_va' => ['icon' => 'building', 'label' => 'BCA VA', 'color' => '#003087'],
+            'bni_va' => ['icon' => 'building', 'label' => 'BNI VA', 'color' => '#ed7203'],
+            'bri_va' => ['icon' => 'building', 'label' => 'BRI VA', 'color' => '#003d7a'],
+            'qris' => ['icon' => 'qr-code', 'label' => 'QRIS', 'color' => '#d32f2f'],
+        ];
+        
+        return $methodMap[$paymentType] ?? [
+            'icon' => 'credit-card',
+            'label' => 'Digital Payment',
+            'color' => '#2563eb'
+        ];
+    }
+    
     return [
-        'icon' => 'bi-credit-card-fill',
+        'icon' => 'credit-card',
         'label' => 'Digital Payment',
-        'badge' => 'bg-primary',
-        'description' => $reference ? "Order ID: " . substr($reference, -12) : 'Midtrans Payment Gateway'
+        'color' => '#2563eb'
     ];
 };
 
-// Gabungkan semua pembayaran untuk statistik
 $allPayments = array_merge($aktif, $riwayat);
-
-// Debug mode - Uncomment untuk cek data
-// echo '<div class="alert alert-info">DEBUG: Aktif=' . count($aktif) . ', Riwayat=' . count($riwayat) . '</div>';
-// if (!empty($riwayat)) {
-//     echo '<pre>Riwayat Status: '; 
-//     foreach($riwayat as $r) echo $r['status'] . ', ';
-//     echo '</pre>';
-// }
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -76,7 +83,7 @@ $allPayments = array_merge($aktif, $riwayat);
           </div>
           <div class="stat-content">
             <div class="stat-value">
-              <?= count(array_filter($allPayments, fn($r) => ($r['status'] ?? '') === 'verified')) ?>
+              <?= count(array_filter($allPayments, fn($r)=> ($r['status'] ?? '') === 'verified')) ?>
             </div>
             <div class="stat-label">Terverifikasi</div>
           </div>
@@ -87,7 +94,7 @@ $allPayments = array_merge($aktif, $riwayat);
           </div>
           <div class="stat-content">
             <div class="stat-value">
-              <?= count(array_filter($allPayments, fn($r) => ($r['metode'] ?? '') === 'midtrans')) ?>
+              <?= count(array_filter($allPayments, fn($r)=> ($r['metode'] ?? '') === 'midtrans')) ?>
             </div>
             <div class="stat-label">Digital</div>
           </div>
@@ -98,7 +105,7 @@ $allPayments = array_merge($aktif, $riwayat);
           </div>
           <div class="stat-content">
             <div class="stat-value stat-value-small">
-              <?= $fmtRp(array_sum(array_column(array_filter($allPayments, fn($r) => ($r['status'] ?? '') === 'verified'), 'jumlah'))) ?>
+              <?= $fmtRp(array_sum(array_column(array_filter($allPayments, fn($r)=> ($r['status'] ?? '') === 'verified'), 'jumlah'))) ?>
             </div>
             <div class="stat-label">Total Bayar</div>
           </div>
@@ -123,7 +130,7 @@ $allPayments = array_merge($aktif, $riwayat);
         </div>
       <?php else: ?>
 
-        <!-- ========== PEMBAYARAN AKTIF (Pending) ========== -->
+        <!-- PEMBAYARAN AKTIF (Pending) -->
         <?php if (!empty($aktif)): ?>
         <div class="content-card mb-4">
           <div class="card-header-custom">
@@ -154,7 +161,7 @@ $allPayments = array_merge($aktif, $riwayat);
                   </thead>
                   <tbody>
                     <?php foreach ($aktif as $i => $row): 
-                      $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['payment_reference'] ?? null);
+                      $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['midtrans_payment_type'] ?? null);
                     ?>
                     <tr>
                       <td><span class="row-number"><?= $i+1 ?></span></td>
@@ -167,9 +174,9 @@ $allPayments = array_merge($aktif, $riwayat);
                         </div>
                       </td>
                       <td>
-                        <span class="method-badge <?= $methodInfo['badge'] ?>">
-                          <i class="<?= $methodInfo['icon'] ?>"></i>
-                          <?= $methodInfo['label'] ?>
+                        <span class="method-badge" style="background: <?= $methodInfo['color'] ?>; color: white;">
+                          <i class="bi bi-<?= $methodInfo['icon'] ?>"></i>
+                          <?= esc($methodInfo['label']) ?>
                         </span>
                       </td>
                       <td><span class="payment-amount"><?= $fmtRp($row['jumlah'] ?? 0) ?></span></td>
@@ -203,7 +210,7 @@ $allPayments = array_merge($aktif, $riwayat);
             <div class="d-block d-lg-none">
               <div class="mobile-cards">
                 <?php foreach ($aktif as $row): 
-                  $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['payment_reference'] ?? null);
+                  $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['midtrans_payment_type'] ?? null);
                 ?>
                 <div class="payment-mobile-card">
                   <div class="mobile-card-header">
@@ -220,7 +227,7 @@ $allPayments = array_merge($aktif, $riwayat);
                         <i class="bi bi-credit-card"></i>
                         Metode
                       </span>
-                      <span class="mobile-value"><?= $methodInfo['label'] ?></span>
+                      <span class="mobile-value"><?= esc($methodInfo['label']) ?></span>
                     </div>
                     <div class="mobile-info-item">
                       <span class="mobile-label">
@@ -252,7 +259,7 @@ $allPayments = array_merge($aktif, $riwayat);
         </div>
         <?php endif; ?>
 
-        <!-- ========== RIWAYAT PEMBAYARAN ========== -->
+        <!-- RIWAYAT PEMBAYARAN -->
         <?php if (!empty($riwayat)): ?>
         <div class="content-card">
           <div class="card-header-custom">
@@ -283,7 +290,7 @@ $allPayments = array_merge($aktif, $riwayat);
                   </thead>
                   <tbody>
                     <?php foreach ($riwayat as $i => $row): 
-                      $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['payment_reference'] ?? null);
+                      $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['midtrans_payment_type'] ?? null);
                       $status = $row['status'] ?? 'pending';
                       $statusClass = match($status) {
                         'verified' => 'status-verified',
@@ -315,9 +322,9 @@ $allPayments = array_merge($aktif, $riwayat);
                         </div>
                       </td>
                       <td>
-                        <span class="method-badge <?= $methodInfo['badge'] ?>">
-                          <i class="<?= $methodInfo['icon'] ?>"></i>
-                          <?= $methodInfo['label'] ?>
+                        <span class="method-badge" style="background: <?= $methodInfo['color'] ?>; color: white;">
+                          <i class="bi bi-<?= $methodInfo['icon'] ?>"></i>
+                          <?= esc($methodInfo['label']) ?>
                         </span>
                       </td>
                       <td><span class="payment-amount"><?= $fmtRp($row['jumlah'] ?? 0) ?></span></td>
@@ -351,7 +358,7 @@ $allPayments = array_merge($aktif, $riwayat);
             <div class="d-block d-lg-none">
               <div class="mobile-cards">
                 <?php foreach ($riwayat as $row): 
-                  $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['payment_reference'] ?? null);
+                  $methodInfo = $getPaymentMethodInfo($row['metode'] ?? 'manual', $row['midtrans_payment_type'] ?? null);
                   $status = $row['status'] ?? 'pending';
                   $statusClass = match($status) {
                     'verified' => 'status-verified',
@@ -387,7 +394,7 @@ $allPayments = array_merge($aktif, $riwayat);
                         <i class="bi bi-credit-card"></i>
                         Metode
                       </span>
-                      <span class="mobile-value"><?= $methodInfo['label'] ?></span>
+                      <span class="mobile-value"><?= esc($methodInfo['label']) ?></span>
                     </div>
                     <div class="mobile-info-item">
                       <span class="mobile-label">
@@ -450,7 +457,6 @@ body {
   min-height: 100vh;
 }
 
-/* === PAGE HEADER === */
 .page-header {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   border-radius: 16px;
@@ -495,7 +501,6 @@ body {
   font-size: 0.95rem;
 }
 
-/* === STATS GRID === */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -568,7 +573,6 @@ body {
 }
 .stat-total .stat-value { color: #7c3aed; }
 
-/* === CONTENT CARD === */
 .content-card {
   background: var(--white);
   border: 1px solid var(--border);
@@ -628,7 +632,6 @@ body {
   padding: 1.5rem;
 }
 
-/* === TABLE === */
 .table-wrapper {
   overflow-x: auto;
 }
@@ -692,16 +695,6 @@ body {
   font-weight: 600;
 }
 
-.method-badge.bg-primary {
-  background: var(--primary-blue);
-  color: var(--white);
-}
-
-.method-badge.bg-secondary {
-  background: var(--border);
-  color: var(--text-gray);
-}
-
 .payment-amount {
   font-weight: 700;
   color: var(--text-dark);
@@ -762,6 +755,7 @@ body {
   text-decoration: none;
   background: var(--primary-blue);
   color: var(--white);
+  transition: all 0.2s;
 }
 
 .btn-action.btn-outline {
@@ -780,7 +774,6 @@ body {
   color: var(--primary-blue);
 }
 
-/* === MOBILE CARDS === */
 .mobile-cards {
   display: flex;
   flex-direction: column;
@@ -892,6 +885,7 @@ body {
   text-decoration: none;
   font-weight: 600;
   font-size: 0.875rem;
+  transition: all 0.2s;
 }
 
 .btn-mobile-action.btn-outline-mobile {
@@ -910,7 +904,6 @@ body {
   color: var(--primary-blue);
 }
 
-/* === EMPTY STATE === */
 .empty-state-container {
   display: flex;
   justify-content: center;
@@ -963,6 +956,7 @@ body {
   font-weight: 600;
   text-decoration: none;
   font-size: 0.938rem;
+  transition: all 0.2s;
 }
 
 .btn-primary-custom:hover {
@@ -970,7 +964,6 @@ body {
   color: var(--white);
 }
 
-/* === RESPONSIVE === */
 @media (max-width: 992px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -1094,7 +1087,6 @@ body {
   }
 }
 
-/* === SCROLLBAR === */
 .table-wrapper::-webkit-scrollbar {
   height: 6px;
 }
@@ -1113,3 +1105,5 @@ body {
   background: var(--light-blue);
 }
 </style>
+
+<!-- ✅ NO PROBLEMATIC JAVASCRIPT - Pure server-side rendering -->

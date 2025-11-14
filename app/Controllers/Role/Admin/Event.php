@@ -4,808 +4,607 @@ namespace App\Controllers\Role\Admin;
 
 use App\Controllers\BaseController;
 use App\Models\EventModel;
-use App\Models\UserModel;
-use App\Models\AbstrakModel;
 use App\Models\PembayaranModel;
-use App\Models\AbsensiModel;
-use App\Models\EventRegistrationModel;
-use App\Models\DokumenModel;
+use CodeIgniter\I18n\Time;
 
 class Event extends BaseController
 {
-    protected $eventModel;
-    protected $userModel;
-    protected $abstrakModel;
-    protected $pembayaranModel;
-    protected $absensiModel;
-    protected $registrationModel;
-    protected $dokumenModel;
     protected $db;
+    protected $eventModel;
+    protected $pembayaranModel;
 
     public function __construct()
     {
-        $this->eventModel        = new EventModel();
-        $this->userModel         = new UserModel();
-        $this->abstrakModel      = new AbstrakModel();
-        $this->pembayaranModel   = new PembayaranModel();
-        $this->absensiModel      = new AbsensiModel();
-        $this->registrationModel = new EventRegistrationModel();
-        $this->dokumenModel      = new DokumenModel();
-        $this->db                = \Config\Database::connect();
+        $this->db = \Config\Database::connect();
+        $this->eventModel = new EventModel();
+        $this->pembayaranModel = new PembayaranModel();
     }
 
-    /* ====================== LIST / DASHBOARD ====================== */
-
+    /**
+     * INDEX - List all events with statistics
+     */
     public function index()
     {
-        try {
-            $events = $this->getEventsWithStats();
-            $stats  = $this->getDashboardStats();
-
-            foreach ($events as &$e) {
-                $e['is_active']                    = $this->parseBoolean($e['is_active']);
-                $e['registration_active']          = $this->parseBoolean($e['registration_active']);
-                $e['abstract_submission_active']   = $this->parseBoolean($e['abstract_submission_active']);
-                $e['full_paper_submission_active'] = $this->parseBoolean($e['full_paper_submission_active'] ?? false);
-
-                $e['attendance_rate'] = ($e['verified_registrations'] ?? 0) > 0
-                    ? round(($e['present_count'] / $e['verified_registrations']) * 100, 2) : 0;
-
-                $e['capacity_filled'] = !empty($e['max_participants'])
-                    ? round(($e['verified_registrations'] / $e['max_participants']) * 100, 2) : 0;
-
-                $e['event_status']        = $this->calculateEventStatus($e);
-                $e['registration_status'] = $this->calculateRegistrationStatus($e);
+        $events = $this->eventModel->getEventsWithStats();
+        
+        // Ensure registration_waves is properly decoded for each event
+        foreach ($events as &$event) {
+            if (isset($event['registration_waves'])) {
+                if (is_string($event['registration_waves'])) {
+                    $event['registration_waves'] = json_decode($event['registration_waves'], true) ?: [];
+                } elseif (!is_array($event['registration_waves'])) {
+                    $event['registration_waves'] = [];
+                }
+            } else {
+                $event['registration_waves'] = [];
             }
-
-            $data = ['events' => $events, 'stats' => $stats];
-            if ($this->request->isAJAX()) {
-                return $this->response->setJSON(['success' => true, 'data' => $data, 'timestamp' => time()]);
-            }
-            return view('role/admin/event/index', $data);
-        } catch (\Throwable $e) {
-            log_message('error', 'Event index error: ' . $e->getMessage());
-            if ($this->request->isAJAX()) {
-                return $this->response->setJSON(['success' => false, 'message' => 'Terjadi kesalahan saat memuat data event']);
-            }
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat memuat data event');
         }
-    }
-
-    private function getEventsWithStats()
-    {
-        $sql = "
-            SELECT e.*,
-                   COALESCE(regs.total_registrations,0)      AS total_registrations,
-                   COALESCE(regs.verified_registrations,0)   AS verified_registrations,
-                   COALESCE(regs.online_registrations,0)     AS online_registrations,
-                   COALESCE(regs.offline_registrations,0)    AS offline_registrations,
-                   COALESCE(revs.total_revenue,0)            AS total_revenue,
-                   COALESCE(abs.total_abstracts,0)           AS total_abstracts,
-                   COALESCE(atts.present_count,0)            AS present_count
+        unset($event);
+        
+        // Calculate overall statistics
+        $stats = $this->db->query("
+            SELECT 
+                COUNT(DISTINCT e.id) as total_events,
+                COUNT(DISTINCT CASE WHEN e.is_active = true THEN e.id END) as active_events,
+                COUNT(DISTINCT CASE WHEN p.status = 'verified' THEN p.id_pembayaran END) as verified_registrations,
+                COALESCE(SUM(CASE WHEN p.status = 'verified' THEN p.jumlah ELSE 0 END), 0) as total_revenue
             FROM events e
-            LEFT JOIN (
-                SELECT event_id,
-                       COUNT(*) AS total_registrations,
-                       COUNT(CASE WHEN status='verified' THEN 1 END)            AS verified_registrations,
-                       COUNT(CASE WHEN participation_type='online' THEN 1 END)  AS online_registrations,
-                       COUNT(CASE WHEN participation_type='offline' THEN 1 END) AS offline_registrations
-                FROM pembayaran GROUP BY event_id
-            ) regs ON regs.event_id = e.id
-            LEFT JOIN (
-                SELECT event_id, SUM(CASE WHEN status='verified' THEN jumlah ELSE 0 END) AS total_revenue
-                FROM pembayaran GROUP BY event_id
-            ) revs ON revs.event_id = e.id
-            LEFT JOIN (
-                SELECT event_id, COUNT(*) AS total_abstracts
-                FROM abstrak GROUP BY event_id
-            ) abs ON abs.event_id = e.id
-            LEFT JOIN (
-                SELECT event_id, COUNT(CASE WHEN status='hadir' THEN 1 END) AS present_count
-                FROM absensi GROUP BY event_id
-            ) atts ON atts.event_id = e.id
-            ORDER BY e.event_date DESC, e.created_at DESC
-        ";
-        return $this->db->query($sql)->getResultArray();
+            LEFT JOIN pembayaran p ON p.event_id = e.id
+        ")->getRowArray();
+        
+        return view('role/admin/event/index', [
+            'title' => 'Kelola Event',
+            'events' => $events,
+            'stats' => $stats
+        ]);
     }
 
-    private function getDashboardStats()
+    /**
+     * CREATE - Add new event
+     */
+    public function create()
     {
-        $totalEvents  = $this->eventModel->countAll();
-        $activeEvents = $this->eventModel->where('is_active', true)->countAllResults();
-        $verifiedRegs = $this->pembayaranModel->where('status', 'verified')->countAllResults();
-        $totalRevenue = (float) ($this->pembayaranModel->selectSum('jumlah')->where('status', 'verified')->first()['jumlah'] ?? 0);
+        if (!$this->request->isAJAX()) {
+            return redirect()->back()->with('error', 'Invalid request');
+        }
 
-        return [
-            'total_events'           => $totalEvents,
-            'active_events'          => $activeEvents,
-            'verified_registrations' => $verifiedRegs,
-            'total_revenue'          => $totalRevenue,
-        ];
-    }
-
-    /* ====================== CREATE / UPDATE ====================== */
-
-    public function store()
-    {
-        $validation = \Config\Services::validation();
-
-        // default ON di create untuk full paper
-        $this->normalizeToggleToBit('full_paper_submission_active', true);
+        log_message('info', '=== CREATE EVENT REQUEST ===');
+        log_message('info', 'POST data: ' . json_encode($this->request->getPost()));
 
         $rules = [
-            'title'                        => 'required|min_length[3]|max_length[255]',
-            'description'                  => 'permit_empty|max_length[2000]',
-            'event_date'                   => 'required|valid_date',
-            'event_time'                   => 'required',
-            'format'                       => 'required|in_list[both,online,offline]',
-            'presenter_fee_offline'        => 'required|integer|greater_than_equal_to[0]',
-            'audience_fee_online'          => 'permit_empty|integer|greater_than_equal_to[0]',
-            'audience_fee_offline'         => 'permit_empty|integer|greater_than_equal_to[0]',
-            'max_participants'             => 'permit_empty|integer|greater_than[0]',
-            'registration_deadline'        => 'permit_empty|valid_date',
-            'abstract_deadline'            => 'permit_empty|valid_date',
-            'full_paper_deadline'          => 'permit_empty|valid_date',
-            'full_paper_submission_active' => 'required|in_list[0,1]',
+            'title' => 'required|min_length[3]|max_length[255]',
+            'description' => 'permit_empty',
+            'event_date' => 'required|valid_date',
+            'event_time' => 'required',
+            'event_end_date' => 'required|valid_date',
+            'event_end_time' => 'required',
+            'format' => 'required|in_list[both,online,offline]',
+            'location' => 'permit_empty',
+            'zoom_link' => 'permit_empty',
         ];
 
-        $format = $this->request->getPost('format');
-        if (in_array($format, ['offline', 'both'], true)) $rules['location']  = 'required|min_length[5]|max_length[255]';
-        if (in_array($format, ['online',  'both'], true)) $rules['zoom_link'] = 'required|valid_url|max_length[500]';
-        if     ($format === 'online')  $rules['audience_fee_online']  = 'required|integer|greater_than_equal_to[0]';
-        elseif ($format === 'offline') $rules['audience_fee_offline'] = 'required|integer|greater_than_equal_to[0]';
-        else { $rules['audience_fee_online'] = $rules['audience_fee_offline'] = 'required|integer|greater_than_equal_to[0]'; }
-
         if (!$this->validate($rules)) {
-            return $this->handleValidationError($validation->getErrors());
-        }
-
-        $dateValidation = $this->validateEventDates();
-        if (!$dateValidation['valid']) {
-            return $this->handleError($dateValidation['message']);
-        }
-
-        $this->db->transStart();
-        try {
-            $data = $this->prepareEventData(true);
-            $data = $this->ensureFullPaperDeadlineOnEnable($data);
-
-            if (!$this->eventModel->save($data)) {
-                $err = $this->eventModel->errors();
-                $msg = $err ? implode(', ', $err) : ($this->db->error()['message'] ?? 'Unknown DB error');
-                throw new \Exception('Failed to create event: ' . $msg);
-            }
-
-            $newId = $this->eventModel->getInsertID();
-            $this->logActivity(session('id_user'), "Created new event: {$data['title']} (ID: {$newId})");
-            $this->db->transComplete();
-            if ($this->db->transStatus() === false) throw new \Exception('Transaction failed');
-
+            log_message('error', 'Validation failed: ' . json_encode($this->validator->getErrors()));
             return $this->response->setJSON([
-                'success'  => true,
-                'message'  => 'Event berhasil dibuat!',
-                'event_id' => $newId
+                'success' => false,
+                'message' => 'Validasi gagal',
+                'errors' => $this->validator->getErrors()
             ]);
-        } catch (\Throwable $e) {
-            $this->db->transRollback();
-            log_message('error', 'Event creation error: ' . $e->getMessage());
-            return $this->handleError('Error: ' . $e->getMessage());
+        }
+
+        // Validate multi-day event
+        $eventDate = $this->request->getPost('event_date');
+        $eventEndDate = $this->request->getPost('event_end_date');
+        
+        if (strtotime($eventEndDate) < strtotime($eventDate)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Tanggal selesai harus setelah atau sama dengan tanggal mulai'
+            ]);
+        }
+
+        // Convert checkbox to boolean for PostgreSQL
+        $isActive = $this->request->getPost('is_active') ? true : false;
+
+        $data = [
+            'title' => $this->request->getPost('title'),
+            'description' => $this->request->getPost('description') ?? '',
+            'event_date' => $eventDate,
+            'event_time' => $this->request->getPost('event_time'),
+            'event_end_date' => $eventEndDate,
+            'event_end_time' => $this->request->getPost('event_end_time'),
+            'format' => $this->request->getPost('format'),
+            'location' => $this->request->getPost('location') ?? null,
+            'zoom_link' => $this->request->getPost('zoom_link') ?? null,
+            'abstract_deadline' => $this->request->getPost('abstract_deadline') ?? null,
+            'abstract_revision_deadline' => $this->request->getPost('abstract_revision_deadline') ?? null,
+            'full_paper_deadline' => $this->request->getPost('full_paper_deadline') ?? null,
+            'registration_active' => true,
+            'abstract_submission_active' => false,
+            'abstract_revision_active' => false,
+            'full_paper_submission_active' => false,
+            'is_active' => $isActive,
+            'registration_waves' => json_encode([]),
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+
+        log_message('info', 'Data to insert: ' . json_encode($data));
+
+        try {
+            // Disable model validation temporarily
+            $this->eventModel->skipValidation(true);
+            $eventId = $this->eventModel->insert($data);
+            $this->eventModel->skipValidation(false);
+            
+            if ($eventId) {
+                log_message('info', 'Event created successfully with ID: ' . $eventId);
+                $this->logActivity('Membuat event baru: ' . $data['title']);
+                
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => 'Event berhasil dibuat! Silakan atur gelombang pendaftaran.',
+                    'event_id' => $eventId
+                ]);
+            } else {
+                $errors = $this->eventModel->errors();
+                log_message('error', 'Model insert failed. Errors: ' . json_encode($errors));
+                
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Gagal menyimpan event',
+                    'errors' => $errors
+                ]);
+            }
+        } catch (\Exception $e) {
+            log_message('error', 'Exception: ' . $e->getMessage());
+            log_message('error', 'Trace: ' . $e->getTraceAsString());
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
         }
     }
 
-    public function edit($id)
+    /**
+     * GET - Get event for editing
+     */
+    public function getEvent($id)
     {
-        $event = $this->eventModel->find($id);
-        if (!$event) return $this->response->setJSON(['success' => false, 'message' => 'Event tidak ditemukan.']);
-
-        // booleans → untuk form edit
-        $event['is_active']                    = $this->parseBoolean($event['is_active']);
-        $event['registration_active']          = $this->parseBoolean($event['registration_active']);
-        $event['abstract_submission_active']   = $this->parseBoolean($event['abstract_submission_active']);
-        $event['full_paper_submission_active'] = $this->parseBoolean($event['full_paper_submission_active'] ?? false);
-
-        foreach (['presenter_fee_offline','audience_fee_online','audience_fee_offline'] as $priceCol) {
-            if (isset($event[$priceCol])) $event[$priceCol] = (int)$event[$priceCol];
+        if (!$this->request->isAJAX()) {
+            return redirect()->back();
         }
 
-        return $this->response->setJSON(['success' => true, 'event' => $event]);
+        $event = $this->eventModel->find($id);
+        
+        if (!$event) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Event tidak ditemukan'
+            ]);
+        }
+
+        // Ensure registration_waves is decoded
+        if (isset($event['registration_waves']) && is_string($event['registration_waves'])) {
+            $event['registration_waves'] = json_decode($event['registration_waves'], true) ?: [];
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'event' => $event
+        ]);
     }
 
+    /**
+     * UPDATE - Update event
+     */
     public function update($id)
     {
+        if (!$this->request->isAJAX()) {
+            return redirect()->back();
+        }
+
         $event = $this->eventModel->find($id);
-        if (!$event) return $this->handleError('Event tidak ditemukan.');
-
-        $validation = \Config\Services::validation();
-
-        // paksa checkbox → '0'/'1' (default pakai kondisi sekarang)
-        $currentFP = $this->parseBoolean($event['full_paper_submission_active'] ?? false);
-        $this->normalizeToggleToBit('full_paper_submission_active', $currentFP);
+        if (!$event) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Event tidak ditemukan'
+            ]);
+        }
 
         $rules = [
-            'title'                        => 'required|min_length[3]|max_length[255]',
-            'description'                  => 'permit_empty|max_length[2000]',
-            'event_date'                   => 'required|valid_date',
-            'event_time'                   => 'required',
-            'format'                       => 'required|in_list[both,online,offline]',
-            'presenter_fee_offline'        => 'required|integer|greater_than_equal_to[0]',
-            'audience_fee_online'          => 'permit_empty|integer|greater_than_equal_to[0]',
-            'audience_fee_offline'         => 'permit_empty|integer|greater_than_equal_to[0]',
-            'max_participants'             => 'permit_empty|integer|greater_than[0]',
-            'registration_deadline'        => 'permit_empty|valid_date',
-            'abstract_deadline'            => 'permit_empty|valid_date',
-            'full_paper_deadline'          => 'permit_empty|valid_date',
-            'full_paper_submission_active' => 'required|in_list[0,1]',
+            'title' => 'required|min_length[3]|max_length[255]',
+            'event_date' => 'required|valid_date',
+            'event_time' => 'required',
+            'event_end_date' => 'required|valid_date',
+            'event_end_time' => 'required',
+            'format' => 'required|in_list[both,online,offline]',
         ];
 
-        $format = $this->request->getPost('format');
-        if (in_array($format, ['offline', 'both'], true)) $rules['location']  = 'required|min_length[5]|max_length[255]';
-        if (in_array($format, ['online',  'both'], true)) $rules['zoom_link'] = 'required|valid_url|max_length[500]';
-        if     ($format === 'online')  $rules['audience_fee_online']  = 'required|integer|greater_than_equal_to[0]';
-        elseif ($format === 'offline') $rules['audience_fee_offline'] = 'required|integer|greater_than_equal_to[0]';
-        else { $rules['audience_fee_online'] = $rules['audience_fee_offline'] = 'required|integer|greater_than_equal_to[0]'; }
-
         if (!$this->validate($rules)) {
-            return $this->handleValidationError($validation->getErrors());
-        }
-
-        $dateValidation = $this->validateEventDates();
-        if (!$dateValidation['valid']) {
-            return $this->handleError($dateValidation['message']);
-        }
-
-        $this->db->transStart();
-        try {
-            $data = $this->prepareEventData(false, $event);
-            $data = $this->ensureFullPaperDeadlineOnEnable($data, $event);
-
-            if (!$this->eventModel->update($id, $data)) {
-                $err = $this->eventModel->errors();
-                $msg = $err ? implode(', ', $err) : ($this->db->error()['message'] ?? 'Unknown DB error');
-                throw new \Exception('Failed to update event: ' . $msg);
-            }
-
-            $this->logActivity(session('id_user'), "Updated event: {$data['title']} (ID: {$id})");
-            $this->db->transComplete();
-            if ($this->db->transStatus() === false) throw new \Exception('Transaction failed');
-
-            return $this->response->setJSON(['success' => true, 'message' => 'Event berhasil diupdate!', 'event_id' => $id]);
-        } catch (\Throwable $e) {
-            $this->db->transRollback();
-            log_message('error', 'Event update error: ' . $e->getMessage());
-            return $this->handleError('Error: ' . $e->getMessage());
-        }
-    }
-
-    /* ====================== DELETE ====================== */
-
-    public function delete($id)
-    {
-        $event = $this->eventModel->find($id);
-        if (!$event) return $this->handleError('Event tidak ditemukan.');
-
-        $this->db->transStart();
-        try {
-            $this->dokumenModel->where('event_id', $id)->delete();
-            $this->absensiModel->where('event_id', $id)->delete();
-            $this->pembayaranModel->where('event_id', $id)->delete();
-            $this->registrationModel->where('id_event', $id)->delete();
-            $this->abstrakModel->where('event_id', $id)->delete();
-            $this->db->table('notifikasi')->like('link', 'event/'.$id)->delete();
-            $this->db->table('log_aktivitas')->like('aktivitas', "(ID: {$id})")->delete();
-
-            if (!$this->eventModel->delete($id)) {
-                throw new \Exception('Failed to delete event from database');
-            }
-
-            $this->logActivity(session('id_user'), "FORCE DELETED event with all dependencies: {$event['title']} (ID: {$id})");
-            $this->db->transComplete();
-            if ($this->db->transStatus() === false) throw new \Exception('Transaction failed during force delete');
-
-            return $this->response->setJSON(['success' => true, 'message' => 'Event dan semua data terkait berhasil dihapus secara permanen!']);
-        } catch (\Throwable $e) {
-            $this->db->transRollback();
-            log_message('error', "Force delete event {$id} failed: " . $e->getMessage());
-            return $this->handleError('Gagal menghapus event: ' . $e->getMessage());
-        }
-    }
-
-    /* ====================== TOGGLES ====================== */
-
-    public function toggleStatus($id)
-    {
-        $event = $this->eventModel->find($id);
-        if (!$event) return $this->handleError('Event tidak ditemukan.');
-
-        $new = !$this->parseBoolean($event['is_active']);
-        try {
-            $this->eventModel->update($id, ['is_active' => $new]);
-            $this->logActivity(session('id_user'), "Changed status for event '{$event['title']}' to " . ($new ? 'active' : 'inactive'));
             return $this->response->setJSON([
-                'success'    => true,
-                'message'    => $new ? 'Event berhasil diaktifkan!' : 'Event berhasil dinonaktifkan!',
-                'new_status' => $new
+                'success' => false,
+                'message' => 'Validasi gagal',
+                'errors' => $this->validator->getErrors()
             ]);
-        } catch (\Throwable $e) {
-            log_message('error', 'Toggle status error: ' . $e->getMessage());
-            return $this->handleError('Error: ' . $e->getMessage());
+        }
+
+        // Validate multi-day event
+        $eventDate = $this->request->getPost('event_date');
+        $eventEndDate = $this->request->getPost('event_end_date');
+        
+        if (strtotime($eventEndDate) < strtotime($eventDate)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Tanggal selesai harus setelah atau sama dengan tanggal mulai'
+            ]);
+        }
+
+        // Convert checkbox to boolean for PostgreSQL
+        $isActive = $this->request->getPost('is_active') ? true : false;
+
+        $data = [
+            'title' => $this->request->getPost('title'),
+            'description' => $this->request->getPost('description') ?? '',
+            'event_date' => $eventDate,
+            'event_time' => $this->request->getPost('event_time'),
+            'event_end_date' => $eventEndDate,
+            'event_end_time' => $this->request->getPost('event_end_time'),
+            'format' => $this->request->getPost('format'),
+            'location' => $this->request->getPost('location') ?? null,
+            'zoom_link' => $this->request->getPost('zoom_link') ?? null,
+            'is_active' => $isActive,
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+
+        try {
+            if ($this->eventModel->update($id, $data)) {
+                $this->logActivity('Update event: ' . $data['title']);
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => 'Event berhasil diupdate'
+                ]);
+            }
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Gagal update event'
+            ]);
+        } catch (\Exception $e) {
+            log_message('error', 'Update failed: ' . $e->getMessage());
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
         }
     }
 
-    public function toggleRegistration($id)
+    /**
+     * UPDATE WAVES - Save registration waves (3 waves system)
+     */
+    public function updateWaves($id)
     {
-        return $this->toggleEventFeature($id, 'registration_active', 'pendaftaran');
-    }
+        if (!$this->request->isAJAX()) {
+            return redirect()->back();
+        }
 
-    public function toggleAbstractSubmission($id)
-    {
-        return $this->toggleEventFeature($id, 'abstract_submission_active', 'submit abstrak');
-    }
-
-    public function toggleFullPaper($id)
-    {
-        // Butuh logika ekstra: saat ON, pastikan deadline valid
         $event = $this->eventModel->find($id);
-        if (!$event) return $this->handleError('Event tidak ditemukan.');
+        if (!$event) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Event tidak ditemukan'
+            ]);
+        }
 
-        $col = $this->pickExistingColumn('events', ['full_paper_submission_active']);
-        if (!$col) return $this->handleError("Kolom 'full_paper_submission_active' tidak ditemukan di tabel events.");
+        $input = $this->request->getJSON(true);
+        
+        if (!isset($input['waves']) || !is_array($input['waves'])) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Data gelombang tidak valid'
+            ]);
+        }
 
-        $new = !$this->parseBoolean($event[$col] ?? false);
+        $waves = $input['waves'];
+        
+        // Validate waves must be exactly 3
+        if (count($waves) !== 3) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Harus ada 3 gelombang'
+            ]);
+        }
 
-        try {
-            $payload = [$col => (bool)$new];
+        // Validate each wave
+        $format = $event['format'];
+        
+        foreach ($waves as $i => $wave) {
+            $waveNum = $i + 1;
+            
+            // Check required fields
+            if (empty($wave['registration_start']) || empty($wave['registration_deadline'])) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => "Gelombang {$waveNum}: Tanggal harus diisi"
+                ]);
+            }
 
-            if ($new) {
-                // hitung deadline aman
-                $tz      = new \DateTimeZone('Asia/Jakarta');
-                $eventDT = $this->makeEventDateTime($event, $tz);
-                if ($eventDT) {
-                    $now   = new \DateTime('now', $tz);
-                    $fixed = $this->computeSafeFullPaperDeadline($eventDT, $now, $event['full_paper_deadline'] ?? null);
-                    $payload['full_paper_deadline'] = $fixed;
+            // Validate dates
+            $start = strtotime($wave['registration_start']);
+            $end = strtotime($wave['registration_deadline']);
+            
+            if ($start >= $end) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => "Gelombang {$waveNum}: Tanggal mulai harus sebelum tanggal selesai"
+                ]);
+            }
+
+            // ✅ ENSURE ALL FEE FIELDS HAVE PROPER VALUES BASED ON FORMAT
+            if ($format === 'offline') {
+                // Offline only: online fees must be 0
+                $waves[$i]['presenter_fee_online'] = 0;
+                $waves[$i]['audience_fee_online'] = 0;
+                // Ensure offline fees exist
+                $waves[$i]['presenter_fee_offline'] = (float)($wave['presenter_fee_offline'] ?? 0);
+                $waves[$i]['audience_fee_offline'] = (float)($wave['audience_fee_offline'] ?? 0);
+            } elseif ($format === 'online') {
+                // Online only: offline fees must be 0
+                $waves[$i]['presenter_fee_offline'] = 0;
+                $waves[$i]['audience_fee_offline'] = 0;
+                // Ensure online fees exist
+                $waves[$i]['presenter_fee_online'] = (float)($wave['presenter_fee_online'] ?? 0);
+                $waves[$i]['audience_fee_online'] = (float)($wave['audience_fee_online'] ?? 0);
+            } else {
+                // Both: all fees must exist
+                $waves[$i]['presenter_fee_online'] = (float)($wave['presenter_fee_online'] ?? 0);
+                $waves[$i]['presenter_fee_offline'] = (float)($wave['presenter_fee_offline'] ?? 0);
+                $waves[$i]['audience_fee_online'] = (float)($wave['audience_fee_online'] ?? 0);
+                $waves[$i]['audience_fee_offline'] = (float)($wave['audience_fee_offline'] ?? 0);
+            }
+
+            // Validate prices based on format
+            if ($format !== 'offline') {
+                if ($waves[$i]['presenter_fee_online'] < 0) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => "Gelombang {$waveNum}: Biaya presenter online tidak valid"
+                    ]);
+                }
+                if ($waves[$i]['audience_fee_online'] < 0) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => "Gelombang {$waveNum}: Biaya audience online tidak valid"
+                    ]);
                 }
             }
 
-            $ok = $this->updateEventFields((int)$id, $payload);
-            if (!$ok) throw new \Exception('Tidak ada data yang bisa diupdate.');
+            if ($format !== 'online') {
+                if ($waves[$i]['presenter_fee_offline'] <= 0) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => "Gelombang {$waveNum}: Biaya presenter offline harus diisi (lebih dari 0)"
+                    ]);
+                }
+                if ($waves[$i]['audience_fee_offline'] <= 0) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => "Gelombang {$waveNum}: Biaya audience offline harus diisi (lebih dari 0)"
+                    ]);
+                }
+            }
 
-            $this->logActivity(session('id_user'), "Event '{$event['title']}' full paper " . ($new ? 'diaktifkan' : 'dinonaktifkan'));
+            // Validate no overlap with previous wave
+            if ($i > 0) {
+                $prevEnd = strtotime($waves[$i-1]['registration_deadline']);
+                if ($start <= $prevEnd) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => "Gelombang {$waveNum} harus dimulai setelah gelombang " . ($i) . " selesai"
+                    ]);
+                }
+            }
 
+            // Validate Early Bird rule (Wave 1 offline must be cheapest or equal)
+            if ($waveNum === 1 && $format !== 'online') {
+                // Wave 1 presenter offline should be <= other waves
+                $wave1PresOff = (float)$waves[0]['presenter_fee_offline'];
+                $wave1AudOff = (float)$waves[0]['audience_fee_offline'];
+
+                foreach ($waves as $j => $compareWave) {
+                    if ($j === 0) continue;
+                    
+                    $comparePresOff = (float)($compareWave['presenter_fee_offline'] ?? 0);
+                    $compareAudOff = (float)($compareWave['audience_fee_offline'] ?? 0);
+
+                    if ($wave1PresOff > $comparePresOff && $comparePresOff > 0) {
+                        return $this->response->setJSON([
+                            'success' => false,
+                            'message' => "Early Bird: Gelombang 1 offline (presenter) harus lebih murah atau sama dengan gelombang berikutnya"
+                        ]);
+                    }
+
+                    if ($wave1AudOff > $compareAudOff && $compareAudOff > 0) {
+                        return $this->response->setJSON([
+                            'success' => false,
+                            'message' => "Early Bird: Gelombang 1 offline (audience) harus lebih murah atau sama dengan gelombang berikutnya"
+                        ]);
+                    }
+                }
+            }
+        }
+
+        try {
+            // ✅ Final cleanup: ensure all numeric values are float
+            foreach ($waves as &$wave) {
+                $wave['presenter_fee_online'] = (float)($wave['presenter_fee_online'] ?? 0);
+                $wave['presenter_fee_offline'] = (float)($wave['presenter_fee_offline'] ?? 0);
+                $wave['audience_fee_online'] = (float)($wave['audience_fee_online'] ?? 0);
+                $wave['audience_fee_offline'] = (float)($wave['audience_fee_offline'] ?? 0);
+            }
+            unset($wave); // Break reference
+
+            log_message('info', 'Saving waves to DB: ' . json_encode($waves));
+
+            $data = [
+                'registration_waves' => json_encode($waves, JSON_UNESCAPED_UNICODE),
+                'updated_at' => date('Y-m-d H:i:s')
+            ];
+
+            if ($this->eventModel->update($id, $data)) {
+                $this->logActivity('Update gelombang pendaftaran: ' . $event['title']);
+                
+                log_message('info', 'Waves saved successfully');
+                
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => 'Gelombang berhasil diupdate'
+                ]);
+            }
+            
             return $this->response->setJSON([
-                'success'    => true,
-                'message'    => $new ? 'Submit full paper berhasil diaktifkan!' : 'Submit full paper berhasil dinonaktifkan!',
-                'new_status' => $new
+                'success' => false,
+                'message' => 'Gagal update gelombang'
             ]);
-        } catch (\Throwable $e) {
-            log_message('error', "Toggle full paper error: " . $e->getMessage());
-            return $this->handleError('Error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            log_message('error', 'Update waves failed: ' . $e->getMessage());
+            log_message('error', 'Trace: ' . $e->getTraceAsString());
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
         }
     }
 
-    /* ====================== DETAIL / EXPORT / STATISTICS ====================== */
-
-    public function detail($id)
+    /**
+     * TOGGLE STATUS - Activate/deactivate event
+     */
+    public function toggleStatus($id)
     {
+        if (!$this->request->isAJAX()) {
+            return redirect()->back();
+        }
+
         $event = $this->eventModel->find($id);
         if (!$event) {
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success' => false, 'message' => 'Event tidak ditemukan.'])
-                : redirect()->back()->with('error', 'Event tidak ditemukan.');
-        }
-
-        // ambil statistik untuk event ini
-        $eid = (int)$id;
-
-        $counts = [
-            'registrations_total'   => (int)$this->pembayaranModel->where('event_id', $eid)->countAllResults(),
-            'registrations_verified'=> (int)$this->pembayaranModel->where(['event_id'=>$eid,'status'=>'verified'])->countAllResults(),
-            'abstracts'             => (int)$this->abstrakModel->where('event_id', $eid)->countAllResults(),
-            'attend_present'        => (int)$this->absensiModel->where(['event_id'=>$eid,'status'=>'hadir'])->countAllResults(),
-        ];
-
-        $event['is_active']                    = $this->parseBoolean($event['is_active']);
-        $event['registration_active']          = $this->parseBoolean($event['registration_active']);
-        $event['abstract_submission_active']   = $this->parseBoolean($event['abstract_submission_active']);
-        $event['full_paper_submission_active'] = $this->parseBoolean($event['full_paper_submission_active'] ?? false);
-
-        if ($this->request->isAJAX()) {
-            return $this->response->setJSON(['success'=>true,'event'=>$event,'stats'=>$counts]);
-        }
-
-        // Jika kamu punya view detail, render:
-        if (is_file(APPPATH.'Views/role/admin/event/detail.php')) {
-            return view('role/admin/event/detail', ['event'=>$event, 'stats'=>$counts]);
-        }
-
-        // fallback JSON
-        return $this->response->setJSON(['success'=>true,'event'=>$event,'stats'=>$counts]);
-    }
-
-    public function export()
-    {
-        // export CSV semua event + metrik
-        $rows = $this->getEventsWithStats();
-
-        $filename = 'events_export_'.date('Ymd_His').'.csv';
-        $headers  = [
-            'ID','Title','Format','Date','Time','Active','RegActive','AbsActive','FPActive',
-            'PresenterFee','AudienceOnline','AudienceOffline',
-            'MaxParticipants','RegDeadline','AbsDeadline','FPDeadline',
-            'TotalReg','VerifiedReg','OnlineReg','OfflineReg','Abstracts','Present','Revenue'
-        ];
-
-        $fh = fopen('php://temp', 'w+');
-        fputcsv($fh, $headers);
-
-        foreach ($rows as $r) {
-            fputcsv($fh, [
-                $r['id'],
-                $r['title'],
-                $r['format'],
-                $r['event_date'],
-                substr($r['event_time'] ?? '',0,5),
-                $this->parseBoolean($r['is_active']) ? 1 : 0,
-                $this->parseBoolean($r['registration_active']) ? 1 : 0,
-                $this->parseBoolean($r['abstract_submission_active']) ? 1 : 0,
-                $this->parseBoolean($r['full_paper_submission_active'] ?? 0) ? 1 : 0,
-                (int)($r['presenter_fee_offline'] ?? 0),
-                (int)($r['audience_fee_online'] ?? 0),
-                (int)($r['audience_fee_offline'] ?? 0),
-                (int)($r['max_participants'] ?? 0),
-                $r['registration_deadline'],
-                $r['abstract_deadline'],
-                $r['full_paper_deadline'],
-                (int)($r['total_registrations'] ?? 0),
-                (int)($r['verified_registrations'] ?? 0),
-                (int)($r['online_registrations'] ?? 0),
-                (int)($r['offline_registrations'] ?? 0),
-                (int)($r['total_abstracts'] ?? 0),
-                (int)($r['present_count'] ?? 0),
-                (float)($r['total_revenue'] ?? 0),
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Event tidak ditemukan'
             ]);
         }
 
-        rewind($fh);
-        $csv = stream_get_contents($fh);
-        fclose($fh);
+        // Convert to boolean for PostgreSQL
+        $newStatus = $event['is_active'] ? false : true;
 
-        return $this->response
-            ->setHeader('Content-Type', 'text/csv')
-            ->setHeader('Content-Disposition', 'attachment; filename="'.$filename.'"')
-            ->setBody($csv);
+        try {
+            if ($this->eventModel->update($id, ['is_active' => $newStatus])) {
+                $text = $newStatus ? 'diaktifkan' : 'dinonaktifkan';
+                $this->logActivity('Toggle status event: ' . $event['title'] . ' - ' . $text);
+                
+                return $this->response->setJSON([
+                    'success' => true,
+                    'message' => 'Event berhasil ' . $text
+                ]);
+            }
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Gagal ubah status'
+            ]);
+        } catch (\Exception $e) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ]);
+        }
     }
 
-    public function statistics()
+    /**
+     * DELETE - Remove event (if no verified participants)
+     */
+    public function delete($id)
     {
-        try {
-            $stats = $this->getDashboardStats();
+        if (!$this->request->isAJAX()) {
+            return redirect()->back();
+        }
 
-            // breakdown format (opsional, ringan)
-            $fmt = $this->db->table('events')
-                ->select("format, COUNT(*) as cnt")
-                ->groupBy('format')->get()->getResultArray();
+        $event = $this->eventModel->find($id);
+        if (!$event) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Event tidak ditemukan'
+            ]);
+        }
+
+        // Check for verified participants
+        $hasParticipants = $this->db->table('pembayaran')
+            ->where('event_id', $id)
+            ->where('status', 'verified')
+            ->countAllResults() > 0;
+
+        if ($hasParticipants) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Event tidak bisa dihapus, sudah ada peserta verified'
+            ]);
+        }
+
+        $this->db->transStart();
+
+        try {
+            // Delete related data
+            $this->db->table('abstrak')->where('event_id', $id)->delete();
+            $this->db->table('pembayaran')->where('event_id', $id)->delete();
+            $this->db->table('absensi')->where('event_id', $id)->delete();
+            
+            // Delete event
+            $this->eventModel->delete($id);
+            
+            $this->db->transComplete();
+
+            if ($this->db->transStatus() === false) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Gagal hapus event'
+                ]);
+            }
+
+            $this->logActivity('Hapus event: ' . $event['title']);
 
             return $this->response->setJSON([
                 'success' => true,
-                'stats'   => $stats,
-                'format_breakdown' => $fmt,
+                'message' => 'Event berhasil dihapus'
             ]);
-        } catch (\Throwable $e) {
-            log_message('error', 'Statistics error: '.$e->getMessage());
-            return $this->response->setJSON(['success'=>false,'message'=>'Gagal memuat statistik'])->setStatusCode(500);
-        }
-    }
 
-    /* ====================== HELPERS ====================== */
-
-    private function toggleEventFeature($id, $field, $featureName)
-    {
-        $event = $this->eventModel->find($id);
-        if (!$event) return $this->handleError('Event tidak ditemukan.');
-
-        $col = $this->pickExistingColumn('events', [$field]);
-        if (!$col) return $this->handleError("Kolom '{$field}' tidak ditemukan di tabel events.");
-
-        $new = !$this->parseBoolean($event[$col] ?? false);
-        try {
-            $ok = $this->updateEventFields($id, [$col => (bool)$new]);
-            if (!$ok) throw new \Exception('Tidak ada data yang bisa diupdate.');
-            $this->logActivity(session('id_user'), "Event '{$event['title']}' {$featureName} " . ($new ? 'dibuka' : 'ditutup'));
+        } catch (\Exception $e) {
+            $this->db->transRollback();
+            log_message('error', 'Delete failed: ' . $e->getMessage());
+            
             return $this->response->setJSON([
-                'success'    => true,
-                'message'    => ucfirst($featureName) . ($new ? ' berhasil dibuka!' : ' berhasil ditutup!'),
-                'new_status' => $new
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
             ]);
-        } catch (\Throwable $e) {
-            log_message('error', "Toggle {$field} error: " . $e->getMessage());
-            return $this->handleError('Error: ' . $e->getMessage());
         }
     }
 
-    private function parseBoolean($v)
-    {
-        if ($v === null || $v === '') return false;
-        if (is_bool($v)) return $v;
-        if (is_numeric($v)) return (bool) intval($v);
-        if (is_string($v)) {
-            $v = strtolower(trim($v));
-            return in_array($v, ['true','1','yes','on','y','t'], true);
-        }
-        return false;
-    }
-
-    private function normalizeTime(?string $time): ?string
-    {
-        if (!$time) return null;
-        $time = trim($time);
-        if (preg_match('/^\d{2}:\d{2}(?::\d{2})?$/', $time)) return substr($time, 0, 5);
-        $ts = strtotime($time);
-        return $ts ? date('H:i', $ts) : null;
-    }
-
-    private function makeEventDateTime(array $event, \DateTimeZone $tz): ?\DateTime
+    /**
+     * Log activity helper
+     */
+    private function logActivity($activity)
     {
         try {
-            $date = $event['event_date'] ?? null;
-            $time = $this->normalizeTime($event['event_time'] ?? null) ?? '00:00';
-            if (!$date) return null;
-            return new \DateTime($date.' '.$time, $tz);
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    private function calculateEventStatus($event)
-    {
-        try {
-            date_default_timezone_set('Asia/Jakarta');
-            $t = $this->normalizeTime($event['event_time'] ?? '00:00') ?? '00:00';
-            $eventDT = new \DateTime(($event['event_date'] ?? date('Y-m-d')) . ' ' . $t);
-            $now     = new \DateTime();
-            $hours   = ($now->getTimestamp() - $eventDT->getTimestamp()) / 3600;
-            if ($hours < -1) return ['text' => 'Akan Datang', 'badge_class' => 'bg-info'];
-            if ($hours < 0)  return ['text' => 'Segera Dimulai', 'badge_class' => 'bg-warning'];
-            if ($hours <= 4) return ['text' => 'Sedang Berlangsung', 'badge_class' => 'bg-success'];
-            return ['text' => 'Sudah Selesai', 'badge_class' => 'bg-danger'];
-        } catch (\Throwable) {
-            return ['text' => 'Status Tidak Diketahui', 'badge_class' => 'bg-secondary'];
-        }
-    }
-
-    private function calculateRegistrationStatus($e)
-    {
-        if (!$this->parseBoolean($e['registration_active'])) {
-            return ['text' => 'Tutup', 'badge_class' => 'bg-danger'];
-        }
-        $now       = time();
-        $eventDate = strtotime($e['event_date']);
-        $deadline  = !empty($e['registration_deadline']) ? strtotime($e['registration_deadline']) : null;
-
-        if ($deadline && $now > $deadline) return ['text' => 'Sudah Berakhir', 'badge_class' => 'bg-warning'];
-        if ($now > $eventDate)             return ['text' => 'Event Sudah Lewat', 'badge_class' => 'bg-danger'];
-        return ['text' => 'Buka', 'badge_class' => 'bg-success'];
-    }
-
-    private function prepareEventData(bool $isCreate = false, array $existingEvent = null)
-    {
-        $format = $this->request->getPost('format');
-
-        $audOnline  = (int) ($this->request->getPost('audience_fee_online') ?? 0);
-        $audOffline = (int) ($this->request->getPost('audience_fee_offline') ?? 0);
-        $presenter  = (int) ($this->request->getPost('presenter_fee_offline') ?? 0);
-
-        if ($format === 'online')  $audOffline = 0;
-        if ($format === 'offline') $audOnline  = 0;
-
-        $isActive  = $this->parseBoolean($this->request->getPost('is_active'));
-        $regActive = $this->parseBoolean($this->request->getPost('registration_active'));
-        $absActive = $this->parseBoolean($this->request->getPost('abstract_submission_active'));
-
-        $fpActivePost = $this->request->getPost('full_paper_submission_active');
-        $fpActive = $isCreate ? true : $this->parseBoolean($fpActivePost);
-
-        return [
-            'title'        => (string) $this->request->getPost('title'),
-            'description'  => (string) $this->request->getPost('description'),
-            'event_date'   => $this->request->getPost('event_date'),
-            'event_time'   => $this->normalizeTime($this->request->getPost('event_time')),
-            'format'       => $format,
-            'location'     => $this->request->getPost('location'),
-            'zoom_link'    => $this->request->getPost('zoom_link'),
-
-            'presenter_fee_offline' => $presenter,
-            'audience_fee_online'   => $audOnline,
-            'audience_fee_offline'  => $audOffline,
-
-            'max_participants'        => ($this->request->getPost('max_participants') === '' ? null
-                                          : (int) $this->request->getPost('max_participants')),
-            'registration_deadline'   => $this->normalizeDateTime($this->request->getPost('registration_deadline')),
-            'abstract_deadline'       => $this->normalizeDateTime($this->request->getPost('abstract_deadline')),
-            'full_paper_deadline'     => $this->normalizeDateTime($this->request->getPost('full_paper_deadline')),
-
-            // simpan sebagai '0'/'1' untuk kompatibilitas
-            'registration_active'          => $regActive ? '1' : '0',
-            'abstract_submission_active'   => $absActive ? '1' : '0',
-            'full_paper_submission_active' => $fpActive  ? '1' : '0',
-            'is_active'                    => $isActive  ? '1' : '0',
-        ];
-    }
-
-    private function ensureFullPaperDeadlineOnEnable(array $data, array $existingEvent = null): array
-    {
-        if (empty($data['full_paper_submission_active']) || $data['full_paper_submission_active'] === '0') return $data;
-
-        $tz  = new \DateTimeZone('Asia/Jakarta');
-        $evt = $existingEvent ?? $data;
-
-        $eventDT = $this->makeEventDateTime([
-            'event_date' => $evt['event_date'] ?? null,
-            'event_time' => $evt['event_time'] ?? null,
-        ], $tz);
-        if (!$eventDT) return $data;
-
-        $now = new \DateTime('now', $tz);
-
-        $fullVal = $data['full_paper_deadline'] ?? ($existingEvent['full_paper_deadline'] ?? null);
-        $fixed   = $this->computeSafeFullPaperDeadline($eventDT, $now, $fullVal);
-
-        $useFixed = false;
-        if (!$fullVal) $useFixed = true;
-        else {
-            $ts = strtotime($fullVal);
-            if (!$ts || $ts < $now->getTimestamp() || $ts >= $eventDT->getTimestamp()) $useFixed = true;
-        }
-
-        if ($useFixed) $data['full_paper_deadline'] = $fixed;
-        return $data;
-    }
-
-    private function computeSafeFullPaperDeadline(\DateTime $eventDT, \DateTime $now, ?string $current): string
-    {
-        $candidate = (clone $eventDT)->modify('-1 day')->setTime(23, 59, 0);
-        $min = (clone $now)->modify('+2 hours');
-        if ($candidate <= $min) $candidate = (clone $eventDT)->modify('-1 hour');
-        if ($candidate >= $eventDT) $candidate = (clone $eventDT)->modify('-1 minute');
-        return $candidate->format('Y-m-d H:i:s');
-    }
-
-    private function validateEventDates()
-    {
-        $tz        = new \DateTimeZone('Asia/Jakarta');
-        $eventDate = (string) $this->request->getPost('event_date');
-        $eventTime = $this->normalizeTime($this->request->getPost('event_time'));
-        $regDL     = $this->request->getPost('registration_deadline');
-        $absDL     = $this->request->getPost('abstract_deadline');
-        $fullDL    = $this->request->getPost('full_paper_deadline');
-
-        if (!$eventDate || !$eventTime) {
-            return ['valid' => false, 'message' => 'Format tanggal/waktu event tidak valid.'];
-        }
-
-        try {
-            $eventDT = new \DateTime($eventDate.' '.$eventTime, $tz);
-        } catch (\Throwable) {
-            return ['valid' => false, 'message' => 'Format tanggal/waktu event tidak valid.'];
-        }
-
-        $maxDeadline = (clone $eventDT)->modify('-1 day')->setTime(23,59,0);
-        $now = new \DateTime('now', $tz);
-
-        $check = function (?string $val, string $label) use ($now, $maxDeadline) {
-            if (empty($val)) return null;
-            $ts = strtotime($val);
-            if ($ts === false) return "$label tidak valid.";
-            if ($ts < $now->getTimestamp()) return "$label tidak boleh di masa lalu.";
-            if ($ts > $maxDeadline->getTimestamp()) return "$label harus sebelum hari event (H-1 23:59).";
-            return null;
-        };
-
-        foreach ([
-            'Batas pendaftaran'       => $regDL,
-            'Batas submit abstrak'    => $absDL,
-            'Batas submit full paper' => $fullDL,
-        ] as $label => $val) {
-            if ($msg = $check($val, $label)) return ['valid' => false, 'message' => $msg];
-        }
-
-        return ['valid' => true];
-    }
-
-    private function handleValidationError($errors)
-    {
-        if ($this->request->isAJAX()) {
-            return $this->response->setJSON(['success' => false, 'errors' => $errors]);
-        }
-        return redirect()->back()->withInput()->with('errors', $errors);
-    }
-
-    private function handleError($message)
-    {
-        if ($this->request->isAJAX()) {
-            return $this->response->setJSON(['success' => false, 'message' => $message]);
-        }
-        return redirect()->back()->with('error', $message);
-    }
-
-    private function logActivity($userId, $activity)
-    {
-        try {
-            $this->db->table('log_aktivitas')->insert([
-                'id_user'   => $userId,
-                'aktivitas' => $activity,
-                'waktu'     => date('Y-m-d H:i:s')
-            ]);
-        } catch (\Throwable $e) {
-            log_message('error', 'Failed to log activity: ' . $e->getMessage());
-        }
-    }
-
-    private function normalizeDateTime(?string $val): ?string
-    {
-        if (!$val) return null;
-        $ts = strtotime($val);
-        return $ts ? date('Y-m-d H:i:s', $ts) : null;
-    }
-
-    /* ====================== DB UTIL ====================== */
-
-    private function columnExists(string $table, string $column): bool
-    {
-        try {
-            $fields = $this->db->getFieldData($table);
-            foreach ($fields as $f) {
-                if (strcasecmp($f->name, $column) === 0) return true;
+            $userId = session()->get('id_user');
+            if ($userId) {
+                $this->db->table('log_aktivitas')->insert([
+                    'id_user' => $userId,
+                    'aktivitas' => $activity,
+                    'waktu' => date('Y-m-d H:i:s')
+                ]);
             }
-        } catch (\Throwable) {}
-        return false;
-    }
-
-    private function pickExistingColumn(string $table, array $candidates): ?string
-    {
-        foreach ($candidates as $c) {
-            if ($this->columnExists($table, $c)) return $c;
+        } catch (\Exception $e) {
+            log_message('warning', 'Log activity failed: ' . $e->getMessage());
         }
-        return null;
-    }
-
-    private function updateEventFields(int $id, array $payload): bool
-    {
-        if (empty($payload)) return false;
-        $filtered = [];
-        foreach ($payload as $k => $v) {
-            if ($this->columnExists('events', $k)) $filtered[$k] = $v;
-        }
-        if (empty($filtered)) return false;
-        $ok = $this->db->table('events')->where('id', $id)->update($filtered);
-        if ($ok === false) return false;
-        return ($this->db->affectedRows() >= 0);
-    }
-
-    /* ====================== SMALL HELPER ====================== */
-
-    private function normalizeToggleToBit(string $name, ?bool $default = null): void
-    {
-        $post = $this->request->getPost();
-
-        if (!array_key_exists($name, $post)) {
-            if ($default !== null) {
-                $post[$name] = $default ? '1' : '0';
-                $this->request->setGlobal('post', $post);
-            }
-            return;
-        }
-
-        $val = $post[$name];
-        if (is_bool($val)) {
-            $post[$name] = $val ? '1' : '0';
-        } elseif (is_numeric($val)) {
-            $post[$name] = ((int)$val) ? '1' : '0';
-        } else {
-            $s = strtolower(trim((string)$val));
-            $post[$name] = in_array($s, ['1','true','on','yes','y','t'], true) ? '1' : '0';
-        }
-
-        $this->request->setGlobal('post', $post);
     }
 }

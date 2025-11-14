@@ -20,7 +20,7 @@ class Event extends BaseController
     /**
      * LIST EVENT:
      * - Filter q (judul/lokasi) & format
-     * - Hitung reg_open per event
+     * - Hitung reg_open per event (CEK GELOMBANG AKTIF)
      * - Pisah ke openEvents/closedEvents
      * - Sertakan status registrasi/pembayaran user (myRegs)
      */
@@ -52,26 +52,68 @@ class Event extends BaseController
             ->orderBy('event_time', 'ASC')
             ->findAll();
 
-        // hitung reg_open (pendaftaran dibuka) per event
+        // === PERBAIKAN: Cek gelombang aktif per event ===
         $now = time();
         foreach ($events as &$e) {
-            $regActive = !empty($e['registration_active']);
-            $deadline  = !empty($e['registration_deadline']) ? strtotime($e['registration_deadline']) : null;
-            $evStart   = !empty($e['event_date']) ? strtotime(($e['event_date'] ?? '') . ' ' . ($e['event_time'] ?? '00:00')) : null;
-
-            $open = ($regActive === true);
-            if ($open && $deadline && $deadline < $now) $open = false;
-            if ($open && $evStart && $evStart < $now)   $open = false;
-
-            $e['reg_open'] = $open;
+            // Gunakan method dari EventModel untuk cek registrasi terbuka
+            $e['reg_open'] = $eventM->isRegistrationOpen($e['id']);
+            
+            // Ambil gelombang aktif SAAT INI (FULL DATA)
+            $currentWave = $eventM->getCurrentWave($e['id']);
+            if ($currentWave) {
+                // Pass the whole wave data to view
+                $e['active_wave'] = $currentWave;
+                
+                // Also set individual prices for backward compatibility
+                $e['audience_fee_online'] = (float)($currentWave['audience_fee_online'] ?? 0);
+                $e['audience_fee_offline'] = (float)($currentWave['audience_fee_offline'] ?? 0);
+            } else {
+                $e['active_wave'] = null;
+                $e['audience_fee_online'] = 0;
+                $e['audience_fee_offline'] = 0;
+            }
+            
+            // === NEW: Cek apakah event punya gelombang yang akan datang (pending) ===
+            $e['has_upcoming_wave'] = false;
+            $waves = $eventM->getWaves($e['id']);
+            if (!empty($waves) && is_array($waves)) {
+                foreach ($waves as $wave) {
+                    $start = strtotime($wave['registration_start'] ?? '');
+                    if ($start && $now < $start) {
+                        $e['has_upcoming_wave'] = true;
+                        $e['next_wave_start'] = $wave['registration_start'];
+                        break;
+                    }
+                }
+            }
         }
         unset($e);
 
-        // pisah ke dua list
-        $openEvents   = [];
-        $closedEvents = [];
+        // pisah ke empat kategori: open, pending, closed, finished
+        $openEvents     = [];
+        $pendingEvents  = [];
+        $closedEvents   = [];
+        $finishedEvents = [];
+        
         foreach ($events as $ev) {
-            if (!empty($ev['reg_open'])) $openEvents[] = $ev; else $closedEvents[] = $ev;
+            // Cek apakah event sudah selesai (lewat tanggal event)
+            $eventEndDate = $ev['event_end_date'] ?? $ev['event_date'];
+            $eventEndTime = $ev['event_end_time'] ?? '23:59:59';
+            $eventEnd = strtotime($eventEndDate . ' ' . $eventEndTime);
+            
+            if ($eventEnd && $now > $eventEnd) {
+                // Event sudah selesai
+                $finishedEvents[] = $ev;
+            } elseif (!empty($ev['reg_open'])) {
+                // Gelombang sedang aktif
+                $openEvents[] = $ev;
+            } elseif (!empty($ev['has_upcoming_wave'])) {
+                // Ada gelombang yang akan datang (segera dibuka)
+                $pendingEvents[] = $ev;
+            } else {
+                // Tidak ada gelombang aktif atau akan datang (ditutup)
+                $closedEvents[] = $ev;
+            }
         }
 
         // status registrasi & pembayaran user (dipakai view untuk tombol/badge)
@@ -118,20 +160,27 @@ class Event extends BaseController
         }
 
         return view('role/audience/events/index', [
-            'title'         => 'Event Tersedia',
-            'q'             => $qRaw,
-            'format'        => $fmt,
-            'isSearching'   => $isSearching,
-            'openEvents'    => $openEvents,
-            'closedEvents'  => $closedEvents,
-            'myRegs'        => $myRegs,
-            'total_all'     => count($events),
-            'total_open'    => count($openEvents),
-            'total_closed'  => count($closedEvents),
+            'title'           => 'Event Tersedia',
+            'q'               => $qRaw,
+            'format'          => $fmt,
+            'isSearching'     => $isSearching,
+            'openEvents'      => $openEvents,
+            'pendingEvents'   => $pendingEvents,
+            'closedEvents'    => $closedEvents,
+            'finishedEvents'  => $finishedEvents,
+            'myRegs'          => $myRegs,
+            'total_all'       => count($events),
+            'total_open'      => count($openEvents),
+            'total_pending'   => count($pendingEvents),
+            'total_closed'    => count($closedEvents),
+            'total_finished'  => count($finishedEvents),
         ]);
     }
 
-    /** detail event */
+    /** 
+     * DETAIL EVENT
+     * - Tampilkan harga dari gelombang aktif SAAT INI
+     */
     public function detail(int $id)
     {
         $eventM = new EventModel();
@@ -158,19 +207,40 @@ class Event extends BaseController
         }
         
         $options = $eventM->getParticipationOptions($id, 'audience');
+        
+        // === PERBAIKAN: Ambil harga dari gelombang aktif ===
         $pricing = $eventM->getPricingMatrix($id);
         $isOpen  = $eventM->isRegistrationOpen($id);
 
+        // === INFO GELOMBANG AKTIF ===
+        $currentWave = $eventM->getCurrentWave($id);
+        $waveInfo = null;
+        if ($currentWave) {
+            $waveInfo = [
+                'wave_number' => $currentWave['wave_number'] ?? null,
+                'start' => $currentWave['registration_start'] ?? null,
+                'deadline' => $currentWave['registration_deadline'] ?? null,
+            ];
+        }
+        
+        // === NEW: Ambil SEMUA gelombang untuk preview harga ===
+        $allWaves = $eventM->getWaves($id);
+
         return view('role/audience/events/detail', [
-            'event'   => $ev,
-            'options' => $options,
-            'pricing' => $pricing,
-            'isOpen'  => $isOpen,
-            'myReg'   => $myReg,
+            'event'     => $ev,
+            'options'   => $options,
+            'pricing'   => $pricing,
+            'isOpen'    => $isOpen,
+            'myReg'     => $myReg,
+            'waveInfo'  => $waveInfo,
+            'allWaves'  => $allWaves,
         ]);
     }
 
-    /** halaman pilih mode (radio online/offline) */
+    /** 
+     * HALAMAN PILIH MODE (radio online/offline)
+     * - Tampilkan harga dari gelombang aktif
+     */
     public function showRegistrationForm(int $id)
     {
         $eventM = new EventModel();
@@ -208,16 +278,33 @@ class Event extends BaseController
         }
 
         $options = $eventM->getParticipationOptions($id, 'audience');
+        
+        // === PERBAIKAN: Ambil harga dari gelombang aktif ===
         $pricing = $eventM->getPricingMatrix($id);
 
+        // === INFO GELOMBANG AKTIF ===
+        $currentWave = $eventM->getCurrentWave($id);
+        $waveInfo = null;
+        if ($currentWave) {
+            $waveInfo = [
+                'wave_number' => $currentWave['wave'] ?? null,
+                'start' => $currentWave['registration_start'] ?? null,
+                'deadline' => $currentWave['registration_deadline'] ?? null,
+            ];
+        }
+
         return view('role/audience/events/register', [
-            'event'   => $ev,
-            'options' => $options,
-            'pricing' => $pricing,
+            'event'     => $ev,
+            'options'   => $options,
+            'pricing'   => $pricing,
+            'waveInfo'  => $waveInfo,
         ]);
     }
 
-    /** submit pilihan mode → buat registrasi → ke instruksi pembayaran */
+    /** 
+     * SUBMIT PILIHAN MODE → buat registrasi → ke instruksi pembayaran
+     * - Simpan harga sesuai gelombang aktif SAAT INI
+     */
     public function register(int $id)
     {
         $idUser = (int)(session()->get('id_user') ?? 0);
@@ -265,7 +352,16 @@ class Event extends BaseController
             return redirect()->to('/audience/events/detail/'.$id)->with('error','Kuota peserta telah penuh.');
         }
 
-        // === PERBAIKAN UTAMA: Reuse atau buat registrasi baru ===
+        // === PERBAIKAN UTAMA: Ambil harga dari gelombang aktif SAAT INI ===
+        $userRole = 'audience'; // audience yang daftar
+        $price = $eventM->getEventPrice($id, $userRole, $mode);
+
+        if ($price <= 0) {
+            return redirect()->back()->withInput()
+                             ->with('error','Harga tidak tersedia untuk mode kehadiran ini. Silakan hubungi admin.');
+        }
+
+        // === Cek dan reuse atau buat registrasi baru ===
         $oldCanceledReg = $regM->where('id_event', $id)
                                ->where('id_user', $idUser)
                                ->whereIn('status', ['batal', 'ditolak'])
@@ -277,20 +373,43 @@ class Event extends BaseController
             $regM->update($oldCanceledReg['id'], [
                 'status' => 'menunggu_pembayaran',
                 'mode_kehadiran' => $mode,
+                'jumlah_bayar' => $price, // === SIMPAN HARGA SESUAI GELOMBANG ===
                 'updated_at' => date('Y-m-d H:i:s')
             ]);
             $idReg = $oldCanceledReg['id'];
             
-            // === FIX: Hapus pembayaran lama dengan event_id dan id_user ===
+            // Hapus pembayaran lama yang dibatalkan
             $this->db->table('pembayaran')
                      ->where('event_id', $id)
                      ->where('id_user', $idUser)
                      ->whereIn('status', ['canceled', 'expired', 'rejected'])
                      ->delete();
         } else {
-            // Buat registrasi baru jika tidak ada yang dibatalkan
-            $idReg = $regM->createRegistration($id, $idUser, $mode);
+            // Buat registrasi baru dengan harga dari gelombang aktif
+            $idReg = $regM->insert([
+                'id_event' => $id,
+                'id_user' => $idUser,
+                'mode_kehadiran' => $mode,
+                'status' => 'menunggu_pembayaran',
+                'jumlah_bayar' => $price, // === SIMPAN HARGA SESUAI GELOMBANG ===
+                'tanggal_daftar' => date('Y-m-d H:i:s'),
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
         }
+
+        // === BUAT RECORD PEMBAYARAN dengan harga gelombang aktif ===
+        $this->db->table('pembayaran')->insert([
+            'id_user' => $idUser,
+            'event_id' => $id,
+            'id_registrasi' => $idReg,
+            'participation_type' => $mode,
+            'jumlah' => $price, // === HARGA DARI GELOMBANG AKTIF ===
+            'status' => 'pending',
+            'metode_pembayaran' => null,
+            'tanggal_pembayaran' => date('Y-m-d H:i:s'),
+            'created_at' => date('Y-m-d H:i:s')
+        ]);
 
         // notifikasi
         try {
