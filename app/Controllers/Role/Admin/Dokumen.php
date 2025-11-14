@@ -24,7 +24,7 @@ class Dokumen extends BaseController
         $this->dokumenModel     = new DokumenModel();
         $this->eventModel       = new EventModel();
         $this->userModel        = new UserModel();
-        $this->pembayaranModel  = new PembayaranModel();
+        $this->pembayaranModel  = new PembayaranModel(); // tetap disimpan untuk kompatibilitas
         $this->absensiModel     = new AbsensiModel();
         $this->db               = \Config\Database::connect();
     }
@@ -62,6 +62,10 @@ class Dokumen extends BaseController
 
     // ================== AJAX (Dropdown / List) ==================
 
+    /**
+     * Presenter terdaftar pada event + Full Paper ACCEPTED
+     * TIDAK lagi bergantung pada tabel pembayaran.
+     */
     public function getUsersForLoa(int $eventId = 0)
     {
         if ($eventId <= 0) {
@@ -69,16 +73,30 @@ class Dokumen extends BaseController
         }
 
         try {
-            $rows = $this->db->table('pembayaran p')
+            // Ambil semua user yang TERDAFTAR pada event ini
+            // (kolom di event_registrations fleksibel: user_id/id_user, event_id/id_event, role)
+            $er = $this->resolveEventRegColumns();
+            if (!$er['table'] || !$er['uid'] || !$er['eid']) {
+                return $this->response->setJSON(['status'=>'error','message'=>'Tabel registrasi tidak ditemukan/inkompatibel'])->setStatusCode(500);
+            }
+
+            $rows = $this->db->table($er['table'].' er')
                 ->distinct()
-                ->select('u.id_user, u.nama_lengkap, u.email, LOWER(u.role) AS role_user')
-                ->join('users u', 'u.id_user = p.id_user', 'left')
-                ->where('p.event_id', $eventId)
+                ->select("
+                    u.id_user,
+                    u.nama_lengkap,
+                    u.email,
+                    LOWER(u.role) AS role_user
+                ", false)
+                ->join('users u', 'u.id_user = er.'.$er['uid'], 'left')
+                ->where('er.'.$er['eid'], $eventId)
                 ->orderBy('u.nama_lengkap', 'ASC')
                 ->get()->getResultArray();
 
+            // Peta status FP dari berbagai kemungkinan sumber
             $fpMap = $this->getFpStatusMap($eventId);
 
+            // Sudah punya LOA?
             $loaRows = $this->db->table('dokumen')
                 ->select('id_user')
                 ->where(['event_id' => $eventId, 'tipe' => 'loa'])
@@ -86,26 +104,26 @@ class Dokumen extends BaseController
             $hasLoaMap = [];
             foreach ($loaRows as $r) $hasLoaMap[(int)$r['id_user']] = true;
 
-            $data = array_map(function($r) use ($fpMap, $hasLoaMap) {
-                $uid      = (int) $r['id_user'];
-                $role     = strtolower((string) ($r['role_user'] ?? ''));
-                $fpStatus = strtolower((string) ($fpMap[$uid] ?? ''));
+            $acceptedAliases = ['accepted','accept','acc','diterima','approved'];
 
-                $acceptedAliases = ['accepted','accept','acc','diterima','approved'];
-                if ($fpStatus !== '' && in_array($fpStatus, $acceptedAliases, true)) $fpStatus = 'accepted';
+            $data = array_map(function($r) use ($fpMap, $hasLoaMap, $acceptedAliases) {
+                $uid   = (int) ($r['id_user'] ?? 0);
+                $role  = strtolower((string) ($r['role_user'] ?? ''));
+                $st    = strtolower((string) ($fpMap[$uid] ?? ''));
+                if ($st !== '' && in_array($st, $acceptedAliases, true)) $st = 'accepted';
 
                 $isPresenter = (strpos($role, 'presenter') === 0);
-                $eligible = ($isPresenter && $fpStatus === 'accepted');
+                $eligible    = ($isPresenter && $st === 'accepted');
 
                 return [
                     'id_user'      => $uid,
                     'nama_lengkap' => (string) ($r['nama_lengkap'] ?? ''),
                     'email'        => (string) ($r['email'] ?? ''),
                     'role'         => $role ?: 'audience',
-                    'fp_status'    => $fpStatus,
+                    'fp_status'    => $st,
                     'has_loa'      => (bool) ($hasLoaMap[$uid] ?? false),
                     'eligible'     => (bool) $eligible,
-                    'note'         => $eligible ? '' : 'Syarat LOA: Presenter & Full Paper ACCEPTED',
+                    'note'         => $eligible ? '' : 'Syarat LOA: Presenter terdaftar & Full Paper ACCEPTED',
                 ];
             }, $rows);
 
@@ -116,6 +134,10 @@ class Dokumen extends BaseController
         }
     }
 
+    /**
+     * Peserta terdaftar pada event dengan status hadir.
+     * (Masih memakai absensi; tidak bergantung pembayaran.)
+     */
     public function getUsersForCertificate(int $eventId = 0)
     {
         if ($eventId <= 0) {
@@ -123,7 +145,13 @@ class Dokumen extends BaseController
         }
 
         try {
-            $rows = $this->db->table('pembayaran p')
+            $er = $this->resolveEventRegColumns();
+            if (!$er['table'] || !$er['uid'] || !$er['eid']) {
+                return $this->response->setJSON(['status'=>'error','message'=>'Tabel registrasi tidak ditemukan/inkompatibel'])->setStatusCode(500);
+            }
+
+            // Ambil semua user yang TERDAFTAR pada event ini, lalu LEFT JOIN ke absensi & dokumen sertifikat
+            $rows = $this->db->table($er['table'].' er')
                 ->distinct()
                 ->select("
                     u.id_user,
@@ -134,22 +162,21 @@ class Dokumen extends BaseController
                     COALESCE(a.status, '') AS attend_status,
                     CASE WHEN d.id_dokumen IS NULL THEN 0 ELSE 1 END AS has_cert
                 ", false)
-                ->join('users u', 'u.id_user = p.id_user', 'left')
-                ->join('absensi a', "a.id_user = u.id_user AND a.event_id = p.event_id AND a.status = 'hadir'", 'left')
-                ->join('dokumen d', "d.id_user = u.id_user AND d.event_id = p.event_id AND d.tipe = 'sertifikat'", 'left')
-                ->where('p.event_id', $eventId)
+                ->join('users u', 'u.id_user = er.'.$er['uid'], 'left')
+                ->join('absensi a', "a.id_user = u.id_user AND a.event_id = er.{$er['eid']} AND a.status = 'hadir'", 'left')
+                ->join('dokumen d', "d.id_user = u.id_user AND d.event_id = er.{$er['eid']} AND d.tipe = 'sertifikat'", 'left')
+                ->where('er.'.$er['eid'], $eventId)
                 ->orderBy('u.nama_lengkap', 'ASC')
                 ->get()->getResultArray();
 
             $data = array_map(static function($r){
-                $roleFinal = strtolower($r['role_user'] ?? '');
-                $attended  = (bool) ($r['attended'] ?? false);
+                $attended = (bool) ($r['attended'] ?? false);
 
                 return [
                     'id_user'       => (int) $r['id_user'],
                     'nama_lengkap'  => (string) ($r['nama_lengkap'] ?? ''),
                     'email'         => (string) ($r['email'] ?? ''),
-                    'role'          => $roleFinal ?: '',
+                    'role'          => (string) (strtolower($r['role_user'] ?? '')),
                     'attended'      => $attended,
                     'attend_status' => (string) ($r['attend_status'] ?? ''),
                     'has_cert'      => (bool)   ($r['has_cert'] ?? false),
@@ -217,15 +244,18 @@ class Dokumen extends BaseController
         $user  = $this->userModel->find($userId);
         if (!$user)  return redirect()->to(site_url('admin/dokumen'))->with('error', 'User tidak ditemukan.');
 
-        $role = strtolower($user['role'] ?? '');
-        $isPresenter = (strpos($role, 'presenter') === 0);
+        // Validasi eligibility: Presenter TERDAFTAR & FP ACCEPTED
+        if (!$this->isUserRegisteredAsPresenter($eventId, $userId)) {
+            return redirect()->to(site_url('admin/dokumen'))
+                ->with('error', 'LOA hanya untuk Presenter yang terdaftar pada event.');
+        }
 
         $fpMap = $this->getFpStatusMap($eventId);
-        $fpStatus = strtolower((string) ($fpMap[$userId] ?? ''));
+        $st    = strtolower((string)($fpMap[$userId] ?? ''));
         $acceptedAliases = ['accepted','accept','acc','diterima','approved'];
-        $fpAccepted = $fpStatus !== '' && in_array($fpStatus, $acceptedAliases, true);
+        $fpAccepted = $st !== '' && in_array($st, $acceptedAliases, true);
 
-        if (!$isPresenter || !$fpAccepted) {
+        if (!$fpAccepted) {
             return redirect()->to(site_url('admin/dokumen'))
                 ->with('error', 'LOA hanya untuk Presenter dengan Full Paper diterima (ACCEPTED).');
         }
@@ -293,6 +323,7 @@ class Dokumen extends BaseController
         $user  = $this->userModel->find($userId);
         if (!$user)  return redirect()->to(site_url('admin/dokumen'))->with('error', 'User tidak ditemukan.');
 
+        // Harus hadir
         $attendance = $this->absensiModel->where([
             'id_user'  => $userId,
             'event_id' => $eventId,
@@ -372,7 +403,6 @@ class Dokumen extends BaseController
                 return $this->response->setJSON([
                     'status'     => 'error',
                     'message'    => 'Dokumen tidak ditemukan.',
-                    // standardize + keep backward-compat
                     'csrf_hash'  => csrf_hash(),
                     'csrf'       => csrf_hash(),
                 ])->setStatusCode(404);
@@ -439,39 +469,38 @@ class Dokumen extends BaseController
             $user = $this->userModel->find($userId);
             if (!$user) return redirect()->to(site_url('admin/dokumen'))->with('error', 'User tidak ditemukan.');
 
-            $role = strtolower($user['role'] ?? '');
-            $isPresenter = (strpos($role, 'presenter') === 0);
-            $fpStatus = strtolower((string) ($fpMap[$userId] ?? ''));
-            $fpAccepted = $fpStatus !== '' && in_array($fpStatus, $acceptedAliases, true);
+            if (!$this->isUserRegisteredAsPresenter($eventId, $userId)) {
+                return redirect()->to(site_url('admin/dokumen'))->with('error', 'User bukan presenter terdaftar pada event ini.');
+            }
 
-            if (!$isPresenter || !$fpAccepted) {
-                return redirect()->to(site_url('admin/dokumen'))->with('error', 'User tidak memenuhi syarat LOA (Presenter & FP ACCEPTED).');
+            $st = strtolower((string) ($fpMap[$userId] ?? ''));
+            $fpAccepted = $st !== '' && in_array($st, $acceptedAliases, true);
+
+            if (!$fpAccepted) {
+                return redirect()->to(site_url('admin/dokumen'))->with('error', 'User tidak memenuhi syarat LOA (Full Paper belum ACCEPTED).');
             }
             if ($this->dokumenModel->hasUserDocument($userId, $eventId, 'loa')) {
                 return redirect()->to(site_url('admin/dokumen'))->with('error', 'LOA untuk user ini sudah ada.');
             }
+
             $eligible = [[
                 'id_user'      => $userId,
                 'nama_lengkap' => $user['nama_lengkap'] ?? '',
                 'email'        => $user['email'] ?? '',
             ]];
         } else {
-            $eligible = $this->db->table('users')
-                ->select('id_user, nama_lengkap, email, LOWER(role) AS role_user')
-                ->orderBy('nama_lengkap', 'ASC')
-                ->get()->getResultArray();
+            // Semua PRESENTER TERDAFTAR di event ini, lalu filter FP ACCEPTED
+            $eligible = $this->getRegisteredPresenters($eventId);
 
-            $eligible = array_values(array_filter($eligible, function($u) use ($fpMap, $acceptedAliases) {
+            $eligible = array_values(array_filter($eligible, function($u) use ($fpMap, $acceptedAliases){
                 $uid = (int)($u['id_user'] ?? 0);
-                $role = strtolower((string)($u['role_user'] ?? ''));
-                $isPresenter = (strpos($role, 'presenter') === 0);
-                $st = strtolower((string) ($fpMap[$uid] ?? ''));
+                $st  = strtolower((string) ($fpMap[$uid] ?? ''));
                 if ($st !== '' && in_array($st, $acceptedAliases, true)) $st = 'accepted';
-                return ($isPresenter && $st === 'accepted');
+                return ($st === 'accepted');
             }));
 
             if (empty($eligible)) {
-                return redirect()->to(site_url('admin/dokumen'))->with('error', 'Tidak ada Presenter dengan Full Paper ACCEPTED.');
+                return redirect()->to(site_url('admin/dokumen'))->with('error', 'Tidak ada Presenter terdaftar dengan Full Paper ACCEPTED.');
             }
         }
 
@@ -522,6 +551,7 @@ class Dokumen extends BaseController
         if (!$event) return redirect()->to(site_url('admin/dokumen'))->with('error', 'Event tidak ditemukan.');
 
         if ($userId > 0) {
+            // Satu user, pastikan hadir
             $user = $this->db->table('absensi a')
                 ->select('u.id_user, u.nama_lengkap, u.email, u.role')
                 ->join('users u', 'u.id_user = a.id_user', 'left')
@@ -538,6 +568,7 @@ class Dokumen extends BaseController
             }
             $eligibleUsers = [$user];
         } else {
+            // Pakai helper di DokumenModel (berbasis absensi)
             $eligibleUsers = $this->dokumenModel->getEligibleUsersForCertificate($eventId);
             if (empty($eligibleUsers)) {
                 return redirect()->to(site_url('admin/dokumen'))->with('error', 'Tidak ada peserta yang memenuhi syarat untuk sertifikat.');
@@ -599,17 +630,22 @@ class Dokumen extends BaseController
         ];
     }
 
+    /**
+     * Progress per event:
+     * - LOA eligible: presenter TERDAFTAR + FP ACCEPTED
+     * - Sertifikat eligible: absensi hadir
+     */
     private function getCompletionPerEvent(int $eventId): array
     {
         $fpMap   = $this->getFpStatusMap($eventId);
         $acceptedAliases = ['accepted','accept','acc','diterima','approved'];
 
-        $presenters = $this->db->table('users')->select('id_user, LOWER(role) AS role_user')->get()->getResultArray();
+        // Presenter terdaftar pada event
+        $presenters = $this->getRegisteredPresenters($eventId);
+
         $eligibleLoa = 0;
         foreach ($presenters as $p) {
             $uid = (int) $p['id_user'];
-            $role = strtolower((string)($p['role_user'] ?? ''));
-            if (strpos($role, 'presenter') !== 0) continue;
             $st  = strtolower((string) ($fpMap[$uid] ?? ''));
             if ($st !== '' && in_array($st, $acceptedAliases, true)) $st = 'accepted';
             if ($st === 'accepted') $eligibleLoa++;
@@ -630,6 +666,10 @@ class Dokumen extends BaseController
         ];
     }
 
+    /**
+     * Mapping status FP per user pada event tertentu.
+     * Mencari dari beberapa kandidat tabel/kolom.
+     */
     private function getFpStatusMap(int $eventId): array
     {
         $db = $this->db;
@@ -812,5 +852,91 @@ class Dokumen extends BaseController
         } catch (\Throwable $e) {
             log_message('error', 'Failed to log activity: ' . $e->getMessage());
         }
+    }
+
+    // ================== Helper kolom/registrasi ==================
+
+    /**
+     * Kembalikan info kolom dinamis untuk tabel event_registrations
+     * supaya kompatibel dengan variasi skema.
+     */
+    private function resolveEventRegColumns(): array
+    {
+        $db = $this->db;
+        $table = null;
+        foreach (['event_registrations','registrations','pendaftaran_event'] as $t) {
+            if ($db->tableExists($t)) { $table = $t; break; }
+        }
+        if (!$table) return ['table'=>null,'uid'=>null,'eid'=>null,'role'=>null];
+
+        $fields = array_flip($db->getFieldNames($table) ?: []);
+        $uid  = null; foreach (['user_id','id_user','uid'] as $c) if (isset($fields[$c])) { $uid = $c; break; }
+        $eid  = null; foreach (['event_id','id_event'] as $c) if (isset($fields[$c])) { $eid = $c; break; }
+        $role = null; foreach (['role','tipe','jenis'] as $c) if (isset($fields[$c])) { $role = $c; break; }
+
+        return ['table'=>$table,'uid'=>$uid,'eid'=>$eid,'role'=>$role];
+    }
+
+    /**
+     * Ambil semua presenter TERDAFTAR (nama, email) pada event tertentu.
+     */
+    private function getRegisteredPresenters(int $eventId): array
+    {
+        $er = $this->resolveEventRegColumns();
+        if (!$er['table'] || !$er['uid'] || !$er['eid']) return [];
+
+        $builder = $this->db->table($er['table'].' er')
+            ->select("u.id_user, u.nama_lengkap, u.email, ".($er['role'] ? "LOWER(er.{$er['role']}) AS er_role" : "'' AS er_role"), false)
+            ->join('users u', 'u.id_user = er.'.$er['uid'], 'left')
+            ->where('er.'.$er['eid'], $eventId);
+
+        // Jika ada kolom role di registrasi, filter presenter di level registrasi;
+        // jika tidak ada, fallback pakai users.role
+        if ($er['role']) {
+            $builder->groupStart()
+                ->like('LOWER(er.'.$er['role'].')', 'presenter', 'after')
+            ->groupEnd();
+        } else {
+            $builder->groupStart()
+                ->like('LOWER(u.role)', 'presenter', 'after')
+            ->groupEnd();
+        }
+
+        $rows = $builder->orderBy('u.nama_lengkap','ASC')->get()->getResultArray();
+        return array_map(static function($r){
+            return [
+                'id_user'      => (int) $r['id_user'],
+                'nama_lengkap' => (string) ($r['nama_lengkap'] ?? ''),
+                'email'        => (string) ($r['email'] ?? ''),
+            ];
+        }, $rows);
+    }
+
+    /**
+     * Cek apakah user terdaftar sebagai presenter pada event.
+     */
+    private function isUserRegisteredAsPresenter(int $eventId, int $userId): bool
+    {
+        $er = $this->resolveEventRegColumns();
+        if (!$er['table'] || !$er['uid'] || !$er['eid']) return false;
+
+        $qb = $this->db->table($er['table'])
+            ->where($er['eid'], $eventId)
+            ->where($er['uid'], $userId);
+
+        if ($er['role']) {
+            $qb->groupStart()
+                ->like('LOWER('.$er['role'].')','presenter','after')
+            ->groupEnd();
+        } else {
+            // Fallback cek role di users
+            $has = $qb->countAllResults();
+            if ($has <= 0) return false;
+
+            $roleUser = $this->db->table('users')->select('LOWER(role) AS r')->where('id_user',$userId)->get()->getRowArray();
+            return $roleUser && strpos(($roleUser['r'] ?? ''), 'presenter') === 0;
+        }
+
+        return $qb->countAllResults() > 0;
     }
 }

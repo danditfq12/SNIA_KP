@@ -1,7 +1,13 @@
 <?php
-$title   = $title   ?? 'Upload Full Paper';
-$event   = $event   ?? [];
-$eventId = (int)($eventId ?? 0);
+$title        = $title        ?? 'Upload Full Paper';
+$event        = $event        ?? [];
+$eventId      = (int)($eventId ?? 0);
+$maxSizeMB    = (int)($maxSizeMB ?? 20);
+
+/** bedakan tampilan upload awal vs revisi */
+$uploadMode   = strtoupper($upload_mode ?? 'NEW'); // 'NEW' | 'REVISION'
+$isRevision   = ($uploadMode === 'REVISION');
+$revisiKe     = isset($revisi_ke) ? (int)$revisi_ke : null; // opsional, jika dikirim controller
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
@@ -11,18 +17,37 @@ $eventId = (int)($eventId ?? 0);
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
       <div class="row g-3 justify-content-center">
-        <div class="col-12 col-lg-8">
+        <!-- Dilebarin kiri-kanan -->
+        <div class="col-12 col-lg-11 col-xl-11 col-xxl-10">
           <div class="card shadow-soft card-glass-plain">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between gap-2">
               <div class="d-flex align-items-center gap-2">
-                <span class="badge bg-blue-soft"><i class="bi bi-upload"></i></span>
-                <h6 class="mb-0 fw-semibold text-blue-900">Form Upload Full Paper</h6>
+                <?php if ($isRevision): ?>
+                  <span class="badge bg-amber-soft"><i class="bi bi-arrow-repeat"></i></span>
+                  <h6 class="mb-0 fw-semibold text-blue-900">Upload Revisi Full Paper</h6>
+                <?php else: ?>
+                  <span class="badge bg-blue-soft"><i class="bi bi-upload"></i></span>
+                  <h6 class="mb-0 fw-semibold text-blue-900">Form Upload Full Paper</h6>
+                <?php endif; ?>
               </div>
               <a href="<?= site_url('presenter/fullpaper') ?>" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-arrow-left me-1"></i> Kembali
               </a>
             </div>
+
             <div class="card-body">
+              <?php if ($isRevision): ?>
+                <div class="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
+                  <i class="bi bi-exclamation-triangle-fill"></i>
+                  <div>
+                    Anda akan mengunggah <strong>revisi</strong>. Berkas ini akan menggantikan unggahan sebelumnya.
+                    <?php if ($revisiKe !== null): ?>
+                      <div class="small text-muted mt-1">Revisi ke-<?= (int)$revisiKe ?></div>
+                    <?php endif; ?>
+                  </div>
+                </div>
+              <?php endif; ?>
+
               <form action="<?= site_url('presenter/fullpaper/store') ?>" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="event_id" value="<?= (int)$eventId ?>">
@@ -30,17 +55,24 @@ $eventId = (int)($eventId ?? 0);
                 <div class="mb-3">
                   <label class="form-label">File Full Paper (PDF) <span class="text-danger">*</span></label>
                   <input type="file" class="form-control form-control-soft" name="full_paper" accept=".pdf,application/pdf" required>
-                  <div class="form-text">Format PDF, maksimal 20MB.</div>
+                  <div class="form-text">Format PDF, maksimal <?= (int)$maxSizeMB ?>MB.</div>
                   <div class="invalid-feedback">File PDF wajib diunggah.</div>
                 </div>
 
                 <div class="d-flex flex-wrap gap-2">
-                  <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-send me-1"></i>Kirim Full Paper
-                  </button>
+                  <?php if ($isRevision): ?>
+                    <button type="submit" class="btn btn-primary">
+                      <i class="bi bi-send me-1"></i>Kirim Revisi
+                    </button>
+                  <?php else: ?>
+                    <button type="submit" class="btn btn-primary">
+                      <i class="bi bi-send me-1"></i>Kirim Full Paper
+                    </button>
+                  <?php endif; ?>
                 </div>
               </form>
             </div>
+
           </div>
         </div>
       </div>
@@ -55,8 +87,16 @@ $eventId = (int)($eventId ?? 0);
 :root{
   --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
   --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
-  --side-pad: clamp(1rem, 2.3vw, 2.2rem);
+  --amber-100:#fef3c7; --amber-700:#b45309;
+
+  /* Lebarin area konten */
+  --side-pad: clamp(.75rem, 1.4vw, 1.25rem);
 }
+.container-xxl{
+  /* Biar konten bisa lebih lebar di desktop besar */
+  max-width: min(100%, 1680px);
+}
+
 .page-wrap-blue{
   min-height:100vh; padding-top:72px;
   background:
@@ -86,6 +126,9 @@ $eventId = (int)($eventId ?? 0);
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
 .btn-outline-secondary{ color:#334155; border-color:#e2e8f0; }
 .btn-outline-secondary:hover{ background:#f8fafc; border-color:#cbd5e1; color:#0f172a; }
+
+.bg-blue-soft{  background:var(--blue-100);  color:var(--blue-800);  border-radius:12px; padding:.35rem .55rem; font-weight:700; font-size:.85rem; }
+.bg-amber-soft{ background:var(--amber-100); color:var(--amber-700); border-radius:12px; padding:.35rem .55rem; font-weight:700; font-size:.85rem; }
 </style>
 
 <script>

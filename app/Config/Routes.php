@@ -422,10 +422,12 @@ $routes->group('reviewer', [
     'filter'    => 'role:reviewer',
     'namespace' => 'App\Controllers\Role\Reviewer',
 ], static function ($routes) {
+
+    // DASHBOARD
     $routes->get('dashboard', 'Dashboard::index');
-    $routes->get('notifications', 'Dashboard::getNotifications');
     $routes->post('dashboard/confirm', 'Dashboard::confirm');
 
+    // ABSTRAK
     $routes->get('abstrak', 'Abstrak::index');
     $routes->get('abstrak/(:num)', 'Abstrak::detail/$1');
     $routes->get('abstrak/preview/(:num)', 'Abstrak::preview/$1');
@@ -434,13 +436,13 @@ $routes->group('reviewer', [
     $routes->post('abstrak/confirm/(:num)', 'Abstrak::confirm/$1');
     $routes->post('abstrak/review/(:num)', 'Abstrak::review/$1');
 
+    // FULL PAPER
     $routes->group('fullpaper', static function ($routes) {
         $routes->get('', 'FullPaper::index');
         $routes->get('(:num)', 'FullPaper::detail/$1');
-        $routes->post('action', 'FullPaper::action');
         $routes->post('submit/(:num)', 'FullPaper::submit/$1');
         $routes->post('(:num)/submit', 'FullPaper::submit/$1');
-        $routes->post('review/(:num)', 'FullPaper::submit/$1');
+        $routes->post('review/(:num)', 'FullPaper::submit/$1'); // kalau memang di-reuse ke submit
         $routes->get('(:num)/download', 'FullPaper::download/$1');
         $routes->get('download/(:num)', 'FullPaper::download/$1');
         $routes->get('blob/(:num)', 'FullPaper::blob/$1');
@@ -448,8 +450,10 @@ $routes->group('reviewer', [
         $routes->get('inline/(:num)', 'FullPaper::inline/$1');
     });
 
+    // RIWAYAT
     $routes->get('riwayat', 'Riwayat::index');
 });
+
 
 // ---------------------------------------------------
 // ENHANCED: Public API with Payment Support

@@ -146,7 +146,7 @@ class FullPaper extends BaseController
         }
     }
 
-    /* ======================= Query Helpers (BARU: baca dari review/reviews) ======================= */
+    /* ======================= Query Helpers (baca status tugas) ======================= */
 
     private function reviewTableName(): ?string
     {
@@ -164,6 +164,7 @@ class FullPaper extends BaseController
 
     private function getTaskStatusFromReviews(int $submissionId, int $reviewerId): ?array
     {
+        // NOTE: ini dipakai utk skema yg nyimpen status di tabel review/reviews (jarang dipakai utk fullpaper)
         $rt = $this->reviewTableName();
         if (!$rt) return null;
 
@@ -190,11 +191,11 @@ class FullPaper extends BaseController
 
     private function getTaskStatus(int $submissionId, int $reviewerId): array
     {
-        // 1) Prioritas: status dari tabel review/reviews (dipakai Dashboard::confirm)
+        // 1) Coba baca dari review/reviews (kalau ada)
         $fromReviews = $this->getTaskStatusFromReviews($submissionId, $reviewerId);
         if ($fromReviews) return $fromReviews;
 
-        // 2) Fallback: dari pivot fullpaper_reviewers
+        // 2) Fallback: dari pivot fullpaper_reviewers (ini yg dipakai Dashboard::confirm)
         $t = $this->pivotTable(); $P = $this->pivotCols();
         if (!$this->db->tableExists($t) || !$P['submission'] || !$P['reviewer']) {
             return ['status'=>'pending','reason'=>null];
@@ -403,6 +404,11 @@ class FullPaper extends BaseController
 
         $this->applyAbstractJoinsForCategory($builder, $sub, $S);
 
+        // HANYA tugas yang sudah DIKONFIRMASI (accepted) di dashboard yang boleh muncul di daftar Full Paper
+        if ($P['status']) {
+            $builder->whereIn("p.{$P['status']}", ['accepted','diterima']);
+        }
+
         $builder->where("p.{$P['reviewer']}", $me);
         $builder->orderBy("s.{$S['pk']}", 'DESC', false);
 
@@ -432,7 +438,7 @@ class FullPaper extends BaseController
                 $eventOptions[$eid] = $r['event_title'] ?? ('Event #'.$eid);
             }
 
-            // hanya tampilkan item yang masih perlu tindakan (To-Do)
+            // cek apakah butuh tindakan ulang (misal setelah upload revisi)
             $needs = true;
             if ($my) {
                 $myAt = $my['tanggal_review'] ?? '1970-01-01 00:00:00';
@@ -445,6 +451,11 @@ class FullPaper extends BaseController
             $asg = strtolower((string)$r['asg_status_norm']);  // 'accepted' | 'pending' | 'declined'
             $eventOver = $this->isEventOver($r['event_end_at'] ?? null);
 
+            // RULE:
+            // - belum dikonfirmasi: sudah difilter di query (tidak muncul di sini)
+            // - declined: jangan tampil (anggap batal)
+            // - diterima (review keputusan): langsung pindah ke riwayat => jangan tampil
+            // - revisi/ditolak: tampil SELAMA event belum selesai, setelah event selesai hilang (riwayat yg menampung)
             $show = true;
             if ($asg === 'declined') {
                 $show = false;
@@ -453,8 +464,11 @@ class FullPaper extends BaseController
             } elseif ($rev === 'revisi' || $rev === 'ditolak') {
                 $show = !$eventOver;
             } else {
-                $show = true; // menunggu
+                // 'menunggu' (belum ada review untuk revision ini) => tampil
+                $show = true;
             }
+
+            // kalau assignment accepted & ada revisi baru (needs), tetap paksa tampil
             if ($asg === 'accepted' && $needs) $show = true;
 
             if ($show) $listRows[] = $r;
@@ -464,7 +478,7 @@ class FullPaper extends BaseController
 
         return view('role/reviewer/fullpaper/index', [
             'title'        => 'Tugas Full Paper',
-            'rows'         => $listRows,   // <— hanya satu list untuk index
+            'rows'         => $listRows,   // hanya To-Do
             'eventOptions' => $eventOptions,
         ]);
     }
@@ -504,7 +518,14 @@ class FullPaper extends BaseController
             return redirect()->to(site_url('reviewer/fullpaper'))->with('error','Anda tidak ditugaskan untuk naskah ini.');
         }
 
+        // baca status tugas dari pivot/review
         $task = $this->getTaskStatus($submissionId, $me);
+
+        // JIKA BELUM DIKONFIRMASI → TIDAK BOLEH MASUK DETAIL
+        if ($task['status'] !== 'accepted') {
+            return redirect()->to(site_url('reviewer/dashboard#incoming'))
+                ->with('error','Terima penugasan full paper ini terlebih dahulu di halaman dashboard.');
+        }
 
         $revNow   = $this->currentRevision($submission, $S);
         $myReview = $this->myLatestReview($submissionId, $me, $revNow);
@@ -549,7 +570,7 @@ class FullPaper extends BaseController
         return view('role/reviewer/fullpaper/detail', [
             'title'          => 'Detail Full Paper',
             'submission'     => $submissionView,
-            'taskStatus'     => $task['status'],
+            'taskStatus'     => $task['status'],   // seharusnya selalu 'accepted' di titik ini
             'taskReason'     => $task['reason'],
             'revisionNo'     => $revNow,
             'myReview'       => $myReview,
@@ -569,7 +590,10 @@ class FullPaper extends BaseController
         $submissionId = (int)$submissionId;
 
         $task = $this->getTaskStatus($submissionId, $me);
-        if ($task['status'] !== 'accepted') return redirect()->back()->with('error','Terima penugasan terlebih dahulu.');
+        if ($task['status'] !== 'accepted') {
+            return redirect()->to(site_url('reviewer/dashboard#incoming'))
+                ->with('error','Terima penugasan terlebih dahulu di halaman dashboard.');
+        }
 
         $decision = strtolower(trim((string)$this->request->getPost('keputusan')));
         $comment  = trim((string)$this->request->getPost('komentar'));
@@ -626,90 +650,19 @@ class FullPaper extends BaseController
             ->with('success', 'Review tersimpan. Status agregat saat ini: '.$final);
     }
 
-    /* ====== Endpoint lama (opsional) – dibiarkan untuk kompatibilitas ====== */
+    /* ====== Endpoint lama (opsional) – dibiarkan untuk kompatibilitas (routes sudah dicabut) ====== */
     public function action()
     {
-        if (!$this->requireReviewer()) {
-            if ($this->request->isAJAX()) {
-                return $this->response->setJSON(['success'=>false,'message'=>'Unauthorized']);
-            }
-            return redirect()->to(site_url('auth/login'))->with('error','Unauthorized');
+        // Tidak lagi dipakai karena konfirmasi tugas sudah pindah ke Dashboard::confirm
+        // Dibiarkan supaya tidak fatal kalau masih ada request lama.
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Aksi konfirmasi full paper sekarang dilakukan melalui dashboard reviewer.'
+            ]);
         }
-
-        $me     = $this->me();
-        $sid    = (int)$this->request->getPost('id');
-        $act    = strtolower((string)$this->request->getPost('action'));
-        $reason = trim((string)$this->request->getPost('reason'));
-
-        $referer = trim((string)$this->request->getHeaderLine('Referer'));
-        $backUrl = $referer && $referer !== base_url('/') ? $referer : site_url('reviewer/fullpaper');
-
-        if ($sid <= 0 || !in_array($act, ['accept','decline'], true)) {
-            $msg = 'Input tidak valid.';
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>false,'message'=>$msg])
-                : redirect()->to($backUrl)->with('error', $msg);
-        }
-
-        $pvt = $this->pivotTable(); $P = $this->pivotCols();
-        if (!$this->db->tableExists($pvt) || !$P['submission'] || !$P['reviewer']) {
-            $msg = 'Skema penugasan tidak valid.';
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>false,'message'=>$msg])
-                : redirect()->to($backUrl)->with('error', $msg);
-        }
-
-        $row = $this->db->table($pvt)
-            ->where($P['submission'], $sid)
-            ->where($P['reviewer'],  $me)
-            ->orderBy($P['pk'] ?: 'id', 'DESC')
-            ->get()->getRowArray();
-        if (!$row) {
-            $msg = 'Penugasan tidak ditemukan.';
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>false,'message'=>$msg])
-                : redirect()->to($backUrl)->with('error', $msg);
-        }
-
-        if (!$P['status']) {
-            $msg = 'Penugasan diproses.';
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>true,'message'=>$msg])
-                : redirect()->to($backUrl)->with('success', $msg);
-        }
-
-        if ($act === 'accept') {
-            $payload = [ $P['status'] => 'accepted' ];
-            if ($P['reason']) $payload[$P['reason']] = null;
-            if ($P['acc'])    $payload[$P['acc']]    = date('Y-m-d H:i:s');
-            if ($P['dec'])    $payload[$P['dec']]    = null;
-
-            $ok = (bool)$this->db->table($pvt)->where($P['pk'] ?: 'id', $row[$P['pk'] ?: 'id'])->update($payload);
-            $msg = $ok ? 'Tugas diterima.' : 'Gagal memperbarui status.';
-
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>$ok,'message'=>$msg])
-                : redirect()->to($backUrl)->with($ok ? 'success' : 'error', $msg);
-        }
-
-        // decline
-        if (mb_strlen($reason) < 5) {
-            $msg = 'Penolakan wajib disertai alasan (≥5 karakter).';
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>false,'message'=>$msg])
-                : redirect()->to($backUrl)->with('error', $msg);
-        }
-
-        $payload = [ $P['status'] => 'declined' ];
-        if ($P['reason']) $payload[$P['reason']] = $reason;
-        if ($P['dec'])    $payload[$P['dec']]    = date('Y-m-d H:i:s');
-
-        $ok  = (bool)$this->db->table($pvt)->where($P['pk'] ?: 'id', $row[$P['pk'] ?: 'id'])->update($payload);
-        $msg = $ok ? 'Tugas ditolak.' : 'Gagal memperbarui status.';
-
-        return $this->request->isAJAX()
-            ? $this->response->setJSON(['success'=>$ok,'message'=>$msg])
-            : redirect()->to($backUrl)->with($ok ? 'success' : 'error', $msg);
+        return redirect()->to(site_url('reviewer/dashboard#incoming'))
+            ->with('error','Aksi konfirmasi full paper sekarang dilakukan melalui dashboard reviewer.');
     }
 
     /* ======================= File utils & endpoints ======================= */

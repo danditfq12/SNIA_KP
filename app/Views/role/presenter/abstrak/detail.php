@@ -12,18 +12,18 @@ $info = [
   'status'   => (string)($vm['chip']['label'] ?? '-'),
   'diunggah' => (string)($vm['uploaded_at'] ?? '-'),
 ];
+
 $hasFile      = !empty($vm['file_exists']);
 $streamUrl    = (string)($vm['file_stream_url'] ?? '');
 $downloadUrl  = (string)($vm['file_download_url'] ?? '');
 $gdocsUrl     = (string)($vm['gdocs_viewer_url'] ?? '');
+
 $canReupload  = !empty($vm['can_reupload']) && !empty($vm['reupload_url']);
 $reuploadUrl  = (string)($vm['reupload_url'] ?? '');
+
 $showCancel   = !empty($vm['show_cancel']) && !empty($vm['cancel_action']);
 $cancelAction = (string)($vm['cancel_action'] ?? '');
-$showRevision = !empty($vm['show_revision']);
-$revDeadline  = (string)($vm['rev_deadline'] ?? '');
-$canUploadRev = !empty($vm['can_upload_revision']);
-$revPost      = (string)($vm['revision_post'] ?? '');
+
 $statusRaw    = (string)($vm['status'] ?? '');
 ?>
 <?= $this->include('partials/header') ?>
@@ -34,7 +34,7 @@ $statusRaw    = (string)($vm['status'] ?? '');
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- HERO SEDERHANA (status di hero DIHAPUS, batal upload TIDAK di hero) -->
+      <!-- HERO SEDERHANA -->
       <div class="card-hero mb-4">
         <div class="hero-body">
           <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
@@ -42,7 +42,6 @@ $statusRaw    = (string)($vm['status'] ?? '');
               <h3 class="hero-title mb-0">
                 <i class="bi bi-file-earmark-text me-2"></i>Detail Abstrak
               </h3>
-              <!-- (badge status di hero dihapus sesuai permintaan) -->
             </div>
 
             <div class="d-flex gap-2 ms-auto align-items-center">
@@ -51,7 +50,6 @@ $statusRaw    = (string)($vm['status'] ?? '');
                   <i class="bi bi-upload me-1"></i>Upload Ulang
                 </a>
               <?php endif; ?>
-              <!-- (Batalkan Upload dipindah ke Kartu Status) -->
               <a href="javascript:history.back()" class="btn btn-light btn-sm">
                 <i class="bi bi-arrow-left"></i> Kembali
               </a>
@@ -81,7 +79,7 @@ $statusRaw    = (string)($vm['status'] ?? '');
         <!-- KIRI -->
         <div class="col-12 col-xl-8">
 
-          <!-- INFORMASI (SIMPLE META LIST) -->
+          <!-- INFORMASI -->
           <div class="card shadow-soft card-glass-plain mb-3">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-info-circle"></i></span>
@@ -139,40 +137,7 @@ $statusRaw    = (string)($vm['status'] ?? '');
             </div>
           </div>
 
-          <!-- FORM REVISI -->
-          <?php if ($showRevision): ?>
-            <div id="section-revisi" class="card shadow-soft card-glass-plain mb-3">
-              <div class="card-header bg-transparent border-0 pb-0">
-                <h6 class="mb-0 fw-semibold text-blue-900"><i class="bi bi-arrow-repeat me-1"></i>Upload Revisi Abstrak</h6>
-              </div>
-              <div class="card-body">
-                <?php if($revDeadline): ?>
-                  <div class="alert alert-info fw-semibold">
-                    <i class="bi bi-clock me-1"></i> Batas pengumpulan revisi: <b><?= esc($revDeadline) ?></b>
-                  </div>
-                <?php endif; ?>
-
-                <?php if ($canUploadRev): ?>
-                  <form action="<?= esc($revPost) ?>" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
-                    <?= csrf_field() ?>
-                    <div class="mb-3">
-                      <label class="form-label">File Abstrak (PDF) <span class="text-danger">*</span></label>
-                      <input type="file" class="form-control form-control-soft" name="file_abstrak" accept=".pdf,application/pdf" required>
-                      <div class="form-text">Format PDF, maksimal 5MB.</div>
-                      <div class="invalid-feedback">File PDF wajib diunggah.</div>
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                      <i class="bi bi-send me-1"></i>Kirim Revisi
-                    </button>
-                  </form>
-                <?php else: ?>
-                  <div class="alert alert-warning mb-0 fw-semibold">
-                    <i class="bi bi-lock me-1"></i> Batas waktu pengumpulan revisi telah berakhir.
-                  </div>
-                <?php endif; ?>
-              </div>
-            </div>
-          <?php endif; ?>
+          <!-- (Bagian FORM REVISI DIHAPUS) -->
 
           <!-- KOMENTAR REVIEWER -->
           <div class="card shadow-soft card-glass-plain mb-3">
@@ -189,7 +154,7 @@ $statusRaw    = (string)($vm['status'] ?? '');
                         <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
                           <div class="d-flex flex-wrap align-items-center gap-2">
                             <span class="badge rounded-pill bg-light text-blue-900 border">
-                              Revisi: <b class="ms-1"><?= esc($t['revisi_ke'] ?? '—') ?></b>
+                              Tahap: <b class="ms-1"><?= esc($t['revisi_ke'] ?? '—') ?></b>
                             </span>
                             <span class="badge rounded-pill bg-<?= esc($t['badge'] ?? 'secondary') ?>-subtle text-<?= esc($t['badge'] ?? 'secondary') ?>">
                               <?= esc($t['badge_txt'] ?? 'Pending') ?>
@@ -223,7 +188,7 @@ $statusRaw    = (string)($vm['status'] ?? '');
 
         <!-- KANAN -->
         <div class="col-12 col-xl-4">
-          <!-- STATUS (tidak sticky lagi, tombol Batalkan Upload dipindah ke sini) -->
+          <!-- STATUS -->
           <div class="card shadow-soft card-glass-plain mb-3">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
               <span class="badge bg-blue-soft"><i class="bi bi-flag"></i></span>
@@ -233,10 +198,8 @@ $statusRaw    = (string)($vm['status'] ?? '');
               <?php if (in_array($statusRaw, ['menunggu','sedang_direview'], true)): ?>
                 <div class="callout callout-info"><i class="bi bi-hourglass-split me-1"></i>Abstrak Anda sedang diproses oleh reviewer.</div>
               <?php elseif ($statusRaw === 'revisi'): ?>
-                <div class="callout callout-warn"><i class="bi bi-arrow-repeat me-1"></i>Perlu revisi. Unggah file revisi pada form.</div>
-                <?php if($revDeadline): ?>
-                  <div class="small text-muted"><i class="bi bi-clock me-1"></i>Deadline revisi: <b><?= esc($revDeadline) ?></b></div>
-                <?php endif; ?>
+                <!-- Tidak ada form revisi lagi, hanya informasi -->
+                <div class="callout callout-warn"><i class="bi bi-arrow-repeat me-1"></i>Abstrak memerlukan penyesuaian. Silakan menunggu arahan/pengumuman panitia.</div>
               <?php elseif ($statusRaw === 'ditolak'): ?>
                 <div class="callout callout-danger"><i class="bi bi-x-octagon me-1"></i>Abstrak ditolak.</div>
               <?php elseif ($statusRaw === 'diterima'): ?>
@@ -374,10 +337,6 @@ body{ font-family: ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helv
 .text-blue-900{ color:var(--blue-900)!important; }
 .bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:10px; padding:.38rem .6rem; font-weight:600; font-size:.9rem; }
 
-/* sticky-card DIHILANGKAN agar tidak ikut scroll */
-.sticky-card{ position:static; top:auto; }
-
-/* callout */
 .callout{ border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.7rem .9rem; font-weight:600; }
 .callout-info{ background:#eef6ff; color:#124d9b; }
 .callout-success{ background:#ecfdf5; color:#065f46; }
@@ -418,7 +377,7 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
-  // Batalkan upload (SweetAlert jika tersedia) — tombol sekarang di Kartu Status
+  // Batalkan upload (SweetAlert jika tersedia)
   const cancelBtn = document.querySelector('.js-cancel-abs');
   if (cancelBtn) {
     cancelBtn.addEventListener('click', function(){
@@ -439,12 +398,6 @@ document.addEventListener('DOMContentLoaded', function(){
         if (confirm('Batalkan upload abstrak? File dan data unggahan akan dihapus.') && form) form.submit();
       }
     });
-  }
-
-  // Auto-scroll ke form revisi bila anchor
-  if (location.hash === '#section-revisi') {
-    const t = document.getElementById('section-revisi');
-    if (t) setTimeout(() => t.scrollIntoView({behavior:'smooth', block:'start'}), 120);
   }
 
   // Fallback modal handler (jika memakai modal bootstrap)

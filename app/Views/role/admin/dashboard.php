@@ -12,7 +12,10 @@ $recentActivities      = $recentActivities      ?? [];
 $logs                  = $logs                  ?? [];
 $unassigned_abstrak    = $unassigned_abstrak    ?? [];
 $unassigned_fullpaper  = $unassigned_fullpaper  ?? [];
-$MAX_ITEMS = 5;
+
+// batas render item
+$ACT_MAX  = 20; // aktivitas
+$ASS_MAX  = 20; // penugasan
 
 helper('url');
 
@@ -93,13 +96,20 @@ if (!function_exists('renderLog')) {
   }
 }
 
-if (!function_exists('renderAssign')) {
-  function renderAssign(array $row, string $href, string $idKey): string {
-    $judul = esc($row['judul'] ?? '-');
-    $nama  = esc($row['nama_lengkap'] ?? '-');
-    $tgl   = esc(fmtDate($row['created_at'] ?? ''));
-    $id    = (int)($row[$idKey] ?? 0);
-    $link  = site_url($href.'/'.$id);
+/** Satu renderer untuk gabungan Abstrak + Full Paper */
+if (!function_exists('renderAssignUnified')) {
+  function renderAssignUnified(array $row): string {
+    $type   = strtolower($row['_type'] ?? 'abstrak'); // abstrak|fullpaper
+    $judul  = esc($row['judul'] ?? '-');
+    $nama   = esc($row['nama_lengkap'] ?? '-');
+    $tgl    = esc(fmtDate($row['created_at'] ?? ''));
+    $id     = $type==='abstrak' ? (int)($row['id_abstrak'] ?? 0) : (int)($row['id_fullpaper'] ?? 0);
+    $href   = $type==='abstrak' ? 'admin/abstrak/detail' : 'admin/fullpaper/detail';
+    $badge  = $type==='abstrak'
+              ? '<span class="status-pill pill-info me-2">Abstrak</span>'
+              : '<span class="status-pill pill-primary me-2">Full&nbsp;Paper</span>';
+    $link   = site_url($href.'/'.$id);
+
     return <<<HTML
       <li class="mb-2">
         <div class="activity-item">
@@ -109,7 +119,10 @@ if (!function_exists('renderAssign')) {
               <div class="fw-semibold small text-truncate" title="{$judul}">{$judul}</div>
               <span class="text-muted xsmall">{$tgl}</span>
             </div>
-            <div class="text-muted xsmall mt-1">oleh {$nama}</div>
+            <div class="text-muted xsmall mt-1 d-flex align-items-center gap-2">
+              {$badge}
+              <span>oleh {$nama}</span>
+            </div>
           </div>
           <div class="ms-2">
             <a class="btn btn-sm btn-outline-danger" href="{$link}">Tugaskan</a>
@@ -119,8 +132,28 @@ if (!function_exists('renderAssign')) {
     HTML;
   }
 }
-?>
 
+/** Gabungkan list perlu penugasan: abstrak + fullpaper, urut terbaru */
+$unified_assign = [];
+foreach ($unassigned_abstrak as $a) {
+  $a['_type'] = 'abstrak';
+  // normalisasi waktu
+  if (empty($a['created_at']) && !empty($a['tanggal_upload'])) $a['created_at'] = $a['tanggal_upload'];
+  $unified_assign[] = $a;
+}
+foreach ($unassigned_fullpaper as $f) {
+  $f['_type'] = 'fullpaper';
+  if (empty($f['created_at']) && !empty($f['uploaded_at'])) $f['created_at'] = $f['uploaded_at'];
+  // pastikan id_fullpaper ada (kalau backend pakai id)
+  if (empty($f['id_fullpaper']) && !empty($f['id'])) $f['id_fullpaper'] = $f['id'];
+  $unified_assign[] = $f;
+}
+usort($unified_assign, function($x,$y){
+  $tx = strtotime($x['created_at'] ?? '') ?: 0;
+  $ty = strtotime($y['created_at'] ?? '') ?: 0;
+  return $ty <=> $tx; // desc
+});
+?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
 <?= $this->include('partials/alerts') ?>
@@ -129,7 +162,7 @@ if (!function_exists('renderAssign')) {
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- HERO (wide banner) -->
+      <!-- HERO -->
       <div class="card-hero mb-3">
         <div class="hero-body">
           <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
@@ -145,7 +178,7 @@ if (!function_exists('renderAssign')) {
         </div>
       </div>
 
-      <!-- 4 KPI (row kecil) -->
+      <!-- KPI -->
       <div class="row g-3 mb-3">
         <div class="col-6 col-lg-3">
           <div class="kpi-card">
@@ -185,9 +218,9 @@ if (!function_exists('renderAssign')) {
         </div>
       </div>
 
-      <!-- GRID KONTEN: kiri besar (Aktivitas), kanan 2 tumpuk (Log, Penugasan) -->
+      <!-- GRID: kiri aktivitas, kanan (log + penugasan GABUNGAN) -->
       <div class="row g-3 mb-3">
-        <!-- Kiri besar -->
+        <!-- Kiri: Aktivitas -->
         <div class="col-12 col-xl-7">
           <section class="panel-card h-100">
             <div class="panel-head">
@@ -197,17 +230,20 @@ if (!function_exists('renderAssign')) {
               <?php if (empty($recentActivities)): ?>
                 <div class="empty-hint text-center"><i class="bi bi-inboxes me-1"></i>Belum ada aktivitas.</div>
               <?php else: ?>
-                <ul class="list-unstyled mb-0">
-                  <?php $i=0; foreach ($recentActivities as $a){ if ($i++ >= $MAX_ITEMS) break; echo renderActivity($a); } ?>
-                </ul>
+                <div class="scroll-area activity-scroll">
+                  <ul class="list-unstyled mb-0">
+                    <?php $i=0; foreach ($recentActivities as $a){ if ($i++ >= $ACT_MAX) break; echo renderActivity($a); } ?>
+                  </ul>
+                </div>
               <?php endif; ?>
             </div>
           </section>
         </div>
 
-        <!-- Kanan atas: log -->
-        <div class="col-12 col-xl-5">
-          <section class="panel-card h-100">
+        <!-- Kanan: stack Log + Perlu Penugasan (SATU LIST gabungan) -->
+        <div class="col-12 col-xl-5 d-flex flex-column gap-3">
+          <!-- Log (atas) -->
+          <section class="panel-card">
             <div class="panel-head">
               <div class="title"><i class="bi bi-list-check me-1 text-secondary"></i>Log Aktivitas</div>
               <div class="d-flex gap-2">
@@ -218,51 +254,38 @@ if (!function_exists('renderAssign')) {
               <?php if (empty($logs)): ?>
                 <div class="empty-hint text-center"><i class="bi bi-clock me-1"></i>Belum ada log aktivitas.</div>
               <?php else: ?>
-                <ul class="list-unstyled mb-0">
-                  <?php $i=0; foreach ($logs as $l){ if ($i++ >= $MAX_ITEMS) break; echo renderLog($l); } ?>
-                </ul>
+                <div class="scroll-area logs-scroll">
+                  <ul class="list-unstyled mb-0">
+                    <?php foreach ($logs as $l){ echo renderLog($l); } ?>
+                  </ul>
+                </div>
               <?php endif; ?>
             </div>
           </section>
-        </div>
 
-        <!-- Kanan bawah: penugasan -->
-        <div class="col-12 col-xl-5">
-          <section class="panel-card h-100">
+          <!-- Perlu Penugasan (gabungan Abstrak + Full Paper) -->
+          <section class="panel-card">
             <div class="panel-head">
               <div class="title"><i class="bi bi-person-gear me-1 text-danger"></i>Perlu Penugasan</div>
             </div>
             <div class="panel-body">
-              <ul class="nav nav-pills pills-compact mb-3" id="assignTabs" role="tablist">
-                <li class="nav-item"><button class="nav-link active" data-target="#pane-abs" type="button">Abstrak</button></li>
-                <li class="nav-item"><button class="nav-link" data-target="#pane-fp" type="button">Full Paper</button></li>
-              </ul>
-
-              <div id="pane-abs" class="assign-pane" role="tabpanel">
-                <?php if (empty($unassigned_abstrak)): ?>
-                  <div class="empty-hint text-center"><i class="bi bi-check2-all me-1"></i>Semua abstrak sudah ditugaskan.</div>
-                <?php else: ?>
+              <?php if (empty($unified_assign)): ?>
+                <div class="empty-hint text-center">
+                  <i class="bi bi-check2-all me-1"></i>Tidak ada item yang menunggu penugasan.
+                </div>
+              <?php else: ?>
+                <div class="scroll-area assign-scroll">
                   <ul class="list-unstyled mb-0">
-                    <?php $i=0; foreach ($unassigned_abstrak as $a){ if ($i++ >= $MAX_ITEMS) break; echo renderAssign($a, 'admin/abstrak/detail', 'id_abstrak'); } ?>
+                    <?php $i=0; foreach ($unified_assign as $row){ if ($i++ >= $ASS_MAX) break; echo renderAssignUnified($row); } ?>
                   </ul>
-                <?php endif; ?>
-              </div>
-
-              <div id="pane-fp" class="assign-pane d-none" role="tabpanel">
-                <?php if (empty($unassigned_fullpaper)): ?>
-                  <div class="empty-hint text-center"><i class="bi bi-check2-all me-1"></i>Semua full paper sudah ditugaskan.</div>
-                <?php else: ?>
-                  <ul class="list-unstyled mb-0">
-                    <?php $i=0; foreach ($unassigned_fullpaper as $f){ if ($i++ >= $MAX_ITEMS) break; echo renderAssign($f, 'admin/fullpaper/detail', 'id_fullpaper'); } ?>
-                  </ul>
-                <?php endif; ?>
-              </div>
+                </div>
+              <?php endif; ?>
             </div>
           </section>
         </div>
       </div>
 
-      <!-- Footer wide: Pembayaran Pending -->
+      <!-- Footer: Pembayaran Pending -->
       <section class="panel-card">
         <div class="panel-head">
           <div class="title"><i class="bi bi-cash-coin me-1 text-warning"></i>Pembayaran Pending</div>
@@ -284,7 +307,7 @@ if (!function_exists('renderAssign')) {
                   </tr>
                 </thead>
                 <tbody>
-                  <?php $i=0; foreach ($pendingPayments as $p): if ($i++ >= $MAX_ITEMS) break; ?>
+                  <?php $i=0; foreach ($pendingPayments as $p): if ($i++ >= 5) break; ?>
                     <tr>
                       <td>
                         <div class="fw-semibold"><?= esc($p['nama_lengkap'] ?? '-') ?></div>
@@ -314,6 +337,11 @@ if (!function_exists('renderAssign')) {
   --blue-700:#1d4ed8; --blue-800:#1e40af;
   --ink:#0f172a; --muted:#64748b;
   --radius:18px; --side-pad:clamp(1rem,2.3vw,2.2rem);
+
+  /* tinggi max area scroll */
+  --h-activity: 420px;
+  --h-logs: 170px;
+  --h-assign: 300px;
 }
 .container-xxl{ max-width:min(100%,1560px); padding-inline:var(--side-pad)!important; margin-inline:auto; }
 .page-wrap-blue{ min-height:100vh; padding-top:72px; background:linear-gradient(180deg,#f5f7ff 0%,#fff 40%); }
@@ -355,17 +383,29 @@ if (!function_exists('renderAssign')) {
 .empty-hint{ color:#567; background:#f6f9ff; border:1px dashed #e3e9ff; border-radius:10px; padding:.7rem .8rem; font-weight:600; }
 .empty-box{ border:1px dashed #e5e7eb; border-radius:10px; padding:14px; color:#6b7280; background:#fafafa; }
 
-/* Tabs kecil */
-.pills-compact .nav-link{
-  font-size:.78rem; padding:.28rem .6rem; border-radius:999px; font-weight:700;
+/* Scroll areas */
+.scroll-area{
+  overflow:auto;
+  padding-right:4px;
+  scrollbar-width:thin;
+  scrollbar-color:#9db7ff #f3f4f6;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling: touch;
 }
-.pills-compact .nav-link.active{ background:#2563eb; color:#fff; }
+.scroll-area::-webkit-scrollbar{ width:8px; }
+.scroll-area::-webkit-scrollbar-thumb{ background:#9db7ff; border-radius:6px; }
+.scroll-area::-webkit-scrollbar-track{ background:#f3f4f6; border-radius:6px; }
 
-/* multi-line clamp */
-.text-truncate-2{ overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.activity-scroll{ max-height: var(--h-activity); }
+.logs-scroll{ max-height: var(--h-logs); }
+.assign-scroll{ max-height: var(--h-assign); }
 
-/* Responsive tweaks */
+/* Responsive */
+@media (max-width:991.98px){
+  :root{ --h-activity: 360px; --h-logs: 160px; --h-assign: 260px; }
+}
 @media (max-width:767.98px){
+  :root{ --h-activity: 320px; --h-logs: 150px; --h-assign: 240px; }
   .hero-title{ font-size:1.05rem; }
   .kpi-num{ font-size:20px; }
   .panel-head .title{ font-size:.95rem; }
@@ -374,7 +414,7 @@ if (!function_exists('renderAssign')) {
 
 <script>
 (function(){
-  // Count-up KPI (respect reduced motion)
+  // Count-up KPI
   const pr = matchMedia('(prefers-reduced-motion: reduce)').matches;
   document.querySelectorAll('[data-countup]').forEach(el=>{
     const target = parseInt(el.dataset.countup||'0',10);
@@ -384,17 +424,6 @@ if (!function_exists('renderAssign')) {
       el.textContent=new Intl.NumberFormat('id-ID').format(now);
       if(now<target) requestAnimationFrame(tick);
     }; requestAnimationFrame(tick);
-  });
-
-  // Tabs penugasan (tanpa Bootstrap JS)
-  const tabs=document.querySelectorAll('#assignTabs .nav-link');
-  const panes=document.querySelectorAll('.assign-pane');
-  tabs.forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      tabs.forEach(b=>b.classList.remove('active')); btn.classList.add('active');
-      panes.forEach(p=>p.classList.add('d-none'));
-      const target=document.querySelector(btn.dataset.target); if(target) target.classList.remove('d-none');
-    });
   });
 })();
 </script>
