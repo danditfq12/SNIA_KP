@@ -1,16 +1,4 @@
 <?php
-/**
- * Enhanced Pembayaran Detail (Audience) - WITH WAVE INFO
- * 
- * Features:
- * - ✅ Wave information display (Gelombang 1, 2, 3)
- * - ✅ Proper payment method display (BCA VA, GoPay, dll)
- * - ✅ Auto-verification support
- * - Midtrans payment only
- * 
- * @version 3.1 - Wave Info & Payment Method Enhanced
- * @date 2025-01-14
- */
 
 $title = $title ?? 'Detail Pembayaran';
 $pay   = $pay   ?? [];
@@ -50,7 +38,7 @@ $evTime  = $event['event_time'] ?? '-';
 
 $canRetry = in_array($status, ['canceled', 'expired', 'rejected'], true);
 
-// ✅ GET PAYMENT METHOD INFO
+//  GET PAYMENT METHOD INFO
 $paymentMethodInfo = [
     'icon' => 'credit-card',
     'label' => 'Digital Payment',
@@ -89,7 +77,7 @@ if (!empty($paymentType)) {
     ];
 }
 
-// ✅ GET WAVE INFO from Event Model
+//  GET WAVE INFO from Event Model
 $eventModel = new \App\Models\EventModel();
 $currentWave = $eventModel->getCurrentWave($eventId);
 $waveNumber = $currentWave['wave_number'] ?? null;
@@ -161,7 +149,7 @@ if ($tanggal && $event) {
                   <span class="pay-tag"><i class="bi bi-calendar-event"></i> <?= esc($evDate) ?></span>
                   <span class="pay-tag"><i class="bi bi-clock"></i> <?= esc($evTime) ?></span>
                   
-                  <!-- ✅ WAVE INFO TAG -->
+                  <!--  WAVE INFO TAG -->
                   <?php if ($waveUsed): ?>
                   <span class="pay-tag wave-tag">
                     <i class="bi bi-speedometer2"></i> 
@@ -169,7 +157,7 @@ if ($tanggal && $event) {
                   </span>
                   <?php endif; ?>
                   
-                  <!-- ✅ PAYMENT METHOD TAG -->
+                  <!--  PAYMENT METHOD TAG -->
                   <span class="pay-tag payment-method-tag" style="background: <?= $paymentMethodInfo['color'] ?>20; border-color: <?= $paymentMethodInfo['color'] ?>40; color: <?= $paymentMethodInfo['color'] ?>;">
                     <i class="bi bi-<?= $paymentMethodInfo['icon'] ?>"></i> 
                     <?= esc($paymentMethodInfo['label']) ?>
@@ -218,7 +206,7 @@ if ($tanggal && $event) {
                         </div>
                       </div>
 
-                      <!-- ✅ WAVE INFO -->
+                      <!--  WAVE INFO -->
                       <?php if ($waveUsed): ?>
                       <div class="detail-group">
                         <label class="detail-label">Gelombang Pendaftaran</label>

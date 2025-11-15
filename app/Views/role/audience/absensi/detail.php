@@ -1,5 +1,5 @@
 <?php
-/** Detail Absensi Event - Enhanced for Audience */
+/** Detail Absensi Event - Enhanced for Audience with Fixed Event Info Display */
 $title = 'Detail Absensi Event';
 
 $e = $event ?? [];
@@ -40,6 +40,12 @@ $attendanceAt = $attendance_at ?? null;
 // Jika sudah absen, paksa nonaktifkan tombol
 if ($already) { $can = false; }
 
+// Convert BOTH to HYBRID for display
+$eventFormat = strtoupper($e['format'] ?? 'HYBRID');
+if ($eventFormat === 'BOTH') {
+    $eventFormat = 'HYBRID';
+}
+
 // Determine participation type display
 $participationDisplay = ucfirst($participationType);
 $participationBadgeClass = 'badge-primary';
@@ -47,6 +53,13 @@ if ($participationType === 'online') {
     $participationBadgeClass = 'badge-info';
 } elseif ($participationType === 'offline') {
     $participationBadgeClass = 'badge-success';
+}
+
+// Format event date time untuk display
+$eventDateTime = null;
+if ($e['event_date']) {
+    $eventDateTimeString = $e['event_date'] . ' ' . ($e['event_time'] ?? '00:00:00');
+    $eventDateTime = new DateTime($eventDateTimeString, new DateTimeZone('Asia/Jakarta'));
 }
 ?>
 
@@ -98,11 +111,11 @@ if ($participationType === 'online') {
             <div class="event-meta-abs">
               <div class="meta-item-abs">
                 <i class="bi bi-geo-alt"></i>
-                <span><?= esc($e['location'] ?? '-') ?></span>
+                <span><?= $participationType === 'online' ? 'Online Event' : esc($e['location'] ?? '-') ?></span>
               </div>
               <div class="meta-item-abs">
                 <i class="bi bi-diagram-3"></i>
-                <span><?= !empty($e['format']) ? strtoupper(esc($e['format'])) : 'N/A' ?></span>
+                <span><?= $eventFormat ?></span>
               </div>
               <div class="meta-item-abs">
                 <span class="badge-abs badge-warning">Audience</span>
@@ -174,6 +187,7 @@ if ($participationType === 'online') {
               <?php endif; ?>
               
               <div class="event-details-grid">
+                <!-- TANGGAL - Selalu ditampilkan -->
                 <div class="detail-item-abs">
                   <div class="detail-icon-abs">
                     <i class="bi bi-calendar3"></i>
@@ -181,19 +195,12 @@ if ($participationType === 'online') {
                   <div class="detail-content-abs">
                     <div class="detail-label-abs">Tanggal</div>
                     <div class="detail-value-abs">
-                      <?php if ($e['event_date']): ?>
-                        <?php 
-                        $eventDateTime = $e['event_date'] . ' ' . ($e['event_time'] ?? '00:00:00');
-                        $eventDt = new DateTime($eventDateTime, new DateTimeZone('Asia/Jakarta'));
-                        ?>
-                        <?= $eventDt->format('d M Y') ?>
-                      <?php else: ?>
-                        -
-                      <?php endif; ?>
+                      <?= $eventDateTime ? $eventDateTime->format('d M Y') : '-' ?>
                     </div>
                   </div>
                 </div>
 
+                <!-- WAKTU - Selalu ditampilkan -->
                 <div class="detail-item-abs">
                   <div class="detail-icon-abs">
                     <i class="bi bi-clock"></i>
@@ -201,15 +208,13 @@ if ($participationType === 'online') {
                   <div class="detail-content-abs">
                     <div class="detail-label-abs">Waktu</div>
                     <div class="detail-value-abs">
-                      <?php if ($e['event_date']): ?>
-                        <?= $eventDt->format('H:i') ?> WIB
-                      <?php else: ?>
-                        -
-                      <?php endif; ?>
+                      <?= $eventDateTime ? $eventDateTime->format('H:i') . ' WIB' : '-' ?>
                     </div>
                   </div>
                 </div>
 
+                <!-- LOKASI - Hanya untuk OFFLINE atau ALL -->
+                <?php if ($participationType === 'offline' || $participationType === 'all'): ?>
                 <div class="detail-item-abs">
                   <div class="detail-icon-abs">
                     <i class="bi bi-geo-alt-fill"></i>
@@ -219,8 +224,10 @@ if ($participationType === 'online') {
                     <div class="detail-value-abs"><?= esc($e['location'] ?? '-') ?></div>
                   </div>
                 </div>
+                <?php endif; ?>
 
-                <?php if (!empty($e['zoom_link']) && ($participationType === 'online' || $participationType === 'all')): ?>
+                <!-- LINK MEETING - Hanya untuk ONLINE atau ALL (jika ada zoom_link) -->
+                <?php if (($participationType === 'online' || $participationType === 'all') && !empty($e['zoom_link'])): ?>
                 <div class="detail-item-abs">
                   <div class="detail-icon-abs">
                     <i class="bi bi-camera-video"></i>
@@ -228,11 +235,42 @@ if ($participationType === 'online') {
                   <div class="detail-content-abs">
                     <div class="detail-label-abs">Link Meeting</div>
                     <div class="detail-value-abs">
-                      <a href="<?= esc($e['zoom_link']) ?>" target="_blank" class="link-abs">Buka Tautan</a>
+                      <a href="<?= esc($e['zoom_link']) ?>" target="_blank" class="link-abs">
+                        <i class="bi bi-box-arrow-up-right me-1"></i>Buka Tautan
+                      </a>
                     </div>
                   </div>
                 </div>
                 <?php endif; ?>
+
+                <!-- FORMAT EVENT - Optional info -->
+                <?php if (!empty($e['format'])): ?>
+                <div class="detail-item-abs">
+                  <div class="detail-icon-abs">
+                    <i class="bi bi-diagram-3"></i>
+                  </div>
+                  <div class="detail-content-abs">
+                    <div class="detail-label-abs">Format</div>
+                    <div class="detail-value-abs"><?= $eventFormat ?></div>
+                  </div>
+                </div>
+                <?php endif; ?>
+              </div>
+
+              <!-- PARTICIPATION TYPE INFO -->
+              <div class="participation-info-abs mt-3">
+                <div class="participation-banner-abs participation-<?= $participationType ?>">
+                  <i class="bi bi-info-circle"></i>
+                  <div>
+                    <?php if ($participationType === 'online'): ?>
+                      <strong>Partisipasi Online:</strong> Anda terdaftar untuk mengikuti event secara online. Gunakan link meeting di atas untuk bergabung.
+                    <?php elseif ($participationType === 'offline'): ?>
+                      <strong>Partisipasi Offline:</strong> Anda terdaftar untuk hadir secara fisik di lokasi. Pastikan datang tepat waktu.
+                    <?php else: ?>
+                      <strong>Partisipasi Hybrid:</strong> Anda dapat memilih untuk hadir secara online atau offline sesuai preferensi Anda.
+                    <?php endif; ?>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -842,6 +880,7 @@ document.addEventListener('DOMContentLoaded', function() {
     --gray-200: #e5e7eb;
     --gray-400: #9ca3af;
     --gray-600: #4b5563;
+    --gray-700: #374151;
     --gray-900: #111827;
   }
 
@@ -989,26 +1028,42 @@ document.addEventListener('DOMContentLoaded', function() {
     border: none;
     cursor: pointer;
     text-decoration: none;
+    transition: all 0.2s;
   }
   .btn-primary-abs {
     background: var(--primary-blue);
     color: var(--white);
   }
+  .btn-primary-abs:hover {
+    background: var(--dark-blue);
+  }
   .btn-success-abs {
     background: var(--success);
     color: var(--white);
+  }
+  .btn-success-abs:hover {
+    background: #059669;
   }
   .btn-danger-abs {
     background: var(--danger);
     color: var(--white);
   }
+  .btn-danger-abs:hover {
+    background: #dc2626;
+  }
   .btn-info-abs {
     background: var(--info);
     color: var(--white);
   }
+  .btn-info-abs:hover {
+    background: #0891b2;
+  }
   .btn-secondary-abs {
     background: var(--gray-200);
     color: var(--gray-700);
+  }
+  .btn-secondary-abs:hover {
+    background: var(--gray-300);
   }
   .btn-disabled-abs {
     background: var(--gray-100);
@@ -1128,6 +1183,55 @@ document.addEventListener('DOMContentLoaded', function() {
     color: var(--primary-blue);
     text-decoration: none;
     font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .link-abs:hover {
+    text-decoration: underline;
+  }
+
+  /* PARTICIPATION INFO BANNER */
+  .participation-info-abs {
+    border-top: 1px solid var(--gray-200);
+    padding-top: 1rem;
+  }
+  .participation-banner-abs {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+  }
+  .participation-banner-abs i {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+  }
+  .participation-online {
+    background: #cffafe;
+    color: #155e75;
+    border: 1px solid #06b6d4;
+  }
+  .participation-online i {
+    color: var(--info);
+  }
+  .participation-offline {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #10b981;
+  }
+  .participation-offline i {
+    color: var(--success);
+  }
+  .participation-all {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #2563eb;
+  }
+  .participation-all i {
+    color: var(--primary-blue);
   }
 
   /* PAYMENT INFO */

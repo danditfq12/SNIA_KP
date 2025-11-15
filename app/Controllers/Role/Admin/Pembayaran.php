@@ -6,20 +6,23 @@ use App\Controllers\BaseController;
 use App\Models\PembayaranModel;
 use App\Models\UserModel;
 use App\Models\VoucherModel;
+use App\Models\EventModel;
 use App\Models\EventRegistrationModel;
-use App\Services\NotificationService; // <-- ADD
+use App\Services\NotificationService;
 
 class Pembayaran extends BaseController
 {
     protected PembayaranModel $pembayaranModel;
     protected UserModel $userModel;
     protected VoucherModel $voucherModel;
+    protected EventModel $eventModel;
 
     public function __construct()
     {
         $this->pembayaranModel = new PembayaranModel();
         $this->userModel       = new UserModel();
         $this->voucherModel    = new VoucherModel();
+        $this->eventModel      = new EventModel();
     }
 
     public function index()
@@ -27,12 +30,63 @@ class Pembayaran extends BaseController
         // daftar pembayaran + info user & event
         $pembayarans = $this->pembayaranModel->getPembayaranWithUser();
 
-        // sisipkan info voucher (jika ada)
+        // ===== ENRICH WITH PRICING TIER INFO =====
         foreach ($pembayarans as &$row) {
+            // Sisipkan info voucher (jika ada)
             if (!empty($row['id_voucher'])) {
                 $row['voucher_info'] = $this->voucherModel->find($row['id_voucher']);
             } else {
                 $row['voucher_info'] = null;
+            }
+
+            // ===== GET EVENT & PRICING TIER =====
+            if (!empty($row['event_id'])) {
+                $event = $this->eventModel->find($row['event_id']);
+                
+                if ($event) {
+                    // Decode waves
+                    $waves = [];
+                    if (!empty($event['registration_waves'])) {
+                        $waves = is_string($event['registration_waves']) 
+                            ? json_decode($event['registration_waves'], true) 
+                            : $event['registration_waves'];
+                    }
+
+                    // Determine pricing tier based on payment date
+                    $paymentDate = strtotime($row['tanggal_bayar'] ?? 'now');
+                    $pricingTier = null;
+                    $originalAmount = (int)($row['jumlah'] ?? 0);
+                    $participationType = $row['participation_type'] ?? 'offline';
+
+                    if (!empty($waves) && is_array($waves)) {
+                        foreach ($waves as $index => $wave) {
+                            $start = strtotime($wave['registration_start'] ?? '');
+                            $end = strtotime($wave['registration_deadline'] ?? '');
+                            
+                            if ($paymentDate >= $start && $paymentDate <= $end) {
+                                // Found the wave!
+                                // EARLY BIRD HANYA UNTUK OFFLINE DI WAVE 1
+                                if ($index === 0 && $participationType === 'offline') {
+                                    $pricingTier = 'early_bird';
+                                } else {
+                                    // Online tetap wave 1/2/3, tidak ada early bird
+                                    $pricingTier = ($index === 1) ? 'regular' : (($index === 2) ? 'on_site' : 'wave_1');
+                                }
+                                
+                                // Get original price from wave
+                                $role = $row['role'] ?? 'audience';
+                                
+                                $feeKey = $role . '_fee_' . $participationType;
+                                $originalAmount = (int)($wave[$feeKey] ?? $row['jumlah']);
+                                
+                                break;
+                            }
+                        }
+                    }
+
+                    $row['pricing_tier'] = $pricingTier;
+                    $row['original_amount'] = $originalAmount;
+                }
             }
         }
         unset($row);
@@ -159,6 +213,58 @@ class Pembayaran extends BaseController
             return redirect()->to('admin/pembayaran')->with('error', 'Pembayaran tidak ditemukan.');
         }
 
+        // ===== GET PRICING TIER INFO =====
+        if (!empty($pembayaran['event_id'])) {
+            $event = $this->eventModel->find($pembayaran['event_id']);
+            
+            if ($event) {
+                // Decode waves
+                $waves = [];
+                if (!empty($event['registration_waves'])) {
+                    $waves = is_string($event['registration_waves']) 
+                        ? json_decode($event['registration_waves'], true) 
+                        : $event['registration_waves'];
+                }
+
+                // Determine pricing tier based on payment date
+                $paymentDate = strtotime($pembayaran['tanggal_bayar'] ?? 'now');
+                $pricingTier = null;
+                $originalAmount = (int)($pembayaran['jumlah'] ?? 0);
+                $participationType = $pembayaran['participation_type'] ?? 'offline';
+
+                if (!empty($waves) && is_array($waves)) {
+                    foreach ($waves as $index => $wave) {
+                        $start = strtotime($wave['registration_start'] ?? '');
+                        $end = strtotime($wave['registration_deadline'] ?? '');
+                        
+                        if ($paymentDate >= $start && $paymentDate <= $end) {
+                            // Found the wave!
+                            // EARLY BIRD HANYA UNTUK OFFLINE DI WAVE 1
+                            if ($index === 0 && $participationType === 'offline') {
+                                $pricingTier = 'early_bird';
+                            } else {
+                                // Online tetap wave 1/2/3, tidak ada early bird
+                                $pricingTier = ($index === 1) ? 'regular' : (($index === 2) ? 'on_site' : 'wave_1');
+                            }
+                            
+                            // Get original price from wave
+                            $role = $pembayaran['role'] ?? 'audience';
+                            
+                            $feeKey = $role . '_fee_' . $participationType;
+                            $originalAmount = (int)($wave[$feeKey] ?? $pembayaran['jumlah']);
+                            
+                            break;
+                        }
+                    }
+                }
+
+                $pembayaran['pricing_tier'] = $pricingTier;
+                $pembayaran['original_amount'] = $originalAmount;
+                $pembayaran['event_title'] = $event['title'];
+                $pembayaran['event_date'] = $event['event_date'];
+            }
+        }
+
         $voucher    = !empty($pembayaran['id_voucher']) ? $this->voucherModel->find($pembayaran['id_voucher']) : null;
         $verifiedBy = !empty($pembayaran['verified_by']) ? $this->userModel->find($pembayaran['verified_by']) : null;
 
@@ -186,7 +292,6 @@ class Pembayaran extends BaseController
         return $this->response->download($file, null)->setFileName($pembayaran['bukti_bayar']);
     }
 
-    // FIXED: Method viewBukti yang diperbaiki
     public function viewBukti(int $id_pembayaran)
     {
         $pembayaran = $this->pembayaranModel->find($id_pembayaran);
@@ -237,7 +342,6 @@ class Pembayaran extends BaseController
         return $this->response->setBody(file_get_contents($file));
     }
 
-    // TAMBAHAN: Method untuk debug lokasi file
     public function debugBukti(int $id_pembayaran)
     {
         $pembayaran = $this->pembayaranModel->find($id_pembayaran);
@@ -272,7 +376,6 @@ class Pembayaran extends BaseController
         return $this->response->setJSON($debugInfo);
     }
 
-    // TAMBAHAN: Method untuk mengecek ketersediaan bukti
     public function checkBukti(int $id_pembayaran)
     {
         $pembayaran = $this->pembayaranModel->find($id_pembayaran);
@@ -306,16 +409,52 @@ class Pembayaran extends BaseController
 
         $out = fopen('php://output', 'w');
         fputcsv($out, [
-            'ID Pembayaran','Nama User','Email','Role','Metode',
-            'Jumlah','Status','Tanggal Bayar','Tanggal Verifikasi','Keterangan'
+            'ID Pembayaran','Nama User','Email','Role','Event','Pricing Tier',
+            'Metode','Jumlah','Status','Tanggal Bayar','Tanggal Verifikasi','Keterangan'
         ]);
 
         foreach ($rows as $r) {
+            // Get pricing tier
+            $pricingTier = '-';
+            if (!empty($r['event_id'])) {
+                $event = $this->eventModel->find($r['event_id']);
+                if ($event) {
+                    $waves = [];
+                    if (!empty($event['registration_waves'])) {
+                        $waves = is_string($event['registration_waves']) 
+                            ? json_decode($event['registration_waves'], true) 
+                            : $event['registration_waves'];
+                    }
+
+                    $paymentDate = strtotime($r['tanggal_bayar'] ?? 'now');
+                    $participationType = $r['participation_type'] ?? 'offline';
+                    
+                    if (!empty($waves) && is_array($waves)) {
+                        foreach ($waves as $index => $wave) {
+                            $start = strtotime($wave['registration_start'] ?? '');
+                            $end = strtotime($wave['registration_deadline'] ?? '');
+                            
+                            if ($paymentDate >= $start && $paymentDate <= $end) {
+                                // EARLY BIRD HANYA UNTUK OFFLINE DI WAVE 1
+                                if ($index === 0 && $participationType === 'offline') {
+                                    $pricingTier = 'Early Bird';
+                                } else {
+                                    $pricingTier = ($index === 1) ? 'Wave 2 (Regular)' : (($index === 2) ? 'Wave 3 (On-Site)' : 'Wave 1');
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             fputcsv($out, [
                 $r['id_pembayaran'],
                 $r['nama_lengkap'],
                 $r['email'],
                 ucfirst((string) $r['role']),
+                $r['event_title'] ?? '-',
+                $pricingTier,
                 $r['metode'],
                 $r['jumlah'],
                 ucfirst((string) $r['status']),

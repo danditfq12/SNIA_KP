@@ -1,25 +1,39 @@
 <?php
 // ===== Variable Initialization =====
-$title        = $title ?? 'Detail Pembayaran';
-$pembayaran   = $pembayaran ?? [];
-$voucher      = $voucher   ?? null;
-$verified_by  = $verified_by ?? null;
+$title = $title ?? 'Detail Pembayaran';
+$pembayaran = $pembayaran ?? [];
+$voucher = $voucher ?? null;
+$verified_by = $verified_by ?? null;
 
-$amount   = (int)($pembayaran['jumlah'] ?? 0);
-$status   = $pembayaran['status'] ?? 'pending';
+$amount = (int)($pembayaran['jumlah'] ?? 0);
+$status = $pembayaran['status'] ?? 'pending';
 
-$statusClass = match($status){
-  'pending'  => 'status-pending',
+// ===== Pricing Tier Information =====
+$pricingTier = $pembayaran['pricing_tier'] ?? null;
+$originalAmount = (int)($pembayaran['original_amount'] ?? $amount);
+
+// ===== Status Mapping =====
+$statusClass = match($status) {
+  'pending' => 'status-pending',
   'verified' => 'status-verified',
   'rejected' => 'status-rejected',
-  default    => 'status-default'
+  default => 'status-default'
 };
 
-$statusText = match($status){
-  'pending'  => 'Pending',
+$statusText = match($status) {
+  'pending' => 'Pending',
   'verified' => 'Terverifikasi',
   'rejected' => 'Ditolak',
-  default    => 'Unknown'
+  default => 'Unknown'
+};
+
+// ===== Pricing Tier Display =====
+$pricingTierDisplay = match($pricingTier) {
+  'early_bird' => ['label' => 'Early Bird (Offline)', 'class' => 'tier-early-bird', 'icon' => 'lightning-charge'],
+  'wave_1' => ['label' => 'Gelombang 1 (Online)', 'class' => 'tier-wave1', 'icon' => 'tag'],
+  'regular' => ['label' => 'Gelombang 2', 'class' => 'tier-regular', 'icon' => 'tag'],
+  'on_site' => ['label' => 'Gelombang 3', 'class' => 'tier-onsite', 'icon' => 'geo-alt'],
+  default => ['label' => 'Standard', 'class' => 'tier-standard', 'icon' => 'cash']
 };
 ?>
 
@@ -77,9 +91,6 @@ $statusText = match($status){
                         <?= ucfirst($pembayaran['participation_type']) ?>
                       </span>
                     <?php endif; ?>
-                    <span class="status-user-badge <?= ($pembayaran['status_user'] ?? 'aktif') === 'aktif' ? 'user-active' : 'user-inactive' ?>">
-                      <?= ucfirst($pembayaran['status_user'] ?? 'aktif') ?>
-                    </span>
                   </div>
                 </div>
               </div>
@@ -120,6 +131,23 @@ $statusText = match($status){
                 <span class="payment-status <?= $statusClass ?>"><?= $statusText ?></span>
               </div>
 
+              <!-- Pricing Tier Badge -->
+              <?php if ($pricingTier): ?>
+                <div class="pricing-tier-section">
+                  <div class="pricing-tier-badge <?= $pricingTierDisplay['class'] ?>">
+                    <i class="bi bi-<?= $pricingTierDisplay['icon'] ?> me-2"></i>
+                    <?= $pricingTierDisplay['label'] ?>
+                  </div>
+                  
+                  <?php if ($pricingTier === 'early_bird' && $originalAmount > $amount): ?>
+                    <div class="early-bird-savings">
+                      <i class="bi bi-piggy-bank me-2"></i>
+                      Hemat: Rp <?= number_format($originalAmount - $amount, 0, ',', '.') ?>
+                    </div>
+                  <?php endif; ?>
+                </div>
+              <?php endif; ?>
+
               <!-- Payment Details Grid -->
               <div class="details-grid">
                 <div class="detail-item">
@@ -130,12 +158,29 @@ $statusText = match($status){
                   <label class="detail-label">Metode</label>
                   <div class="detail-value"><?= esc($pembayaran['metode'] ?? '-') ?></div>
                 </div>
+                
+                <?php if ($pricingTier && $originalAmount != $amount): ?>
+                  <div class="detail-item">
+                    <label class="detail-label">Harga Asli</label>
+                    <div class="detail-value original-amount">
+                      <del>Rp <?= number_format($originalAmount, 0, ',', '.') ?></del>
+                    </div>
+                  </div>
+                  <div class="detail-item">
+                    <label class="detail-label">Diskon <?= $pricingTierDisplay['label'] ?></label>
+                    <div class="detail-value discount-amount">
+                      -Rp <?= number_format($originalAmount - $amount, 0, ',', '.') ?>
+                    </div>
+                  </div>
+                <?php endif; ?>
+                
                 <div class="detail-item">
                   <label class="detail-label">Tanggal Bayar</label>
                   <div class="detail-value">
                     <?= !empty($pembayaran['tanggal_bayar']) ? date('d/m/Y H:i', strtotime($pembayaran['tanggal_bayar'])) : '-' ?>
                   </div>
                 </div>
+                
                 <?php if (!empty($pembayaran['verified_at'])): ?>
                 <div class="detail-item">
                   <label class="detail-label">Tanggal Verifikasi</label>
@@ -143,25 +188,90 @@ $statusText = match($status){
                 </div>
                 <?php endif; ?>
 
-                <!-- Discount Information -->
-                <?php if (isset($pembayaran['original_amount'], $pembayaran['jumlah']) && (int)$pembayaran['original_amount'] != (int)$pembayaran['jumlah']): ?>
-                  <div class="detail-item">
-                    <label class="detail-label">Harga Asli</label>
-                    <div class="detail-value original-amount">
-                      <del>Rp <?= number_format((int)$pembayaran['original_amount'], 0, ',', '.') ?></del>
-                    </div>
+                <?php if (!empty($pembayaran['midtrans_transaction_id'])): ?>
+                <div class="detail-item full-width">
+                  <label class="detail-label">Transaction ID</label>
+                  <div class="detail-value transaction-id">
+                    <?= esc($pembayaran['midtrans_transaction_id']) ?>
+                    <?php if (!empty($pembayaran['auto_verified'])): ?>
+                      <span class="auto-badge">AUTO</span>
+                    <?php endif; ?>
                   </div>
-                  <div class="detail-item">
-                    <label class="detail-label">Diskon</label>
-                    <div class="detail-value discount-amount">
-                      -Rp <?= number_format((int)($pembayaran['discount_amount'] ?? 0), 0, ',', '.') ?>
-                    </div>
-                  </div>
+                </div>
                 <?php endif; ?>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- Pricing Breakdown Card -->
+        <?php if ($pricingTier): ?>
+        <div class="col-12">
+          <div class="pricing-breakdown-card">
+            <div class="pricing-breakdown-header">
+              <h5 class="pricing-breakdown-title">
+                <i class="bi bi-receipt me-2"></i>Rincian Harga
+              </h5>
+            </div>
+            <div class="pricing-breakdown-body">
+              <div class="breakdown-items">
+                <div class="breakdown-item">
+                  <span class="breakdown-label">Harga Event (<?= $pricingTierDisplay['label'] ?>)</span>
+                  <span class="breakdown-value">Rp <?= number_format($originalAmount, 0, ',', '.') ?></span>
+                </div>
+                
+                <?php if ($pricingTier === 'early_bird' && $originalAmount > $amount): ?>
+                  <div class="breakdown-item discount">
+                    <span class="breakdown-label">
+                      <i class="bi bi-lightning-charge me-1"></i>Diskon Early Bird
+                    </span>
+                    <span class="breakdown-value">-Rp <?= number_format($originalAmount - $amount, 0, ',', '.') ?></span>
+                  </div>
+                <?php endif; ?>
+                
+                <?php if ($voucher): ?>
+                  <div class="breakdown-item discount">
+                    <span class="breakdown-label">
+                      <i class="bi bi-ticket-perforated me-1"></i>Voucher: <?= esc($voucher['kode_voucher']) ?>
+                    </span>
+                    <span class="breakdown-value">
+                      -Rp <?= number_format((int)($pembayaran['discount_amount'] ?? 0), 0, ',', '.') ?>
+                    </span>
+                  </div>
+                <?php endif; ?>
+                
+                <div class="breakdown-divider"></div>
+                
+                <div class="breakdown-item total">
+                  <span class="breakdown-label">Total Pembayaran</span>
+                  <span class="breakdown-value">Rp <?= number_format($amount, 0, ',', '.') ?></span>
+                </div>
+              </div>
+              
+              <!-- Pricing Tier Info -->
+              <div class="tier-info-box">
+                <div class="tier-info-icon">
+                  <i class="bi bi-<?= $pricingTierDisplay['icon'] ?>"></i>
+                </div>
+                <div class="tier-info-content">
+                  <div class="tier-info-title">Kategori Harga: <?= $pricingTierDisplay['label'] ?></div>
+                  <div class="tier-info-description">
+                    <?php
+                    echo match($pricingTier) {
+                      'early_bird' => 'User mendaftar offline dengan harga early bird dan mendapat diskon spesial (Gelombang 1)',
+                      'wave_1' => 'User mendaftar online di Gelombang 1 (gelombang pertama)',
+                      'regular' => 'User mendaftar di Gelombang 2 dengan harga regular',
+                      'on_site' => 'User mendaftar di Gelombang 3 (on-site/hari H)',
+                      default => 'User mendaftar dengan harga standar'
+                    };
+                    ?>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Event Information -->
         <?php if (!empty($pembayaran['event_title'])): ?>
@@ -173,24 +283,14 @@ $statusText = match($status){
               </div>
               <div class="event-details">
                 <h6 class="event-title"><?= esc($pembayaran['event_title']) ?></h6>
-                <?php if (!empty($pembayaran['event_date'])): ?>
-                  <div class="event-date"><?= date('d M Y', strtotime($pembayaran['event_date'])) ?></div>
-                <?php endif; ?>
               </div>
             </div>
-            <?php if (!empty($pembayaran['event_id'])): ?>
-              <div class="event-action">
-                <a class="btn btn-outline-primary" href="<?= site_url('admin/event/detail/'.$pembayaran['event_id']) ?>">
-                  <i class="bi bi-box-arrow-up-right me-2"></i>Lihat Event
-                </a>
-              </div>
-            <?php endif; ?>
           </div>
         </div>
         <?php endif; ?>
 
         <!-- Voucher Information -->
-        <?php if ($voucher): ?>
+        <?php if ($voucher && $pricingTier !== 'early_bird'): ?>
         <div class="col-12">
           <div class="voucher-card">
             <div class="voucher-content">
@@ -279,7 +379,12 @@ $statusText = match($status){
                       <?= !empty($pembayaran['tanggal_bayar']) ? date('d M Y, H:i', strtotime($pembayaran['tanggal_bayar'])) : 'N/A' ?>
                     </div>
                     <div class="timeline-title">Pembayaran dibuat</div>
-                    <div class="timeline-description">User membuat pembayaran dan mengupload bukti</div>
+                    <div class="timeline-description">
+                      User membuat pembayaran 
+                      <?php if ($pricingTier): ?>
+                        dengan harga <strong><?= $pricingTierDisplay['label'] ?></strong>
+                      <?php endif; ?>
+                    </div>
                   </div>
                 </div>
 
@@ -377,6 +482,16 @@ $statusText = match($status){
                 <span class="summary-label">Status</span>
                 <span class="payment-status <?= $statusClass ?>"><?= $statusText ?></span>
               </div>
+              
+              <?php if ($pricingTier): ?>
+              <div class="summary-item">
+                <span class="summary-label">Tipe Harga</span>
+                <span class="pricing-tier-badge-small <?= $pricingTierDisplay['class'] ?>">
+                  <?= $pricingTierDisplay['label'] ?>
+                </span>
+              </div>
+              <?php endif; ?>
+              
               <div class="summary-item">
                 <span class="summary-label">Total Bayar</span>
                 <span class="summary-value">Rp <?= number_format($amount, 0, ',', '.') ?></span>
@@ -425,12 +540,20 @@ $statusText = match($status){
                 </div>
 
                 <div class="info-column">
+                  <?php if ($pricingTier): ?>
+                  <div class="info-row">
+                    <span class="info-label">Pricing Tier</span>
+                    <span class="info-value"><?= esc($pricingTier) ?></span>
+                  </div>
+                  <?php endif; ?>
+                  
                   <?php if (!empty($pembayaran['id_voucher'])): ?>
                   <div class="info-row">
                     <span class="info-label">Voucher ID</span>
                     <span class="info-value"><?= esc($pembayaran['id_voucher']) ?></span>
                   </div>
                   <?php endif; ?>
+                  
                   <?php if (!empty($pembayaran['auto_verified'])): ?>
                   <div class="info-row">
                     <span class="info-label">Auto Verified</span>
@@ -439,6 +562,7 @@ $statusText = match($status){
                     </span>
                   </div>
                   <?php endif; ?>
+                  
                   <div class="info-row">
                     <span class="info-label">Last Updated</span>
                     <span class="info-value">
@@ -459,8 +583,7 @@ $statusText = match($status){
           </div>
         </div>
 
-      </div><!-- row -->
-
+      </div>
     </div>
   </main>
 </div>
@@ -507,9 +630,6 @@ $statusText = match($status){
 <?= $this->include('partials/footer') ?>
 
 <style>
-/* ========================================
-   CSS VARIABLES & CONFIGURATION
-   ======================================== */
 :root {
   --primary-color: #2563eb;
   --success-color: #10b981;
@@ -517,34 +637,23 @@ $statusText = match($status){
   --danger-color: #ef4444;
   --info-color: #06b6d4;
   --secondary-color: #6b7280;
-  
   --light-bg: #f8fafc;
   --border-color: #e2e8f0;
   --text-primary: #1e293b;
   --text-secondary: #64748b;
-  
   --border-radius: 12px;
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
 }
 
-/* ========================================
-   GLOBAL STYLES
-   ======================================== */
 body {
   background: linear-gradient(135deg, var(--light-bg) 0%, #e2e8f0 100%);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   color: var(--text-primary);
 }
 
-#content main > .container-fluid {
-  margin-top: 0;
-}
-
-/* ========================================
-   HEADER SECTION
-   ======================================== */
+/* Header Section */
 .header-section {
   background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
   color: white;
@@ -574,28 +683,15 @@ body {
 }
 
 .header-subtitle {
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255,255,255,0.9);
   font-size: 1.1rem;
   font-weight: 400;
 }
 
-.header-actions .btn {
-  font-weight: 600;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-/* ========================================
-   CARD STYLES
-   ======================================== */
-.info-card,
-.event-info-card,
-.voucher-card,
-.features-card,
-.timeline-card,
-.action-card,
-.summary-card,
-.additional-info-card {
+/* Card Styles */
+.info-card, .event-info-card, .voucher-card, .features-card,
+.timeline-card, .action-card, .summary-card, .additional-info-card,
+.pricing-breakdown-card {
   background: white;
   border-radius: var(--border-radius);
   border: 1px solid var(--border-color);
@@ -604,54 +700,32 @@ body {
   transition: all 0.3s ease;
 }
 
-.info-card:hover,
-.timeline-card:hover,
-.features-card:hover {
+.info-card:hover, .timeline-card:hover, .features-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 
-/* ========================================
-   CARD HEADERS
-   ======================================== */
-.info-card-header,
-.features-header,
-.timeline-header,
-.action-header,
-.summary-header,
-.additional-info-header {
+.info-card-header, .features-header, .timeline-header, .action-header,
+.summary-header, .additional-info-header, .pricing-breakdown-header {
   background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
   padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--border-color);
 }
 
-.info-card-title,
-.features-title,
-.timeline-title,
-.action-title,
-.summary-title,
-.additional-info-title {
+.info-card-title, .features-title, .timeline-title, .action-title,
+.summary-title, .additional-info-title, .pricing-breakdown-title {
   color: var(--text-primary);
   font-weight: 700;
   font-size: 1rem;
   margin: 0;
 }
 
-/* ========================================
-   CARD BODIES
-   ======================================== */
-.info-card-body,
-.features-body,
-.timeline-body,
-.action-body,
-.summary-body,
-.additional-info-body {
+.info-card-body, .features-body, .timeline-body, .action-body,
+.summary-body, .additional-info-body, .pricing-breakdown-body {
   padding: 1.5rem;
 }
 
-/* ========================================
-   USER PROFILE SECTION
-   ======================================== */
+/* User Profile */
 .user-profile {
   display: flex;
   align-items: center;
@@ -697,9 +771,7 @@ body {
   gap: 0.5rem;
 }
 
-.role-badge,
-.participation-badge,
-.status-user-badge {
+.role-badge, .participation-badge {
   padding: 0.25rem 0.75rem;
   border-radius: 6px;
   font-size: 0.75rem;
@@ -724,19 +796,7 @@ body {
   border: 1px solid var(--border-color);
 }
 
-.user-active {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.user-inactive {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-/* ========================================
-   PAYMENT SUMMARY
-   ======================================== */
+/* Payment Summary */
 .payment-summary {
   text-align: center;
   margin-bottom: 1.5rem;
@@ -779,9 +839,76 @@ body {
   color: #374151;
 }
 
-/* ========================================
-   DETAILS GRID
-   ======================================== */
+/* Pricing Tier Styles */
+.pricing-tier-section {
+  text-align: center;
+  margin: 1rem 0 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.pricing-tier-badge {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border-radius: 50px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  margin-bottom: 0.75rem;
+}
+
+.tier-early-bird {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #78350f;
+  border: 2px solid #fbbf24;
+}
+
+.tier-wave1 {
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+  color: #4c1d95;
+  border: 2px solid #a78bfa;
+}
+
+.tier-regular {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  color: #1e3a8a;
+  border: 2px solid #60a5fa;
+}
+
+.tier-onsite {
+  background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+  color: #831843;
+  border: 2px solid #f472b6;
+}
+
+.tier-standard {
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+  color: #1e293b;
+  border: 2px solid #94a3b8;
+}
+
+.pricing-tier-badge-small {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.early-bird-savings {
+  color: var(--success-color);
+  font-weight: 700;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+/* Details Grid */
 .details-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -791,6 +918,10 @@ body {
 .detail-item {
   display: flex;
   flex-direction: column;
+}
+
+.detail-item.full-width {
+  grid-column: 1 / -1;
 }
 
 .detail-label {
@@ -816,81 +947,154 @@ body {
   color: var(--success-color);
 }
 
-/* ========================================
-   EVENT INFO CARD
-   ======================================== */
-.event-info-card {
-  padding: 1.5rem;
+.detail-value.transaction-id {
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  background: #f8fafc;
+  padding: 0.5rem;
+  border-radius: 6px;
+  word-break: break-all;
+}
+
+.auto-badge {
+  display: inline-block;
+  background: rgba(16,185,129,0.1);
+  color: var(--success-color);
+  border: 1px solid rgba(16,185,129,0.2);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-left: 0.25rem;
+}
+
+/* Pricing Breakdown */
+.breakdown-items {
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.breakdown-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
+  padding: 0.75rem 0;
 }
 
-.event-content {
+.breakdown-item.discount {
+  color: var(--success-color);
+}
+
+.breakdown-item.total {
+  padding-top: 1rem;
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+.breakdown-label {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.breakdown-value {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.breakdown-item.discount .breakdown-value {
+  color: var(--success-color);
+}
+
+.breakdown-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 0.5rem 0;
+}
+
+.tier-info-box {
   display: flex;
   align-items: center;
   gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(145deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
 }
 
-.event-icon {
+.tier-info-icon {
   width: 3rem;
   height: 3rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--primary-color), #1e40af);
+  background: var(--success-color);
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
+  flex-shrink: 0;
 }
 
-.event-title {
-  color: var(--text-primary);
+.tier-info-content {
+  flex: 1;
+}
+
+.tier-info-title {
   font-weight: 700;
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
 }
 
-.event-date {
+.tier-info-description {
   color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
-/* ========================================
-   VOUCHER CARD
-   ======================================== */
-.voucher-card {
-  background: linear-gradient(145deg, #f0fdf4 0%, #ecfdf5 100%);
-  border-color: #bbf7d0;
+/* Event & Voucher Cards */
+.event-info-card, .voucher-card {
   padding: 1.5rem;
+}
+
+.event-content, .voucher-content {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
   gap: 1rem;
 }
 
-.voucher-content {
+.event-icon, .voucher-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary-color), var(--info-color));
   display: flex;
   align-items: center;
-  gap: 1rem;
+  justify-content: center;
+  color: white;
+  font-size: 1.5rem;
+  flex-shrink: 0;
 }
 
 .voucher-icon {
-  color: var(--success-color);
-  font-size: 1.5rem;
+  background: linear-gradient(135deg, var(--warning-color), #f97316);
 }
 
-.voucher-title {
-  color: var(--text-primary);
+.event-title, .voucher-title {
   font-weight: 700;
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
 }
 
 .voucher-value {
   color: var(--text-secondary);
   font-size: 0.875rem;
+}
+
+.voucher-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .voucher-discount {
@@ -907,65 +1111,64 @@ body {
 .discount-value {
   color: var(--success-color);
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 1.125rem;
 }
 
-/* ========================================
-   FEATURES GRID
-   ======================================== */
+/* Features Grid */
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 1rem;
   margin-bottom: 1rem;
 }
 
 .feature-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
+  gap: 0.5rem;
+  padding: 1rem;
   background: #f8fafc;
-  border: 1px solid var(--border-color);
   border-radius: 8px;
+  border: 1px solid var(--border-color);
 }
 
 .feature-icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 6px;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 1rem;
+  font-size: 1.25rem;
 }
 
 .feature-name {
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  text-align: center;
 }
 
 .features-unlock-date {
+  text-align: center;
   color: var(--text-secondary);
   font-size: 0.75rem;
-  text-align: center;
-  padding-top: 1rem;
+  padding-top: 0.5rem;
   border-top: 1px solid var(--border-color);
 }
 
-/* ========================================
-   TIMELINE
-   ======================================== */
+/* Timeline */
 .timeline {
   position: relative;
+  padding-left: 2rem;
 }
 
 .timeline::before {
   content: '';
   position: absolute;
-  left: 1rem;
+  left: 0.5rem;
   top: 0;
   bottom: 0;
   width: 2px;
@@ -974,22 +1177,21 @@ body {
 
 .timeline-item {
   position: relative;
-  padding-left: 3rem;
-  margin-bottom: 2rem;
+  padding-bottom: 2rem;
 }
 
 .timeline-item:last-child {
-  margin-bottom: 0;
+  padding-bottom: 0;
 }
 
 .timeline-marker {
   position: absolute;
-  left: 0.5rem;
-  top: 0.25rem;
+  left: -1.5rem;
+  top: 0;
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
-  border: 2px solid white;
+  border: 3px solid white;
   box-shadow: 0 0 0 2px var(--border-color);
 }
 
@@ -1001,9 +1203,8 @@ body {
 }
 
 .timeline-title {
-  color: var(--text-primary);
   font-weight: 700;
-  font-size: 0.875rem;
+  color: var(--text-primary);
   margin-bottom: 0.25rem;
 }
 
@@ -1012,9 +1213,7 @@ body {
   font-size: 0.875rem;
 }
 
-/* ========================================
-   ACTION PANEL
-   ======================================== */
+/* Action Buttons */
 .action-buttons {
   display: flex;
   flex-direction: column;
@@ -1029,16 +1228,9 @@ body {
 .secondary-actions {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
 }
 
-/* ========================================
-   SUMMARY CARD
-   ======================================== */
-.summary-card {
-  margin-top: 1rem;
-}
-
+/* Summary Card */
 .summary-item {
   display: flex;
   justify-content: space-between;
@@ -1060,15 +1252,12 @@ body {
 .summary-value {
   color: var(--text-primary);
   font-weight: 600;
-  font-size: 0.875rem;
 }
 
-/* ========================================
-   ADDITIONAL INFO
-   ======================================== */
+/* Additional Info */
 .info-columns {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 2rem;
   margin-bottom: 1.5rem;
 }
@@ -1088,6 +1277,7 @@ body {
 .info-label {
   color: var(--text-secondary);
   font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .info-value {
@@ -1102,85 +1292,23 @@ body {
 }
 
 .notes-label {
-  color: var(--text-primary);
-  font-weight: 600;
+  color: var(--text-secondary);
   font-size: 0.875rem;
-  margin-bottom: 0.5rem;
+  font-weight: 600;
   display: block;
+  margin-bottom: 0.5rem;
 }
 
 .notes-content {
   background: #f8fafc;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
   padding: 1rem;
+  border-radius: 8px;
   color: var(--text-primary);
   font-size: 0.875rem;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
-/* ========================================
-   MODAL STYLES
-   ======================================== */
-.modal-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%);
-  color: white;
-  border-bottom: none;
-}
-
-.modal-title {
-  font-weight: 700;
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-/* ========================================
-   BUTTON STYLES
-   ======================================== */
-.btn {
-  font-weight: 600;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-.btn:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-
-.btn-lg {
-  padding: 0.75rem 1.5rem;
-  font-size: 1.1rem;
-}
-
-/* ========================================
-   UTILITY CLASSES
-   ======================================== */
-.text-primary { 
-  color: var(--primary-color) !important; 
-}
-
-.text-success { 
-  color: var(--success-color) !important; 
-}
-
-.text-warning { 
-  color: var(--warning-color) !important; 
-}
-
-.text-danger { 
-  color: var(--danger-color) !important; 
-}
-
-.text-info { 
-  color: var(--info-color) !important; 
-}
-
-/* ========================================
-   RESPONSIVE DESIGN
-   ======================================== */
+/* Responsive */
 @media (max-width: 768px) {
   .header-section {
     padding: 1.5rem;
@@ -1199,69 +1327,49 @@ body {
     grid-template-columns: 1fr;
   }
   
-  .info-columns {
-    grid-template-columns: 1fr;
-    gap: 1rem;
+  .breakdown-items {
+    padding: 0.75rem;
   }
   
-  .event-info-card,
-  .voucher-card {
+  .tier-info-box {
     flex-direction: column;
     text-align: center;
   }
   
   .features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .info-columns {
     grid-template-columns: 1fr;
   }
   
-  .timeline::before {
-    left: 0.75rem;
-  }
-  
-  .timeline-item {
-    padding-left: 2.5rem;
-  }
-  
-  .timeline-marker {
-    left: 0.25rem;
-  }
-}
-
-@media (max-width: 576px) {
-  .user-profile {
+  .voucher-card {
     flex-direction: column;
-    text-align: center;
+    gap: 1rem;
   }
   
-  .user-badges {
-    justify-content: center;
+  .voucher-discount {
+    text-align: center;
   }
 }
 </style>
 
 <script>
-// ========================================
-// PAYMENT DETAIL MANAGEMENT SCRIPT
-// ========================================
-
 (function() {
   'use strict';
 
-  // ===== DOM Selectors =====
   const $ = (selector, context = document) => context.querySelector(selector);
   const $$ = (selector, context = document) => Array.from(context.querySelectorAll(selector));
 
-  // ===== Modal Elements =====
   const verifikasiModal = new bootstrap.Modal($('#verifikasiModal'));
 
-  // ===== Verification Modal Functionality =====
-  $$('[data-open-verif]').forEach(button => {
+  $('[data-open-verif]').forEach(button => {
     button.addEventListener('click', () => {
       const paymentId = button.getAttribute('data-id');
       const status = button.getAttribute('data-status');
       const isVerification = status === 'verified';
 
-      // Update modal title
       const title = $('#verifikasiTitle');
       if (title) {
         title.innerHTML = isVerification 
@@ -1269,19 +1377,12 @@ body {
           : '<i class="bi bi-x-circle me-2"></i>Tolak Pembayaran';
       }
 
-      // Set hidden status field
       const statusField = $('#verifikasiStatus');
-      if (statusField) {
-        statusField.value = status;
-      }
+      if (statusField) statusField.value = status;
 
-      // Update form action
       const form = $('#verifikasiForm');
-      if (form) {
-        form.action = `<?= site_url('admin/pembayaran/verifikasi') ?>/${paymentId}`;
-      }
+      if (form) form.action = `<?= site_url('admin/pembayaran/verifikasi') ?>/${paymentId}`;
 
-      // Update submit button
       const submitButton = $('#verifikasiSubmit');
       if (submitButton) {
         submitButton.className = `btn btn-${isVerification ? 'success' : 'danger'}`;
@@ -1292,7 +1393,6 @@ body {
     });
   });
 
-  // ===== Notification Functionality =====
   const notifyButton = $('#btnNotify');
   if (notifyButton) {
     notifyButton.addEventListener('click', () => {
@@ -1307,7 +1407,6 @@ body {
         cancelButtonColor: '#6b7280'
       }).then(result => {
         if (result.isConfirmed) {
-          // TODO: Implement notification sending
           Swal.fire({
             icon: 'success',
             title: 'Berhasil',
@@ -1320,7 +1419,6 @@ body {
     });
   }
 
-  // ===== Add Note Functionality =====
   const addNoteButton = $('#btnAddNote');
   if (addNoteButton) {
     addNoteButton.addEventListener('click', async () => {
@@ -1334,14 +1432,11 @@ body {
         confirmButtonColor: '#2563eb',
         cancelButtonColor: '#6b7280',
         inputValidator: (value) => {
-          if (!value) {
-            return 'Catatan tidak boleh kosong';
-          }
+          if (!value) return 'Catatan tidak boleh kosong';
         }
       });
 
       if (note) {
-        // TODO: Implement note saving
         Swal.fire({
           icon: 'success',
           title: 'Catatan Tersimpan',
@@ -1353,7 +1448,6 @@ body {
     });
   }
 
-  // ===== Form Submission Enhancement =====
   const verifikasiForm = $('#verifikasiForm');
   if (verifikasiForm) {
     verifikasiForm.addEventListener('submit', (e) => {
@@ -1363,7 +1457,6 @@ body {
         submitButton.innerHTML = '<i class="bi bi-arrow-repeat me-2"></i>Memproses...';
         submitButton.disabled = true;
 
-        // Re-enable button after 3 seconds (fallback)
         setTimeout(() => {
           submitButton.innerHTML = originalContent;
           submitButton.disabled = false;
@@ -1371,9 +1464,6 @@ body {
       }
     });
   }
-
-  // ===== Console Log for Debug =====
-  console.log('Payment detail management script loaded successfully');
 
 })();
 </script>

@@ -1,8 +1,5 @@
 <?php
-// =========================================
-//  Enhanced Pembayaran - Index (Audience) with Midtrans Support
-//  FIXED: Proper JavaScript DOM handling
-// =========================================
+
 $title = $title ?? 'Pembayaran Saya';
 $eventMap = $eventMap ?? [];
 $badgeMap = $badgeMap ?? ['pending'=>'warning','verified'=>'success','rejected'=>'danger','canceled'=>'secondary'];

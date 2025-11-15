@@ -80,19 +80,26 @@ class Laporan extends BaseController
 
     public function export()
     {
-        $type = $this->request->getGet('type') ?? 'comprehensive';
-        $format = $this->request->getGet('format') ?? 'csv';
+        try {
+            $type = $this->request->getGet('type') ?? 'comprehensive';
+            $format = $this->request->getGet('format') ?? 'csv';
 
-        switch ($type) {
-            case 'users':
-                return $this->exportUsers($format);
-            case 'abstrak':
-                return $this->exportAbstrak($format);
-            case 'pembayaran':
-                return $this->exportPembayaran($format);
-            case 'comprehensive':
-            default:
-                return $this->exportComprehensive($format);
+            switch ($type) {
+                case 'users':
+                    return $this->exportUsers($format);
+                case 'abstrak':
+                    return $this->exportAbstrak($format);
+                case 'pembayaran':
+                    return $this->exportPembayaran($format);
+                case 'comprehensive':
+                default:
+                    return $this->exportComprehensive($format);
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Export error: ' . $e->getMessage());
+            log_message('error', 'Stack trace: ' . $e->getTraceAsString());
+            
+            return redirect()->back()->with('error', 'Gagal melakukan export: ' . $e->getMessage());
         }
     }
 
@@ -144,12 +151,22 @@ class Laporan extends BaseController
         $users = $this->userModel->orderBy('created_at', 'DESC')->findAll();
         
         if ($format === 'csv') {
+            // Clear any previous output
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
             $filename = 'laporan_users_' . date('Y-m-d') . '.csv';
             
-            header('Content-Type: text/csv');
+            header('Content-Type: text/csv; charset=UTF-8');
             header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Pragma: no-cache');
+            header('Expires: 0');
             
             $output = fopen('php://output', 'w');
+            
+            // BOM untuk Excel UTF-8
+            fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
             
             // CSV Headers
             fputcsv($output, [
@@ -171,7 +188,62 @@ class Laporan extends BaseController
                 ]);
             }
             
+            // Hitung statistik per role dan status
+            $countAdmin = 0;
+            $countPresenter = 0;
+            $countAudience = 0;
+            $countReviewer = 0;
+            $countAktif = 0;
+            $countNonaktif = 0;
+            $countVerified = 0;
+            $countNotVerified = 0;
+            
+            foreach ($users as $user) {
+                // Count by role
+                switch ($user['role']) {
+                    case 'admin': $countAdmin++; break;
+                    case 'presenter': $countPresenter++; break;
+                    case 'audience': $countAudience++; break;
+                    case 'reviewer': $countReviewer++; break;
+                }
+                
+                // Count by status
+                if ($user['status'] === 'aktif') $countAktif++;
+                else $countNonaktif++;
+                
+                // Count email verification
+                if ($user['email_verified_at']) $countVerified++;
+                else $countNotVerified++;
+            }
+            
+            // Tambahkan ringkasan di bawah
+            fputcsv($output, []);
+            fputcsv($output, ['=== RINGKASAN DATA USER ===']);
+            fputcsv($output, []);
+            fputcsv($output, ['Total User', count($users)]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Berdasarkan Role:']);
+            fputcsv($output, ['Admin', $countAdmin]);
+            fputcsv($output, ['Presenter', $countPresenter]);
+            fputcsv($output, ['Audience', $countAudience]);
+            fputcsv($output, ['Reviewer', $countReviewer]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Berdasarkan Status:']);
+            fputcsv($output, ['Aktif', $countAktif]);
+            fputcsv($output, ['Nonaktif', $countNonaktif]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Verifikasi Email:']);
+            fputcsv($output, ['Sudah Verifikasi', $countVerified]);
+            fputcsv($output, ['Belum Verifikasi', $countNotVerified]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Tanggal Export', date('d/m/Y H:i:s')]);
+            
             fclose($output);
+            exit;
         }
         
         return;
@@ -182,17 +254,27 @@ class Laporan extends BaseController
         $abstraks = $this->abstrakModel->getAbstrakWithDetails();
         
         if ($format === 'csv') {
+            // Clear any previous output
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
             $filename = 'laporan_abstrak_' . date('Y-m-d') . '.csv';
             
-            header('Content-Type: text/csv');
+            header('Content-Type: text/csv; charset=UTF-8');
             header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Pragma: no-cache');
+            header('Expires: 0');
             
             $output = fopen('php://output', 'w');
             
+            // BOM untuk Excel UTF-8
+            fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+            
             // CSV Headers
             fputcsv($output, [
-                'ID Abstrak', 'Judul', 'Penulis', 'Email', 'Kategori', 
-                'Status', 'Tanggal Upload', 'Revisi Ke'
+                'ID Abstrak', 'Judul', 'Nama Penulis', 'Email', 'Status', 
+                'Kategori', 'Tanggal Upload', 'Reviewer'
             ]);
             
             // CSV Data
@@ -200,16 +282,87 @@ class Laporan extends BaseController
                 fputcsv($output, [
                     $abstrak['id_abstrak'],
                     $abstrak['judul'],
-                    $abstrak['nama_lengkap'],
-                    $abstrak['email'],
-                    $abstrak['nama_kategori'],
+                    $abstrak['nama_lengkap'] ?? '-',
+                    $abstrak['email'] ?? '-',
                     ucfirst($abstrak['status']),
+                    $abstrak['nama_kategori'] ?? '-',
                     date('d/m/Y H:i', strtotime($abstrak['tanggal_upload'])),
-                    $abstrak['revisi_ke']
+                    $abstrak['reviewer_name'] ?? 'Belum ditugaskan'
                 ]);
             }
             
+            // Hitung statistik
+            $countMenunggu = 0;
+            $countSedangReview = 0;
+            $countDiterima = 0;
+            $countDitolak = 0;
+            $countRevisi = 0;
+            $kategoriCount = [];
+            $assignedReviewer = 0;
+            $unassignedReviewer = 0;
+            
+            foreach ($abstraks as $abstrak) {
+                // Count by status
+                switch ($abstrak['status']) {
+                    case 'menunggu': $countMenunggu++; break;
+                    case 'sedang_direview': $countSedangReview++; break;
+                    case 'diterima': $countDiterima++; break;
+                    case 'ditolak': $countDitolak++; break;
+                    case 'revisi': $countRevisi++; break;
+                }
+                
+                // Count by kategori
+                $kategori = $abstrak['nama_kategori'] ?? 'Tidak Ada Kategori';
+                if (!isset($kategoriCount[$kategori])) {
+                    $kategoriCount[$kategori] = 0;
+                }
+                $kategoriCount[$kategori]++;
+                
+                // Count reviewer assignment
+                if (!empty($abstrak['reviewer_name']) && $abstrak['reviewer_name'] !== 'Belum ditugaskan') {
+                    $assignedReviewer++;
+                } else {
+                    $unassignedReviewer++;
+                }
+            }
+            
+            // Tambahkan ringkasan di bawah
+            fputcsv($output, []);
+            fputcsv($output, ['=== RINGKASAN DATA ABSTRAK ===']);
+            fputcsv($output, []);
+            fputcsv($output, ['Total Abstrak', count($abstraks)]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Berdasarkan Status:']);
+            fputcsv($output, ['Menunggu', $countMenunggu]);
+            fputcsv($output, ['Sedang Review', $countSedangReview]);
+            fputcsv($output, ['Diterima', $countDiterima]);
+            fputcsv($output, ['Ditolak', $countDitolak]);
+            fputcsv($output, ['Revisi', $countRevisi]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Berdasarkan Kategori:']);
+            arsort($kategoriCount); // Sort by count descending
+            foreach ($kategoriCount as $kategori => $count) {
+                fputcsv($output, [$kategori, $count]);
+            }
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Penugasan Reviewer:']);
+            fputcsv($output, ['Sudah Ditugaskan', $assignedReviewer]);
+            fputcsv($output, ['Belum Ditugaskan', $unassignedReviewer]);
+            fputcsv($output, []);
+            
+            // Persentase acceptance
+            $totalReviewed = $countDiterima + $countDitolak;
+            $acceptanceRate = $totalReviewed > 0 ? round(($countDiterima / $totalReviewed) * 100, 2) : 0;
+            fputcsv($output, ['Acceptance Rate', $acceptanceRate . '%']);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Tanggal Export', date('d/m/Y H:i:s')]);
+            
             fclose($output);
+            exit;
         }
         
         return;
@@ -220,34 +373,93 @@ class Laporan extends BaseController
         $pembayarans = $this->pembayaranModel->getPembayaranWithUser();
         
         if ($format === 'csv') {
+            // Clear any previous output
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
             $filename = 'laporan_pembayaran_' . date('Y-m-d') . '.csv';
             
-            header('Content-Type: text/csv');
+            header('Content-Type: text/csv; charset=UTF-8');
             header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Pragma: no-cache');
+            header('Expires: 0');
             
             $output = fopen('php://output', 'w');
             
+            // BOM untuk Excel UTF-8
+            fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+            
             // CSV Headers
             fputcsv($output, [
-                'ID Pembayaran', 'Nama User', 'Email', 'Role', 'Metode', 
-                'Jumlah', 'Status', 'Tanggal Bayar'
+                'ID Pembayaran', 'Nama User', 'Email', 'Role', 'Event', 
+                'Metode', 'Jumlah', 'Status', 'Tanggal Bayar', 'Tanggal Verifikasi'
             ]);
+            
+            // Inisialisasi variabel untuk total
+            $totalSemua = 0;
+            $totalPending = 0;
+            $totalVerified = 0;
+            $totalRejected = 0;
+            $countPending = 0;
+            $countVerified = 0;
+            $countRejected = 0;
             
             // CSV Data
             foreach ($pembayarans as $pembayaran) {
                 fputcsv($output, [
                     $pembayaran['id_pembayaran'],
-                    $pembayaran['nama_lengkap'],
-                    $pembayaran['email'],
-                    ucfirst($pembayaran['role']),
+                    $pembayaran['nama_lengkap'] ?? '-',
+                    $pembayaran['email'] ?? '-',
+                    ucfirst($pembayaran['role'] ?? '-'),
+                    $pembayaran['event_title'] ?? '-',
                     $pembayaran['metode'],
-                    $pembayaran['jumlah'],
+                    number_format($pembayaran['jumlah'], 0, ',', '.'),
                     ucfirst($pembayaran['status']),
-                    date('d/m/Y H:i', strtotime($pembayaran['tanggal_bayar']))
+                    date('d/m/Y H:i', strtotime($pembayaran['tanggal_bayar'])),
+                    $pembayaran['verified_at'] ? date('d/m/Y H:i', strtotime($pembayaran['verified_at'])) : '-'
                 ]);
+                
+                // Hitung total per status
+                $totalSemua += $pembayaran['jumlah'];
+                
+                if ($pembayaran['status'] === 'pending') {
+                    $totalPending += $pembayaran['jumlah'];
+                    $countPending++;
+                } elseif ($pembayaran['status'] === 'verified') {
+                    $totalVerified += $pembayaran['jumlah'];
+                    $countVerified++;
+                } elseif ($pembayaran['status'] === 'rejected') {
+                    $totalRejected += $pembayaran['jumlah'];
+                    $countRejected++;
+                }
             }
             
+            // Tambahkan ringkasan di bawah
+            fputcsv($output, []);
+            fputcsv($output, ['=== RINGKASAN PEMBAYARAN ===']);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Total Transaksi', count($pembayarans)]);
+            fputcsv($output, ['Total Nominal Semua', 'Rp ' . number_format($totalSemua, 0, ',', '.')]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Status Pending', $countPending . ' transaksi']);
+            fputcsv($output, ['Nominal Pending', 'Rp ' . number_format($totalPending, 0, ',', '.')]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Status Verified', $countVerified . ' transaksi']);
+            fputcsv($output, ['Nominal Verified (Revenue)', 'Rp ' . number_format($totalVerified, 0, ',', '.')]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Status Rejected', $countRejected . ' transaksi']);
+            fputcsv($output, ['Nominal Rejected', 'Rp ' . number_format($totalRejected, 0, ',', '.')]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Tanggal Export', date('d/m/Y H:i:s')]);
+            
             fclose($output);
+            exit;
         }
         
         return;
@@ -256,12 +468,22 @@ class Laporan extends BaseController
     private function exportComprehensive($format)
     {
         if ($format === 'csv') {
+            // Clear any previous output
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
             $filename = 'laporan_komprehensif_' . date('Y-m-d') . '.csv';
             
-            header('Content-Type: text/csv');
+            header('Content-Type: text/csv; charset=UTF-8');
             header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Pragma: no-cache');
+            header('Expires: 0');
             
             $output = fopen('php://output', 'w');
+            
+            // BOM untuk Excel UTF-8
+            fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
             
             // Write summary statistics
             fputcsv($output, ['LAPORAN KOMPREHENSIF SNIA']);
@@ -269,37 +491,196 @@ class Laporan extends BaseController
             fputcsv($output, []);
             
             // User statistics
-            fputcsv($output, ['STATISTIK USER']);
+            fputcsv($output, ['=== STATISTIK USER ===']);
             fputcsv($output, ['Total User', $this->userModel->countAll()]);
             fputcsv($output, ['Admin', $this->userModel->where('role', 'admin')->countAllResults()]);
             fputcsv($output, ['Presenter', $this->userModel->where('role', 'presenter')->countAllResults()]);
             fputcsv($output, ['Audience', $this->userModel->where('role', 'audience')->countAllResults()]);
             fputcsv($output, ['Reviewer', $this->userModel->where('role', 'reviewer')->countAllResults()]);
             fputcsv($output, []);
+            fputcsv($output, ['Status Aktif', $this->userModel->where('status', 'aktif')->countAllResults()]);
+            fputcsv($output, ['Status Nonaktif', $this->userModel->where('status', 'nonaktif')->countAllResults()]);
+            fputcsv($output, []);
             
             // Abstrak statistics
-            fputcsv($output, ['STATISTIK ABSTRAK']);
+            fputcsv($output, ['=== STATISTIK ABSTRAK ===']);
             fputcsv($output, ['Total Abstrak', $this->abstrakModel->countAll()]);
             fputcsv($output, ['Menunggu', $this->abstrakModel->where('status', 'menunggu')->countAllResults()]);
             fputcsv($output, ['Sedang Review', $this->abstrakModel->where('status', 'sedang_direview')->countAllResults()]);
             fputcsv($output, ['Diterima', $this->abstrakModel->where('status', 'diterima')->countAllResults()]);
             fputcsv($output, ['Ditolak', $this->abstrakModel->where('status', 'ditolak')->countAllResults()]);
+            fputcsv($output, ['Revisi', $this->abstrakModel->where('status', 'revisi')->countAllResults()]);
             fputcsv($output, []);
             
             // Pembayaran statistics
-            fputcsv($output, ['STATISTIK PEMBAYARAN']);
-            fputcsv($output, ['Total Pembayaran', $this->pembayaranModel->countAll()]);
+            fputcsv($output, ['=== STATISTIK PEMBAYARAN ===']);
+            fputcsv($output, ['Total Transaksi', $this->pembayaranModel->countAll()]);
             fputcsv($output, ['Pending', $this->pembayaranModel->where('status', 'pending')->countAllResults()]);
             fputcsv($output, ['Verified', $this->pembayaranModel->where('status', 'verified')->countAllResults()]);
             fputcsv($output, ['Rejected', $this->pembayaranModel->where('status', 'rejected')->countAllResults()]);
+            fputcsv($output, []);
             
+            // Total revenue
             $totalRevenue = $this->pembayaranModel
                                ->selectSum('jumlah')
                                ->where('status', 'verified')
                                ->first()['jumlah'] ?? 0;
-            fputcsv($output, ['Total Revenue', 'Rp ' . number_format($totalRevenue, 0, ',', '.')]);
+            
+            $totalPending = $this->pembayaranModel
+                               ->selectSum('jumlah')
+                               ->where('status', 'pending')
+                               ->first()['jumlah'] ?? 0;
+            
+            $totalRejected = $this->pembayaranModel
+                               ->selectSum('jumlah')
+                               ->where('status', 'rejected')
+                               ->first()['jumlah'] ?? 0;
+            
+            fputcsv($output, ['Total Revenue (Verified)', 'Rp ' . number_format($totalRevenue, 0, ',', '.')]);
+            fputcsv($output, ['Total Pending', 'Rp ' . number_format($totalPending, 0, ',', '.')]);
+            fputcsv($output, ['Total Rejected', 'Rp ' . number_format($totalRejected, 0, ',', '.')]);
+            fputcsv($output, []);
+            
+            // Pembayaran per metode
+            fputcsv($output, ['Berdasarkan Metode Pembayaran:']);
+            
+            try {
+                $metodePembayaran = $this->pembayaranModel
+                    ->select('metode, COUNT(*) as jumlah, SUM(jumlah) as total')
+                    ->where('status', 'verified')
+                    ->groupBy('metode')
+                    ->findAll();
+                
+                if (!empty($metodePembayaran)) {
+                    foreach ($metodePembayaran as $metode) {
+                        fputcsv($output, [
+                            $metode['metode'],
+                            $metode['jumlah'] . ' transaksi',
+                            'Rp ' . number_format($metode['total'], 0, ',', '.')
+                        ]);
+                    }
+                } else {
+                    fputcsv($output, ['Belum ada data pembayaran']);
+                }
+            } catch (\Throwable $e) {
+                fputcsv($output, ['Error mengambil data metode pembayaran']);
+                log_message('error', 'Error getting payment methods: ' . $e->getMessage());
+            }
+            
+            fputcsv($output, []);
+            
+            // Monthly statistics (last 6 months)
+            fputcsv($output, ['=== STATISTIK BULANAN (6 BULAN TERAKHIR) ===']);
+            fputcsv($output, ['Bulan', 'User Baru', 'Abstrak Masuk', 'Revenue', 'Total Pembayaran']);
+            
+            $monthlyStats = $this->getMonthlyStatistics(6);
+            $totalUsersBulanan = 0;
+            $totalAbstrakBulanan = 0;
+            $totalRevenueBulanan = 0;
+            
+            foreach ($monthlyStats as $stat) {
+                // Hitung total pembayaran per bulan
+                $bulanParts = explode(' ', $stat['month']);
+                $monthNum = date('m', strtotime($bulanParts[0]));
+                $yearNum = $bulanParts[1];
+                $monthDate = $yearNum . '-' . $monthNum;
+                
+                $totalPembayaranBulan = $this->pembayaranModel
+                    ->where('tanggal_bayar >=', $monthDate . '-01')
+                    ->where('tanggal_bayar <=', $monthDate . '-31')
+                    ->countAllResults();
+                
+                fputcsv($output, [
+                    $stat['month'],
+                    $stat['users'],
+                    $stat['abstraks'],
+                    'Rp ' . number_format($stat['revenue'], 0, ',', '.'),
+                    $totalPembayaranBulan
+                ]);
+                
+                $totalUsersBulanan += $stat['users'];
+                $totalAbstrakBulanan += $stat['abstraks'];
+                $totalRevenueBulanan += $stat['revenue'];
+            }
+            
+            fputcsv($output, []);
+            fputcsv($output, ['Total 6 Bulan:']);
+            fputcsv($output, ['User Baru', $totalUsersBulanan]);
+            fputcsv($output, ['Abstrak Masuk', $totalAbstrakBulanan]);
+            fputcsv($output, ['Total Revenue', 'Rp ' . number_format($totalRevenueBulanan, 0, ',', '.')]);
+            fputcsv($output, []);
+            
+            // Rata-rata per bulan
+            fputcsv($output, ['Rata-rata Per Bulan:']);
+            fputcsv($output, ['User Baru', round($totalUsersBulanan / 6, 2)]);
+            fputcsv($output, ['Abstrak Masuk', round($totalAbstrakBulanan / 6, 2)]);
+            fputcsv($output, ['Revenue', 'Rp ' . number_format($totalRevenueBulanan / 6, 0, ',', '.')]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['=== INFORMASI TAMBAHAN ===']);
+            
+            // Top 5 kategori abstrak
+            try {
+                $topKategori = $this->abstrakModel
+                    ->select('kategori_abstrak.nama_kategori, COUNT(*) as jumlah')
+                    ->join('kategori_abstrak', 'kategori_abstrak.id_kategori = abstrak.id_kategori', 'left')
+                    ->groupBy('kategori_abstrak.nama_kategori')
+                    ->orderBy('jumlah', 'DESC')
+                    ->limit(5)
+                    ->findAll();
+                
+                fputcsv($output, []);
+                fputcsv($output, ['Top 5 Kategori Abstrak:']);
+                
+                if (!empty($topKategori)) {
+                    foreach ($topKategori as $index => $kat) {
+                        fputcsv($output, [
+                            ($index + 1) . '. ' . ($kat['nama_kategori'] ?? 'Tidak Ada Kategori'),
+                            $kat['jumlah'] . ' abstrak'
+                        ]);
+                    }
+                } else {
+                    fputcsv($output, ['Belum ada data kategori']);
+                }
+            } catch (\Throwable $e) {
+                fputcsv($output, []);
+                fputcsv($output, ['Top 5 Kategori Abstrak:']);
+                fputcsv($output, ['Error mengambil data kategori']);
+                log_message('error', 'Error getting top categories: ' . $e->getMessage());
+            }
+            
+            fputcsv($output, []);
+            
+            // Tingkat verifikasi email
+            try {
+                $emailVerified = $this->userModel->where('email_verified_at IS NOT NULL')->countAllResults();
+                $totalUsers = $this->userModel->countAll();
+                $verificationRate = $totalUsers > 0 ? round(($emailVerified / $totalUsers) * 100, 2) : 0;
+                
+                fputcsv($output, ['Tingkat Verifikasi Email', $verificationRate . '%']);
+                fputcsv($output, ['Email Terverifikasi', $emailVerified . ' dari ' . $totalUsers . ' user']);
+            } catch (\Throwable $e) {
+                fputcsv($output, ['Tingkat Verifikasi Email', 'Error mengambil data']);
+                log_message('error', 'Error getting email verification: ' . $e->getMessage());
+            }
+            
+            fputcsv($output, []);
+            
+            // Tingkat penerimaan abstrak
+            $totalDiterima = $this->abstrakModel->where('status', 'diterima')->countAllResults();
+            $totalDitolak = $this->abstrakModel->where('status', 'ditolak')->countAllResults();
+            $totalReviewed = $totalDiterima + $totalDitolak;
+            $acceptanceRate = $totalReviewed > 0 ? round(($totalDiterima / $totalReviewed) * 100, 2) : 0;
+            
+            fputcsv($output, ['Acceptance Rate Abstrak', $acceptanceRate . '%']);
+            fputcsv($output, ['Diterima', $totalDiterima]);
+            fputcsv($output, ['Ditolak', $totalDitolak]);
+            fputcsv($output, []);
+            
+            fputcsv($output, ['Tanggal Export', date('d/m/Y H:i:s')]);
             
             fclose($output);
+            exit;
         }
         
         return;

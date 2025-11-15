@@ -1,17 +1,4 @@
 <?php
-/**
- * Audience Payment Instruction View - WITH WAVE INFO
- * 
- * Features:
- * - ✅ Wave-based pricing display
- * - ✅ Show wave number (Gelombang 1, 2, 3, dll)
- * - ✅ Wave deadline countdown
- * - Midtrans payment only
- * - Continue existing payment support
- * 
- * @version 3.1 - Wave Info Added
- * @date 2025-11-14
- */
 
 $title = $title ?? 'Instruksi Pembayaran';
 $reg   = $reg   ?? [];
@@ -42,7 +29,7 @@ $snapScriptUrl = $isProduction
     ? 'https://app.midtrans.com/snap/snap.js' 
     : 'https://app.sandbox.midtrans.com/snap/snap.js';
 
-// ✅ Wave info processing
+//  Wave info processing
 $waveNumber = $current_wave['wave_number'] ?? null;
 $waveName = $current_wave['wave_name'] ?? null;
 $waveDeadline = $current_wave['registration_deadline'] ?? null;
@@ -87,7 +74,7 @@ if ($waveDeadline) {
           <div class="payment-hero mb-4">
             <div class="row align-items-center">
               <div class="col-md-8">
-                <!-- ✅ Wave Badge -->
+                <!--  Wave Badge -->
                 <?php if ($waveNumber): ?>
                 <div class="hero-badge mb-2 wave-badge">
                   <i class="bi bi-speedometer2 me-2"></i>
@@ -139,7 +126,7 @@ if ($waveDeadline) {
             </div>
           </div>
 
-          <!-- ✅ Wave Warning (if deadline near) -->
+          <!--  Wave Warning (if deadline near) -->
           <?php if ($daysRemaining !== null && $daysRemaining <= 3 && $daysRemaining > 0): ?>
           <div class="alert alert-warning mb-4">
             <div class="d-flex align-items-start gap-2">
@@ -296,7 +283,7 @@ if ($waveDeadline) {
                   </span>
                 </div>
 
-                <!-- ✅ Wave Info in Summary -->
+                <!--  Wave Info in Summary -->
                 <?php if ($waveNumber): ?>
                 <div class="summary-item">
                   <span class="summary-label">Gelombang Pendaftaran</span>

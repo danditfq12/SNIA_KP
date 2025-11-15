@@ -1,16 +1,4 @@
 <?php
-/**
- * Audience Choose Mode View - NO VOUCHER, Wave-Based Pricing
- * 
- * Features:
- * - Wave-based pricing display (early bird, regular, etc)
- * - NO voucher system
- * - Direct to payment with wave pricing
- * - Full integration with EventModel waves
- * 
- * @version 3.1 - No Voucher Edition (Payment Info Removed)
- * @date 2025-11-14
- */
 
 $title   = 'Pilih Mode Kehadiran';
 $event   = $event ?? [];
@@ -227,7 +215,7 @@ $eventFormat = strtolower($event['format'] ?? '');
                         </li>
                         <li>
                           <i class="bi bi-check2"></i>
-                          <span><strong>Recording Access</strong> - Akses rekaman 7 hari</span>
+                          <span><strong>Recording Access</strong> - Akses rekaman </span>
                         </li>
                         <li>
                           <i class="bi bi-check2"></i>
@@ -240,7 +228,7 @@ $eventFormat = strtolower($event['format'] ?? '');
                         </li>
                         <li>
                           <i class="bi bi-check2"></i>
-                          <span><strong>Certificate</strong> - Sertifikat fisik & digital</span>
+                          <span><strong>Exclusive Merchandise</strong> - Merchandise Eksklusif</span>
                         </li>
                         <li>
                           <i class="bi bi-check2"></i>

@@ -1,16 +1,4 @@
 <?php
-/**
- * Audience Payment Create/Method Selection View - NO VOUCHER
- * 
- * Features:
- * - Midtrans payment only
- * - Wave-based pricing
- * - No voucher system
- * - Direct payment processing
- * 
- * @version 3.0 - No Voucher Edition
- * @date 2025-11-14
- */
 
 $title = 'Pilihan Pembayaran';
 $reg = $reg ?? [];

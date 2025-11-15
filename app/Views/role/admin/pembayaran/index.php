@@ -95,6 +95,17 @@ function getPaymentMethodDisplay($payment) {
         'badge' => null
     ];
 }
+
+// ===== HELPER FUNCTION: Get Pricing Tier Display =====
+function getPricingTierDisplay($pricingTier) {
+    return match($pricingTier) {
+        'early_bird' => ['label' => 'Early Bird', 'class' => 'tier-early', 'icon' => 'lightning-charge-fill'],
+        'wave_1'     => ['label' => 'Gel 1', 'class' => 'tier-wave1', 'icon' => 'tag-fill'],
+        'regular'    => ['label' => 'Gel 2', 'class' => 'tier-regular', 'icon' => 'tag-fill'],
+        'on_site'    => ['label' => 'Gel 3', 'class' => 'tier-onsite', 'icon' => 'geo-alt-fill'],
+        default      => null
+    };
+}
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -190,7 +201,7 @@ function getPaymentMethodDisplay($payment) {
           </div>
           <div class="filter-body">
             <div class="row g-3 align-items-end">
-              <div class="col-md-4">
+              <div class="col-md-3">
                 <label class="form-label">Pencarian</label>
                 <div class="search-input-wrapper">
                   <input type="text" class="form-control search-input" id="searchInput" 
@@ -218,18 +229,30 @@ function getPaymentMethodDisplay($payment) {
                 </select>
               </div>
 
+              <!-- ===== PRICING TIER FILTER ===== -->
+              <div class="col-md-2">
+                <label class="form-label">Pricing Tier</label>
+                <select class="form-select" id="pricingFilter" aria-label="Filter pricing tier">
+                  <option value="">Semua Tier</option>
+                  <option value="early_bird">Early Bird (Offline)</option>
+                  <option value="wave_1">Gelombang 1 (Online)</option>
+                  <option value="regular">Gelombang 2</option>
+                  <option value="on_site">Gelombang 3</option>
+                </select>
+              </div>
+
               <div class="col-md-2">
                 <label class="form-label">Partisipasi</label>
                 <select class="form-select" id="participationFilter" aria-label="Filter partisipasi">
-                  <option value="">Semua Partisipasi</option>
+                  <option value="">Semua</option>
                   <option value="online">Online</option>
                   <option value="offline">Offline</option>
                 </select>
               </div>
 
-              <div class="col-md-2">
+              <div class="col-md-1">
                 <button class="btn btn-outline-secondary w-100" id="btnResetFilter">
-                  <i class="bi bi-arrow-counterclockwise me-2"></i>Reset
+                  <i class="bi bi-arrow-counterclockwise"></i>
                 </button>
               </div>
             </div>
@@ -258,6 +281,11 @@ function getPaymentMethodDisplay($payment) {
               $amount = (int)($p['jumlah'] ?? 0);
               $evt    = $p['event_title'] ?? null;
 
+              // ===== GET PRICING TIER INFO =====
+              $pricingTier = $p['pricing_tier'] ?? null;
+              $originalAmount = (int)($p['original_amount'] ?? $amount);
+              $tierDisplay = getPricingTierDisplay($pricingTier);
+
               // ===== GET PAYMENT METHOD DISPLAY INFO =====
               $paymentDisplay = getPaymentMethodDisplay($p);
 
@@ -281,6 +309,7 @@ function getPaymentMethodDisplay($payment) {
                    data-status="<?= esc($status) ?>"
                    data-role="<?= esc($role) ?>"
                    data-participation="<?= esc($part) ?>"
+                   data-pricing="<?= esc($pricingTier ?? '') ?>"
                    data-search="<?= esc($searchStr) ?>">
                 
                 <article class="payment-card" aria-label="Kartu pembayaran">
@@ -309,9 +338,25 @@ function getPaymentMethodDisplay($payment) {
                   <!-- Payment Body -->
                   <div class="payment-body">
                     
+                    <!-- ===== NEW: PRICING TIER BADGE (if exists) ===== -->
+                    <?php if ($tierDisplay): ?>
+                      <div class="pricing-tier-mini">
+                        <span class="tier-badge <?= $tierDisplay['class'] ?>">
+                          <i class="bi bi-<?= $tierDisplay['icon'] ?> me-1"></i>
+                          <?= $tierDisplay['label'] ?>
+                        </span>
+                        <?php if ($pricingTier === 'early_bird' && $originalAmount > $amount): ?>
+                          <span class="savings-badge">
+                            <i class="bi bi-piggy-bank me-1"></i>
+                            Hemat Rp <?= number_format($originalAmount - $amount, 0, ',', '.') ?>
+                          </span>
+                        <?php endif; ?>
+                      </div>
+                    <?php endif; ?>
+                    
                     <!-- Payment Details -->
                     <div class="payment-details">
-                      <!-- ===== IMPROVED PAYMENT METHOD DISPLAY ===== -->
+                      <!-- Payment Method Display -->
                       <div class="detail-row mb-3">
                         <div class="detail-item">
                           <label class="detail-label">Metode Pembayaran</label>
@@ -332,7 +377,12 @@ function getPaymentMethodDisplay($payment) {
                       <div class="detail-row">
                         <div class="detail-item">
                           <label class="detail-label">Jumlah Bayar</label>
-                          <div class="detail-value amount">Rp <?= number_format($amount, 0, ',', '.') ?></div>
+                          <div class="detail-value amount">
+                            Rp <?= number_format($amount, 0, ',', '.') ?>
+                            <?php if ($originalAmount > $amount): ?>
+                              <del class="original-price">Rp <?= number_format($originalAmount, 0, ',', '.') ?></del>
+                            <?php endif; ?>
+                          </div>
                         </div>
                         <div class="detail-item">
                           <label class="detail-label">Tanggal Bayar</label>
@@ -550,7 +600,76 @@ body {
   margin-top: 0;
 }
 
-/* ========== NEW: Payment Method Display Styles ========== */
+/* ========== NEW: Pricing Tier Mini Badge ========== */
+.pricing-tier-mini {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.tier-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  flex-shrink: 0;
+}
+
+.tier-early {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #78350f;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+}
+
+.tier-wave1 {
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+  color: #4c1d95;
+  box-shadow: 0 2px 8px rgba(167, 139, 250, 0.3);
+}
+
+.tier-regular {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  color: #1e3a8a;
+  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.3);
+}
+
+.tier-onsite {
+  background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+  color: #831843;
+  box-shadow: 0 2px 8px rgba(244, 114, 182, 0.3);
+}
+
+.savings-badge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success-color);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+}
+
+.original-price {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+/* ========== Payment Method Display Styles ========== */
 .payment-method-display {
   display: flex;
   align-items: center;
@@ -606,6 +725,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .transaction-id-label {
@@ -616,11 +737,12 @@ body {
 
 .transaction-id-value {
   color: var(--text-primary);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-family: 'Courier New', monospace;
   background: #f8fafc;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
+  word-break: break-all;
 }
 
 .auto-verified-badge {
@@ -1133,6 +1255,15 @@ body {
     width: 100%;
     justify-content: center;
   }
+  
+  .pricing-tier-mini {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .savings-badge {
+    width: 100%;
+  }
 }
 
 @media (max-width: 576px) {
@@ -1147,6 +1278,10 @@ body {
     text-align: center;
     gap: 0.5rem;
   }
+  
+  .transaction-id-value {
+    font-size: 0.65rem;
+  }
 }
 </style>
 
@@ -1160,6 +1295,7 @@ body {
   const searchInput = $('#searchInput');
   const statusFilter = $('#statusFilter');
   const roleFilter = $('#roleFilter');
+  const pricingFilter = $('#pricingFilter'); // NEW
   const participationFilter = $('#participationFilter');
   const resetButton = $('#btnResetFilter');
   const resultCounter = $('#resultCounter');
@@ -1171,6 +1307,7 @@ body {
     const searchQuery = (searchInput?.value || '').toLowerCase();
     const statusValue = statusFilter?.value || '';
     const roleValue = roleFilter?.value || '';
+    const pricingValue = pricingFilter?.value || ''; // NEW
     const participationValue = participationFilter?.value || '';
     
     const paymentCards = $$('#paymentContainer > div');
@@ -1180,14 +1317,16 @@ body {
       const searchData = (card.getAttribute('data-search') || '').toLowerCase();
       const statusData = card.getAttribute('data-status') || '';
       const roleData = card.getAttribute('data-role') || '';
+      const pricingData = card.getAttribute('data-pricing') || ''; // NEW
       const participationData = card.getAttribute('data-participation') || '';
 
       const matchesSearch = !searchQuery || searchData.includes(searchQuery);
       const matchesStatus = !statusValue || statusData === statusValue;
       const matchesRole = !roleValue || roleData === roleValue;
+      const matchesPricing = !pricingValue || pricingData === pricingValue; // NEW
       const matchesParticipation = !participationValue || participationData === participationValue;
 
-      const shouldShow = matchesSearch && matchesStatus && matchesRole && matchesParticipation;
+      const shouldShow = matchesSearch && matchesStatus && matchesRole && matchesPricing && matchesParticipation;
       
       card.style.display = shouldShow ? '' : 'none';
       if (shouldShow) visibleCount++;
@@ -1202,6 +1341,7 @@ body {
     if (searchInput) searchInput.value = '';
     if (statusFilter) statusFilter.value = '';
     if (roleFilter) roleFilter.value = '';
+    if (pricingFilter) pricingFilter.value = ''; // NEW
     if (participationFilter) participationFilter.value = '';
     applyFilters();
   }
@@ -1209,6 +1349,7 @@ body {
   searchInput?.addEventListener('input', applyFilters);
   statusFilter?.addEventListener('change', applyFilters);
   roleFilter?.addEventListener('change', applyFilters);
+  pricingFilter?.addEventListener('change', applyFilters); // NEW
   participationFilter?.addEventListener('change', applyFilters);
   resetButton?.addEventListener('click', resetFilters);
 
