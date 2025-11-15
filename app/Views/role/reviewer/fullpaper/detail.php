@@ -38,7 +38,7 @@ $absBadge  = function($s){
 };
 $absLabel = $absStatus ? strtoupper($absStatus) : 'PENDING';
 
-/* ==== Hitung mayoritas panel + opsional revisi ==== */
+/** ==== Hitung mayoritas panel + opsional revisi ==== */
 $acc=$rev=$rej=$done=0;
 $total = count($reviewers);
 foreach ($reviewers as $rv) {
@@ -73,6 +73,22 @@ $myKpt = strtolower($my['keputusan'] ?? '');
 $myCmt = trim((string)($my['komentar'] ?? ''));
 $hasMy = !empty($my);
 $btnText = $hasMy ? 'Ubah' : 'Kirim';
+
+// ==== FLAG: Presenter upload revisi & belum direview ulang oleh reviewer ini ====
+// syarat: sudah revisi (revNo >= 1) DAN
+//         - belum ada review utk revisi ini; ATAU
+//         - tanggal_review terakhir < tanggal upload revisi
+$uploadedAt    = $S['full_paper_uploaded_at'] ?? null;
+$myReviewedAt  = $my['tanggal_review'] ?? null;
+$needsReReview = false;
+
+if ($revNo !== null && $revNo >= 1 && $uploadedAt) {
+    if (!$myReviewedAt) {
+        $needsReReview = true;
+    } else {
+        $needsReReview = strtotime($myReviewedAt) < strtotime($uploadedAt);
+    }
+}
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_reviewer') ?>
@@ -265,6 +281,21 @@ $btnText = $hasMy ? 'Ubah' : 'Kirim';
               </button>
             </div>
             <div class="card-body">
+
+              <?php if ($needsReReview): ?>
+                <div class="alert alert-warning d-flex align-items-start gap-2 small mb-3">
+                  <i class="bi bi-exclamation-circle mt-1"></i>
+                  <div>
+                    <div class="fw-semibold mb-1">Presenter mengunggah revisi baru.</div>
+                    <div>
+                      Revisi ke-<?= (int)$revNo ?> diunggah pada
+                      <b><?= $fmt($S['full_paper_uploaded_at'] ?? '', true) ?></b>.
+                      Silakan kirim review terbaru Anda untuk revisi ini.
+                    </div>
+                  </div>
+                </div>
+              <?php endif; ?>
+
               <?php if (!$hasMy): ?>
                 <div class="text-muted">Belum ada review yang Anda kirim.</div>
               <?php else: ?>

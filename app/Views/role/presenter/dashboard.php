@@ -249,6 +249,7 @@ $mapFp = function($s){
                         $absPill = $absToPill($absSt);
                         $fpPill  = $fpToPill($fpSt);
 
+                        // pembayaran boleh lanjut kalau abstrak & full paper diterima
                         $blockedPay = !($absSt === 'diterima' && $fpSt === 'ACCEPTED');
 
                         $ctaHref = "/presenter/events/detail/$eventId"; $ctaText = "Lihat Detail";
@@ -272,10 +273,25 @@ $mapFp = function($s){
                                       : (!empty($p['steps']['kontributor']) && str_contains($p['steps']['kontributor'],'current') ? 'current' : 'muted');
                         $absState   = $mapAbs($absSt);
                         $fpState    = $mapFp($fpSt);
-                        $payBlocked = !($absSt === 'diterima' && $fpSt === 'ACCEPTED');
-                        $bayarState = $payBlocked ? ($absState==='danger'||$fpState==='danger' ? 'danger' : 'muted') : 'current';
-                        $veri       = (string)($p['steps']['verifikasi'] ?? '');
-                        $finishState= (!$payBlocked && str_contains($veri,'done')) ? 'done' : 'muted';
+
+                        // LOA: ditandai selesai jika abstrak & full paper diterima
+                        if (!$blockedPay) {
+                          $loaState = 'done';
+                        } elseif ($fpState === 'warn') {
+                          $loaState = 'warn';
+                        } elseif ($fpState === 'danger') {
+                          $loaState = 'danger';
+                        } else {
+                          $loaState = 'muted';
+                        }
+
+                        $payBlocked = $blockedPay;
+                        $bayarState = $payBlocked
+                            ? ($absState==='danger'||$fpState==='danger' ? 'danger' : 'muted')
+                            : 'current';
+
+                        $veri        = (string)($p['steps']['verifikasi'] ?? '');
+                        $finishState = (!$payBlocked && str_contains($veri,'done')) ? 'done' : 'muted';
 
                         $absStepClass = ($absState==='done' ? 'done' : ($absState==='warn' ? 'warn' : ($absState==='danger' ? 'danger' : 'current')));
                         $fpStepClass  = ($fpState==='done'  ? 'done' : ($fpState==='warn'  ? 'warn'  : ($fpState==='danger'  ? 'danger'  : ($absState==='done' ? 'current' : 'muted'))));
@@ -304,6 +320,12 @@ $mapFp = function($s){
                             <div class="step <?= esc($fpStepClass) ?>">
                               <div class="dot"><i class="bi bi-file-earmark-arrow-up-fill"></i></div>
                               <div class="label">Upload Berkas</div>
+                            </div>
+
+                            <!-- STEP LOA -->
+                            <div class="step <?= esc($loaState) ?>">
+                              <div class="dot"><i class="bi bi-file-earmark-check-fill"></i></div>
+                              <div class="label">LOA</div>
                             </div>
 
                             <div class="step <?= esc($bayarState) ?>">

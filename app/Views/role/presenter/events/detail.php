@@ -7,6 +7,7 @@ $payment      = $payment ?? null;
 $contributors = $contributors ?? [];
 $price        = $price ?? null;
 $actions      = $actions ?? ['primary'=>null,'secondary'=>null];
+$flow         = $flow ?? ['state'=>null,'label'=>null,'hint'=>null];
 
 /* Utils */
 $abStatus  = strtolower($abstrak['status'] ?? '');
@@ -33,7 +34,11 @@ $isReg = (bool)$reg;
 $kontributorDone = false;
 if ($reg) {
   foreach (['contributor_done','kontributor_done','profile_completed','is_profile_completed'] as $f) {
-    if (array_key_exists($f,$reg)) { $kontributorDone = (bool)$reg[$f]; break; }
+    if (array_key_exists($f,$reg)) {
+      $v = $reg[$f];
+      $kontributorDone = ($v === true || $v === 1 || $v === '1' || $v === 't' || $v === 'true');
+      if ($kontributorDone) break;
+    }
   }
 }
 
@@ -44,11 +49,27 @@ if ($isReg && empty($contributors)) {
     'nama' => $reg['nama'] ?? ($reg['full_name'] ?? (session()->get('nama') ?? '')),
     'email'=> $reg['email'] ?? (session()->get('email') ?? ''),
     'afiliasi'=>$reg['afiliasi'] ?? ($reg['institution'] ?? ''),
-    'negara'=> $reg['negara'] ?? ($reg['country'] ?? ''),
   ]];
 }
 
 $eventId = (int)($event['id'] ?? 0);
+
+/* map state flow ke warna alert */
+$flowState   = strtolower((string)($flow['state'] ?? ''));
+$flowLabel   = (string)($flow['label'] ?? '');
+$flowHint    = (string)($flow['hint']  ?? '');
+$flowAlertCl = 'alert-secondary';
+if (in_array($flowState, ['lengkapi_kontributor','upload_abstrak','upload_fullpaper','bayar'], true)) {
+  $flowAlertCl = 'alert-primary';
+} elseif (in_array($flowState, ['menunggu_abstrak','fp_menunggu_review','pembayaran_pending','menunggu_loa'], true)) {
+  $flowAlertCl = 'alert-warning';
+} elseif (in_array($flowState, ['fp_perbaikan','abstrak_ditolak','pembayaran_ditolak'], true)) {
+  $flowAlertCl = 'alert-danger';
+} elseif (in_array($flowState, ['pembayaran_kedaluwarsa'], true)) {
+  $flowAlertCl = 'alert-secondary';
+} elseif (in_array($flowState, ['siap_absen','sudah_absen'], true)) {
+  $flowAlertCl = 'alert-success';
+}
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
@@ -170,7 +191,6 @@ $eventId = (int)($event['id'] ?? 0);
                         <th>Nama</th>
                         <th>Email</th>
                         <th>Afiliasi</th>
-                        <th>Negara</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -180,7 +200,6 @@ $eventId = (int)($event['id'] ?? 0);
                           <td><?= esc($c['nama'] ?? ($c['name'] ?? '-')) ?></td>
                           <td><?= esc($c['email'] ?? '-') ?></td>
                           <td><?= esc($c['afiliasi'] ?? ($c['affiliation'] ?? '-')) ?></td>
-                          <td><?= esc($c['negara'] ?? ($c['country'] ?? '-')) ?></td>
                         </tr>
                       <?php endforeach; ?>
                     </tbody>
@@ -200,6 +219,37 @@ $eventId = (int)($event['id'] ?? 0);
               <h5 class="mb-0 fw-semibold text-blue-900">Progress Pendaftaran</h5>
             </div>
             <div class="card-body">
+
+              <!-- Status Flow dari controller -->
+              <?php if ($flowState): ?>
+                <div class="alert <?= esc($flowAlertCl) ?> small py-2 px-3 mb-3">
+                  <div class="fw-semibold mb-1">
+                    <?= esc($flowLabel ?: 'Status terkini') ?>
+                    <?php if ($flowState === 'abstrak_ditolak'): ?>
+                      <span class="badge bg-danger-subtle text-danger border border-danger border-opacity-25 ms-1">
+                        Final
+                      </span>
+                    <?php endif; ?>
+                  </div>
+                  <div class="mb-0">
+                    <?= esc($flowHint ?: 'Status alur pendaftaran event Anda.') ?>
+                  </div>
+                </div>
+              <?php endif; ?>
+
+              <!-- EXTRA khusus abstrak ditolak: tekankan tidak bisa lanjut -->
+              <?php if ($abStatus === 'ditolak'): ?>
+                <div class="alert alert-danger-soft small py-2 px-3 mb-3 border border-danger-subtle">
+                  <div class="fw-semibold mb-1">
+                    Abstrak ditolak — event ini tidak bisa diikuti lagi.
+                  </div>
+                  <div class="mb-0">
+                    Anda tetap dapat melihat detail abstrak di menu <strong>Abstrak</strong>,
+                    namun tidak dapat mengunggah ulang abstrak baru untuk event ini.
+                    Silakan mengikuti event lain jika ingin mengirim abstrak lagi.
+                  </div>
+                </div>
+              <?php endif; ?>
 
               <ul class="list-group list-group-flush mb-3">
                 <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -235,7 +285,7 @@ $eventId = (int)($event['id'] ?? 0);
                   elseif (str_contains($lbl,'bayar')) $icon='bi-credit-card';
                   elseif (str_contains($lbl,'absen')) $icon='bi-qr-code-scan';
                 ?>
-                  <a class="btn <?= esc($p['class'] ?? 'btn-primary') ?> <?= !empty($p['confirm']) ? 'js-swal-confirm' : '' ?>"
+                  <a class="btn <?= esc($p['class'] ?? 'btn-primary') ?> <?= !empty($p['confirm']) ? 'js-swal-confirm' : '' ?><?= !empty($p['disabled']) ? ' disabled' : '' ?>"
                      href="<?= esc($p['url'] ?? '#') ?>"
                      <?= !empty($p['confirm']) ? 'data-confirm="'.esc($p['confirm']).'"' : '' ?>>
                     <i class="bi <?= esc($icon) ?> me-1"></i><?= esc($p['label'] ?? '') ?>
@@ -338,6 +388,14 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .btn-warning{ background:#d97706; border-color:#d97706; box-shadow:0 4px 12px rgba(217,119,6,.2); }
 .btn-danger{  background:#dc2626; border-color:#dc2626; box-shadow:0 4px 12px rgba(220,38,38,.2); }
 .btn-info{    background:#06b6d4; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,.2); }
+
+.alert-danger-soft{
+  background:rgba(220,38,38,.04);
+  color:#b91c1c;
+}
+
+.bg-danger-subtle{ background:rgba(248,113,113,.15)!important; }
+.border-danger-subtle{ border-color:rgba(248,113,113,.55)!important; }
 
 /* Responsive */
 @media (max-width:767.98px){

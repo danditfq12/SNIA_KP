@@ -60,14 +60,7 @@ $badgeForDecision = function($k){
     default                                                         => ['secondary', $k ? ucfirst($k) : '—'],
   };
 };
-$badgeForAssign = function($s){
-  $s = strtolower((string)$s);
-  return match ($s) {
-    'accepted' => ['primary','Menerima Tugas'],
-    'declined' => ['secondary','Menolak'],
-    default    => ['secondary','Menunggu'],
-  };
-};
+
 $panelBadge = function($p){
   $p = strtoupper((string)$p);
   return match($p){
@@ -105,7 +98,7 @@ $panelLabel = function($p){
                 <i class="bi bi-file-earmark-text me-2"></i>Detail Full Paper
               </h3>
 
-              <!-- hanya badge revisi (tanpa info "menunggu reviewer") -->
+              <!-- hanya badge revisi -->
               <?php if ($revNo > 0): ?>
                 <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
                   <span class="badge bg-light text-dark fw-semibold">
@@ -271,16 +264,16 @@ $panelLabel = function($p){
                 <div class="vstack gap-3">
                   <?php foreach ($reviewers as $r):
                     [$cls, $lbl] = $badgeForDecision($r['keputusan'] ?? null);
-                    [$csa, $lsa] = $badgeForAssign($r['assignment_status'] ?? null);
                   ?>
                   <div class="p-2 border rounded-3">
                     <div class="d-flex align-items-start justify-content-between">
                       <div>
                         <div class="fw-semibold text-blue-900">
                           <?= esc($r['name'] ?? 'Reviewer') ?>
-                          <?php if (!empty($r['email'])): ?><small class="text-muted ms-1">&lt;<?= esc($r['email']) ?>&gt;</small><?php endif; ?>
+                          <?php if (!empty($r['email'])): ?>
+                            <small class="text-muted ms-1">&lt;<?= esc($r['email']) ?>&gt;</small>
+                          <?php endif; ?>
                         </div>
-                        <div class="small text-muted">Tugas: <span class="badge bg-<?= $csa ?>"><?= $lsa ?></span></div>
                       </div>
                       <div><span class="badge bg-<?= $cls ?>"><?= $lbl ?></span></div>
                     </div>
@@ -338,9 +331,9 @@ $panelLabel = function($p){
                     <?php if ($panel['panel']==='REVISION' && $isOpen): ?>
                       <div class="alert alert-warning mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Mayoritas revisi — silakan unggah revisi.</div>
                     <?php elseif ($panel['panel']==='ACCEPTED'): ?>
-                      <div class="alert alert-success mb-0"><i class="bi bi-check2-circle me-1"></i> Mayoritas Diterima — naskah diterima.</div>
+                      <div class="alert alert-success mb-0"><i class="bi bi-check2-circle me-1"></i> Mayoritas diterima — naskah diterima.</div>
                     <?php elseif ($panel['panel']==='REJECTED'): ?>
-                      <div class="alert alert-danger mb-0"><i class="bi bi-x-octagon me-1"></i> Mayoritas Ditolak — hubungi panitia bila perlu.</div>
+                      <div class="alert alert-danger mb-0"><i class="bi bi-x-octagon me-1"></i> Mayoritas ditolak — silakan hubungi panitia bila perlu.</div>
                     <?php else: ?>
                       <div class="alert alert-info mb-0"><i class="bi bi-hourglass-split me-1"></i> Menunggu keputusan panel.</div>
                     <?php endif; ?>

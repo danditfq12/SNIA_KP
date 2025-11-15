@@ -137,8 +137,6 @@ $statusRaw    = (string)($vm['status'] ?? '');
             </div>
           </div>
 
-          <!-- (Bagian FORM REVISI DIHAPUS) -->
-
           <!-- KOMENTAR REVIEWER -->
           <div class="card shadow-soft card-glass-plain mb-3">
             <div class="card-header bg-transparent border-0 pb-0">
@@ -154,7 +152,7 @@ $statusRaw    = (string)($vm['status'] ?? '');
                         <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-2">
                           <div class="d-flex flex-wrap align-items-center gap-2">
                             <span class="badge rounded-pill bg-light text-blue-900 border">
-                              Tahap: <b class="ms-1"><?= esc($t['revisi_ke'] ?? '—') ?></b>
+                              Putaran review: <b class="ms-1"><?= esc($t['revisi_ke'] ?? '—') ?></b>
                             </span>
                             <span class="badge rounded-pill bg-<?= esc($t['badge'] ?? 'secondary') ?>-subtle text-<?= esc($t['badge'] ?? 'secondary') ?>">
                               <?= esc($t['badge_txt'] ?? 'Pending') ?>
@@ -196,16 +194,25 @@ $statusRaw    = (string)($vm['status'] ?? '');
             </div>
             <div class="card-body">
               <?php if (in_array($statusRaw, ['menunggu','sedang_direview'], true)): ?>
-                <div class="callout callout-info"><i class="bi bi-hourglass-split me-1"></i>Abstrak Anda sedang diproses oleh reviewer.</div>
-              <?php elseif ($statusRaw === 'revisi'): ?>
-                <!-- Tidak ada form revisi lagi, hanya informasi -->
-                <div class="callout callout-warn"><i class="bi bi-arrow-repeat me-1"></i>Abstrak memerlukan penyesuaian. Silakan menunggu arahan/pengumuman panitia.</div>
+                <div class="callout callout-info">
+                  <i class="bi bi-hourglass-split me-1"></i>
+                  Abstrak Anda sedang diproses oleh reviewer.
+                </div>
               <?php elseif ($statusRaw === 'ditolak'): ?>
-                <div class="callout callout-danger"><i class="bi bi-x-octagon me-1"></i>Abstrak ditolak.</div>
+                <div class="callout callout-danger">
+                  <i class="bi bi-x-octagon me-1"></i>
+                  Abstrak ditolak untuk event ini.
+                </div>
               <?php elseif ($statusRaw === 'diterima'): ?>
-                <div class="callout callout-success"><i class="bi bi-check2-circle me-1"></i>Abstrak diterima.</div>
+                <div class="callout callout-success">
+                  <i class="bi bi-check2-circle me-1"></i>
+                  Abstrak diterima oleh panitia.
+                </div>
               <?php else: ?>
-                <div class="callout callout-info"><i class="bi bi-info-circle me-1"></i>—</div>
+                <div class="callout callout-info">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Status abstrak belum tersedia.
+                </div>
               <?php endif; ?>
 
               <?php if ($showCancel): ?>
@@ -229,11 +236,14 @@ $statusRaw    = (string)($vm['status'] ?? '');
             <div class="card-body">
               <?php if (!empty($vm['assigned_reviewer']['name']) || !empty($vm['assigned_reviewer']['email'])): ?>
                 <div class="d-flex align-items-center gap-3">
-                  <div class="avatar-badge"><span><?= esc(strtoupper(mb_substr($vm['assigned_reviewer']['name'] ?? 'R',0,1))) ?></span></div>
+                  <div class="avatar-badge">
+                    <span><?= esc(strtoupper(mb_substr($vm['assigned_reviewer']['name'] ?? 'R',0,1))) ?></span>
+                  </div>
                   <div class="flex-fill">
                     <div class="fw-bold text-blue-900"><?= esc($vm['assigned_reviewer']['name'] ?? '—') ?></div>
                     <?php if(!empty($vm['assigned_reviewer']['email'])): ?>
-                      <div class="small"><i class="bi bi-envelope me-1"></i>
+                      <div class="small">
+                        <i class="bi bi-envelope me-1"></i>
                         <a href="mailto:<?= esc($vm['assigned_reviewer']['email']) ?>" class="text-primary">
                           <?= esc($vm['assigned_reviewer']['email']) ?>
                         </a>
@@ -257,14 +267,19 @@ $statusRaw    = (string)($vm['status'] ?? '');
               <div class="card-body">
                 <?php foreach ($vm['contributors'] as $c): ?>
                   <div class="contrib-item">
-                    <div class="avatar-badge"><span><?= esc(strtoupper(mb_substr($c['name'] ?? 'C',0,1))) ?></span></div>
+                    <div class="avatar-badge">
+                      <span><?= esc(strtoupper(mb_substr($c['name'] ?? 'C',0,1))) ?></span>
+                    </div>
                     <div>
                       <div class="fw-semibold text-blue-900"><?= esc($c['name'] ?? '—') ?></div>
                       <?php if (!empty($c['affiliation'])): ?>
-                        <div class="text-muted small"><i class="bi bi-building me-1"></i><?= esc($c['affiliation']) ?></div>
+                        <div class="text-muted small">
+                          <i class="bi bi-building me-1"></i><?= esc($c['affiliation']) ?>
+                        </div>
                       <?php endif; ?>
                       <?php if (!empty($c['email'])): ?>
-                        <div class="small"><i class="bi bi-envelope me-1"></i>
+                        <div class="small">
+                          <i class="bi bi-envelope me-1"></i>
                           <a class="text-primary" href="mailto:<?= esc($c['email']) ?>"><?= esc($c['email']) ?></a>
                         </div>
                       <?php endif; ?>
@@ -287,7 +302,9 @@ $statusRaw    = (string)($vm['status'] ?? '');
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0">
           <div class="modal-header bg-light">
-            <h6 class="modal-title"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Konfirmasi</h6>
+            <h6 class="modal-title">
+              <i class="bi bi-exclamation-triangle me-2 text-danger"></i>Konfirmasi
+            </h6>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
           </div>
           <div class="modal-body">
@@ -317,51 +334,157 @@ $statusRaw    = (string)($vm['status'] ?? '');
   --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
   --muted:#6b7280; --side-pad: clamp(1rem, 2.3vw, 2.2rem);
 }
-.container-xxl{ max-width:min(100%, 1560px); padding-inline:var(--side-pad)!important; margin-inline:auto; }
-body{ font-family: ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif; font-size:15.5px; line-height:1.6; }
-.page-wrap-blue{ min-height:100vh; padding-top:72px; background:
-  radial-gradient(900px 300px at 20% -10%, rgba(59,130,246,.17), rgba(59,130,246,0) 60%),
-  radial-gradient(900px 300px at 80% 110%, rgba(59,130,246,.14), rgba(59,130,246,0) 70%),
-  linear-gradient(180deg, var(--blue-50), #fff 40%); }
+.container-xxl{
+  max-width:min(100%, 1560px);
+  padding-inline:var(--side-pad)!important;
+  margin-inline:auto;
+}
+body{
+  font-family: ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  font-size:15.5px;
+  line-height:1.6;
+}
+.page-wrap-blue{
+  min-height:100vh;
+  padding-top:72px;
+  background:
+    radial-gradient(900px 300px at 20% -10%, rgba(59,130,246,.17), rgba(59,130,246,0) 60%),
+    radial-gradient(900px 300px at 80% 110%, rgba(59,130,246,.14), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--blue-50), #fff 40%);
+}
 
-.card-hero{ border:0; border-radius:16px; overflow:hidden; box-shadow:0 12px 28px rgba(30,64,175,.10); }
-.card-hero .hero-body{ background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff; padding:1.4rem 1.1rem; }
-.hero-title{ font-weight:800; letter-spacing:.2px; font-size:1.25rem; }
+.card-hero{
+  border:0;
+  border-radius:16px;
+  overflow:hidden;
+  box-shadow:0 12px 28px rgba(30,64,175,.10);
+}
+.card-hero .hero-body{
+  background:linear-gradient(135deg,var(--blue-700),var(--blue-800));
+  color:#fff;
+  padding:1.4rem 1.1rem;
+}
+.hero-title{
+  font-weight:800;
+  letter-spacing:.2px;
+  font-size:1.25rem;
+}
 
-.card-glass-plain{ background:#fff; border-radius:14px; border:1px solid rgba(30,64,175,.10); }
-.shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
+.card-glass-plain{
+  background:#fff;
+  border-radius:14px;
+  border:1px solid rgba(30,64,175,.10);
+}
+.shadow-soft{
+  box-shadow:0 10px 24px rgba(30,64,175,.08);
+}
 
-.meta-list{ list-style:none; padding-left:0; margin:0; }
-.meta-list li{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.45rem 0; }
+.meta-list{
+  list-style:none;
+  padding-left:0;
+  margin:0;
+}
+.meta-list li{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:.75rem;
+  padding:.45rem 0;
+}
 .meta-list li span{ color:var(--muted); }
-.text-blue-900{ color:var(--blue-900)!important; }
-.bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:10px; padding:.38rem .6rem; font-weight:600; font-size:.9rem; }
 
-.callout{ border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.7rem .9rem; font-weight:600; }
+.text-blue-900{ color:var(--blue-900)!important; }
+.bg-blue-soft{
+  background:var(--blue-200);
+  color:var(--blue-800);
+  border-radius:10px;
+  padding:.38rem .6rem;
+  font-weight:600;
+  font-size:.9rem;
+}
+
+.callout{
+  border:1px dashed rgba(30,64,175,.18);
+  border-radius:12px;
+  padding:.7rem .9rem;
+  font-weight:600;
+}
 .callout-info{ background:#eef6ff; color:#124d9b; }
 .callout-success{ background:#ecfdf5; color:#065f46; }
 .callout-danger{ background:#fef2f2; color:#9f1239; }
 .callout-warn{ background:#fff7ed; color:#92400e; }
 
-.avatar-badge{ width:44px; height:44px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(180deg,#eaf2ff,#e3edff); color:#274690; font-weight:800; border:1px solid rgba(39,70,144,.15); }
-.avatar-badge.sm{ width:36px; height:36px; font-size:.9rem; }
-.contrib-item{ display:flex; gap:.75rem; align-items:flex-start; padding:.65rem 0; border-bottom:1px dashed rgba(30,64,175,.12); }
+.avatar-badge{
+  width:44px;
+  height:44px;
+  border-radius:50%;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:linear-gradient(180deg,#eaf2ff,#e3edff);
+  color:#274690;
+  font-weight:800;
+  border:1px solid rgba(39,70,144,.15);
+}
+.avatar-badge.sm{
+  width:36px;
+  height:36px;
+  font-size:.9rem;
+}
+
+.contrib-item{
+  display:flex;
+  gap:.75rem;
+  align-items:flex-start;
+  padding:.65rem 0;
+  border-bottom:1px dashed rgba(30,64,175,.12);
+}
 .contrib-item:last-child{ border-bottom:none; }
 
-.btn{ font-weight:800; border-radius:10px; font-size:.95rem; padding:.54rem .96rem; }
-.btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
+.btn{
+  font-weight:800;
+  border-radius:10px;
+  font-size:.95rem;
+  padding:.54rem .96rem;
+}
+.btn-primary{
+  background:var(--blue-600);
+  border-color:var(--blue-600);
+  box-shadow:0 4px 12px rgba(37,99,235,.2);
+}
 
-.pdf-wrap{ border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#f8fafc; transition:height .2s ease; }
+.pdf-wrap{
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+  overflow:hidden;
+  background:#f8fafc;
+  transition:height .2s ease;
+}
 .pdf-wrap.is-min{ height:52vh; }
 .pdf-wrap.is-max{ height:82vh; }
-.pdf-frame{ width:100%; height:100%; border:0; }
+.pdf-frame{
+  width:100%;
+  height:100%;
+  border:0;
+}
 
-.empty-hint{ color:#567; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.8rem 1rem; }
+.empty-hint{
+  color:#567;
+  background:#f6f9ff;
+  border:1px dashed rgba(30,64,175,.18);
+  border-radius:12px;
+  padding:.8rem 1rem;
+}
+
+/* kecilin dikit di mobile */
+@media (max-width:767.98px){
+  .card-hero .hero-body{ padding:1.2rem 1rem; }
+}
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  // Toggle preview size
+  // Toggle preview size: kecil ↔ besar
   const wrap = document.getElementById('pdfWrap');
   const btn  = document.getElementById('btnToggleSize');
   if (wrap && btn) {
@@ -371,13 +494,14 @@ document.addEventListener('DOMContentLoaded', function(){
       wrap.classList.toggle('is-min', !toMax);
       wrap.classList.toggle('is-max',  toMax);
       btn.dataset.state = toMax ? 'min' : 'max';
-      btn.innerHTML = toMax ? '<i class="bi bi-arrows-angle-contract"></i>'
-                            : '<i class="bi bi-arrows-fullscreen"></i>';
+      btn.innerHTML = toMax
+        ? '<i class="bi bi-arrows-angle-contract"></i>'
+        : '<i class="bi bi-arrows-fullscreen"></i>';
       btn.title = toMax ? 'Minimize' : 'Fullscreen';
     });
   }
 
-  // Batalkan upload (SweetAlert jika tersedia)
+  // Batalkan upload (pakai SweetAlert kalau ada, kalau tidak fallback confirm biasa)
   const cancelBtn = document.querySelector('.js-cancel-abs');
   if (cancelBtn) {
     cancelBtn.addEventListener('click', function(){
@@ -400,7 +524,7 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
-  // Fallback modal handler (jika memakai modal bootstrap)
+  // Fallback modal handler (kalau suatu saat mau dipakai)
   document.getElementById('confirmCancelBtn')?.addEventListener('click', () => {
     document.getElementById('cancelForm')?.submit();
   });
