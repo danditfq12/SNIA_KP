@@ -99,17 +99,27 @@ $badgeRev = fn($s)=> match(strtolower((string)$s)){
                     $nama  = (string)($r['nama_lengkap']  ?? '-');
                     $kat   = (string)($r['nama_kategori'] ?? '-');
                     $evtNm = (string)($r['event_title']   ?? '-');
-                    $txt   = strtolower(trim($judul.' '.$nama.' '.$kat));
+                    $txt   = strtolower(trim($judul.' '.$nama.' '.$kat.' '.$evtNm));
                     $eid   = (int)($r['event_id'] ?? 0);
                     $rev   = strtolower((string)($r['review_status'] ?? 'menunggu'));
-                    $uploaded = $r['tanggal_upload'] ?? null;
+                    $uploaded       = $r['tanggal_upload'] ?? null;
+
+                    // flag dari controller (optional, fallback false)
+                    $needsReReview  = !empty($r['needs_re_review']);
                   ?>
                   <tr class="review-row"
                       data-search="<?= esc($txt) ?>"
                       data-event="<?= $eid ?>"
                       data-status="<?= esc($rev) ?>">
                     <td>
-                      <div class="fw-semibold text-dark mb-1"><?= esc($judul) ?></div>
+                      <div class="fw-semibold text-dark mb-1 d-flex flex-wrap align-items-center gap-2">
+                        <span class="text-truncate"><?= esc($judul) ?></span>
+                        <?php if ($needsReReview): ?>
+                          <span class="badge bg-warning text-dark align-middle">
+                            <i class="bi bi-upload me-1"></i>Revisi baru, perlu ditinjau
+                          </span>
+                        <?php endif; ?>
+                      </div>
                       <div class="small text-muted d-flex flex-wrap gap-2">
                         <span><i class="bi bi-calendar2-plus me-1"></i><?= $fmt($uploaded, true) ?></span>
                         <span class="d-md-none">•</span>
@@ -125,7 +135,11 @@ $badgeRev = fn($s)=> match(strtolower((string)$s)){
                     </td>
                     <td class="d-none d-lg-table-cell"><?= esc($nama) ?></td>
                     <td class="d-none d-xl-table-cell text-muted"><?= esc($kat) ?></td>
-                    <td><span class="badge bg-<?= $badgeRev($rev) ?> px-3 py-2"><?= esc(ucfirst($rev)) ?></span></td>
+                    <td>
+                      <span class="badge bg-<?= $badgeRev($rev) ?> px-3 py-2">
+                        <?= esc(ucfirst($rev)) ?>
+                      </span>
+                    </td>
                     <td class="text-end">
                       <a href="<?= site_url('reviewer/fullpaper/'.$id) ?>" class="btn btn-primary btn-sm">
                         <i class="bi bi-eye me-1"></i>Tinjau
@@ -155,24 +169,50 @@ $badgeRev = fn($s)=> match(strtolower((string)$s)){
   --glass-bd: rgba(30,64,175,.14);
   --glass-shadow: 0 10px 24px rgba(2,6,23,.08);
 }
-.container-xxl{ max-width:min(100%, 1560px); padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; margin-inline:auto; }
-body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.5px; line-height:1.6; color:var(--ink); }
+.container-xxl{
+  max-width:min(100%, 1560px);
+  padding-left:var(--side-pad)!important;
+  padding-right:var(--side-pad)!important;
+  margin-inline:auto;
+}
+body{
+  font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size:15.5px;
+  line-height:1.6;
+  color:var(--ink);
+}
 .page-wrap-blue{
-  min-height:100vh; padding-top:72px;
+  min-height:100vh;
+  padding-top:72px;
   background:
     radial-gradient(1000px 380px at 10% -10%, rgba(59,130,246,.16), rgba(59,130,246,0) 60%),
     radial-gradient(1000px 380px at 90% 110%, rgba(59,130,246,.12), rgba(59,130,246,0) 70%),
     linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
-.card-hero{ border:0; border-radius:var(--radius); overflow:hidden; box-shadow:0 12px 28px rgba(30,64,175,.18); }
-.card-hero .hero-body{ background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff; padding:1.8rem 1.2rem; min-height:164px; }
+.card-hero{
+  border:0;
+  border-radius:var(--radius);
+  overflow:hidden;
+  box-shadow:0 12px 28px rgba(30,64,175,.18);
+}
+.card-hero .hero-body{
+  background:linear-gradient(135deg,var(--blue-700),var(--blue-800));
+  color:#fff;
+  padding:1.8rem 1.2rem;
+  min-height:164px;
+}
 .hero-title{ font-weight:800; }
 .text-white-70{ color:rgba(255,255,255,.85)!important; }
 .hero-tools .input-group .input-group-text{ background:#fff; border:0; }
 .hero-tools .form-control{ border:0; }
 .hero-tools .btn{ border:0; }
 .hero-search{ border-radius:12px; overflow:hidden; }
-.hero-tabs{ background:#fff; padding:.6rem .8rem; border:1px solid rgba(30,64,175,.18); border-top:0; }
+.hero-tabs{
+  background:#fff;
+  padding:.6rem .8rem;
+  border:1px solid rgba(30,64,175,.18);
+  border-top:0;
+}
 
 .card-glass{
   backdrop-filter: blur(6px);
@@ -181,8 +221,17 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
   border-radius: 12px;
   box-shadow: var(--glass-shadow);
 }
-.table thead th{ background:#f8fafc; border-bottom:1px solid #e2e8f0; font-weight:600; color:#374151; padding:14px; }
-.table tbody td{ padding:14px; vertical-align:middle; }
+.table thead th{
+  background:#f8fafc;
+  border-bottom:1px solid #e2e8f0;
+  font-weight:600;
+  color:#374151;
+  padding:14px;
+}
+.table tbody td{
+  padding:14px;
+  vertical-align:middle;
+}
 
 .bg-info-subtle{ background-color: rgba(6,182,212,.12) !important; }
 .text-info{ color:#06b6d4 !important; }
@@ -190,15 +239,29 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .bg-warning{ background-color:#f59e0b !important; }
 .bg-danger{ background-color:#ef4444 !important; }
 .bg-secondary{ background-color:#6b7280 !important; }
-.btn{ border-radius:10px; font-weight:800; }
-.btn-primary{ background-color:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
+
+.btn{
+  border-radius:10px;
+  font-weight:800;
+}
+.btn-primary{
+  background-color:var(--blue-600);
+  border-color:var(--blue-600);
+  box-shadow:0 4px 12px rgba(37,99,235,.2);
+}
 
 .empty-icon{ font-size:3rem; color:#94a3b8; }
 .empty-title{ font-weight:700; color:#334155; }
 .empty-subtitle{ color:#64748b; }
 
-.form-control, .form-select{ border:2px solid #e2e8f0; border-radius:8px; }
-.form-control:focus, .form-select:focus{ border-color:var(--blue-600); box-shadow:0 0 0 .2rem rgba(37,99,235,.1); }
+.form-control, .form-select{
+  border:2px solid #e2e8f0;
+  border-radius:8px;
+}
+.form-control:focus, .form-select:focus{
+  border-color:var(--blue-600);
+  box-shadow:0 0 0 .2rem rgba(37,99,235,.1);
+}
 .input-group-text{ border-radius:8px 0 0 8px; }
 
 @media (max-width:767.98px){

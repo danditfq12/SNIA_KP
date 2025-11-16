@@ -46,6 +46,10 @@ $quotaFull     = (bool)($VM['quotaFull'] ?? false);
 $hasReviewDecision = (bool)($VM['hasReviewDecision'] ?? false);
 $assignStatusMap   = $VM['assignStatusMap'] ?? ['default'=>['secondary','Pending']];
 
+// NEW: flag dari controller untuk gating assign
+$canAssign           = $VM['canAssign'] ?? true;
+$assignBlockedReason = $VM['assignBlockedReason'] ?? null;
+
 // Formatter kecil
 $fmtDT = fn($s)=> $s ? date('d M Y H:i', strtotime($s)) : '—';
 
@@ -167,15 +171,6 @@ $absNotReviewed = !$absHasDecision;
                 <span class="badge bg-blue-soft"><i class="bi bi-file-earmark-pdf"></i></span>
                 <h6 class="mb-0 fw-semibold text-blue-900">Pratinjau Full Paper</h6>
               </div>
-              <div class="btn-group btn-group-sm">
-                <?php if ($downloadUrl): ?>
-                  <a class="btn btn-outline-secondary" href="<?= esc($downloadUrl) ?>"><i class="bi bi-download"></i></a>
-                <?php endif; ?>
-                <?php if ($previewUrl): ?>
-                  <a class="btn btn-outline-secondary" target="_blank" rel="noopener" href="<?= esc($previewUrl) ?>"><i class="bi bi-box-arrow-up-right"></i></a>
-                <?php endif; ?>
-                <button type="button" class="btn btn-outline-secondary" id="btnToggleSize" data-state="max"><i class="bi bi-arrows-fullscreen"></i></button>
-              </div>
             </div>
             <div class="card-body">
               <?php if ($previewUrl): ?>
@@ -183,11 +178,22 @@ $absNotReviewed = !$absHasDecision;
                   <iframe class="pdf-frame" title="Preview PDF" id="pdfFrame"
                           src="<?= esc($previewUrl) ?>#toolbar=1&navpanes=0"></iframe>
                 </div>
-                <div class="small text-muted mt-2">
-                  Jika pratinjau kosong, klik ikon <b>↗</b> untuk membuka di tab baru
-                  <?php if (!empty($gdocs)): ?>
-                    atau gunakan <a target="_blank" rel="noopener" href="<?= esc($gdocs) ?>">Google Docs Viewer</a>.
-                  <?php endif; ?>
+                <div class="small text-muted mt-2 d-flex justify-content-between align-items-center flex-wrap">
+                  <div>
+                    Jika pratinjau kosong, klik ikon <b>↗</b> untuk membuka di tab baru
+                    <?php if (!empty($gdocs)): ?>
+                      atau gunakan <a target="_blank" rel="noopener" href="<?= esc($gdocs) ?>">Google Docs Viewer</a>.
+                    <?php endif; ?>
+                  </div>
+                  <div class="btn-group btn-group-sm mt-2 mt-sm-0">
+                    <?php if ($downloadUrl): ?>
+                      <a class="btn btn-outline-secondary" href="<?= esc($downloadUrl) ?>"><i class="bi bi-download"></i></a>
+                    <?php endif; ?>
+                    <?php if ($previewUrl): ?>
+                      <a class="btn btn-outline-secondary" target="_blank" rel="noopener" href="<?= esc($previewUrl) ?>"><i class="bi bi-box-arrow-up-right"></i></a>
+                    <?php endif; ?>
+                    <button type="button" class="btn btn-outline-secondary" id="btnToggleSize" data-state="max"><i class="bi bi-arrows-fullscreen"></i></button>
+                  </div>
                 </div>
               <?php else: ?>
                 <div class="empty-hint"><i class="bi bi-info-circle me-1"></i> Belum ada file untuk dipratinjau.</div>
@@ -260,11 +266,11 @@ $absNotReviewed = !$absHasDecision;
               </div>
             </div>
 
-            <!-- === Satu Alert Saja: Abstrak belum direview === -->
-            <?php if ($absNotReviewed): ?>
+            <!-- Alert general untuk penugasan -->
+            <?php if (!$canAssign): ?>
               <div class="alert alert-warning shadow-soft border-0 mb-3">
                 <i class="bi bi-exclamation-triangle me-2"></i>
-                Abstrak belum direview. Penugasan reviewer Full Paper dinonaktifkan sementara.
+                <?= esc($assignBlockedReason ?: 'Penugasan reviewer full paper dinonaktifkan untuk saat ini.') ?>
               </div>
             <?php endif; ?>
 
@@ -290,12 +296,12 @@ $absNotReviewed = !$absHasDecision;
                       $stAt = !empty($ar['status_at']) ? $fmtDT($ar['status_at']) : '—';
                       $asAt = !empty($ar['assigned_at']) ? $fmtDT($ar['assigned_at']) : '—';
 
-                      // assignment status (seharusnya accepted/pending di sini)
+                      // assignment status (accepted/pending/declined)
                       $assignKey = strtolower((string)($ar['assignment_status'] ?? ''));
                       $assignKey = $assignKey ?: 'default';
                       [$csa, $lsa] = $assignStatusMap[$assignKey] ?? $assignStatusMap['default'];
 
-                      // headline badge
+                      // headline badge (kalau sudah accepted, pakai status review; kalau belum, pending)
                       $headlineBadge = ($assignKey === 'accepted') ? $m : ['Pending','secondary'];
 
                       $unassignUrl = site_url('admin/fullpaper/unassign/'.$submissionId.'/'.(int)$ar['reviewer_id']);
@@ -312,12 +318,16 @@ $absNotReviewed = !$absHasDecision;
                         <div class="text-end">
                           <span class="badge bg-<?= esc($headlineBadge[1]) ?>"><?= esc($headlineBadge[0]) ?></span>
                           <div class="mt-2">
-                            <a href="#"
-                               class="btn btn-outline-danger btn-xs js-unassign"
-                               data-url="<?= esc($unassignUrl) ?>"
-                               data-name="<?= esc($ar['name'] ?? 'Reviewer') ?>">
-                              <i class="bi bi-x-circle me-1"></i>Batalkan
-                            </a>
+                            <?php if ($assignKey !== 'accepted'): ?>
+                              <a href="#"
+                                 class="btn btn-outline-danger btn-xs js-unassign"
+                                 data-url="<?= esc($unassignUrl) ?>"
+                                 data-name="<?= esc($ar['name'] ?? 'Reviewer') ?>">
+                                <i class="bi bi-x-circle me-1"></i>Batalkan
+                              </a>
+                            <?php else: ?>
+                              <small class="text-muted fst-italic d-block">Sudah dikonfirmasi</small>
+                            <?php endif; ?>
                           </div>
                         </div>
                       </div>
@@ -335,6 +345,10 @@ $absNotReviewed = !$absHasDecision;
                     <div class="fw-semibold">Tambah Reviewer</div>
                     <small class="text-muted">Review masuk: <?= (int)$completedCount ?></small>
                   </div>
+                  <?php
+                    // disable form jika tidak boleh assign (abstrak ditolak / belum diterima / status final)
+                    $assignDisabled = !$canAssign;
+                  ?>
                   <?php if (!$quotaFull): ?>
                     <form method="post" action="<?= site_url('admin/fullpaper/assign/'.$submissionId) ?>" class="row g-2" id="assignForm">
                       <?= csrf_field() ?>
@@ -342,8 +356,14 @@ $absNotReviewed = !$absHasDecision;
                         <select name="reviewer_id"
                                 class="form-select form-select-sm"
                                 required id="reviewerSelect"
-                                <?= $absNotReviewed ? 'disabled' : '' ?>>
-                          <option value=""><?= $absNotReviewed ? '-- menunggu review abstrak --' : '-- pilih --' ?></option>
+                                <?= $assignDisabled ? 'disabled' : '' ?>>
+                          <option value="">
+                            <?php if ($assignDisabled): ?>
+                              -- <?= esc($assignBlockedReason ?: 'penugasan dinonaktifkan') ?> --
+                            <?php else: ?>
+                              -- pilih --
+                            <?php endif; ?>
+                          </option>
                           <?php if (!empty($reviewers)): ?>
                             <?php $declinedLookup = array_flip($declinedIds); ?>
                             <?php foreach ($reviewers as $rv):
@@ -366,7 +386,7 @@ $absNotReviewed = !$absHasDecision;
                         <div class="form-text">Maksimal <?= $maxReviewer ?> orang.</div>
                       </div>
                       <div class="col-12 d-grid">
-                        <button class="btn btn-primary btn-sm" id="btnAssign" <?= $absNotReviewed ? 'disabled' : '' ?>>
+                        <button class="btn btn-primary btn-sm" id="btnAssign" <?= $assignDisabled ? 'disabled' : '' ?>>
                           <i class="bi bi-person-plus me-1"></i>Tugaskan
                         </button>
                       </div>
@@ -400,7 +420,11 @@ $absNotReviewed = !$absHasDecision;
                         </tbody>
                       </table>
                     </div>
-                    <div class="small text-muted mt-2">Info tahap abstrak; boleh menugaskan reviewer yang sama untuk full paper.</div>
+                    <div class="small text-muted mt-2">
+                      Reviewer yang sudah memberi keputusan pada abstrak akan
+                      <b>otomatis ditugaskan</b> ke full paper ketika abstrak berstatus <b>Diterima</b>.
+                      Admin tetap bisa menambah reviewer lain sebagai pelengkap.
+                    </div>
                   <?php endif; ?>
                 </div>
 

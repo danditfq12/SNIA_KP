@@ -114,7 +114,7 @@ if ($revNo !== null && $revNo >= 1 && $uploadedAt) {
                 <?php endif; ?>
               </div>
 
-              <!-- Badge revisi + panel -->
+              <!-- Badge revisi + panel + info revisi baru -->
               <div class="mt-2 d-flex flex-wrap align-items-center gap-2">
                 <?php if ($revNo !== null): ?>
                   <span class="badge bg-light text-dark fw-semibold">
@@ -127,6 +127,12 @@ if ($revNo !== null && $revNo >= 1 && $uploadedAt) {
                 <?php if ($panel==='ACCEPTED' && $optional): ?>
                   <span class="badge bg-warning text-dark">
                     <i class="bi bi-stars me-1"></i>Revisi Opsional diperbolehkan
+                  </span>
+                <?php endif; ?>
+
+                <?php if ($needsReReview): ?>
+                  <span class="badge bg-warning text-dark">
+                    <i class="bi bi-upload me-1"></i>Presenter mengunggah revisi baru
                   </span>
                 <?php endif; ?>
               </div>
@@ -435,7 +441,7 @@ if ($revNo !== null && $revNo >= 1 && $uploadedAt) {
   --glass-bd: rgba(30,64,175,.14);
   --glass-shadow: 0 10px 24px rgba(2,6,23,.08);
 }
-.container-xxl{ max-width:min(100%, 1560px); padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; margin-inline:auto; }
+.container-xxl{ max-width=min(100%, 1560px); padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; margin-inline:auto; }
 body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.5px; line-height:1.6; color:var(--ink); }
 .page-wrap-blue{
   min-height:100vh; padding-top:72px;

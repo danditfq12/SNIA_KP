@@ -107,19 +107,41 @@ class Dashboard extends BaseController
 
     /* =============== Meta Abstrak & Fullpaper =============== */
 
+    /**
+     * Ambil status abstrak TERBARU + timestamp status ts (updated_at/tanggal_upload/created_at).
+     * Dipakai utk logika:
+     * - abstrak ditolak → tetap tampil di progress max 24 jam atau sampai event mulai.
+     */
     private function getAbstractStatus(int $uid, int $eventId): array
     {
-        if (!$this->tableExists('abstrak')) return ['has'=>false,'status'=>''];
+        if (!$this->tableExists('abstrak')) {
+            return ['has' => false, 'status' => '', 'ts' => null];
+        }
 
         $orderCol = $this->pickCol('abstrak', ['updated_at','tanggal_upload','created_at'], 'id_abstrak');
 
-        $row = $this->db->table('abstrak')
-            ->select('status')
-            ->where('id_user',$uid)->where('event_id',$eventId)
-            ->orderBy($orderCol,'DESC')->get()->getRowArray();
+        // timestamp yg dipakai utk 24 jam
+        $tsExpr = $this->buildCoalesceExpr('abstrak', 'a', ['updated_at','tanggal_upload','created_at']);
 
-        if (!$row) return ['has'=>false,'status'=>''];
-        return ['has'=>true,'status'=>strtolower((string)$row['status'])];
+        $row = $this->db->table('abstrak a')
+            ->select("status, $tsExpr AS ts", false)
+            ->where('id_user', $uid)
+            ->where('event_id', $eventId)
+            ->orderBy($orderCol, 'DESC')
+            ->get()->getRowArray();
+
+        if (!$row) {
+            return ['has' => false, 'status' => '', 'ts' => null];
+        }
+
+        $status = strtolower((string)($row['status'] ?? ''));
+        $ts     = !empty($row['ts']) ? strtotime((string)$row['ts']) : null;
+
+        return [
+            'has'    => true,
+            'status' => $status,
+            'ts'     => $ts,
+        ];
     }
 
     private function getFullpaperMeta(int $uid, int $eventId): array
@@ -218,7 +240,8 @@ class Dashboard extends BaseController
     }
 
     /**
-     * Event yang masih proses (belum dimulai).
+     * Event yang masih proses (belum selesai / belum mulai).
+     * NOTE: kalau abstrak DITOLAK → tetap tampil max 24 jam atau sampai event mulai.
      */
     private function getProgressEvents(int $uid): array
     {
@@ -255,13 +278,25 @@ class Dashboard extends BaseController
             $timeStr   = trim((string)($e['event_time'] ?? ''));
             $startTs   = $dateStr ? strtotime($dateStr.' '.($timeStr !== '' ? $timeStr : '00:00:00')) : null;
 
+            // Kalau event sudah mulai / lewat → tidak masuk progress
             if ($startTs !== null && $startTs <= $now) {
                 continue;
             }
 
             $absMeta = $this->getAbstractStatus($uid, $eventId);
             $absHas  = $absMeta['has'];
-            $absSt   = strtolower($absMeta['status']);
+            $absSt   = strtolower($absMeta['status'] ?? '');
+            $absTs   = $absMeta['ts'] ?? null;
+
+            // ==== KHUSUS: abstrak ditolak → tetap tampil max 24 jam atau sampai event mulai ====
+            if ($absSt === 'ditolak' && $absTs !== null) {
+                $limitTs = $absTs + 86400; // 1x24 jam
+                // kalau sekarang sudah lebih dari 24 jam sejak ditolak → hide dari progress
+                if ($now > $limitTs) {
+                    continue;
+                }
+                // kalau event mulai duluan, kita sudah di-"continue" di atas (startTs <= now)
+            }
 
             $fpEligible = $absHas && $absSt !== 'ditolak';
             $fpMeta     = $this->getFullpaperMeta($uid, $eventId);
@@ -290,6 +325,7 @@ class Dashboard extends BaseController
             if (($step_fp_done || !$fpEligible) && !$step_bayar_done) $current = 'bayar';
             if ($step_bayar_done && !$step_finish_done) $current = 'verifikasi';
 
+            // Kalau sudah fully finish (pembayaran verified) → tidak tampil di progress
             if ($step_finish_done) continue;
 
             $out[] = [

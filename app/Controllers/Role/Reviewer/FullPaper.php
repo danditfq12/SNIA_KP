@@ -38,6 +38,58 @@ class FullPaper extends BaseController
         return $ts < time();
     }
 
+    // BARU: cek event sudah DIMULAI berdasarkan tanggal + jam
+    private function isEventStarted(?string $date, ?string $time = null): bool
+    {
+        if (!$date) return false;
+        $date = trim((string)$date);
+        $time = trim((string)($time ?? ''));
+
+        $dt = $date . ($time !== '' ? (' ' . $time) : '');
+        $ts = strtotime($dt);
+        if ($ts === false) return false;
+
+        return $ts <= time();
+    }
+
+    // BARU: helper untuk cek event sudah mulai dari row submission
+    private function isEventStartedForSubmission(array $subRow, array $S): bool
+    {
+        if (!$S['event'] || empty($subRow[$S['event']])) return false;
+        if (!$this->db->tableExists('events')) return false;
+
+        $eventId = (int)$subRow[$S['event']];
+        $ef = array_flip($this->db->getFieldNames('events') ?: []);
+
+        $eid = isset($ef['id']) ? 'id' : (isset($ef['event_id']) ? 'event_id' : null);
+        if (!$eid) return false;
+
+        $dateCandidates = ['event_date','start_date','tanggal_mulai','mulai_at','started_at','date_start'];
+        $timeCandidates = ['event_time','start_time','jam_mulai','waktu_mulai'];
+
+        $edateCol = null;
+        foreach ($dateCandidates as $c) {
+            if (isset($ef[$c])) { $edateCol = $c; break; }
+        }
+        if (!$edateCol) return false;
+
+        $etimeCol = null;
+        foreach ($timeCandidates as $c) {
+            if (isset($ef[$c])) { $etimeCol = $c; break; }
+        }
+
+        $sel = "$edateCol AS d";
+        if ($etimeCol) $sel .= ", $etimeCol AS t";
+
+        $ev = $this->db->table('events')->select($sel)->where($eid, $eventId)->get()->getRowArray();
+        if (!$ev) return false;
+
+        $date = $ev['d'] ?? null;
+        $time = $ev['t'] ?? null;
+
+        return $this->isEventStarted($date, $time);
+    }
+
     /* ======================= Tabel: submissions/abstrak ======================= */
 
     private function submissionTable(): string
@@ -164,7 +216,6 @@ class FullPaper extends BaseController
 
     private function getTaskStatusFromReviews(int $submissionId, int $reviewerId): ?array
     {
-        // NOTE: ini dipakai utk skema yg nyimpen status di tabel review/reviews (jarang dipakai utk fullpaper)
         $rt = $this->reviewTableName();
         if (!$rt) return null;
 
@@ -191,11 +242,9 @@ class FullPaper extends BaseController
 
     private function getTaskStatus(int $submissionId, int $reviewerId): array
     {
-        // 1) Coba baca dari review/reviews (kalau ada)
         $fromReviews = $this->getTaskStatusFromReviews($submissionId, $reviewerId);
         if ($fromReviews) return $fromReviews;
 
-        // 2) Fallback: dari pivot fullpaper_reviewers (ini yg dipakai Dashboard::confirm)
         $t = $this->pivotTable(); $P = $this->pivotCols();
         if (!$this->db->tableExists($t) || !$P['submission'] || !$P['reviewer']) {
             return ['status'=>'pending','reason'=>null];
@@ -404,7 +453,7 @@ class FullPaper extends BaseController
 
         $this->applyAbstractJoinsForCategory($builder, $sub, $S);
 
-        // HANYA tugas yang sudah DIKONFIRMASI (accepted) di dashboard yang boleh muncul di daftar Full Paper
+        // hanya tugas yg sudah accepted di dashboard
         if ($P['status']) {
             $builder->whereIn("p.{$P['status']}", ['accepted','diterima']);
         }
@@ -434,11 +483,16 @@ class FullPaper extends BaseController
             $r['event_title'] = $r['event_title'] ?? '-';
             $r['event_end_at']= $r['event_end_at'] ?? null;
 
+            // event start info untuk rule "sampai event dimulai"
+            $eventDate = $r['event_date'] ?? null;
+            $eventTime = $r['event_time'] ?? null;
+            $eventStarted = $this->isEventStarted($eventDate, $eventTime);
+
             if ($eid && !isset($eventOptions[$eid])) {
                 $eventOptions[$eid] = $r['event_title'] ?? ('Event #'.$eid);
             }
 
-            // cek apakah butuh tindakan ulang (misal setelah upload revisi)
+            // cek kebutuhan re-review (revisi baru)
             $needs = true;
             if ($my) {
                 $myAt = $my['tanggal_review'] ?? '1970-01-01 00:00:00';
@@ -447,28 +501,26 @@ class FullPaper extends BaseController
                 $needs = true;
             }
 
-            $rev = strtolower((string)$r['review_status']);    // 'menunggu' | 'revisi' | 'diterima' | 'ditolak'
-            $asg = strtolower((string)$r['asg_status_norm']);  // 'accepted' | 'pending' | 'declined'
-            $eventOver = $this->isEventOver($r['event_end_at'] ?? null);
+            $rev = strtolower((string)$r['review_status']);    // menunggu | revisi | diterima | ditolak
+            $asg = strtolower((string)$r['asg_status_norm']);  // accepted | pending | declined
 
-            // RULE:
-            // - belum dikonfirmasi: sudah difilter di query (tidak muncul di sini)
-            // - declined: jangan tampil (anggap batal)
-            // - diterima (review keputusan): langsung pindah ke riwayat => jangan tampil
-            // - revisi/ditolak: tampil SELAMA event belum selesai, setelah event selesai hilang (riwayat yg menampung)
+            // RULE INDEX:
+            // - assignment declined  => tidak tampil
+            // - keputusan diterima   => tidak tampil (pindah ke riwayat)
+            // - revisi / ditolak     => tetap tampil SAMPAI event DIMULAI
+            // - menunggu             => tampil
             $show = true;
             if ($asg === 'declined') {
                 $show = false;
             } elseif ($rev === 'diterima') {
                 $show = false;
             } elseif ($rev === 'revisi' || $rev === 'ditolak') {
-                $show = !$eventOver;
+                $show = !$eventStarted; // <== perintah: sampai event dimulai
             } else {
-                // 'menunggu' (belum ada review untuk revision ini) => tampil
                 $show = true;
             }
 
-            // kalau assignment accepted & ada revisi baru (needs), tetap paksa tampil
+            // jika ada revisi baru dan reviewer ini belum re-review, tetap paksa tampil
             if ($asg === 'accepted' && $needs) $show = true;
 
             if ($show) $listRows[] = $r;
@@ -478,7 +530,7 @@ class FullPaper extends BaseController
 
         return view('role/reviewer/fullpaper/index', [
             'title'        => 'Tugas Full Paper',
-            'rows'         => $listRows,   // hanya To-Do
+            'rows'         => $listRows,
             'eventOptions' => $eventOptions,
         ]);
     }
@@ -518,10 +570,8 @@ class FullPaper extends BaseController
             return redirect()->to(site_url('reviewer/fullpaper'))->with('error','Anda tidak ditugaskan untuk naskah ini.');
         }
 
-        // baca status tugas dari pivot/review
         $task = $this->getTaskStatus($submissionId, $me);
 
-        // JIKA BELUM DIKONFIRMASI → TIDAK BOLEH MASUK DETAIL
         if ($task['status'] !== 'accepted') {
             return redirect()->to(site_url('reviewer/dashboard#incoming'))
                 ->with('error','Terima penugasan full paper ini terlebih dahulu di halaman dashboard.');
@@ -567,14 +617,21 @@ class FullPaper extends BaseController
             'abstrak_status'        => $submission['abstrak_status'] ?? null,
         ];
 
+        // BARU: flag event sudah mulai untuk kunci form review
+        $eventStarted = $this->isEventStarted(
+            $submissionView['event_date'] ?? null,
+            $submissionView['event_time'] ?? null
+        );
+
         return view('role/reviewer/fullpaper/detail', [
             'title'          => 'Detail Full Paper',
             'submission'     => $submissionView,
-            'taskStatus'     => $task['status'],   // seharusnya selalu 'accepted' di titik ini
+            'taskStatus'     => $task['status'],
             'taskReason'     => $task['reason'],
             'revisionNo'     => $revNow,
             'myReview'       => $myReview,
             'reviewers'      => $reviewers,
+            'eventStarted'   => $eventStarted,  // dikirim ke view
         ]);
     }
 
@@ -617,6 +674,12 @@ class FullPaper extends BaseController
         $subRow   = $this->db->table($subTable)->where($S['pk'],$submissionId)->get()->getRowArray() ?: [];
         $revNow   = $this->currentRevision($subRow, $S);
 
+        // BARU: blokir perubahan jika event sudah DIMULAI
+        if ($this->isEventStartedForSubmission($subRow, $S)) {
+            return redirect()->to(site_url('reviewer/fullpaper/'.$submissionId))
+                ->with('error','Event sudah dimulai. Review tidak dapat diubah lagi.');
+        }
+
         $fields = $this->db->getFieldNames($this->reviewsTable()) ?: [];
 
         $payload = [
@@ -650,11 +713,9 @@ class FullPaper extends BaseController
             ->with('success', 'Review tersimpan. Status agregat saat ini: '.$final);
     }
 
-    /* ====== Endpoint lama (opsional) – dibiarkan untuk kompatibilitas (routes sudah dicabut) ====== */
+    /* ====== Endpoint lama (opsional) ====== */
     public function action()
     {
-        // Tidak lagi dipakai karena konfirmasi tugas sudah pindah ke Dashboard::confirm
-        // Dibiarkan supaya tidak fatal kalau masih ada request lama.
         if ($this->request->isAJAX()) {
             return $this->response->setJSON([
                 'success' => false,
@@ -745,7 +806,7 @@ class FullPaper extends BaseController
     public function preview($submissionId) { return $this->blob($submissionId); }
     public function inline($submissionId)  { return $this->blob($submissionId); }
 
-    /* ======================= (Opsional) Hook ======================= */
+    /* ======================= Hook setelah author reupload ======================= */
 
     public function afterAuthorReupload(int $submissionId, bool $notifyAll = true): void
     {

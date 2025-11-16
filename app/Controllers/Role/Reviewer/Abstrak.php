@@ -134,6 +134,34 @@ class Abstrak extends BaseController
         return null;
     }
 
+    /**
+     * Cek apakah event dari abstrak ini sudah mulai.
+     * Kalau kolom event_date tidak ada / kosong → dianggap belum mulai (false).
+     */
+    private function isEventStarted(int $idAbstrak): bool
+    {
+        if (!$this->db->tableExists('abstrak') || !$this->db->tableExists('events')) {
+            return false;
+        }
+
+        $row = $this->db->table('abstrak a')
+            ->select('e.event_date, e.event_time')
+            ->join('events e', 'e.id = a.event_id', 'left')
+            ->where('a.id_abstrak', $idAbstrak)
+            ->get()->getRowArray();
+
+        if (!$row || empty($row['event_date'])) {
+            return false;
+        }
+
+        $date = trim((string)$row['event_date']);
+        $time = trim((string)($row['event_time'] ?? '00:00:00'));
+        $ts   = strtotime("$date $time");
+        if ($ts === false) return false;
+
+        return $ts <= time(); // event sudah mulai / lewat
+    }
+
     /* ================= Pages ================= */
 
     public function index()
@@ -420,6 +448,13 @@ class Abstrak extends BaseController
         }
 
         $idAbstrak = (int)$id;
+
+        // ❌ Jangan boleh ubah status review kalau event sudah dimulai
+        if ($this->isEventStarted($idAbstrak)) {
+            return redirect()->back()
+                ->with('error', 'Event sudah dimulai, hasil review abstrak tidak dapat diubah lagi.');
+        }
+
         if ($this->getTaskStatus($idAbstrak, $idReviewer) !== 'accepted') {
             return redirect()->back()->with('error','Tugas belum di-ACC atau sudah ditolak.')->withInput();
         }
@@ -536,6 +571,13 @@ class Abstrak extends BaseController
         }
 
         $idAbstrak = (int)$id;
+
+        // ❌ Jangan boleh undo kalau event sudah dimulai
+        if ($this->isEventStarted($idAbstrak)) {
+            return redirect()->back()
+                ->with('error', 'Event sudah dimulai, keputusan review abstrak tidak dapat diubah lagi.');
+        }
+
         $rt = $this->reviewTable();
         if (!$rt) return redirect()->back()->with('error','Tabel review tidak ditemukan.');
         $R  = $this->reviewCols($rt);
