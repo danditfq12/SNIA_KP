@@ -22,7 +22,7 @@ class Landing extends BaseController
     public function index()
     {
         try {
-            // Ambil event aktif yang terdekat
+            // Ambil event aktif terdekat
             $activeEvent = $this->eventModel
                 ->where('is_active', true)
                 ->where('registration_active', true)
@@ -30,7 +30,7 @@ class Landing extends BaseController
                 ->orderBy('event_date', 'ASC')
                 ->first();
 
-            // Ambil voucher aktif jika ada
+            // Ambil voucher aktif jika ada event
             $activeVouchers = [];
             if ($activeEvent) {
                 $activeVouchers = $this->voucherModel
@@ -40,43 +40,42 @@ class Landing extends BaseController
                     ->orderBy('masa_berlaku', 'ASC')
                     ->findAll();
 
-                // Hitung sisa kuota untuk setiap voucher
+                // Hitung sisa kuota
                 foreach ($activeVouchers as &$voucher) {
                     $usedCount = $this->db->table('pembayaran')
                         ->where('id_voucher', $voucher['id_voucher'])
                         ->where('status', 'verified')
                         ->countAllResults();
-                    
+
                     $voucher['used_count'] = $usedCount;
                     $voucher['remaining']  = max(0, (int)$voucher['kuota'] - $usedCount);
                 }
             }
 
-            // Parse boolean values untuk event
+            // Parse boolean + format tanggal
             if ($activeEvent) {
                 $activeEvent['is_active']                    = $this->parseBoolean($activeEvent['is_active']);
                 $activeEvent['registration_active']          = $this->parseBoolean($activeEvent['registration_active']);
                 $activeEvent['abstract_submission_active']   = $this->parseBoolean($activeEvent['abstract_submission_active']);
                 $activeEvent['full_paper_submission_active'] = $this->parseBoolean($activeEvent['full_paper_submission_active'] ?? false);
-                
-                // Format tanggal Indonesia
+
                 $activeEvent['event_date_formatted'] = $this->formatDateIndonesian($activeEvent['event_date']);
-                $activeEvent['registration_deadline_formatted'] = !empty($activeEvent['registration_deadline']) 
-                    ? $this->formatDateIndonesian($activeEvent['registration_deadline']) 
+                $activeEvent['registration_deadline_formatted'] = !empty($activeEvent['registration_deadline'])
+                    ? $this->formatDateIndonesian($activeEvent['registration_deadline'])
                     : null;
             }
 
-            $data = [
+            return view('landing/index', [
                 'activeEvent'    => $activeEvent,
                 'activeVouchers' => $activeVouchers,
-            ];
-
-            return view('landing', $data);
+                'title'          => 'SNIA - Seminar Nasional Informatika',
+            ]);
         } catch (\Exception $e) {
             log_message('error', 'Landing page error: ' . $e->getMessage());
-            return view('landing', [
+            return view('landing/index', [
                 'activeEvent'    => null,
                 'activeVouchers' => [],
+                'title'          => 'SNIA - Seminar Nasional Informatika',
             ]);
         }
     }
@@ -96,17 +95,8 @@ class Landing extends BaseController
     private function formatDateIndonesian($date)
     {
         if (!$date) return '';
-        
-        $months = [
-            1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-            'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-        ];
-        
-        $timestamp = strtotime($date);
-        $day   = date('d', $timestamp);
-        $month = $months[(int)date('m', $timestamp)];
-        $year  = date('Y', $timestamp);
-        
-        return "{$day} {$month} {$year}";
+        $months = [1 => 'Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+        $ts = strtotime($date);
+        return date('d', $ts) . ' ' . $months[(int)date('m', $ts)] . ' ' . date('Y', $ts);
     }
 }

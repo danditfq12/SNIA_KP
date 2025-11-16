@@ -1,16 +1,15 @@
 <?php
-// Input dari controller (versi ABSTRAK):
-// 'abstrak'         => [id_abstrak, judul, tanggal_upload, file_abstrak, nama_lengkap, nama_kategori, event_title, event_date?, event_time?]
-// 'taskStatus'      => 'accepted'|'pending'|'declined'
-// 'taskReason'      => string|null (opsional)
-// 'myReview'        => ['keputusan','komentar','tanggal_review'] | null
-// (opsional) 'existingReview' => sama struktur dengan myReview
+// Input dari controller:
+// 'abstrak'        => [id_abstrak, judul, tanggal_upload, file_abstrak, nama_lengkap, nama_kategori, event_title, event_date?, event_time?]
+// 'taskStatus'     => 'accepted'|'pending'|'declined'
+// 'taskReason'     => string|null
+// 'existingReview' => ['keputusan','komentar','tanggal_review'] | null
 
 $title       = $title ?? 'Detail Abstrak';
 $A           = $abstrak ?? [];
 $taskStatus  = strtolower($taskStatus ?? 'pending');
 $taskReason  = $taskReason ?? null;
-$my          = $myReview ?? ($existingReview ?? null);
+$my          = $existingReview ?? null; // pakai existingReview dari controller
 $reviewers   = $reviewers ?? [];
 
 $fmt = fn($d,$h=false)=>$d ? date($h?'d M Y H:i':'d M Y', strtotime($d)) : '-';
@@ -18,9 +17,8 @@ $badgeMap = function($s){
   $s = strtolower((string)$s);
   return match(true){
     in_array($s,['accepted','diterima']) => 'bg-success',
-    in_array($s,['revision','revisi'])   => 'bg-warning text-dark',
     in_array($s,['rejected','ditolak'])  => 'bg-danger',
-    in_array($s,['pending','menunggu','none','']) => 'bg-secondary',
+    in_array($s,['pending','menunggu','sedang_direview','none','']) => 'bg-secondary',
     default => 'bg-secondary'
   };
 };
@@ -33,12 +31,28 @@ $hasFile     = !empty($A['file_abstrak']);
 $kpt         = strtolower(trim((string)($my['keputusan'] ?? '')));
 $comment     = trim((string)($my['komentar'] ?? ''));
 $commentLen  = mb_strlen($comment);
-// dianggap “sudah review” jika ada keputusan final DAN komentar valid (≥5)
-$isFinal     = in_array($kpt, ['accepted','diterima','revision','revisi','rejected','ditolak'], true);
+$isFinal     = in_array($kpt, ['accepted','diterima','rejected','ditolak'], true);
 $isReviewed  = $isFinal && $commentLen >= 5;
 
 $showLastSent = !empty($my['tanggal_review']) && $isReviewed;
 $blobUrl      = site_url('reviewer/abstrak/blob/'.$idAbs);
+
+/** ===== Flag: Event sudah mulai atau belum (berdasarkan event_date + event_time) ===== */
+$eventStartRawDate = $A['event_date'] ?? null;
+$eventStartRawTime = $A['event_time'] ?? null;
+$eventStartTs      = null;
+$eventStarted      = false;
+$eventStartDisplay = null;
+
+if (!empty($eventStartRawDate)) {
+    $timeString = trim($eventStartRawTime ?: '00:00:00');
+    $ts = strtotime($eventStartRawDate . ' ' . $timeString);
+    if ($ts !== false) {
+        $eventStartTs      = $ts;
+        $eventStarted      = $ts <= time(); // true kalau event sudah mulai / lewat
+        $eventStartDisplay = date('d M Y H:i', $ts);
+    }
+}
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_reviewer') ?>
@@ -180,6 +194,20 @@ $blobUrl      = site_url('reviewer/abstrak/blob/'.$idAbs);
               </button>
             </div>
             <div class="card-body">
+
+              <?php if ($eventStarted && $eventStartDisplay): ?>
+                <div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+                  <i class="bi bi-exclamation-circle mt-1"></i>
+                  <div>
+                    <div class="fw-semibold">Event sudah dimulai.</div>
+                    <div class="small">
+                      Review yang Anda kirim sekarang akan tercatat sebagai review setelah event dimulai
+                      (mulai: <b><?= esc($eventStartDisplay) ?></b>).
+                    </div>
+                  </div>
+                </div>
+              <?php endif; ?>
+
               <?php if (!$my): ?>
                 <div class="text-muted">Belum ada review yang Anda kirim pada versi ini.</div>
               <?php else: ?>
@@ -266,7 +294,10 @@ $blobUrl      = site_url('reviewer/abstrak/blob/'.$idAbs);
               <?php if (!empty($A['event_date'])): ?>
                 <div class="kv-row mt-2">
                   <div class="kv-label">Tanggal</div>
-                  <div class="kv-value"><?= $fmt($A['event_date']) ?> <?= esc($A['event_time'] ?? '') ?></div>
+                  <div class="kv-value">
+                    <?= $fmt($A['event_date']) ?>
+                    <?= esc($A['event_time'] ?? '') ?>
+                  </div>
                 </div>
               <?php endif; ?>
             </div>
@@ -278,7 +309,7 @@ $blobUrl      = site_url('reviewer/abstrak/blob/'.$idAbs);
   </main>
 </div>
 
-<!-- Modal: Kirim/Ubah Review (centered) -->
+<!-- Modal: Kirim/Ubah Review -->
 <div class="modal fade" id="reviewModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <form method="post" action="<?= site_url('reviewer/abstrak/review/'.$idAbs) ?>" class="modal-content" id="reviewForm">
@@ -296,9 +327,8 @@ $blobUrl      = site_url('reviewer/abstrak/blob/'.$idAbs);
           <label class="form-label">Keputusan</label>
           <?php $val = $isReviewed ? $kpt : 'accepted'; ?>
           <select name="keputusan" class="form-select" <?= !$canReview?'disabled':'' ?> required>
-            <option value="accepted" <?= $val==='accepted' || $val==='diterima' ? 'selected':'' ?>>Diterima (Accept)</option>
-            <option value="revision" <?= $val==='revision' || $val==='revisi' ? 'selected':'' ?>>Revisi (Revision)</option>
-            <option value="rejected" <?= $val==='rejected' || $val==='ditolak' ? 'selected':'' ?>>Ditolak (Reject)</option>
+            <option value="accepted" <?= in_array($val, ['accepted','diterima']) ? 'selected':'' ?>>Diterima (Accept)</option>
+            <option value="rejected" <?= in_array($val, ['rejected','ditolak']) ? 'selected':'' ?>>Ditolak (Reject)</option>
           </select>
         </div>
         <div>
@@ -317,7 +347,7 @@ $blobUrl      = site_url('reviewer/abstrak/blob/'.$idAbs);
   </div>
 </div>
 
-<!-- Modal: Tolak Penugasan (centered) -->
+<!-- Modal: Tolak Penugasan -->
 <div class="modal fade" id="declineModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <form method="post" action="<?= site_url('reviewer/abstrak/confirm/'.$idAbs) ?>" class="modal-content" id="declineForm">
@@ -392,7 +422,6 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 
 /* badges */
 .bg-success{ background-color:#10b981 !important; }
-.bg-warning{ background-color:#f59e0b !important; }
 .bg-danger{ background-color:#ef4444 !important; }
 .bg-secondary{ background-color:#6b7280 !important; }
 
@@ -419,15 +448,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ==== VALIDASI DENGAN SWEETALERT2 ====
+  // Flag event sudah mulai (dari PHP)
+  const eventStarted      = <?= $eventStarted ? 'true' : 'false' ?>;
+  const eventStartDisplay = <?= json_encode($eventStartDisplay ?? '') ?>;
+
+  // VALIDASI & KONFIRMASI REVIEW (SweetAlert2)
   const form   = document.getElementById('reviewForm');
   const select = form?.querySelector('select[name="keputusan"]');
   const text   = form?.querySelector('textarea[name="komentar"]');
 
-  form?.addEventListener('submit', async (e) => {
-    const decision = (select?.value || '').toLowerCase();
-    const comment  = (text?.value || '').trim();
+  let allowSubmitAfterConfirm = false;
 
+  form?.addEventListener('submit', async (e) => {
+    if (!select || !text) return;
+
+    const decision = (select.value || '').toLowerCase();
+    const comment  = (text.value || '').trim();
+
+    // Validasi panjang komentar dulu
     if (comment.length < 5) {
       e.preventDefault();
       await Swal.fire({
@@ -436,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
         text: 'Komentar wajib diisi minimal 5 karakter.',
         confirmButtonText: 'OK'
       });
-      text?.focus();
+      text.focus();
       return;
     }
     if (decision === 'rejected' && comment.length < 10) {
@@ -447,7 +485,29 @@ document.addEventListener('DOMContentLoaded', () => {
         text: 'Jika memilih Ditolak, komentar minimal 10 karakter.',
         confirmButtonText: 'OK'
       });
-      text?.focus();
+      text.focus();
+      return;
+    }
+
+    // Kalau event sudah dimulai → konfirmasi dulu
+    if (eventStarted && !allowSubmitAfterConfirm) {
+      e.preventDefault();
+      const result = await Swal.fire({
+        icon: 'info',
+        title: 'Event sudah dimulai',
+        text: eventStartDisplay
+          ? 'Event untuk abstrak ini sudah dimulai pada ' + eventStartDisplay + '. Review yang Anda kirim akan tercatat sebagai review setelah event dimulai. Lanjutkan?'
+          : 'Event untuk abstrak ini sudah dimulai. Review yang Anda kirim akan tercatat sebagai review setelah event dimulai. Lanjutkan?',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, kirim review',
+        cancelButtonText: 'Batal'
+      });
+
+      if (result.isConfirmed) {
+        allowSubmitAfterConfirm = true;
+        form.submit(); // submit ulang setelah konfirmasi
+      }
+      return;
     }
   });
 

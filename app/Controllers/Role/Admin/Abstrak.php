@@ -29,6 +29,8 @@ class Abstrak extends BaseController
         }
     }
 
+    /* ========================= Utilities: path & reviews ========================= */
+
     private function isPublicUrl(string $path): bool
     {
         return (bool) preg_match('~^https?://~i', $path);
@@ -203,6 +205,81 @@ class Abstrak extends BaseController
         return $rows;
     }
 
+    /* ========================= Utilities: submissions/FP gating ========================= */
+
+    private function submissionsTable(): ?string
+    {
+        if ($this->db->tableExists('submissions')) return 'submissions';
+        return null;
+    }
+
+    private function submissionsCols(string $table): array
+    {
+        $fields = array_flip($this->db->getFieldNames($table) ?: []);
+        $pick = function(array $cands) use ($fields) {
+            foreach ($cands as $c) if (isset($fields[$c])) return $c;
+            return null;
+        };
+        return [
+            'pk'        => $pick(['id','submission_id','id_submission']) ?? 'id',
+            'user_id'   => $pick(['user_id','id_user']),
+            'event_id'  => $pick(['event_id','id_event']),
+            'fp_status' => $pick(['full_paper_status']),
+            'fp_notes'  => $pick(['review_notes','catatan_reviewer','admin_comment','admin_notes']),
+            'fp_dec_at' => $pick(['full_paper_decision_at','decision_at']),
+            'fp_dec_by' => $pick(['full_paper_decision_by','decision_by']),
+        ];
+    }
+
+    private function autoGateFullPaperOnAbstractDecision(int $idAbstrak, string $status): void
+    {
+        try {
+            $absRow  = $this->abstrakModel->find($idAbstrak);
+            if (!$absRow) return;
+
+            $userId  = (int)($absRow['id_user']  ?? $absRow['user_id']  ?? 0);
+            $eventId = (int)($absRow['event_id'] ?? $absRow['id_event'] ?? 0);
+            if (!$userId || !$eventId) return;
+
+            $subsTable = $this->submissionsTable();
+            if (!$subsTable) return;
+
+            $C = $this->submissionsCols($subsTable);
+            if (!$C['user_id'] || !$C['event_id'] || !$C['fp_status']) return;
+
+            $subs = $this->db->table($subsTable)
+                ->select(($C['pk'] ?: 'id') . ' AS id, ' . $C['fp_status'] . ' AS st')
+                ->where($C['user_id'], $userId)
+                ->where($C['event_id'], $eventId)
+                ->get()->getResultArray();
+
+            if (strtolower($status) === 'ditolak' && $subs) {
+                foreach ($subs as $s) {
+                    $cur = strtoupper((string)($s['st'] ?? 'NONE'));
+                    if (in_array($cur, ['ACCEPTED','REJECTED'], true)) {
+                        continue;
+                    }
+                    $upd = [ $C['fp_status'] => 'REJECTED' ];
+                    if ($C['fp_notes'])  $upd[$C['fp_notes']]  = 'Auto-voided: abstrak ditolak.';
+                    if ($C['fp_dec_at']) $upd[$C['fp_dec_at']] = date('Y-m-d H:i:s');
+                    if ($C['fp_dec_by']) $upd[$C['fp_dec_by']] = (int)(session('id_user') ?? 0);
+
+                    $this->db->table($subsTable)->where($C['pk'], (int)$s['id'])->update($upd);
+
+                    if ($this->db->tableExists('fullpaper_reviewers')) {
+                        $this->db->table('fullpaper_reviewers')
+                            ->where('submission_id', (int)$s['id'])
+                            ->delete();
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'autoGateFullPaperOnAbstractDecision failed: '.$e->getMessage());
+        }
+    }
+
+    /* ========================= Pages ========================= */
+
     public function index()
     {
         try {
@@ -266,6 +343,29 @@ class Abstrak extends BaseController
         try {
             $idKategori = (int)$idKategori;
 
+            // Upayakan mengambil nama kategori agar pesan alert spesifik.
+            $namaKategori = 'ini';
+            try {
+                if ($this->db->tableExists('kategori')) {
+                    $rowKat = $this->db->table('kategori')
+                        ->select('nama_kategori')
+                        ->where('id_kategori', $idKategori)
+                        ->get()->getRowArray();
+                    if ($rowKat && !empty($rowKat['nama_kategori'])) {
+                        $namaKategori = $rowKat['nama_kategori'];
+                    }
+                } elseif ($this->db->tableExists('categories')) {
+                    $rowKat = $this->db->table('categories')
+                        ->select('name')
+                        ->where('id', $idKategori)
+                        ->get()->getRowArray();
+                    if ($rowKat && !empty($rowKat['name'])) {
+                        $namaKategori = $rowKat['name'];
+                    }
+                }
+            } catch (\Throwable $e) { /* ignore */ }
+
+            // Ambil reviewer sesuai model/tabel
             if (method_exists($this->revKatModel, 'getByCategory')) {
                 $rows = $this->revKatModel->getByCategory($idKategori);
             } else {
@@ -277,13 +377,23 @@ class Abstrak extends BaseController
                     ->get()->getResultArray();
             }
 
+            // Jika kosong → success:false + pesan khusus
+            if (empty($rows)) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => 'Maaf, tidak ada reviewer dengan kategori "'.$namaKategori.'".',
+                    'data'    => []
+                ]);
+            }
+
+            // Ada data
             return $this->response->setJSON([
                 'success' => true,
                 'data'    => array_map(fn($r) => [
                     'id_user' => (int)($r['id_user'] ?? 0),
                     'nama'    => $r['nama_lengkap'] ?? '-',
                     'email'   => $r['email'] ?? '',
-                ], $rows ?? []),
+                ], $rows),
             ]);
         } catch (\Throwable $e) {
             log_message('error','getReviewersByCategory error: '.$e->getMessage());
@@ -417,6 +527,8 @@ class Abstrak extends BaseController
                     } catch (\Throwable $e) { /* ignore */ }
                 }
             }
+
+            $this->autoGateFullPaperOnAbstractDecision($idAbstrak, $status);
 
             $this->db->transComplete();
 
@@ -597,7 +709,6 @@ class Abstrak extends BaseController
 
         $now = date('Y-m-d H:i:s');
 
-        // target reviewers: 1 orang (jika dipilih) atau semua yang pernah pegang
         if ($idReviewer > 0) {
             $target = [ ['reviewer_id' => $idReviewer] ];
         } else {
@@ -612,7 +723,6 @@ class Abstrak extends BaseController
             $rid = (int)($r['reviewer_id'] ?? 0);
             if ($rid <= 0) continue;
 
-            // kalau sudah ada pending+accepted, skip
             $q = $this->db->table($rt)->where($R['abstrakFk'], $idAbstrak)->where($R['reviewer'], $rid);
             if ($R['decision']) $q->where($R['decision'], 'pending');
             if ($R['task'])     $q->whereIn("LOWER({$R['task']})", ['accepted','accept','ok','yes']);
@@ -633,7 +743,6 @@ class Abstrak extends BaseController
             $this->db->table($rt)->insert($row);
         }
 
-        // pastikan status abstrak kembali ke sedang_direview
         $this->abstrakModel->update($idAbstrak, ['status' => 'sedang_direview']);
 
         $this->db->transComplete();

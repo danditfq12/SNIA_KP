@@ -249,13 +249,15 @@ $mapFp = function($s){
                         $absPill = $absToPill($absSt);
                         $fpPill  = $fpToPill($fpSt);
 
-                        $blockedPay = !($absSt === 'diterima' && $fpSt === 'ACCEPTED');
+                        // CTA utama (link tombol)
+                        $blockedPay = true; // akan di-set ulang di bawah
 
                         $ctaHref = "/presenter/events/detail/$eventId"; $ctaText = "Lihat Detail";
                         if (!$absSt) {
                           $ctaHref = "/presenter/kontributor/start/$eventId"; $ctaText = "Lengkapi Kontributor";
                         } elseif ($absSt==='ditolak') {
-                          $ctaHref = "/presenter/abstrak/create/$eventId";     $ctaText = "Perbaiki Abstrak";
+                          // ❗ Abstrak ditolak: JANGAN suruh upload abstrak lagi
+                          $ctaHref = "/presenter/events/detail/$eventId";     $ctaText = "Lihat Status Event";
                         } elseif (in_array($absSt, ['menunggu','sedang_direview'], true)) {
                           $ctaHref = "/presenter/events/detail/$eventId";      $ctaText = "Cek Status Abstrak";
                         } elseif ($absSt==='revisi') {
@@ -268,17 +270,77 @@ $mapFp = function($s){
                           elseif ($fpSt==='ACCEPTED')         { $ctaHref="/presenter/pembayaran/instruction/$eventId"; $ctaText="Lanjut ke Pembayaran"; }
                         }
 
-                        $stKontrib  = !empty($p['steps']['kontributor']) && str_contains($p['steps']['kontributor'],'done') ? 'done'
+                        $stKontrib  = !empty($p['steps']['kontributor']) && str_contains($p['steps']['kontributor'],'done')
+                                      ? 'done'
                                       : (!empty($p['steps']['kontributor']) && str_contains($p['steps']['kontributor'],'current') ? 'current' : 'muted');
+
                         $absState   = $mapAbs($absSt);
                         $fpState    = $mapFp($fpSt);
-                        $payBlocked = !($absSt === 'diterima' && $fpSt === 'ACCEPTED');
-                        $bayarState = $payBlocked ? ($absState==='danger'||$fpState==='danger' ? 'danger' : 'muted') : 'current';
-                        $veri       = (string)($p['steps']['verifikasi'] ?? '');
-                        $finishState= (!$payBlocked && str_contains($veri,'done')) ? 'done' : 'muted';
 
-                        $absStepClass = ($absState==='done' ? 'done' : ($absState==='warn' ? 'warn' : ($absState==='danger' ? 'danger' : 'current')));
-                        $fpStepClass  = ($fpState==='done'  ? 'done' : ($fpState==='warn'  ? 'warn'  : ($fpState==='danger'  ? 'danger'  : ($absState==='done' ? 'current' : 'muted'))));
+                        /** ================== LOGIKA STEP SESUAI AKTIVITAS ==================
+                         * Input data → Abstrak → Full paper → LOA → Pembayaran → Selesai
+                         * - Full paper baru upload / menunggu / revisi: JANGAN maju ke LOA
+                         * - LOA hanya ketika FP = ACCEPTED
+                         * - Pembayaran hanya boleh kalau abstrak & full paper diterima
+                         */
+
+                        // Boleh lanjut pembayaran kalau abstrak & full paper diterima
+                        $allowPay   = ($absSt === 'diterima' && $fpSt === 'ACCEPTED');
+                        $blockedPay = !$allowPay;
+
+                        // LOA:
+                        // - FP ACCEPTED  => LOA done
+                        // - FP REJECTED  => LOA danger
+                        // - selain itu   => LOA muted (belum LOA)
+                        if ($fpSt === 'ACCEPTED') {
+                            $loaState = 'done';
+                        } elseif ($fpSt === 'REJECTED') {
+                            $loaState = 'danger';
+                        } else {
+                            $loaState = 'muted';
+                        }
+
+                        // Pembayaran & Selesai
+                        $bayarStepMeta = (string)($p['steps']['bayar'] ?? '');
+                        $verifStepMeta = (string)($p['steps']['verifikasi'] ?? '');
+
+                        $bayarState  = 'muted';
+                        $finishState = 'muted';
+
+                        if ($allowPay) {
+                            // sudah ada pembayaran?
+                            if (str_contains($bayarStepMeta, 'done')) {
+                                $bayarState = 'done';
+                            } else {
+                                $bayarState = 'current'; // step berikut setelah LOA
+                            }
+
+                            // verifikasi pembayaran => selesai
+                            if (str_contains($verifStepMeta, 'done')) {
+                                $finishState = 'done';
+                                $bayarState  = 'done';
+                            }
+                        } else {
+                            // kalau status sudah buntu (ditolak), tandai merah di bayar & selesai
+                            if ($absState === 'danger' || $fpState === 'danger') {
+                                $bayarState  = 'danger';
+                                $finishState = 'danger';
+                            }
+                        }
+
+                        // Step visual abstrak & full paper
+                        $absStepClass = (
+                            $absState === 'done'   ? 'done'   :
+                            ($absState === 'warn'  ? 'warn'   :
+                            ($absState === 'danger'? 'danger' : 'current'))
+                        );
+
+                        $fpStepClass  = (
+                            $fpState === 'done'    ? 'done'   :
+                            ($fpState === 'warn'   ? 'warn'   :
+                            ($fpState === 'danger' ? 'danger' :
+                                ($absState === 'done' ? 'current' : 'muted')))
+                        );
                       ?>
                         <div class="fp-card mb-3">
                           <div class="fp-head">
@@ -306,6 +368,12 @@ $mapFp = function($s){
                               <div class="label">Upload Berkas</div>
                             </div>
 
+                            <!-- STEP LOA -->
+                            <div class="step <?= esc($loaState) ?>">
+                              <div class="dot"><i class="bi bi-file-earmark-check-fill"></i></div>
+                              <div class="label">LOA</div>
+                            </div>
+
                             <div class="step <?= esc($bayarState) ?>">
                               <div class="dot"><i class="bi bi-cash-stack"></i></div>
                               <div class="label">Pembayaran</div>
@@ -319,7 +387,7 @@ $mapFp = function($s){
 
                           <div class="fp-foot">
                             <?php if ($blockedPay && $ctaText === 'Lanjut ke Pembayaran'): ?>
-                              <button class="btn btn-success flex-fill" disabled title="Menunggu Abstrak diterima & Full Paper diterima">
+                              <button class="btn btn-success flex-fill" disabled title="Menunggu Abstrak & Full Paper diterima">
                                 <i class="bi bi-lock-fill me-1"></i>Lanjut ke Pembayaran
                               </button>
                             <?php else: ?>
@@ -329,7 +397,12 @@ $mapFp = function($s){
                             <?php endif; ?>
                           </div>
 
-                          <?php if ($blockedPay): ?>
+                          <?php if ($absSt === 'ditolak'): ?>
+                            <div class="mini-hint mt-2">
+                              <i class="bi bi-x-octagon me-1"></i>
+                              Abstrak Anda <b>ditolak</b>. Event ini tidak dapat dilanjutkan. Jangan upload abstrak baru untuk event ini, dan hubungi panitia jika ada kebijakan banding.
+                            </div>
+                          <?php elseif ($blockedPay): ?>
                             <div class="mini-hint mt-2"><i class="bi bi-exclamation-triangle me-1"></i>
                               Pembayaran belum tersedia. Selesaikan tahap sebelumnya terlebih dahulu.
                             </div>
@@ -486,7 +559,7 @@ body{
 .kpi-green{ background:#e9fff5; color:#0f8a5b; }
 
 .kpi-label{
-  color:#384; color:#475569; font-weight:700; letter-spacing:.15px;
+  color:#475569; font-weight:700; letter-spacing:.15px;
 }
 .stat-number{
   font-size:28px; font-weight:900; line-height:1.15; letter-spacing:.25px; margin-top:2px; color:#0f172a;

@@ -205,12 +205,13 @@ class MidtransService
 
     public function buildTransactionParams($orderId, $amount, $customerDetails, $itemDetails, $eventData = [])
     {
-        $baseUrl = rtrim(base_url(), '/') . '/';
+        $baseUrl    = rtrim(base_url(), '/') . '/';
+        $finishPath = $eventData['finish_path'] ?? 'presenter/pembayaran/finish';
 
         $params = [
             'transaction_details' => [
                 'order_id'     => $orderId,
-                'gross_amount' => (int) $amount,
+                'gross_amount' => (int) $amount, // HARUS = sum(item_details)
             ],
             'customer_details' => [
                 'first_name' => $customerDetails['nama_lengkap'] ?? 'Customer',
@@ -219,7 +220,7 @@ class MidtransService
             ],
             'item_details' => $itemDetails,
             'callbacks' => [
-                'finish' => $baseUrl . 'audience/pembayaran/finish?order_id=' . $orderId,
+                'finish' => $baseUrl . $finishPath . '?order_id=' . $orderId,
             ],
             'expiry' => [
                 'start_time' => date('Y-m-d H:i:s O'),
@@ -232,12 +233,10 @@ class MidtransService
             ],
         ];
 
-        // Tambah custom field untuk tracking (opsional)
-        if (!empty($eventData)) {
-            $params['custom_field1'] = (string)($eventData['event_id'] ?? '');
-            $params['custom_field2'] = (string)($eventData['user_role'] ?? '');
-            $params['custom_field3'] = (string)($eventData['participation_type'] ?? '');
-        }
+        // Custom tracking (opsional)
+        $params['custom_field1'] = (string)($eventData['event_id'] ?? '');
+        $params['custom_field2'] = (string)($eventData['user_role'] ?? '');
+        $params['custom_field3'] = (string)($eventData['participation_type'] ?? '');
 
         return $params;
     }
@@ -261,22 +260,46 @@ class MidtransService
                 'no_hp'        => $userDetails['no_hp'] ?? '',
             ];
 
+            // Nama item aman: rapikan spasi & potong multibyte-safe ke 50 karakter
+            $rawTitle  = (string)($eventDetails['title'] ?? 'Event Registration');
+            $clean     = preg_replace('/\s+/', ' ', $rawTitle);
+            $safeTitle = trim(mb_substr($clean ?? 'Event Registration', 0, 50));
+            if ($safeTitle === '') {
+                $safeTitle = 'Event Registration';
+            }
+
+            // Item standar (tanpa merchant_name). Category opsional boleh dipakai.
             $itemDetails = [[
-                'id'            => 'EVENT-' . $eventId,
-                'price'         => (int) $amount,
-                'quantity'      => 1,
-                'name'          => $eventDetails['title'] ?? 'Event Registration',
-                'category'      => 'Event Registration',
-                'merchant_name' => 'SNIA Conference',
+                'id'       => 'EVENT-' . $eventId,
+                'name'     => $safeTitle,
+                'price'    => (int) $amount,
+                'quantity' => 1,
+                'category' => 'Event Registration',
             ]];
+
+            // Hitung gross dari item_details (bukan percaya input luar)
+            $gross = 0;
+            foreach ($itemDetails as $it) {
+                $gross += ((int)$it['price']) * ((int)($it['quantity'] ?? 1));
+            }
+            if ($gross <= 0) {
+                throw new \InvalidArgumentException('Invalid gross amount');
+            }
+
+            // Tentukan finish path berdasarkan role
+            $finishPath = ($userRole === 'presenter')
+                ? 'presenter/pembayaran/finish'
+                : 'audience/pembayaran/finish';
 
             $eventData = [
                 'event_id'           => $eventId,
                 'user_role'          => $userRole,
                 'participation_type' => $participationType,
+                'finish_path'        => $finishPath,
             ];
 
-            $params       = $this->buildTransactionParams($orderId, $amount, $customerDetails, $itemDetails, $eventData);
+            // Pakai $gross (konsisten dgn sum item_details)
+            $params       = $this->buildTransactionParams($orderId, $gross, $customerDetails, $itemDetails, $eventData);
             $snapResponse = $this->createTransaction($params);
 
             if (!isset($snapResponse['token'])) {
@@ -319,7 +342,7 @@ class MidtransService
                 }
                 break;
 
-            case 'settlement':
+        case 'settlement':
                 $paymentStatus = 'verified';
                 break;
 
@@ -357,7 +380,7 @@ class MidtransService
     public function syncPaymentStatus($orderId)
     {
         try {
-            $statusData       = $this->getTransactionStatus($orderId);
+            $statusData        = $this->getTransactionStatus($orderId);
             $transactionStatus = $statusData['transaction_status'] ?? '';
             $fraudStatus       = $statusData['fraud_status']       ?? '';
 

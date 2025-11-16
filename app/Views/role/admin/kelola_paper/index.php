@@ -1,8 +1,4 @@
 <?php
-/**
- * File: app/Views/role/admin/kelola_paper/index.php
- * Expect: $aktif (array event aktif/mendatang), $berakhir (array event selesai), $reviewerLoads (array)
- */
 $title         = $title ?? 'Kelola Paper';
 $aktif         = $aktif ?? [];
 $berakhir      = $berakhir ?? [];
@@ -35,7 +31,6 @@ $cntBerakhir = count($berakhir);
           <div class="text-white-75 small">
             Pusat penugasan reviewer untuk Abstrak & Full Paper per event.
           </div>
-          <!-- Tombol buka panel reviewer (desktop/tablet) -->
           <div class="d-none d-md-flex">
             <button class="btn btn-light btn-sm fw-bold" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasReviewer">
               <i class="bi bi-people me-1"></i> Reviewer (<?= number_format(count($reviewerLoads)) ?>)
@@ -116,8 +111,8 @@ $cntBerakhir = count($berakhir);
                     <?php
                       $id  = (int)($e['id'] ?? 0);
                       $cntPresenter = (int)($e['presenter_count'] ?? 0);
-                      $cntAbsUnasg  = (int)($e['abs_unassigned'] ?? 0); // belum memenuhi kuota reviewer
-                      $cntFpUnasg   = (int)($e['fp_unassigned'] ?? 0);  // belum memenuhi kuota reviewer
+                      $cntAbsUnasg  = (int)($e['abs_unassigned'] ?? 0); 
+                      $cntFpUnasg   = (int)($e['fp_unassigned'] ?? 0);
                       $hay = strtolower(
                         ($e['title'] ?? '') . ' ' .
                         $fmtDate($e['event_date'] ?? null) . ' ' .
@@ -147,11 +142,11 @@ $cntBerakhir = count($berakhir);
                             <div class="value"><?= number_format($cntPresenter) ?></div>
                           </div>
                           <div class="metric-pill <?= $absCls ?>">
-                            <div class="label"><i class="bi bi-person-gear me-1"></i>Abstrak kurang reviewer</div>
+                            <div class="label"><i class="bi bi-person-gear me-1"></i>Tugas Abstrak Masuk</div>
                             <div class="value"><?= number_format($cntAbsUnasg) ?></div>
                           </div>
                           <div class="metric-pill <?= $fpCls ?>">
-                            <div class="label"><i class="bi bi-journal-x me-1"></i>Full paper kurang reviewer</div>
+                            <div class="label"><i class="bi bi-journal-x me-1"></i>Tugas Full Paper Masuk</div>
                             <div class="value"><?= number_format($cntFpUnasg) ?></div>
                           </div>
                         </div>
@@ -212,11 +207,11 @@ $cntBerakhir = count($berakhir);
                             <div class="value"><?= number_format($cntPresenter) ?></div>
                           </div>
                           <div class="metric-pill <?= $absCls ?>">
-                            <div class="label"><i class="bi bi-person-gear me-1"></i>Abstrak kurang reviewer</div>
+                            <div class="label"><i class="bi bi-person-gear me-1"></i>Tugas Abstrak Masuk</div>
                             <div class="value"><?= number_format($cntAbsUnasg) ?></div>
                           </div>
                           <div class="metric-pill <?= $fpCls ?>">
-                            <div class="label"><i class="bi bi-journal-x me-1"></i>Full paper kurang reviewer</div>
+                            <div class="label"><i class="bi bi-journal-x me-1"></i>Tugas Full Paper Masuk</div>
                             <div class="value"><?= number_format($cntFpUnasg) ?></div>
                           </div>
                         </div>

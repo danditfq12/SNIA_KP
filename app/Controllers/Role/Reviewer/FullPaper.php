@@ -38,6 +38,58 @@ class FullPaper extends BaseController
         return $ts < time();
     }
 
+    // BARU: cek event sudah DIMULAI berdasarkan tanggal + jam
+    private function isEventStarted(?string $date, ?string $time = null): bool
+    {
+        if (!$date) return false;
+        $date = trim((string)$date);
+        $time = trim((string)($time ?? ''));
+
+        $dt = $date . ($time !== '' ? (' ' . $time) : '');
+        $ts = strtotime($dt);
+        if ($ts === false) return false;
+
+        return $ts <= time();
+    }
+
+    // BARU: helper untuk cek event sudah mulai dari row submission
+    private function isEventStartedForSubmission(array $subRow, array $S): bool
+    {
+        if (!$S['event'] || empty($subRow[$S['event']])) return false;
+        if (!$this->db->tableExists('events')) return false;
+
+        $eventId = (int)$subRow[$S['event']];
+        $ef = array_flip($this->db->getFieldNames('events') ?: []);
+
+        $eid = isset($ef['id']) ? 'id' : (isset($ef['event_id']) ? 'event_id' : null);
+        if (!$eid) return false;
+
+        $dateCandidates = ['event_date','start_date','tanggal_mulai','mulai_at','started_at','date_start'];
+        $timeCandidates = ['event_time','start_time','jam_mulai','waktu_mulai'];
+
+        $edateCol = null;
+        foreach ($dateCandidates as $c) {
+            if (isset($ef[$c])) { $edateCol = $c; break; }
+        }
+        if (!$edateCol) return false;
+
+        $etimeCol = null;
+        foreach ($timeCandidates as $c) {
+            if (isset($ef[$c])) { $etimeCol = $c; break; }
+        }
+
+        $sel = "$edateCol AS d";
+        if ($etimeCol) $sel .= ", $etimeCol AS t";
+
+        $ev = $this->db->table('events')->select($sel)->where($eid, $eventId)->get()->getRowArray();
+        if (!$ev) return false;
+
+        $date = $ev['d'] ?? null;
+        $time = $ev['t'] ?? null;
+
+        return $this->isEventStarted($date, $time);
+    }
+
     /* ======================= Tabel: submissions/abstrak ======================= */
 
     private function submissionTable(): string
@@ -64,12 +116,14 @@ class FullPaper extends BaseController
         $pk = $this->primaryKey($table);
 
         $title = $pk;
-        foreach (['title','judul','judul_paper','judul_penelitian','judul_abstrak','nama'] as $c)
+        foreach (['title','judul','judul_paper','judul_penelitian','judul_abstrak','nama'] as $c) {
             if ($this->colExists($table,$c)) { $title = $c; break; }
+        }
 
         $event = null;
-        foreach (['event_id','id_event','events_id'] as $c)
+        foreach (['event_id','id_event','events_id'] as $c) {
             if ($this->colExists($table,$c)) { $event = $c; break; }
+        }
 
         return [
             'pk'    => $pk,
@@ -80,7 +134,13 @@ class FullPaper extends BaseController
             'status'=> $this->colExists($table,'full_paper_status')      ? 'full_paper_status'      : null,
             'path'  => $this->colExists($table,'full_paper_path')        ? 'full_paper_path'        : null,
             'ts'    => $this->colExists($table,'full_paper_uploaded_at') ? 'full_paper_uploaded_at' : null,
+            'rev'   => $this->colExists($table,'revision_no')            ? 'revision_no'            : null,
         ];
+    }
+
+    private function currentRevision(array $submissionRow, array $S): int
+    {
+        return (int)($S['rev'] ? ($submissionRow[$S['rev']] ?? 0) : 0);
     }
 
     /* ======================= Tabel: pivot & reviews ======================= */
@@ -127,10 +187,64 @@ class FullPaper extends BaseController
         return 'menunggu';
     }
 
-    /* ======================= Query Helpers ======================= */
+    /* ======================= Review scope helpers ======================= */
+
+    private function reviewScope(\CodeIgniter\Database\BaseBuilder $qb, int $submissionId, int $revNo): void
+    {
+        $qb->where('submission_id', $submissionId);
+        $fields = $this->db->getFieldNames($this->reviewsTable()) ?: [];
+        if (in_array('revision_no', $fields, true)) {
+            $qb->where('revision_no', $revNo);
+        }
+    }
+
+    /* ======================= Query Helpers (baca status tugas) ======================= */
+
+    private function reviewTableName(): ?string
+    {
+        if ($this->db->tableExists('review'))  return 'review';
+        if ($this->db->tableExists('reviews')) return 'reviews';
+        return null;
+    }
+
+    private function pickColFrom(string $table, array $cands): ?string
+    {
+        $fields = array_map('strtolower', $this->db->getFieldNames($table) ?: []);
+        foreach ($cands as $c) if (in_array(strtolower($c), $fields, true)) return $c;
+        return null;
+    }
+
+    private function getTaskStatusFromReviews(int $submissionId, int $reviewerId): ?array
+    {
+        $rt = $this->reviewTableName();
+        if (!$rt) return null;
+
+        $subFk = $this->pickColFrom($rt, ['id_submission','submission_id']);
+        $rid   = $this->pickColFrom($rt, ['id_reviewer','reviewer_id','user_id']);
+        if (!$subFk || !$rid) return null;
+
+        $asg   = $this->pickColFrom($rt, ['status_tugas','tugas_status','assignment_status','konfirmasi_status']);
+        $rsn   = $this->pickColFrom($rt, ['decline_reason','alasan_tolak','alasan','reason']);
+
+        $row = $this->db->table($rt)
+            ->where($subFk, $submissionId)
+            ->where($rid,   $reviewerId)
+            ->orderBy($this->pickColFrom($rt, ['id','id_review']) ?? 'id', 'DESC')
+            ->get()->getRowArray();
+
+        if (!$row) return null;
+
+        return [
+            'status' => $this->normalizeAssign($asg ? ($row[$asg] ?? 'pending') : 'pending'),
+            'reason' => $rsn ? ($row[$rsn] ?? null) : null,
+        ];
+    }
 
     private function getTaskStatus(int $submissionId, int $reviewerId): array
     {
+        $fromReviews = $this->getTaskStatusFromReviews($submissionId, $reviewerId);
+        if ($fromReviews) return $fromReviews;
+
         $t = $this->pivotTable(); $P = $this->pivotCols();
         if (!$this->db->tableExists($t) || !$P['submission'] || !$P['reviewer']) {
             return ['status'=>'pending','reason'=>null];
@@ -152,14 +266,16 @@ class FullPaper extends BaseController
         ];
     }
 
-    private function myLatestReview(int $submissionId, int $me, ?string $uploadedAt): ?array
+    private function myLatestReview(int $submissionId, int $me, int $revNow): ?array
     {
         if (!$this->db->tableExists($this->reviewsTable())) return null;
 
-        $qb = $this->db->table($this->reviewsTable())
-            ->where('submission_id', $submissionId)
-            ->where('reviewer_id',   $me);
-        return $qb->orderBy('tanggal_review','DESC')->orderBy('id','DESC')->get()->getRowArray() ?: null;
+        $qb = $this->db->table($this->reviewsTable())->where('reviewer_id', $me);
+        $this->reviewScope($qb, $submissionId, $revNow);
+
+        return $qb->orderBy('tanggal_review','DESC')
+                  ->orderBy('id','DESC')
+                  ->get()->getRowArray() ?: null;
     }
 
     private function assignedReviewers(int $submissionId): array
@@ -190,34 +306,20 @@ class FullPaper extends BaseController
             $out[] = [
                 'order'        => (int)($r['order_no'] ?? ($i+1)),
                 'reviewer_id'  => (int)$r['reviewer_id'],
-                'nama'         => $r['nama_lengkap'] ?? ('Reviewer #'.($i+1)),
+                'nama'         => $r['nama_lengkap'] ?? ('Reviewer #'.$i+1),
                 'tugas_status' => $this->normalizeAssign($r['tugas_status'] ?? 'pending'),
             ];
         }
         return $out;
     }
 
-    private function latestReviewerDecisions(int $submissionId): array
+    private function latestReviewerDecisions(int $submissionId, int $revNow): array
     {
         if (!$this->db->tableExists($this->reviewsTable())) return [];
 
-        $pvt = $this->pivotTable(); $P = $this->pivotCols();
-
-        $rids = [];
-        if ($this->db->tableExists($pvt) && $P['reviewer'] && $P['submission']) {
-            $acc = $this->db->table($pvt)
-                ->select($P['reviewer'].' AS rid')
-                ->where($P['submission'], $submissionId);
-            if ($P['status']) $acc->whereIn('LOWER('.$P['status'].')', ['accepted','accept']);
-            $rows = $acc->get()->getResultArray();
-            $rids = array_values(array_unique(array_map(fn($r)=>(int)$r['rid'], $rows)));
-        }
-        if (!$rids) return [];
-
         $b = $this->db->table($this->reviewsTable())
-            ->select('reviewer_id, keputusan, komentar, tanggal_review')
-            ->where('submission_id', $submissionId)
-            ->whereIn('reviewer_id', $rids);
+            ->select('reviewer_id, keputusan, komentar, tanggal_review');
+        $this->reviewScope($b, $submissionId, $revNow);
 
         $rows = $b->orderBy('reviewer_id','ASC')->orderBy('tanggal_review','DESC')->get()->getResultArray();
         $latest = [];
@@ -230,7 +332,12 @@ class FullPaper extends BaseController
 
     private function recalcAggregateStatus(int $submissionId): string
     {
-        $latest = $this->latestReviewerDecisions($submissionId);
+        $subTable = $this->submissionTable(); $S = $this->submissionCols($subTable);
+        $subRow   = $this->db->table($subTable)->where($S['pk'],$submissionId)->get()->getRowArray() ?: [];
+        $revNow   = $this->currentRevision($subRow, $S);
+
+        $latest = $this->latestReviewerDecisions($submissionId, $revNow);
+
         $acc=$rev=$rej=0;
         foreach ($latest as $r) {
             $k = strtolower((string)($r['keputusan'] ?? ''));
@@ -244,7 +351,6 @@ class FullPaper extends BaseController
         elseif ($acc >= 2) $final = 'ACCEPTED';
         elseif ($rev >= 1) $final = 'REVISION';
 
-        $subTable = $this->submissionTable(); $S = $this->submissionCols($subTable);
         if ($S['status']) {
             $update = [$S['status'] => $final];
             if ($this->colExists($subTable, 'eligible_to_pay')) {
@@ -265,9 +371,18 @@ class FullPaper extends BaseController
             $on = "a.event_id = s.{$S['event']} AND a.id_user = s.{$S['user']}";
             $builder->join('abstrak a', $on, 'left');
 
+            $af = array_flip($this->db->getFieldNames('abstrak') ?: []);
+            $colKat = isset($af['id_kategori']) ? 'id_kategori' : (isset($af['kategori_id']) ? 'kategori_id' : null);
+
+            $absStatusCol = null;
+            foreach (['status_abstrak','abstrak_status','status_review','review_status','status'] as $c) {
+                if (isset($af[$c])) { $absStatusCol = $c; break; }
+            }
+            if ($absStatusCol) {
+                $builder->select("a.$absStatusCol AS abstrak_status");
+            }
+
             if ($this->db->tableExists('kategori_abstrak')) {
-                $af = array_flip($this->db->getFieldNames('abstrak') ?: []);
-                $colKat = isset($af['id_kategori']) ? 'id_kategori' : (isset($af['kategori_id']) ? 'kategori_id' : null);
                 if ($colKat) {
                     $builder->join('kategori_abstrak ka', "ka.id_kategori = a.$colKat", 'left')
                             ->select('ka.nama_kategori');
@@ -285,16 +400,20 @@ class FullPaper extends BaseController
             $eid    = isset($ef['id']) ? 'id' : (isset($ef['event_id']) ? 'event_id' : null);
             $etitle = isset($ef['title']) ? 'title' : (isset($ef['nama']) ? 'nama' : null);
 
-            $endCandidates = ['end_date','date_end','tanggal_selesai','selesai_at','ended_at','end_at','tanggal_akhir','finish_date'];
-            $eend = null;
-            foreach ($endCandidates as $c) { if (isset($ef[$c])) { $eend = $c; break; } }
+            $endCandidates  = ['end_date','date_end','tanggal_selesai','selesai_at','ended_at','end_at','tanggal_akhir','finish_date'];
+            $eend = null; foreach ($endCandidates as $c) { if (isset($ef[$c])) { $eend = $c; break; } }
+
+            $dateCandidates = ['event_date','start_date','tanggal_mulai','mulai_at','started_at','date_start'];
+            $timeCandidates = ['event_time','start_time','jam_mulai','waktu_mulai'];
+            $edate = null; foreach ($dateCandidates as $c) if (isset($ef[$c])) { $edate = $c; break; }
+            $etime = null; foreach ($timeCandidates as $c) if (isset($ef[$c])) { $etime = $c; break; }
 
             if ($eid && $etitle) {
                 $builder->join('events e', "e.$eid = s.{$S['event']}", 'left')
                         ->select("e.$eid AS event_id, e.$etitle AS event_title");
-                if ($eend) {
-                    $builder->select("e.$eend AS event_end_at");
-                }
+                if ($eend)  $builder->select("e.$eend AS event_end_at");
+                if ($edate) $builder->select("e.$edate AS event_date");
+                if ($etime) $builder->select("e.$etime AS event_time");
             }
         }
     }
@@ -312,8 +431,7 @@ class FullPaper extends BaseController
         if (!$this->db->tableExists($pvt)) {
             return view('role/reviewer/fullpaper/index', [
                 'title'        => 'Tugas Full Paper',
-                'todoRows'     => [],
-                'historyRows'  => [],
+                'rows'         => [],
                 'eventOptions' => [],
             ]);
         }
@@ -331,23 +449,31 @@ class FullPaper extends BaseController
         if ($S['ts'])     $builder->select("s.{$S['ts']} AS tanggal_upload");
         if ($S['event'])  $builder->select("s.{$S['event']} AS s_event_id");
         if ($S['user'])   $builder->select("s.{$S['user']}  AS s_user_id");
+        if ($S['rev'])    $builder->select("s.{$S['rev']} AS revision_no");
 
         $this->applyAbstractJoinsForCategory($builder, $sub, $S);
+
+        // hanya tugas yg sudah accepted di dashboard
+        if ($P['status']) {
+            $builder->whereIn("p.{$P['status']}", ['accepted','diterima']);
+        }
 
         $builder->where("p.{$P['reviewer']}", $me);
         $builder->orderBy("s.{$S['pk']}", 'DESC', false);
 
-        $rows = $builder->get()->getResultArray();
+        $rawRows = $builder->get()->getResultArray();
 
         $eventOptions = [];
-        $todoRows     = [];
-        $historyRows  = [];
+        $listRows     = [];
 
-        foreach ($rows as &$r) {
+        foreach ($rawRows as &$r) {
             $sid = (int)($r['id'] ?? 0);
 
-            $uploadedAt = null;
-            $my = $this->myLatestReview($sid, $me, $uploadedAt);
+            $subRow     = $this->db->table($sub)->where($S['pk'], $sid)->get()->getRowArray() ?: [];
+            $revNow     = $this->currentRevision($subRow, $S);
+            $uploadedAt = $subRow[$S['ts']] ?? null;
+
+            $my = $this->myLatestReview($sid, $me, $revNow);
 
             $r['review_status']   = $this->normDecision($my['keputusan'] ?? null) ?: 'menunggu';
             $r['asg_status_norm'] = $this->normalizeAssign($r['asg_status'] ?? 'pending');
@@ -357,35 +483,54 @@ class FullPaper extends BaseController
             $r['event_title'] = $r['event_title'] ?? '-';
             $r['event_end_at']= $r['event_end_at'] ?? null;
 
+            // event start info untuk rule "sampai event dimulai"
+            $eventDate = $r['event_date'] ?? null;
+            $eventTime = $r['event_time'] ?? null;
+            $eventStarted = $this->isEventStarted($eventDate, $eventTime);
+
             if ($eid && !isset($eventOptions[$eid])) {
                 $eventOptions[$eid] = $r['event_title'] ?? ('Event #'.$eid);
             }
 
-            $rev = strtolower((string)$r['review_status']);    // 'menunggu' | 'revisi' | 'diterima' | 'ditolak'
-            $asg = strtolower((string)$r['asg_status_norm']);  // 'accepted' | 'pending' | 'declined'
-            $eventOver = $this->isEventOver($r['event_end_at'] ?? null);
-
-            $goesToTodo = true;
-            if ($asg === 'declined') {
-                $goesToTodo = false;                 // pindah ke riwayat jika menolak (Opsi A)
-            } elseif ($rev === 'diterima') {
-                $goesToTodo = false;
-            } elseif ($rev === 'revisi' || $rev === 'ditolak') {
-                $goesToTodo = !$eventOver;
-            } else { // 'menunggu' atau lainnya
-                $goesToTodo = true;
+            // cek kebutuhan re-review (revisi baru)
+            $needs = true;
+            if ($my) {
+                $myAt = $my['tanggal_review'] ?? '1970-01-01 00:00:00';
+                $needs = $uploadedAt ? ($myAt < $uploadedAt) : false;
+            } else {
+                $needs = true;
             }
 
-            if ($goesToTodo) $todoRows[] = $r;
-            else             $historyRows[] = $r;
+            $rev = strtolower((string)$r['review_status']);    // menunggu | revisi | diterima | ditolak
+            $asg = strtolower((string)$r['asg_status_norm']);  // accepted | pending | declined
+
+            // RULE INDEX:
+            // - assignment declined  => tidak tampil
+            // - keputusan diterima   => tidak tampil (pindah ke riwayat)
+            // - revisi / ditolak     => tetap tampil SAMPAI event DIMULAI
+            // - menunggu             => tampil
+            $show = true;
+            if ($asg === 'declined') {
+                $show = false;
+            } elseif ($rev === 'diterima') {
+                $show = false;
+            } elseif ($rev === 'revisi' || $rev === 'ditolak') {
+                $show = !$eventStarted; // <== perintah: sampai event dimulai
+            } else {
+                $show = true;
+            }
+
+            // jika ada revisi baru dan reviewer ini belum re-review, tetap paksa tampil
+            if ($asg === 'accepted' && $needs) $show = true;
+
+            if ($show) $listRows[] = $r;
         }
         unset($r);
         ksort($eventOptions);
 
         return view('role/reviewer/fullpaper/index', [
             'title'        => 'Tugas Full Paper',
-            'todoRows'     => $todoRows,
-            'historyRows'  => $historyRows,
+            'rows'         => $listRows,
             'eventOptions' => $eventOptions,
         ]);
     }
@@ -407,6 +552,7 @@ class FullPaper extends BaseController
         if ($S['path'])   $builder->select("s.{$S['path']} AS full_paper_path");
         if ($S['event'])  $builder->select("s.{$S['event']} AS s_event_id");
         if ($S['user'])   $builder->select("s.{$S['user']}  AS s_user_id");
+        if ($S['rev'])    $builder->select("s.{$S['rev']} AS revision_no");
 
         $this->applyAbstractJoinsForCategory($builder, $subTable, $S);
 
@@ -426,11 +572,16 @@ class FullPaper extends BaseController
 
         $task = $this->getTaskStatus($submissionId, $me);
 
-        $uploadedAt = $submission['full_paper_uploaded_at'] ?? null;
-        $myReview   = $this->myLatestReview($submissionId, $me, $uploadedAt);
+        if ($task['status'] !== 'accepted') {
+            return redirect()->to(site_url('reviewer/dashboard#incoming'))
+                ->with('error','Terima penugasan full paper ini terlebih dahulu di halaman dashboard.');
+        }
+
+        $revNow   = $this->currentRevision($submission, $S);
+        $myReview = $this->myLatestReview($submissionId, $me, $revNow);
 
         $assignedList = $this->assignedReviewers($submissionId);
-        $latestDec    = $this->latestReviewerDecisions($submissionId);
+        $latestDec    = $this->latestReviewerDecisions($submissionId, $revNow);
 
         $reviewers = [];
         foreach ($assignedList as $row) {
@@ -460,15 +611,27 @@ class FullPaper extends BaseController
             'nama_kategori'         => $submission['nama_kategori'] ?? '-',
             'event_id'              => (int)($submission['event_id'] ?? $submission['s_event_id'] ?? 0),
             'event_title'           => $submission['event_title'] ?? '-',
+            'event_date'            => $submission['event_date'] ?? null,
+            'event_time'            => $submission['event_time'] ?? null,
+            'revisi_ke'             => $submission['revision_no'] ?? null,
+            'abstrak_status'        => $submission['abstrak_status'] ?? null,
         ];
+
+        // BARU: flag event sudah mulai untuk kunci form review
+        $eventStarted = $this->isEventStarted(
+            $submissionView['event_date'] ?? null,
+            $submissionView['event_time'] ?? null
+        );
 
         return view('role/reviewer/fullpaper/detail', [
             'title'          => 'Detail Full Paper',
             'submission'     => $submissionView,
             'taskStatus'     => $task['status'],
             'taskReason'     => $task['reason'],
+            'revisionNo'     => $revNow,
             'myReview'       => $myReview,
             'reviewers'      => $reviewers,
+            'eventStarted'   => $eventStarted,  // dikirim ke view
         ]);
     }
 
@@ -484,7 +647,10 @@ class FullPaper extends BaseController
         $submissionId = (int)$submissionId;
 
         $task = $this->getTaskStatus($submissionId, $me);
-        if ($task['status'] !== 'accepted') return redirect()->back()->with('error','Terima penugasan terlebih dahulu.');
+        if ($task['status'] !== 'accepted') {
+            return redirect()->to(site_url('reviewer/dashboard#incoming'))
+                ->with('error','Terima penugasan terlebih dahulu di halaman dashboard.');
+        }
 
         $decision = strtolower(trim((string)$this->request->getPost('keputusan')));
         $comment  = trim((string)$this->request->getPost('komentar'));
@@ -504,12 +670,17 @@ class FullPaper extends BaseController
             return redirect()->back()->with('error','Tabel fullpaper_reviews belum tersedia.');
         }
 
-        $existing = $this->db->table($this->reviewsTable())
-            ->where('submission_id', $submissionId)
-            ->where('reviewer_id',   $me)
-            ->orderBy('tanggal_review','DESC')
-            ->orderBy('id','DESC')
-            ->get()->getRowArray();
+        $subTable = $this->submissionTable(); $S = $this->submissionCols($subTable);
+        $subRow   = $this->db->table($subTable)->where($S['pk'],$submissionId)->get()->getRowArray() ?: [];
+        $revNow   = $this->currentRevision($subRow, $S);
+
+        // BARU: blokir perubahan jika event sudah DIMULAI
+        if ($this->isEventStartedForSubmission($subRow, $S)) {
+            return redirect()->to(site_url('reviewer/fullpaper/'.$submissionId))
+                ->with('error','Event sudah dimulai. Review tidak dapat diubah lagi.');
+        }
+
+        $fields = $this->db->getFieldNames($this->reviewsTable()) ?: [];
 
         $payload = [
             'submission_id'  => $submissionId,
@@ -518,6 +689,17 @@ class FullPaper extends BaseController
             'komentar'       => $comment,
             'tanggal_review' => date('Y-m-d H:i:s'),
         ];
+        if (in_array('revision_no', $fields, true)) {
+            $payload['revision_no'] = $revNow;
+        }
+
+        $qbExist = $this->db->table($this->reviewsTable())
+            ->where('submission_id', $submissionId)
+            ->where('reviewer_id',   $me);
+        if (in_array('revision_no', $fields, true)) {
+            $qbExist->where('revision_no', $revNow);
+        }
+        $existing = $qbExist->orderBy('tanggal_review','DESC')->orderBy('id','DESC')->get()->getRowArray();
 
         if ($existing) {
             $this->db->table($this->reviewsTable())->where('id', (int)$existing['id'])->update($payload);
@@ -531,89 +713,17 @@ class FullPaper extends BaseController
             ->with('success', 'Review tersimpan. Status agregat saat ini: '.$final);
     }
 
+    /* ====== Endpoint lama (opsional) ====== */
     public function action()
     {
-        if (!$this->requireReviewer()) {
-            if ($this->request->isAJAX()) {
-                return $this->response->setJSON(['success'=>false,'message'=>'Unauthorized']);
-            }
-            return redirect()->to(site_url('auth/login'))->with('error','Unauthorized');
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Aksi konfirmasi full paper sekarang dilakukan melalui dashboard reviewer.'
+            ]);
         }
-
-        $me     = $this->me();
-        $sid    = (int)$this->request->getPost('id');
-        $act    = strtolower((string)$this->request->getPost('action'));
-        $reason = trim((string)$this->request->getPost('reason'));
-
-        $referer = trim((string)$this->request->getHeaderLine('Referer'));
-        $backUrl = $referer && $referer !== base_url('/') ? $referer : site_url('reviewer/fullpaper');
-
-        if ($sid <= 0 || !in_array($act, ['accept','decline'], true)) {
-            $msg = 'Input tidak valid.';
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>false,'message'=>$msg])
-                : redirect()->to($backUrl)->with('error', $msg);
-        }
-
-        $pvt = $this->pivotTable(); $P = $this->pivotCols();
-        if (!$this->db->tableExists($pvt) || !$P['submission'] || !$P['reviewer']) {
-            $msg = 'Skema penugasan tidak valid.';
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>false,'message'=>$msg])
-                : redirect()->to($backUrl)->with('error', $msg);
-        }
-
-        $row = $this->db->table($pvt)
-            ->where($P['submission'], $sid)
-            ->where($P['reviewer'],  $me)
-            ->orderBy($P['pk'] ?: 'id', 'DESC')
-            ->get()->getRowArray();
-        if (!$row) {
-            $msg = 'Penugasan tidak ditemukan.';
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>false,'message'=>$msg])
-                : redirect()->to($backUrl)->with('error', $msg);
-        }
-
-        if (!$P['status']) {
-            $msg = 'Penugasan diproses.';
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>true,'message'=>$msg])
-                : redirect()->to($backUrl)->with('success', $msg);
-        }
-
-        if ($act === 'accept') {
-            $payload = [ $P['status'] => 'accepted' ];
-            if ($P['reason']) $payload[$P['reason']] = null;
-            if ($P['acc'])    $payload[$P['acc']]    = date('Y-m-d H:i:s');
-            if ($P['dec'])    $payload[$P['dec']]    = null;
-
-            $ok = (bool)$this->db->table($pvt)->where($P['pk'] ?: 'id', $row[$P['pk'] ?: 'id'])->update($payload);
-            $msg = $ok ? 'Tugas diterima.' : 'Gagal memperbarui status.';
-
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>$ok,'message'=>$msg])
-                : redirect()->to($backUrl)->with($ok ? 'success' : 'error', $msg);
-        }
-
-        // decline
-        if (mb_strlen($reason) < 5) {
-            $msg = 'Penolakan wajib disertai alasan (≥5 karakter).';
-            return $this->request->isAJAX()
-                ? $this->response->setJSON(['success'=>false,'message'=>$msg])
-                : redirect()->to($backUrl)->with('error', $msg);
-        }
-
-        $payload = [ $P['status'] => 'declined' ];
-        if ($P['reason']) $payload[$P['reason']] = $reason;
-        if ($P['dec'])    $payload[$P['dec']]    = date('Y-m-d H:i:s');
-
-        $ok  = (bool)$this->db->table($pvt)->where($P['pk'] ?: 'id', $row[$P['pk'] ?: 'id'])->update($payload);
-        $msg = $ok ? 'Tugas ditolak.' : 'Gagal memperbarui status.';
-
-        return $this->request->isAJAX()
-            ? $this->response->setJSON(['success'=>$ok,'message'=>$msg])
-            : redirect()->to($backUrl)->with($ok ? 'success' : 'error', $msg);
+        return redirect()->to(site_url('reviewer/dashboard#incoming'))
+            ->with('error','Aksi konfirmasi full paper sekarang dilakukan melalui dashboard reviewer.');
     }
 
     /* ======================= File utils & endpoints ======================= */
@@ -695,4 +805,55 @@ class FullPaper extends BaseController
 
     public function preview($submissionId) { return $this->blob($submissionId); }
     public function inline($submissionId)  { return $this->blob($submissionId); }
+
+    /* ======================= Hook setelah author reupload ======================= */
+
+    public function afterAuthorReupload(int $submissionId, bool $notifyAll = true): void
+    {
+        $subTable = $this->submissionTable(); $S = $this->submissionCols($subTable);
+
+        $this->db->transStart();
+
+        $row  = $this->db->table($subTable)->where($S['pk'],$submissionId)->get()->getRowArray() ?: [];
+        $rev  = (int)($S['rev'] ? ($row[$S['rev']] ?? 0) : 0);
+        $upd  = [
+            $S['status'] ?? 'full_paper_status'      => 'UPLOADED',
+            $S['ts']     ?? 'full_paper_uploaded_at' => date('Y-m-d H:i:s'),
+        ];
+        if ($S['rev']) $upd[$S['rev']] = $rev + 1;
+
+        $this->db->table($subTable)->where($S['pk'],$submissionId)->update($upd);
+
+        $pvt = $this->pivotTable(); $P = $this->pivotCols();
+        $qb  = $this->db->table($pvt)->select($P['reviewer'].' AS rid')
+                        ->where($P['submission'], $submissionId);
+
+        if (!$notifyAll && $this->db->tableExists($this->reviewsTable())) {
+            $b = $this->db->table($this->reviewsTable())
+                 ->select('DISTINCT reviewer_id AS rid')
+                 ->where('submission_id', $submissionId)
+                 ->whereIn('LOWER(keputusan)', ['revision','revisi']);
+            $rids = array_map(fn($x)=>(int)$x['rid'], $b->get()->getResultArray());
+            if ($rids) $qb->whereIn($P['reviewer'], $rids); else $qb->where('0=1', null, false);
+        }
+
+        $reviewers = array_map(fn($x)=>(int)$x['rid'], $qb->get()->getResultArray());
+
+        if ($this->db->tableExists('notifications') && $reviewers) {
+            $rows = [];
+            foreach ($reviewers as $rid) {
+                $rows[] = [
+                    'user_id'    => $rid,
+                    'title'      => 'Revisi Full Paper diunggah',
+                    'message'    => "Submission #{$submissionId} mengunggah revisi baru. Mohon re-review.",
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'is_read'    => 0,
+                    'link'       => site_url('reviewer/fullpaper/'.$submissionId),
+                ];
+            }
+            if ($rows) $this->db->table('notifications')->insertBatch($rows);
+        }
+
+        $this->db->transComplete();
+    }
 }

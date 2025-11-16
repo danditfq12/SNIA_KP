@@ -5,8 +5,8 @@ $eventId = $eventId ?? (int)($event['id'] ?? 0);
 
 $presenterName  = $presenter_name  ?? '';
 $presenterEmail = $presenter_email ?? '';
-$afiliasi       = $afiliasi        ?? '';
-$phone          = $phone           ?? '';
+$afiliasi       = $afiliasi        ?? ''; // di-prefill dari registrasi atau users.institusi
+$phone          = $phone           ?? ''; // di-prefill dari registrasi atau users.no_hp
 
 $coAuthors = $coauthors ?? [];
 $isUpdate  = !empty($is_update);
@@ -20,7 +20,7 @@ $isUpdate  = !empty($is_update);
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl py-4">
 
-      <!-- Form Card (tanpa hero) -->
+      <!-- Form Card -->
       <div class="card shadow-soft card-glass-plain">
         <div class="card-body">
           <div class="mb-3">
@@ -51,14 +51,18 @@ $isUpdate  = !empty($is_update);
               </div>
 
               <div class="col-12 col-md-6">
-                <label class="form-label">No. HP (opsional)</label>
-                <input type="text" name="phone" class="form-control form-control-soft" value="<?= esc($phone) ?>">
+                <label class="form-label">No. HP</label>
+                <input type="text" name="phone" class="form-control form-control-soft" value="<?= esc($phone) ?>" placeholder="Otomatis terisi dari profil jika ada">
               </div>
               <div class="col-12 col-md-6">
                 <label class="form-label">Afiliasi/Institusi <span class="text-danger">*</span></label>
-                <input type="text" name="afiliasi" class="form-control form-control-soft" value="<?= esc($afiliasi) ?>" required>
+                <input type="text" name="afiliasi" class="form-control form-control-soft" value="<?= esc($afiliasi) ?>" required placeholder="Otomatis terisi dari profil jika ada">
               </div>
             </div>
+
+            <small class="text-muted d-block mt-2">
+              Bidang di atas otomatis mengambil dari profil Anda.
+            </small>
 
             <hr class="my-4">
 
@@ -125,7 +129,7 @@ $isUpdate  = !empty($is_update);
   --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
   --ink:#0f172a; --muted:#6b7280;
   --radius:14px;
-  --side-pad: clamp(1rem, 2.3vw, 2.2rem); /* kiri–kanan sama seperti halaman lain */
+  --side-pad: clamp(1rem, 2.3vw, 2.2rem);
   --gutter:   1rem;
 }
 
@@ -146,7 +150,6 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
   margin-inline:auto;
 }
 
-/* Card & heading */
 .card-glass-plain{
   backdrop-filter: blur(6px);
   background: rgba(255,255,255,.96);
@@ -158,10 +161,8 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .hero-title{ font-weight:800; letter-spacing:.25px; font-size:1.4rem; }
 .text-blue-900{ color:var(--blue-900)!important; }
 
-/* Grid spacing */
 .row.g-3{ --bs-gutter-x: var(--gutter); --bs-gutter-y: var(--gutter); }
 
-/* Inputs */
 .form-label{ font-weight:700; color:#334155; }
 .form-control{ border-radius:10px; font-size:.98rem; }
 .form-control-soft{
@@ -174,7 +175,6 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
   box-shadow:0 0 0 .2rem rgba(59,130,246,.12);
 }
 
-/* Table */
 .table{ font-size:.95rem; margin-bottom:0; }
 .table thead th{
   background:#f8fbff!important;
@@ -191,7 +191,6 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
   background:#fff;
 }
 
-/* Buttons */
 .btn{ font-weight:800; letter-spacing:.2px; border-radius:10px; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.18); }
 .btn-outline-danger{ border-color:#fecaca; color:#b91c1c; }
@@ -200,7 +199,6 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .btn-outline-secondary:hover{ background:#f8fafc; border-color:#cbd5e1; color:#0f172a; }
 .btn-sm{ padding:.38rem .7rem; font-size:.84rem; }
 
-/* Responsive */
 @media (max-width:575.98px){
   .container-xxl{ padding-left: calc(var(--side-pad) - .25rem) !important; padding-right: calc(var(--side-pad) - .25rem) !important; }
   .table thead th, .table tbody td{ padding:.6rem .75rem; font-size:.86rem; }

@@ -1,204 +1,275 @@
 <?php
-// File: app/Views/role/reviewer/dashboard.php
+/**
+ * Reviewer Dashboard (simple, schema-tolerant)
+ */
 
-$title    = 'Reviewer Dashboard';
-$cards    = $cards    ?? ['total'=>0,'done'=>0];
-$incoming = $incoming ?? [];   // gabungan abstrak + fullpaper yang perlu konfirmasi
-$notifs   = $notifs   ?? [];
-$hasAssign= (bool)($hasAssign ?? false);
+$title     = $title ?? 'Reviewer Dashboard';
+$cards     = $cards ?? ['total'=>0,'done'=>0];
+$incoming  = $incoming ?? [];
+$activities= $activities ?? [];
 
-$fmtDate = fn($d,$withTime=false) => $d ? date($withTime?'d M Y H:i':'d M Y', strtotime($d)) : '-';
+$total   = (int)($cards['total'] ?? 0);
+$done    = (int)($cards['done']  ?? 0);
+$masuk   = (int)count($incoming);
+$belum   = max(0, $total - $done);
+$selesai = $done;
+
+$hasAssign    = (bool)($hasAssign    ?? false);
+$hasAssignAbs = (bool)($hasAssignAbs ?? false);
+$hasAssignFp  = (bool)($hasAssignFp  ?? false);
+
+$fmt = function($d,$withTime=false){
+  if (!$d) return '-';
+  return date($withTime?'d M Y H:i':'d M Y', strtotime($d));
+};
+
+// sapaan singkat
+$rawName   = (string) (session('nama_lengkap') ?? session('nama') ?? session('username') ?? 'Reviewer');
+$firstName = trim(explode(' ', $rawName)[0]) ?: 'Reviewer';
+$hour  = (int)date('G');
+$waktu = ($hour>=5 && $hour<11) ? 'Pagi' : (($hour>=11 && $hour<15) ? 'Siang' : (($hour>=15 && $hour<18) ? 'Sore' : 'Malam'));
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_reviewer') ?>
 <?= $this->include('partials/alerts') ?>
 
 <div id="content">
-  <main class="flex-fill" style="padding-top:70px;">
-    <div class="container-fluid p-3 p-md-4">
+  <main class="flex-fill page-wrap-blue">
+    <div class="container-xxl px-3 px-md-4 py-4">
 
-      <!-- HEADER -->
-      <div class="header-section d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h3 class="welcome-text mb-1">
-            Hai, <?= esc(session('nama_lengkap') ?? session('nama') ?? 'Reviewer') ?>
-          </h3>
-          <small class="text-white-50">Kelola tugas review abstrak & full paper Anda</small>
-        </div>
-        <div class="d-none d-md-flex gap-2">
-          <a href="<?= site_url('reviewer/abstrak') ?>" class="btn btn-light">
-            <i class="bi bi-journal-text me-1"></i> Abstrak
-          </a>
-          <a href="<?= site_url('reviewer/riwayat') ?>" class="btn btn-outline-light">
-            <i class="bi bi-clock-history me-1"></i> Riwayat
-          </a>
+      <!-- HERO -->
+      <div class="card-hero mb-4">
+        <div class="hero-body">
+          <h3 class="hero-title mb-1">Halo, <?= esc($firstName) ?> 👋</h3>
+          <div class="text-white-70 small">Selamat <?= esc($waktu) ?> — ini ringkasan tugas & aktivitas Anda.</div>
         </div>
       </div>
 
-      <!-- KPI: Total Tugas & Total Diselesaikan -->
+      <!-- KPI -->
       <div class="row g-3 mb-4">
-        <div class="col-12 col-md-6">
+        <div class="col-12 col-xl-4">
           <div class="kpi-card shadow-sm h-100">
             <div class="card-body d-flex align-items-center gap-3">
-              <div class="kpi-icon bg-primary-subtle text-primary">
-                <i class="bi bi-list-task"></i>
-              </div>
+              <div class="kpi-icon kpi-blue"><i class="bi bi-hourglass-split"></i></div>
               <div>
-                <div class="kpi-label">Total Tugas</div>
-                <div class="kpi-number" data-count="<?= (int)$cards['total'] ?>">
-                  <?= number_format((int)$cards['total']) ?>
-                </div>
+                <div class="kpi-label">Tugas Belum Direview</div>
+                <div class="kpi-number" data-count="<?= $belum ?>"><?= number_format($belum) ?></div>
               </div>
             </div>
           </div>
         </div>
-
-        <div class="col-12 col-md-6">
+        <div class="col-12 col-xl-4">
           <div class="kpi-card shadow-sm h-100">
             <div class="card-body d-flex align-items-center gap-3">
-              <div class="kpi-icon bg-success-subtle text-success">
-                <i class="bi bi-check2-circle"></i>
-              </div>
+              <div class="kpi-icon kpi-purple"><i class="bi bi-inbox"></i></div>
               <div>
-                <div class="kpi-label">Total Diselesaikan</div>
-                <div class="kpi-number" data-count="<?= (int)$cards['done'] ?>">
-                  <?= number_format((int)$cards['done']) ?>
-                </div>
+                <div class="kpi-label">Tugas Masuk</div>
+                <div class="kpi-number" data-count="<?= $masuk ?>"><?= number_format($masuk) ?></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-xl-4">
+          <div class="kpi-card shadow-sm h-100">
+            <div class="card-body d-flex align-items-center gap-3">
+              <div class="kpi-icon kpi-green"><i class="bi bi-check2-circle"></i></div>
+              <div>
+                <div class="kpi-label">Tugas Selesai</div>
+                <div class="kpi-number" data-count="<?= $selesai ?>"><?= number_format($selesai) ?></div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- MAIN CONTENT ROW -->
+      <!-- GRID: Konfirmasi kiri & Aktivitas kanan -->
       <div class="row g-3">
-        <!-- TUGAS MASUK (PERLU KONFIRMASI) -->
+        <!-- LEFT: TUGAS MASUK GABUNGAN -->
         <div class="col-12 col-lg-8">
-          <div class="card shadow-sm h-100">
+          <div class="card admin-card h-100" id="incoming">
             <div class="card-header d-flex align-items-center justify-content-between">
-              <h5 class="card-title mb-0">
-                <i class="bi bi-inbox me-2 text-primary"></i>Tugas Masuk (Perlu Konfirmasi)
-              </h5>
-              <span class="badge bg-primary-subtle text-primary"><?= count($incoming) ?> item</span>
+              <h5 class="mb-0"><i class="bi bi-clipboard-check me-2 text-primary"></i>Tugas Masuk (Perlu Konfirmasi)</h5>
+              <span class="badge bg-primary-subtle text-primary fw-semibold"><?= (int)count($incoming) ?> item</span>
             </div>
-            <div class="card-body">
-              <?php if (!$hasAssign): ?>
-                <div class="empty-state">
-                  <div class="empty-icon"><i class="bi bi-info-circle"></i></div>
-                  <div class="empty-title">Fitur konfirmasi tugas belum aktif</div>
-                  <div class="empty-subtitle">Tambahkan kolom status tugas pada tabel review (assignment)</div>
-                </div>
-              <?php elseif (empty($incoming)): ?>
-                <div class="empty-state">
+            <div class="card-body p-0">
+              <?php if (!$incoming): ?>
+                <div class="empty-state my-4">
                   <div class="empty-icon"><i class="bi bi-check-circle"></i></div>
                   <div class="empty-title">Tidak ada tugas menunggu konfirmasi</div>
-                  <div class="empty-subtitle">Tugas baru yang perlu konfirmasi akan muncul di sini</div>
+                  <div class="empty-subtitle">Tugas baru akan otomatis tampil di sini.</div>
                 </div>
               <?php else: ?>
-                <div class="task-list">
-                  <?php foreach ($incoming as $t): ?>
-                    <?php
-                      $taskType = strtolower($t['task_type'] ?? 'abstrak'); // 'abstrak' | 'fullpaper'
-                      $title    = $t['judul'] ?? '—';
-                      $event    = $t['event_title'] ?? '—';
-                      $uploadAt = $fmtDate($t['tanggal_upload'] ?? null, true);
-                      $id = $taskType === 'abstrak'
-                        ? (int)($t['id_abstrak'] ?? 0)
-                        : (int)($t['id_submission'] ?? $t['submission_id'] ?? 0);
-                    ?>
-                    <div class="task-item">
-                      <div class="task-content">
-                        <div class="task-title d-flex align-items-center gap-2">
-                          <?= esc($title) ?>
-                          <span class="badge bg-info-subtle text-info">
-                            <i class="bi bi-file-text me-1"></i><?= $taskType==='abstrak'?'Abstrak':'Full Paper' ?>
-                          </span>
-                        </div>
-                        <div class="task-meta">
-                          <span><i class="bi bi-calendar-event me-1"></i><?= esc($event) ?></span>
-                          <span><i class="bi bi-upload me-1"></i><?= esc($uploadAt) ?></span>
-                        </div>
-                      </div>
-                      <div class="task-action d-flex gap-2">
-                        <!-- Accept -->
-                        <form class="m-0" method="post" action="<?= site_url('reviewer/dashboard/confirm') ?>">
-                          <?= csrf_field() ?>
-                          <input type="hidden" name="type"   value="<?= esc($taskType) ?>">
-                          <input type="hidden" name="id"     value="<?= (int)$id ?>">
-                          <input type="hidden" name="action" value="accept">
-                          <button class="btn btn-sm btn-success">
-                            <i class="bi bi-check-lg me-1"></i>Terima
-                          </button>
-                        </form>
 
-                        <!-- Decline (modal reason wajib) -->
-                        <button class="btn btn-sm btn-outline-danger btn-decline"
-                                data-type="<?= esc($taskType) ?>"
-                                data-id="<?= (int)$id ?>"
-                                data-title="<?= esc($title,'attr') ?>">
-                          <i class="bi bi-x-lg me-1"></i>Tolak
-                        </button>
+                <?php if (!$hasAssignAbs || !$hasAssignFp): ?>
+                  <div class="alert alert-warning m-3">
+                    <div class="d-flex align-items-start gap-2">
+                      <i class="bi bi-exclamation-triangle-fill"></i>
+                      <div>
+                        <strong>Catatan skema:</strong>
+                        <?php if (!$hasAssignAbs && !$hasAssignFp): ?>
+                          Pivot abstrak & fullpaper belum memiliki kolom status konfirmasi.
+                          Tombol tetap berfungsi (fallback), namun disarankan menambahkan
+                          <code>assignment_status</code> (opsional: <code>accepted_at</code>, <code>declined_at</code>, <code>decline_reason</code>).
+                        <?php elseif (!$hasAssignAbs): ?>
+                          Pivot <em>abstrak</em> belum memiliki kolom status konfirmasi. Tombol tetap berfungsi (fallback).
+                        <?php else: ?>
+                          Pivot <em>full paper</em> belum memiliki kolom status konfirmasi. Tombol tetap berfungsi (fallback).
+                        <?php endif; ?>
                       </div>
                     </div>
-                  <?php endforeach; ?>
-                </div>
-              <?php endif; ?>
-            </div>
-            <div class="card-footer">
-              <div class="small text-muted">
-                <i class="bi bi-exclamation-triangle me-1 text-danger"></i>
-                <strong>Catatan:</strong> Penolakan <u>wajib</u> mencantumkan alasan yang jelas.
-              </div>
-            </div>
-          </div>
-        </div>
+                  </div>
+                <?php endif; ?>
 
-        <!-- PANEL KANAN: HANYA TUGAS BARU MASUK -->
-        <div class="col-12 col-lg-4">
-          <div class="card shadow-sm h-100">
-            <div class="card-header d-flex align-items-center justify-content-between">
-              <h5 class="card-title mb-0">
-                <i class="bi bi-bell me-2 text-info"></i>Tugas Baru Masuk
-              </h5>
-              <button class="btn btn-sm btn-outline-info" onclick="refreshNotifications()">
-                <i class="bi bi-arrow-clockwise"></i>
-              </button>
-            </div>
-            <div class="card-body">
-              <div id="notification-container">
-                <?php if (!empty($notifs)): ?>
-                  <div class="notification-list">
-                    <?php foreach ($notifs as $n): ?>
+                <div class="scroll-area" style="max-height:60vh;">
+                  <div class="task-list p-3">
+                    <?php foreach ($incoming as $t): ?>
                       <?php
-                        $iconClass = 'bi-exclamation-triangle text-warning';
+                        $type     = strtolower($t['task_type'] ?? 'abstrak'); // abstrak|fullpaper
+                        $title    = $t['judul'] ?? '(Tanpa judul)';
+                        $event    = $t['event_title'] ?? '—';
+                        $uploadAt = $fmt($t['tanggal_upload'] ?? null, true);
+                        $id       = ($type === 'abstrak')
+                                      ? (int)($t['id_abstrak'] ?? $t['id'] ?? 0)
+                                      : (int)($t['id_submission'] ?? $t['id'] ?? 0);
                       ?>
-                      <div class="notification-item <?= !empty($n['read']) ? 'read' : 'unread' ?>">
-                        <div class="notification-icon"><i class="bi <?= $iconClass ?>"></i></div>
-                        <div class="notification-content">
-                          <div class="notification-title"><?= esc($n['title'] ?? '-') ?></div>
-                          <?php if (!empty($n['message'])): ?>
-                            <div class="notification-message"><?= esc($n['message']) ?></div>
-                          <?php endif; ?>
-                          <?php if (!empty($n['time'])): ?>
-                            <div class="notification-time"><i class="bi bi-clock me-1"></i><?= esc($n['time']) ?></div>
-                          <?php endif; ?>
-                        </div>
-                        <?php if (!empty($n['link'])): ?>
-                          <div class="notification-action">
-                            <a class="btn btn-sm btn-outline-primary" href="<?= esc($n['link']) ?>">Buka</a>
+                      <div class="task-item">
+                        <div class="task-left">
+                          <div class="task-title">
+                            <span class="truncate-2"><?= esc($title) ?></span>
+
+                            <!-- CHIP JENIS TUGAS -->
+                            <span class="type-chip <?= $type==='abstrak' ? 'type-abs' : 'type-fp' ?>"
+                                  title="<?= $type==='abstrak' ? 'Abstrak' : 'Full Paper' ?>">
+                              <i class="bi <?= $type==='abstrak' ? 'bi-journal-text' : 'bi-file-earmark-text' ?> me-1"></i>
+                              <strong><?= $type==='abstrak' ? 'Abstrak' : 'Full Paper' ?></strong>
+                            </span>
                           </div>
-                        <?php endif; ?>
+                          <div class="task-meta">
+                            <span><i class="bi bi-calendar-event me-1"></i><?= esc($event) ?></span>
+                            <span><i class="bi bi-upload me-1"></i><?= esc($uploadAt) ?></span>
+                          </div>
+                        </div>
+                        <div class="task-actions">
+                          <form class="m-0" method="post" action="<?= site_url('reviewer/dashboard/confirm') ?>">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="type"   value="<?= esc($type) ?>">
+                            <input type="hidden" name="id"     value="<?= (int)$id ?>">
+                            <input type="hidden" name="action" value="accept">
+                            <button class="btn btn-success btn-sm">
+                              <i class="bi bi-check-lg me-1"></i>Terima
+                            </button>
+                          </form>
+
+                          <button class="btn btn-outline-danger btn-sm btn-decline"
+                                  data-type="<?= esc($type) ?>"
+                                  data-id="<?= (int)$id ?>"
+                                  data-title="<?= esc($title,'attr') ?>">
+                            <i class="bi bi-x-lg me-1"></i>Tolak
+                          </button>
+                        </div>
                       </div>
                     <?php endforeach; ?>
                   </div>
-                <?php else: ?>
-                  <div class="empty-state">
-                    <div class="empty-icon"><i class="bi bi-bell-slash"></i></div>
-                    <div class="empty-title">Tidak ada tugas baru</div>
-                    <div class="empty-subtitle">Jika ada penugasan baru, notifikasi akan muncul di sini</div>
-                  </div>
-                <?php endif; ?>
-              </div>
+                </div>
+              <?php endif; ?>
+            </div>
+            <div class="card-footer small text-muted">
+              <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+              Penolakan <b>wajib</b> mencantumkan alasan yang jelas.
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: AKTIVITAS / NOTIFIKASI -->
+        <div class="col-12 col-lg-4">
+          <div class="card admin-card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <h5 class="mb-0">
+                <i class="bi bi-bell me-2 text-info"></i>Notifikasi & Pengingat
+              </h5>
+              <?php if (!empty($activities)): ?>
+                <span class="badge bg-info-subtle text-info fw-semibold"><?= count($activities) ?></span>
+              <?php endif; ?>
+            </div>
+            <div class="card-body p-0">
+              <?php if (empty($activities)): ?>
+                <div class="empty-state my-4">
+                  <div class="empty-icon"><i class="bi bi-inboxes"></i></div>
+                  <div class="empty-title">Belum ada notifikasi</div>
+                  <div class="empty-subtitle">Pengingat deadline abstrak & full paper akan tampil di sini.</div>
+                </div>
+              <?php else: ?>
+                <div class="scroll-area" style="max-height:60vh;">
+                  <ul class="list-unstyled m-0 p-2 activity-list">
+                    <?php foreach ($activities as $a):
+                      // Struktur: title, desc, icon, badge, time (timestamp|text), link, type (opsional)
+                      $badge = strtolower($a['badge'] ?? '');
+                      $pill  = $badge==='success' ? 'pill-success'
+                             :($badge==='warning' ? 'pill-warn'
+                             :($badge==='danger'  ? 'pill-danger'
+                             :($badge==='info'    ? 'pill-info' : 'pill-muted')));
+                      $link  = !empty($a['link']) ? (string)$a['link'] : 'javascript:void(0)';
+                      $timeV = $a['time'] ?? null;
+                      $timeT = is_numeric($timeV) ? date('d M Y H:i', (int)$timeV)
+                             : (is_string($timeV) ? $timeV : '');
+                      $type  = strtolower($a['type'] ?? '');
+                      // chip jenis notif
+                      $chipLabel = $type==='abstrak_deadline'       ? 'Abstrak'
+                                  :($type==='fullpaper_deadline'   ? 'Full Paper'
+                                  :($type==='fullpaper_revision'   ? 'Revisi'
+                                  : 'Info'));
+                    ?>
+                      <li class="notif-item">
+                        <div class="notif-line <?= esc($pill) ?>">
+                          <div class="notif-icon-wrap">
+                            <span class="notif-icon">
+                              <i class="bi <?= esc($a['icon'] ?? 'bi-bell') ?>"></i>
+                            </span>
+                          </div>
+                          <div class="notif-content flex-fill">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                              <a href="<?= esc($link) ?>" class="notif-title text-decoration-none">
+                                <?= esc($a['title'] ?? '-') ?>
+                              </a>
+                              <?php if ($chipLabel): ?>
+                                <span class="notif-chip">
+                                  <?= esc($chipLabel) ?>
+                                </span>
+                              <?php endif; ?>
+                            </div>
+                            <?php if (!empty($a['desc'])): ?>
+                              <div class="notif-desc"><?= esc($a['desc']) ?></div>
+                            <?php endif; ?>
+
+                            <div class="d-flex justify-content-between align-items-center mt-1">
+                              <?php if ($timeT): ?>
+                                <small class="text-muted d-inline-flex align-items-center gap-1">
+                                  <i class="bi bi-clock-history"></i>
+                                  <span><?= esc($timeT) ?></span>
+                                </small>
+                              <?php else: ?>
+                                <span></span>
+                              <?php endif; ?>
+                              <!-- urgency badge kecil di kanan -->
+                              <small class="notif-urgency <?= esc($pill) ?>">
+                                <?php if ($badge==='danger'): ?>
+                                  <i class="bi bi-exclamation-octagon me-1"></i>Mendesak
+                                <?php elseif ($badge==='warning'): ?>
+                                  <i class="bi bi-exclamation-triangle me-1"></i>Segera
+                                <?php elseif ($badge==='success'): ?>
+                                  <i class="bi bi-check-circle me-1"></i>Info
+                                <?php else: ?>
+                                  <i class="bi bi-info-circle me-1"></i>Pengingat
+                                <?php endif; ?>
+                              </small>
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    <?php endforeach; ?>
+                  </ul>
+                </div>
+              <?php endif; ?>
             </div>
           </div>
         </div>
@@ -215,9 +286,7 @@ $fmtDate = fn($d,$withTime=false) => $d ? date($withTime?'d M Y H:i':'d M Y', st
           <input type="hidden" name="id"     id="declId">
           <input type="hidden" name="action" value="decline">
           <div class="modal-header">
-            <h6 class="modal-title">
-              <i class="bi bi-x-octagon text-danger me-2"></i>Tolak Tugas
-            </h6>
+            <h6 class="modal-title"><i class="bi bi-x-octagon text-danger me-2"></i>Tolak Tugas</h6>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
@@ -230,9 +299,7 @@ $fmtDate = fn($d,$withTime=false) => $d ? date($withTime?'d M Y H:i':'d M Y', st
           </div>
           <div class="modal-footer">
             <button class="btn btn-light" type="button" data-bs-dismiss="modal">Batal</button>
-            <button class="btn btn-danger" type="submit">
-              <i class="bi bi-x-lg me-1"></i>Tolak
-            </button>
+            <button class="btn btn-danger" type="submit"><i class="bi bi-x-lg me-1"></i>Tolak</button>
           </div>
         </form>
       </div>
@@ -244,71 +311,211 @@ $fmtDate = fn($d,$withTime=false) => $d ? date($withTime?'d M Y H:i':'d M Y', st
 
 <style>
 :root{
-  --primary-color:#2563eb;
-  --ring:#eef2f7;
+  --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
+  --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
+  --muted:#6b7280; --ink:#0f172a; --radius:16px;
+  --side-pad: clamp(1rem, 2.3vw, 2.2rem);
 }
-body{ background:#f9fafb; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
 
-/* HEADER */
-.header-section{
-  background:linear-gradient(135deg,var(--primary-color),#1e40af);
-  color:#fff; padding:24px; border-radius:16px;
-  box-shadow:0 8px 28px rgba(0,0,0,.12);
+/* Container */
+.container-xxl{
+  max-width: min(100%, 1480px);
+  padding-left: var(--side-pad) !important;
+  padding-right: var(--side-pad) !important;
+  margin-inline: auto;
 }
-.welcome-text{ font-weight:700; font-size:1.6rem; }
 
-/* CARD umum */
-.card{ border:0; border-radius:16px; box-shadow:0 8px 24px rgba(0,0,0,.06); }
-.card-header{ background:#f8fafc; border-bottom:1px solid var(--ring); border-radius:16px 16px 0 0!important; padding:16px 20px; }
-.card-title{ font-weight:600; color:#111827; }
+.page-wrap-blue{
+  min-height:100vh; padding-top:72px;
+  background:
+    radial-gradient(900px 350px at 10% -10%, rgba(59,130,246,.14), rgba(59,130,246,0) 60%),
+    radial-gradient(900px 350px at 90% 110%, rgba(59,130,246,.10), rgba(59,130,246,0) 70%),
+    linear-gradient(180deg, var(--blue-50), #fff 40%);
+}
+
+/* HERO */
+.card-hero{ border:0; border-radius:var(--radius); overflow:hidden; box-shadow:0 12px 28px rgba(30,64,175,.18); }
+.card-hero .hero-body{ background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff; padding:1.8rem 1.2rem; min-height:148px; }
+.hero-title{ font-weight:900; letter-spacing:.2px; }
+.text-white-70{ color:rgba(255,255,255,.92)!important; }
+
+/* Card seragam */
+.card.admin-card{ border:1px solid rgba(30,64,175,.12); border-radius:16px; background:#fff; box-shadow:0 10px 22px rgba(30,64,175,.08); }
+.card-header{ background:#f8fafc; border-bottom:1px solid #e9eef7; }
 
 /* KPI */
-.kpi-card{ background:#fff; border:1px solid var(--ring); border-left:6px solid #e5e7eb; border-radius:16px; transition:.2s; }
+.kpi-card{ background:#fff; border:1px solid #e9eef7; border-radius:16px; transition:.2s; }
 .kpi-card:hover{ transform:translateY(-2px); box-shadow:0 14px 30px rgba(0,0,0,.08); }
-.kpi-card .card-body{ padding:20px 22px; }
-.kpi-icon{ width:60px; height:60px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.6rem; flex-shrink:0; box-shadow:inset 0 0 0 1px rgba(0,0,0,.04); }
-.kpi-label{ color:#6b7280; font-size:1rem; font-weight:600; line-height:1.1; }
-.kpi-number{ font-size:2.6rem; font-weight:800; color:#0f172a; line-height:1; letter-spacing:-.5px; }
+.kpi-card .card-body{ padding:18px 20px; }
+.kpi-icon{
+  width:54px; height:54px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:20px;
+  box-shadow:0 8px 20px rgba(29,78,216,.10), inset 0 -2px 0 rgba(255,255,255,.7);
+}
+.kpi-blue{ background:#e8f0ff; color:#1b4fd6; }
+.kpi-purple{ background:#efe9ff; color:#5b34cf; }
+.kpi-green{ background:#e9fff5; color:#0f8a5b; }
+.kpi-label{ color:#475569; font-weight:700; letter-spacing:.15px; }
+.kpi-number{ font-size:28px; font-weight:900; line-height:1.1; color:#0f172a; }
 
-/* TUGAS LIST */
+/* List tugas */
 .task-list{ display:flex; flex-direction:column; gap:12px; }
-.task-item{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:14px; background:#f3f4f6; border:1px solid #e5e7eb; border-radius:12px; transition:.16s; }
+.task-item{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:14px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px; transition:.16s; }
 .task-item:hover{ box-shadow:0 10px 20px rgba(0,0,0,.06); border-color:#dbe2ea; }
-.task-content{ flex:1; }
-.task-title{ font-weight:600; color:#1f2937; }
-.task-meta{ display:flex; flex-wrap:wrap; gap:10px; color:#6b7280; font-size:.9rem; }
+.task-left{ flex:1; min-width:0; }
+.task-title{ display:flex; align-items:center; gap:8px; font-weight:700; color:#1f2937; }
+.truncate-2{ overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.task-meta{ display:flex; flex-wrap:wrap; gap:10px; color:#6b7280; font-size:.9rem; margin-top:4px; }
+.task-actions{ display:flex; gap:8px; }
 
-/* NOTIFIKASI */
-.notification-list{ display:flex; flex-direction:column; gap:10px; }
-.notification-item{ display:flex; gap:12px; padding:12px; border-radius:12px; border:1px solid #e5e7eb; background:#fff; transition:.16s; }
-.notification-item.unread{ background:#f0f9ff; border-color:#bae6fd; }
-.notification-item.read{ opacity:.9; }
-.notification-item:hover{ transform:translateX(2px); box-shadow:0 8px 18px rgba(0,0,0,.06); }
-.notification-icon{ flex-shrink:0; font-size:1rem; margin-top:2px; }
-.notification-title{ font-weight:600; color:#111827; font-size:.95rem; }
-.notification-message{ color:#6b7280; font-size:.85rem; line-height:1.4; margin-top:2px; }
-.notification-time{ color:#94a3b8; font-size:.78rem; margin-top:4px; }
+/* CHIP jenis tugas */
+.type-chip{
+  display:inline-flex; align-items:center; gap:.35rem;
+  font-size:.78rem; font-weight:800; letter-spacing:.1px;
+  padding:.24rem .6rem; border-radius:999px; border:1px solid transparent;
+  line-height:1; user-select:none;
+}
+.type-abs{ /* Abstrak: biru */
+  background:#e0f2fe; color:#075985; border-color:#7dd3fc;
+}
+.type-fp{  /* Full Paper: ungu */
+  background:#f5f3ff; color:#4c1d95; border-color:#c4b5fd;
+}
 
-/* EMPTY STATE */
-.empty-state{ text-align:center; padding:2.4rem 1.6rem; color:#6b7280; }
-.empty-icon{ font-size:2.6rem; opacity:.5; margin-bottom:.6rem; }
-.empty-title{ font-size:1.05rem; font-weight:600; color:#374151; }
-.empty-subtitle{ font-size:.88rem; color:#9ca3af; }
+/* Pills (dipakai warna dasar) */
+.status-pill,
+.pill-warn,
+.pill-success,
+.pill-danger,
+.pill-info,
+.pill-muted{}
+
+/* warna dasar */
+.pill-warn{ background:#fef3c7; color:#92400e; }
+.pill-success{ background:#d1fae5; color:#065f46; }
+.pill-danger{ background:#fee2e2; color:#991b1b; }
+.pill-info{ background:#e0f2fe; color:#0c4a6e; }
+.pill-muted{ background:#f3f4f6; color:#374151; }
+
+/* Empty state */
+.empty-state{ text-align:center; padding:2rem 1.2rem; color:#6b7280; }
+.empty-state .empty-icon{ font-size:2.2rem; opacity:.55; margin-bottom:.4rem; }
+.empty-state .empty-title{ font-size:1.05rem; font-weight:700; color:#374151; }
+.empty-state .empty-subtitle{ font-size:.88rem; color:#94a3b8; }
+
+/* Scrollbar */
+.scroll-area{ overflow:auto; scrollbar-width:thin; scrollbar-color:#9db7ff #f3f4f6; }
+.scroll-area::-webkit-scrollbar{ width:8px; }
+.scroll-area::-webkit-scrollbar-thumb{ background:#9db7ff; border-radius:6px; }
+.scroll-area::-webkit-scrollbar-track{ background:#f3f4f6; border-radius:6px; }
+
+/* Buttons */
+.btn{ font-weight:800; border-radius:10px; font-size:.95rem; padding:.48rem .9rem; }
+
+/* NOTIFIKASI (Aktivitas) */
+.activity-list{ display:flex; flex-direction:column; gap:8px; }
+.notif-item{ list-style:none; }
+.notif-line{
+  display:flex;
+  gap:10px;
+  padding:10px 10px;
+  border-radius:14px;
+  background:#f9fafb;
+  border:1px solid #e5e7eb;
+  position:relative;
+  overflow:hidden;
+}
+/* garis warna di kiri */
+.notif-line::before{
+  content:'';
+  position:absolute;
+  left:0; top:0; bottom:0;
+  width:4px;
+  background:#e5e7eb;
+}
+.notif-line.pill-warn::before{ background:#f59e0b; }
+.notif-line.pill-danger::before{ background:#dc2626; }
+.notif-line.pill-success::before{ background:#16a34a; }
+.notif-line.pill-info::before{ background:#0ea5e9; }
+
+.notif-icon-wrap{
+  padding-top:2px;
+}
+.notif-icon{
+  width:32px; height:32px;
+  border-radius:999px;
+  display:flex; align-items:center; justify-content:center;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-size:15px;
+}
+.notif-line.pill-warn .notif-icon{ background:#fffbeb; color:#92400e; }
+.notif-line.pill-danger .notif-icon{ background:#fef2f2; color:#b91c1c; }
+.notif-line.pill-success .notif-icon{ background:#ecfdf5; color:#047857; }
+.notif-line.pill-info .notif-icon{ background:#e0f2fe; color:#0c4a6e; }
+
+.notif-title{
+  font-size:.9rem;
+  font-weight:700;
+  color:#111827;
+}
+.notif-desc{
+  font-size:.78rem;
+  color:#6b7280;
+  margin-top:2px;
+}
+.notif-chip{
+  font-size:.7rem;
+  font-weight:700;
+  padding:.15rem .5rem;
+  border-radius:99px;
+  background:#e5e7eb;
+  color:#374151;
+  white-space:nowrap;
+}
+.notif-urgency{
+  font-size:.7rem;
+  font-weight:700;
+  padding:.18rem .5rem;
+  border-radius:999px;
+  border:1px solid transparent;
+  background:#f3f4f6;
+  color:#4b5563;
+}
+.notif-urgency.pill-warn{
+  background:#fef3c7;
+  color:#92400e;
+  border-color:#fde68a;
+}
+.notif-urgency.pill-danger{
+  background:#fee2e2;
+  color:#991b1b;
+  border-color:#fecaca;
+}
+.notif-urgency.pill-success{
+  background:#dcfce7;
+  color:#166534;
+  border-color:#bbf7d0;
+}
+.notif-urgency.pill-info{
+  background:#e0f2fe;
+  color:#0c4a6e;
+  border-color:#bfdbfe;
+}
 
 /* Responsive */
 @media (max-width: 768px){
-  .header-section{ padding:18px; text-align:center; }
-  .welcome-text{ font-size:1.3rem; }
+  .card-hero .hero-body{ min-height:130px; }
   .task-item{ flex-direction:column; }
 }
+
+/* kecil */
+.xsmall{ font-size:.8rem; }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   animateKPINumbers();
   wireDeclineModal();
-  setInterval(refreshNotifications, 300000); // 5 menit
-  refreshNotifications();
 });
 
 function animateKPINumbers(){
@@ -346,47 +553,5 @@ function wireDeclineModal(){
       alert('Alasan penolakan minimal 5 karakter.');
     }
   });
-}
-
-async function refreshNotifications(){
-  const url = '<?= site_url("reviewer/notifications") ?>';
-  try {
-    const res = await fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}});
-    if (!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    if (data && data.success && Array.isArray(data.notifications)){
-      updateNotificationDisplay(data.notifications);
-    } else {
-      updateNotificationDisplay([]);
-    }
-  } catch(e){
-    updateNotificationDisplay([]);
-  }
-}
-
-function updateNotificationDisplay(items){
-  const wrap = document.getElementById('notification-container');
-  if (!items || items.length===0){
-    wrap.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon"><i class="bi bi-bell-slash"></i></div>
-        <div class="empty-title">Tidak ada tugas baru</div>
-        <div class="empty-subtitle">Jika ada penugasan baru, notifikasi akan muncul di sini</div>
-      </div>`;
-    return;
-  }
-  const esc = (t)=>{const d=document.createElement('div'); d.textContent=t??''; return d.innerHTML;};
-  const html = items.map(n=>`
-    <div class="notification-item ${n.read?'read':'unread'}">
-      <div class="notification-icon"><i class="bi bi-exclamation-triangle text-warning"></i></div>
-      <div class="notification-content">
-        <div class="notification-title">${esc(n.title)}</div>
-        ${n.message?`<div class="notification-message">${esc(n.message)}</div>`:''}
-        ${n.time?`<div class="notification-time"><i class="bi bi-clock me-1"></i>${esc(n.time)}</div>`:''}
-      </div>
-      ${n.link?`<div class="notification-action"><a class="btn btn-sm btn-outline-primary" href="${esc(n.link)}">Buka</a></div>`:''}
-    </div>
-  `).join('');
-  wrap.innerHTML = `<div class="notification-list">${html}</div>`;
 }
 </script>

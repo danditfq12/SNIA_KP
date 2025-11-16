@@ -25,69 +25,9 @@ $formLocked     = (bool)($formLocked ?? false);
 <div id="content">
   <main class="flex-fill page-wrap-blue">
     <div class="container-xxl px-3 px-md-4 py-4">
-
-      <!-- HERO (seragam) -->
-      <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
-        <div>
-          <h3 class="hero-title mb-1"><i class="bi bi-file-earmark-plus me-2"></i>Kirim Abstrak</h3>
-          <div class="text-white-75 small">Event: <?= esc($event['title'] ?? '-') ?></div>
-        </div>
-        <div class="d-none d-md-block text-end">
-          <div class="text-white-75 small">Tanggal event</div>
-          <div class="fw-semibold text-white">
-            <?= $fmtDate($event['event_date'] ?? null) ?>
-            <?= !empty($event['event_time']) ? ' • '.esc($event['event_time']) : '' ?>
-          </div>
-        </div>
-      </div>
-
       <div class="row g-3">
-        <!-- Info Event -->
-        <div class="col-12 col-lg-4">
-          <div class="card shadow-soft card-glass-plain h-100">
-            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between gap-2">
-              <div class="d-flex align-items-center gap-2">
-                <span class="badge bg-blue-soft"><i class="bi bi-info-circle"></i></span>
-                <h6 class="mb-0 fw-semibold text-blue-900">Info Event</h6>
-              </div>
-              <a href="<?= site_url('/presenter/kontributor/start/'.(int)$eventId) ?>" class="btn btn-sm btn-outline-primary">
-                <i class="bi bi-people me-1"></i> Edit Kontributor
-              </a>
-            </div>
-            <div class="card-body small">
-              <dl class="mb-0">
-                <dt class="text-muted">Tanggal Event</dt>
-                <dd class="fw-semibold mb-2"><?= $fmtDate($event['event_date'] ?? null) ?></dd>
-
-                <dt class="text-muted">Waktu</dt>
-                <dd class="fw-semibold mb-2"><?= esc($event['event_time'] ?? '-') ?></dd>
-
-                <dt class="text-muted">Lokasi</dt>
-                <dd class="fw-semibold mb-2"><?= esc($event['location'] ?? '-') ?></dd>
-
-                <dt class="text-muted">Format</dt>
-                <dd class="fw-semibold mb-2"><?= esc($formatLabel($event['format'] ?? '')) ?></dd>
-
-                <hr>
-
-                <dt class="text-muted">Deadline Abstrak</dt>
-                <dd class="fw-semibold mb-2"><?= $fmtDT($event['abstract_deadline'] ?? null) ?></dd>
-
-                <?php if (!empty($event['full_paper_deadline'])): ?>
-                  <dt class="text-muted">Deadline Full Paper</dt>
-                  <dd class="fw-semibold"><?= $fmtDT($event['full_paper_deadline']) ?></dd>
-                <?php endif; ?>
-              </dl>
-
-              <div class="alert alert-info mt-3 mb-0 shadow-none border-0 bg-blue-soft-2 text-blue-900">
-                Pastikan data <strong>kontributor</strong> sudah lengkap (minimal afiliasi).
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Form -->
-        <div class="col-12 col-lg-8">
+        <!-- Form (full width) -->
+        <div class="col-12">
 
           <?php if ($showFpCta): ?>
             <div class="alert alert-success card-glow d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
@@ -142,18 +82,44 @@ $formLocked     = (bool)($formLocked ?? false);
                 <?= csrf_field() ?>
                 <input type="hidden" name="event_id" value="<?= (int)$eventId ?>">
 
-                <!-- Kategori -->
+                <!-- Kategori (dropdown scrollable) -->
                 <div class="mb-3">
                   <label class="form-label">Kategori <span class="text-danger">*</span></label>
-                  <select name="id_kategori" class="form-select form-control-soft" <?= $formLocked ? 'disabled' : '' ?> required>
-                    <option value="">-- Pilih Kategori --</option>
-                    <?php foreach ($kategoriList as $k): ?>
-                      <option value="<?= (int)$k['id_kategori'] ?>" <?= (string)$oldKategori === (string)$k['id_kategori'] ? 'selected' : '' ?>>
-                        <?= esc($k['nama_kategori']) ?>
-                      </option>
-                    <?php endforeach; ?>
-                  </select>
-                  <div class="invalid-feedback">Kategori wajib dipilih.</div>
+
+                  <!-- Hidden value tetap dipakai untuk submit -->
+                  <input type="hidden" name="id_kategori" id="kategoriValue" value="<?= esc($oldKategori) ?>">
+
+                  <div class="dropdown w-100">
+                    <button
+                      class="btn btn-light border w-100 d-flex justify-content-between align-items-center form-control-soft"
+                      type="button"
+                      id="kategoriDropdown"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false"
+                      <?= $formLocked ? 'disabled' : '' ?>
+                      style="height:44px; text-align:left;"
+                    >
+                      <span id="kategoriLabel" class="text-truncate">
+                        <?= $oldKategori ? esc(array_values(array_filter($kategoriList, fn($k)=> (string)$k['id_kategori']===(string)$oldKategori))[0]['nama_kategori'] ?? 'Pilih Kategori') : '— Pilih Kategori —' ?>
+                      </span>
+                      <i class="bi bi-chevron-down ms-2"></i>
+                    </button>
+                    <ul class="dropdown-menu w-100 shadow" aria-labelledby="kategoriDropdown"
+                        style="max-height: 260px; overflow-y: auto;">
+                      <li>
+                        <button class="dropdown-item" type="button" data-value="">
+                          — Pilih Kategori —
+                        </button>
+                      </li>
+                      <?php foreach ($kategoriList as $k): ?>
+                        <li>
+                          <button class="dropdown-item" type="button" data-value="<?= (int)$k['id_kategori'] ?>">
+                            <?= esc($k['nama_kategori']) ?>
+                          </button>
+                        </li>
+                      <?php endforeach; ?>
+                    </ul>
+                  </div>
                 </div>
 
                 <!-- Judul -->
@@ -241,13 +207,13 @@ $formLocked     = (bool)($formLocked ?? false);
   --blue-300:#93c5fd; --blue-400:#60a5fa; --blue-500:#3b82f6;
   --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
 
-  --side-pad: clamp(1rem, 2.3vw, 2.2rem);  /* kiri–kanan konsisten (LEBIH LEBAR) */
+  --side-pad: clamp(1rem, 2.3vw, 2.2rem);
   --gutter-x: 1rem;
 }
 
 body{
   font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  font-size:15.5px;   /* seragam dgn halaman lain */
+  font-size:15.5px;
   line-height:1.6;
   color:#0f172a;
 }
@@ -261,7 +227,7 @@ body{
     linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
 
-/* ===== Container — LEBAR disamakan (1560px) ===== */
+/* ===== Container ===== */
 .container-xxl{
   max-width: min(100%, 1560px);
   padding-left: var(--side-pad) !important;
@@ -345,7 +311,7 @@ body{
   pointer-events: all;
 }
 
-/* ===== Table (kalau ada tabel tambahan) ===== */
+/* ===== Table ===== */
 .table{ font-size:.95rem; margin-bottom:0; }
 .table thead th{
   background:#f8fbff!important;
@@ -398,6 +364,16 @@ body{
   const forms = document.querySelectorAll('.needs-validation');
   Array.from(forms).forEach(form => {
     form.addEventListener('submit', e => {
+      // validasi kategori (karena hidden input tidak bisa required native)
+      const katVal = document.getElementById('kategoriValue')?.value || '';
+      const katInvalid = document.getElementById('kategoriInvalid');
+      if (!katVal) {
+        katInvalid.style.display = 'block';
+        e.preventDefault(); e.stopPropagation();
+      } else {
+        katInvalid.style.display = 'none';
+      }
+
       if (!form.checkValidity()) { e.preventDefault(); e.stopPropagation(); }
       form.classList.add('was-validated');
     }, false);
@@ -406,5 +382,22 @@ body{
   const titleCount = document.getElementById('titleCount');
   const updateCount = () => { titleCount.textContent = (titleInput?.value || '').length; };
   if (titleInput) { updateCount(); titleInput.addEventListener('input', updateCount); }
+
+  // Dropdown kategori: set value + label
+  const dropdown = document.querySelector('#kategoriDropdown');
+  const list = document.querySelectorAll('.dropdown-menu [data-value]');
+  const label = document.getElementById('kategoriLabel');
+  const hidden = document.getElementById('kategoriValue');
+  const katInvalid = document.getElementById('kategoriInvalid');
+
+  list.forEach(item => {
+    item.addEventListener('click', () => {
+      const val = item.getAttribute('data-value') || '';
+      const text = item.textContent.trim();
+      hidden.value = val;
+      label.textContent = text || '— Pilih Kategori —';
+      katInvalid.style.display = val ? 'none' : 'block';
+    });
+  });
 })();
 </script>

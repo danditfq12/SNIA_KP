@@ -8,7 +8,7 @@ use App\Models\FullPaperModel;
 
 class KelolaPaper extends BaseController
 {
-    // Kuota reviewer
+    // Kuota reviewer minimal
     private int $requiredAbs = 1; // Abstrak
     private int $requiredFp  = 3; // Full paper
 
@@ -64,13 +64,17 @@ class KelolaPaper extends BaseController
                 if ($absUserCol) {
                     $absPivot = $this->firstExistingTable(['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak']);
                     if ($absPivot) {
-                        $absCol = $this->firstExistingColumn($absPivot, ['id_abstrak','abstrak_id']);
+                        $absCol   = $this->firstExistingColumn($absPivot, ['id_abstrak','abstrak_id']);
+                        $assignCol= $this->firstExistingColumn($absPivot, ['assignment_status','status_tugas','tugas_status','konfirmasi_status']);
                         if ($absCol) {
+                            $assignedExpr = $assignCol
+                                ? "SUM(CASE WHEN {$assignCol} IS NULL OR LOWER({$assignCol}) <> 'declined' THEN 1 ELSE 0 END)"
+                                : "COUNT(*)";
                             $e['abs_unassigned'] = (int)$db->query("
                                 SELECT COUNT(DISTINCT a.{$absUserCol}) c
                                 FROM abstrak a
                                 LEFT JOIN (
-                                  SELECT {$absCol} aid, COUNT(*) assigned
+                                  SELECT {$absCol} aid, {$assignedExpr} AS assigned
                                   FROM {$absPivot}
                                   GROUP BY {$absCol}
                                 ) ax ON ax.aid = a.id_abstrak
@@ -119,7 +123,6 @@ class KelolaPaper extends BaseController
                         $relCol    = $this->firstExistingColumn($fpPivot, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
                         $assignCol = $this->firstExistingColumn($fpPivot, ['assignment_status','status_tugas','tugas_status','konfirmasi_status']);
                         if ($relCol) {
-                            // ✅ Konsisten: hitung non-declined sebagai assignment aktif
                             $assignedExpr = $assignCol
                                 ? "SUM(CASE WHEN {$assignCol} IS NULL OR LOWER({$assignCol}) <> 'declined' THEN 1 ELSE 0 END)"
                                 : "COUNT(*)";
@@ -309,7 +312,7 @@ class KelolaPaper extends BaseController
         return $this->streamFile($path, $latest['full_paper_path']);
     }
 
-    /* ============================ Helpers ============================ */
+    /* ============================ Helpers (schema introspection) ============================ */
 
     private function columnExists(string $table, string $column): bool
     {
@@ -359,27 +362,32 @@ class KelolaPaper extends BaseController
         if ($idAbstrak <= 0) return 0;
         $db = \Config\Database::connect();
 
-        // 1) Pivot
-        $pivot = $this->firstExistingTable(['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak']);
-        if ($pivot) {
-            $colAbs = $this->firstExistingColumn($pivot, ['id_abstrak','abstrak_id']);
+        // 1) Pivot (pakai status tugas kalau ada) → hitung NON-declined
+        if ($pivot = $this->firstExistingTable(['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak'])) {
+            $colAbs  = $this->firstExistingColumn($pivot, ['id_abstrak','abstrak_id']);
+            $colStat = $this->firstExistingColumn($pivot, ['assignment_status','status_tugas','tugas_status','konfirmasi_status']);
             if ($colAbs) {
+                if ($colStat) {
+                    $row = $db->table($pivot)
+                        ->select("SUM(CASE WHEN {$colStat} IS NULL OR LOWER({$colStat}) <> 'declined' THEN 1 ELSE 0 END) AS c", false)
+                        ->where($colAbs, $idAbstrak)->get()->getRow();
+                    return (int)($row->c ?? 0);
+                }
+                // tanpa kolom status → hitung semua baris
                 return (int)$db->table($pivot)->where($colAbs, $idAbstrak)->countAllResults();
             }
         }
 
-        // 2) Tabel penilaian (distinct reviewer)
-        $tbl = $this->firstExistingTable(['reviews','abstrak_reviews','review']);
-        if (!$tbl) return 0;
-
-        $colAbs = $this->firstExistingColumn($tbl, ['id_abstrak','abstrak_id']);
-        $colRev = $this->firstExistingColumn($tbl, ['id_reviewer','reviewer_id']);
-        if (!$colAbs || !$colRev) return 0;
-
-        return (int)$db->table($tbl)
-            ->select("COUNT(DISTINCT {$colRev}) AS c", false)
-            ->where($colAbs, $idAbstrak)
-            ->get()->getRow('c');
+        // 2) Fallback: distinct reviewer di tabel review
+        if ($tbl = $this->firstExistingTable(['reviews','abstrak_reviews','review'])) {
+            $colAbs = $this->firstExistingColumn($tbl, ['id_abstrak','abstrak_id']);
+            $colRev = $this->firstExistingColumn($tbl, ['id_reviewer','reviewer_id']);
+            if ($colAbs && $colRev) {
+                $row = $db->table($tbl)->select("COUNT(DISTINCT {$colRev}) AS c", false)->where($colAbs, $idAbstrak)->get()->getRow();
+                return (int)($row->c ?? 0);
+            }
+        }
+        return 0;
     }
 
     private function getAbstractCompletedCount(int $idAbstrak): int
@@ -409,37 +417,31 @@ class KelolaPaper extends BaseController
     {
         $db = \Config\Database::connect();
 
-        // 1) Pivot resmi
         if ($db->tableExists('fullpaper_reviewers')) {
             $colSub    = $this->firstExistingColumn('fullpaper_reviewers', ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
-            $assignCol = $this->firstExistingColumn('fullpaper_reviewers', ['assignment_status','status_tugas','tugas_status','konfirmasi_status']);
+            $colAssign = $this->firstExistingColumn('fullpaper_reviewers', ['assignment_status','status_tugas','tugas_status','konfirmasi_status']);
             if ($colSub) {
-                if ($assignCol) {
-                    // ✅ Fix: hitung semua yang BUKAN 'declined' (pending/accepted/NULL dihitung)
+                if ($colAssign) {
+                    // assignment AKTIF: accepted/pending/NULL
                     $row = $db->table('fullpaper_reviewers')
-                        ->select("SUM(CASE WHEN {$assignCol} IS NULL OR LOWER({$assignCol}) <> 'declined' THEN 1 ELSE 0 END) AS c", false)
-                        ->where($colSub, $submissionId)
-                        ->get()->getRow('c');
-                    return (int)$row;
-                } else {
-                    // tanpa kolom status → hitung semua baris pivot
-                    return (int)$db->table('fullpaper_reviewers')->where($colSub, $submissionId)->countAllResults();
+                        ->select("SUM(CASE WHEN {$colAssign} IS NULL OR LOWER({$colAssign}) IN ('accepted','pending') THEN 1 ELSE 0 END) AS c", false)
+                        ->where($colSub, $submissionId)->get()->getRow();
+                    return (int)($row->c ?? 0);
                 }
+                return (int)$db->table('fullpaper_reviewers')->where($colSub, $submissionId)->countAllResults();
             }
         }
 
-        // 2) Fallback: tabel penilaian (distinct reviewer)
-        $tbl = $this->firstExistingTable(['fullpaper_reviews','fullpaper_review','fp_review','review_fullpaper']);
-        if (!$tbl) return 0;
-
-        $colSub = $this->firstExistingColumn($tbl, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
-        $colRev = $this->firstExistingColumn($tbl, ['reviewer_id','id_reviewer']);
-        if (!$colSub || !$colRev) return 0;
-
-        return (int)$db->table($tbl)
-            ->select("COUNT(DISTINCT {$colRev}) AS c", false)
-            ->where($colSub, $submissionId)
-            ->get()->getRow('c');
+        // fallback: distinct reviewer di tabel review
+        if ($tbl = $this->firstExistingTable(['fullpaper_reviews','fullpaper_review','fp_review','review_fullpaper'])) {
+            $colSub = $this->firstExistingColumn($tbl, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
+            $colRev = $this->firstExistingColumn($tbl, ['reviewer_id','id_reviewer']);
+            if ($colSub && $colRev) {
+                $row = $db->table($tbl)->select("COUNT(DISTINCT {$colRev}) AS c", false)->where($colSub, $submissionId)->get()->getRow();
+                return (int)($row->c ?? 0);
+            }
+        }
+        return 0;
     }
 
     private function getFullpaperCompletedCount(int $submissionId): int
@@ -486,7 +488,7 @@ class KelolaPaper extends BaseController
         return null;
     }
 
-    /* ============================ Reviewer loads ============================ */
+    /* ============================ Reviewer sources & loads ============================ */
 
     /** Sumber identitas reviewer (users/reviewers) */
     private function resolveReviewerSource(): array
@@ -505,67 +507,152 @@ class KelolaPaper extends BaseController
         return ['table'=>$table,'id'=>$idCol,'name'=>$nameCol,'email'=>$emailCol];
     }
 
-    /** Ambil semua reviewer */
+    /** Kumpulkan semua reviewer_id dari pivot dan tabel review (distinct) */
+    private function collectReviewerIds(): array
+    {
+        $db = \Config\Database::connect();
+        $ids = [];
+
+        $col = function(string $table, array $cands){
+            foreach ($cands as $c) if ($this->columnExists($table,$c)) return $c;
+            return null;
+        };
+
+        // 1) Pivot Abstrak
+        foreach (['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak'] as $t) {
+            if ($db->tableExists($t)) {
+                $rid = $col($t, ['reviewer_id','id_reviewer','user_id','id_user']);
+                if ($rid) {
+                    $rows = $db->table($t)->select("DISTINCT {$rid} AS id", false)->get()->getResultArray();
+                    foreach ($rows as $r) { $ids[(int)$r['id']] = true; }
+                }
+            }
+        }
+
+        // 2) Pivot Fullpaper
+        if ($db->tableExists('fullpaper_reviewers')) {
+            $rid = $col('fullpaper_reviewers', ['reviewer_id','id_reviewer','user_id','id_user']);
+            if ($rid) {
+                $rows = $db->table('fullpaper_reviewers')->select("DISTINCT {$rid} AS id", false)->get()->getResultArray();
+                foreach ($rows as $r) { $ids[(int)$r['id']] = true; }
+            }
+        }
+
+        // 3) Review Abstrak
+        foreach (['reviews','abstrak_reviews','review'] as $t) {
+            if ($db->tableExists($t)) {
+                $rid = $col($t, ['reviewer_id','id_reviewer','user_id','id_user']);
+                if ($rid) {
+                    $rows = $db->table($t)->select("DISTINCT {$rid} AS id", false)->get()->getResultArray();
+                    foreach ($rows as $r) { $ids[(int)$r['id']] = true; }
+                }
+            }
+        }
+
+        // 4) Review Fullpaper
+        foreach (['fullpaper_reviews','fullpaper_review','fp_review','review_fullpaper'] as $t) {
+            if ($db->tableExists($t)) {
+                $rid = $col($t, ['reviewer_id','id_reviewer','user_id','id_user']);
+                if ($rid) {
+                    $rows = $db->table($t)->select("DISTINCT {$rid} AS id", false)->get()->getResultArray();
+                    foreach ($rows as $r) { $ids[(int)$r['id']] = true; }
+                }
+            }
+        }
+
+        // 5) Fallback: users.role = reviewer (kalau ada)
+        if ($db->tableExists('users') && $this->columnExists('users','role')) {
+            $rows = $db->table('users')->select('id_user AS id')
+                ->whereIn('role', ['reviewer','reviewer_abs','reviewer_fp'])
+                ->get()->getResultArray();
+            foreach ($rows as $r) { $ids[(int)$r['id']] = true; }
+        }
+
+        unset($ids[0]); // buang nol
+        return array_keys($ids);
+    }
+
+    /** Ambil profil reviewer dari users/reviewers untuk ID yang terkumpul */
     private function getAllReviewers(): array
     {
-        $db  = \Config\Database::connect();
+        $db     = \Config\Database::connect();
+        $ids    = $this->collectReviewerIds();
+        if (!$ids) return [];
+
         $src = $this->resolveReviewerSource();
-        if (!$src['table'] || !$src['id']) return [];
+        if (!$src['table'] || !$src['id']) {
+            return array_map(fn($id)=>['id'=>$id,'name'=>"Reviewer #$id",'email'=>null], $ids);
+        }
 
         $b = $db->table($src['table']);
         $sel = ["{$src['table']}.{$src['id']} AS id"];
         if ($src['name'])  $sel[] = "{$src['table']}.{$src['name']} AS name";
         if ($src['email']) $sel[] = "{$src['table']}.{$src['email']} AS email";
-        $b->select(implode(', ', $sel));
+        $b->select(implode(', ',$sel))->whereIn($src['id'], $ids);
+        $rows = $b->get()->getResultArray();
 
-        if ($src['table'] === 'users' && in_array('role',$db->getFieldNames('users'),true)) {
-            $b->where('role','reviewer');
+        $out = [];
+        foreach ($ids as $id) {
+            $hit = null;
+            foreach ($rows as $r) if ((int)$r['id'] === (int)$id) { $hit = $r; break; }
+            $out[] = [
+                'id'    => (int)$id,
+                'name'  => $hit['name'] ?? ("Reviewer #$id"),
+                'email' => $hit['email'] ?? null,
+            ];
         }
-        if ($src['name']) $b->orderBy($src['name'],'ASC');
-
-        return $b->get()->getResultArray();
+        return $out;
     }
 
     /** Hitung beban aktif (belum final) abstrak per reviewer */
     private function countActiveAbstractByReviewer(int $reviewerId): int
     {
         $db = \Config\Database::connect();
-
-        $pivot = $this->firstExistingTable(['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak']);
-        $revT  = $this->firstExistingTable(['reviews','abstrak_reviews','review']);
-
         $finalAbs = ['diterima','revisi','ditolak','accepted','revision','rejected'];
 
-        if ($pivot) {
-            $colAbsP = $this->firstExistingColumn($pivot, ['id_abstrak','abstrak_id']);
-            $colRevP = $this->firstExistingColumn($pivot, ['id_reviewer','reviewer_id']);
-            if ($colAbsP && $colRevP) {
-                if ($revT) {
+        if ($pivot = $this->firstExistingTable(['abstrak_reviewers','abstrak_reviewer','reviewer_abstrak'])) {
+            $colAbs  = $this->firstExistingColumn($pivot, ['id_abstrak','abstrak_id']);
+            $colRev  = $this->firstExistingColumn($pivot, ['id_reviewer','reviewer_id','user_id','id_user']);
+            $colStat = $this->firstExistingColumn($pivot, ['assignment_status','status_tugas','tugas_status','konfirmasi_status']);
+
+            if ($colAbs && $colRev) {
+                $assignFilter = '';
+                if ($colStat) $assignFilter = " AND (p.{$colStat} IS NULL OR LOWER(p.{$colStat}) IN ('accepted','pending')) ";
+                if ($revT = $this->firstExistingTable(['reviews','abstrak_reviews','review'])) {
                     $colAbsR = $this->firstExistingColumn($revT, ['id_abstrak','abstrak_id']);
                     $colRevR = $this->firstExistingColumn($revT, ['id_reviewer','reviewer_id']);
                     $colStR  = $this->firstExistingColumn($revT, ['keputusan','status','decision']);
                     if ($colAbsR && $colRevR && $colStR) {
-                        $row = $db->query("
+                        $sql = "
                             SELECT COUNT(*) c
                             FROM {$pivot} p
-                            WHERE p.{$colRevP} = ?
+                            WHERE p.{$colRev} = ?
+                              {$assignFilter}
                               AND NOT EXISTS (
                                 SELECT 1 FROM {$revT} r
-                                WHERE r.{$colAbsR} = p.{$colAbsP}
-                                  AND r.{$colRevR} = p.{$colRevP}
+                                WHERE r.{$colAbsR} = p.{$colAbs}
+                                  AND r.{$colRevR} = p.{$colRev}
                                   AND LOWER(r.{$colStR}) IN ('".implode("','",$finalAbs)."')
                               )
-                        ", [$reviewerId])->getRow();
+                        ";
+                        $row = $db->query($sql, [$reviewerId])->getRow();
                         return (int)($row->c ?? 0);
                     }
                 }
-                // tanpa tabel review → semua assignment dianggap aktif
-                return (int)$db->table($pivot)->where($colRevP, $reviewerId)->countAllResults();
+                // tanpa tabel review → hitung assignment aktif saja
+                $b = $db->table($pivot)->where($colRev, $reviewerId);
+                if ($colStat) {
+                    $b->groupStart()
+                        ->where($colStat, null)
+                        ->orWhereIn("LOWER({$colStat})", ['accepted','pending'])
+                      ->groupEnd();
+                }
+                return (int)$b->countAllResults();
             }
         }
 
-        // tanpa pivot: hitung distinct abstrak di tabel review yg belum final
-        if ($revT) {
+        // fallback: dari tabel review (distinct abstrak) yg belum final
+        if ($revT = $this->firstExistingTable(['reviews','abstrak_reviews','review'])) {
             $colAbsR = $this->firstExistingColumn($revT, ['id_abstrak','abstrak_id']);
             $colRevR = $this->firstExistingColumn($revT, ['id_reviewer','reviewer_id']);
             $colStR  = $this->firstExistingColumn($revT, ['keputusan','status','decision']);
@@ -582,7 +669,6 @@ class KelolaPaper extends BaseController
                 return (int)($row->c ?? 0);
             }
         }
-
         return 0;
     }
 
@@ -590,56 +676,51 @@ class KelolaPaper extends BaseController
     private function countActiveFullpaperByReviewer(int $reviewerId): int
     {
         $db   = \Config\Database::connect();
-        $fpP  = $this->firstExistingTable(['fullpaper_reviewers']);
-        $fpR  = $this->firstExistingTable(['fullpaper_reviews','fullpaper_review','fp_review','review_fullpaper']);
-
-        // final = tugas selesai
         $finalFp = ['accepted','rejected','revision'];
 
-        if ($fpP) {
-            $colSubP   = $this->firstExistingColumn($fpP, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
-            $colRevP   = $this->firstExistingColumn($fpP, ['reviewer_id','id_reviewer']);
-            $colAssign = $this->firstExistingColumn($fpP, ['assignment_status','status_tugas','tugas_status','konfirmasi_status']);
-            if ($colSubP && $colRevP) {
+        if ($fpP = $this->firstExistingTable(['fullpaper_reviewers'])) {
+            $colSub = $this->firstExistingColumn($fpP, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
+            $colRev = $this->firstExistingColumn($fpP, ['reviewer_id','id_reviewer','user_id','id_user']);
+            $colStt = $this->firstExistingColumn($fpP, ['assignment_status','status_tugas','tugas_status','konfirmasi_status']);
+            if ($colSub && $colRev) {
                 $assignFilter = '';
-                if ($colAssign) {
-                    // hanya assignment yang diterima (atau belum ada status) dihitung sebagai aktif
-                    $assignFilter = " AND (LOWER(fr.{$colAssign})='accepted' OR fr.{$colAssign} IS NULL) ";
-                }
-                if ($fpR) {
+                if ($colStt) $assignFilter = " AND (LOWER(fr.{$colStt}) IN ('accepted','pending') OR fr.{$colStt} IS NULL) ";
+
+                if ($fpR = $this->firstExistingTable(['fullpaper_reviews','fullpaper_review','fp_review','review_fullpaper'])) {
                     $colSubR = $this->firstExistingColumn($fpR, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
                     $colRevR = $this->firstExistingColumn($fpR, ['reviewer_id','id_reviewer']);
                     $colStR  = $this->firstExistingColumn($fpR, ['keputusan','status','decision']);
                     if ($colSubR && $colRevR && $colStR) {
-                        $row = $db->query("
+                        $sql = "
                             SELECT COUNT(*) c
                             FROM {$fpP} fr
-                            WHERE fr.{$colRevP} = ?
+                            WHERE fr.{$colRev} = ?
                               {$assignFilter}
                               AND NOT EXISTS (
                                 SELECT 1 FROM {$fpR} r
-                                WHERE r.{$colSubR} = fr.{$colSubP}
-                                  AND r.{$colRevR} = fr.{$colRevP}
+                                WHERE r.{$colSubR} = fr.{$colSub}
+                                  AND r.{$colRevR} = fr.{$colRev}
                                   AND LOWER(r.{$colStR}) IN ('".implode("','",$finalFp)."')
                               )
-                        ", [$reviewerId])->getRow();
+                        ";
+                        $row = $db->query($sql, [$reviewerId])->getRow();
                         return (int)($row->c ?? 0);
                     }
                 }
-                // tanpa tabel review → semua assignment accepted/NULL dianggap aktif
-                $b = $db->table($fpP)->where($colRevP, $reviewerId);
-                if ($colAssign) {
+                // tanpa tabel review → assignment aktif saja
+                $b = $db->table($fpP)->where($colRev, $reviewerId);
+                if ($colStt) {
                     $b->groupStart()
-                        ->where("LOWER({$colAssign})",'accepted')
-                        ->orWhere($colAssign, null)
+                        ->where($colStt, null)
+                        ->orWhereIn("LOWER({$colStt})", ['accepted','pending'])
                       ->groupEnd();
                 }
                 return (int)$b->countAllResults();
             }
         }
 
-        // fallback: hanya dari tabel review (distinct submission) yang belum final
-        if ($fpR) {
+        // fallback: dari tabel review (distinct submission) yg belum final
+        if ($fpR = $this->firstExistingTable(['fullpaper_reviews','fullpaper_review','fp_review','review_fullpaper'])) {
             $colSubR = $this->firstExistingColumn($fpR, ['submission_id','id_submission','fullpaper_id','id_fullpaper','abstrak_id','id_abstrak']);
             $colRevR = $this->firstExistingColumn($fpR, ['reviewer_id','id_reviewer']);
             $colStR  = $this->firstExistingColumn($fpR, ['keputusan','status','decision']);

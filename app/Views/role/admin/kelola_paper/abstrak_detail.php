@@ -29,9 +29,10 @@ $fmtDT = function($dt){
 
 $idAbstrak = (int)($abstrak['id_abstrak'] ?? 0);
 
-// RULE tombol Tugaskan:
-// controller sudah hanya mengisi $assigned dengan reviewer aktif,
-// jadi cukup cek kosong/tidak.
+/** RULE tombol Tugaskan:
+ * controller sudah hanya mengisi $assigned dengan reviewer aktif,
+ * jadi cukup cek kosong/tidak.
+ */
 $canAssign = empty($assigned);
 
 $eventId   = (int)($abstrak['event_id'] ?? 0);
@@ -168,9 +169,9 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
               <?php else: ?>
                 <div class="vstack gap-2">
                   <?php foreach ($reviews as $r):
-                    $dKey = strtolower($r['keputusan'] ?? 'pending');
-                    $dMap = ['diterima'=>'success','ditolak'=>'danger','revisi'=>'warning','pending'=>'secondary','sedang_direview'=>'info'];
-                    $dCls = $dMap[$dKey] ?? 'secondary';
+                    $dKey  = strtolower($r['keputusan'] ?? '');
+                    $label = ($dKey==='diterima') ? 'Diterima' : (($dKey==='ditolak') ? 'Ditolak' : '—');
+                    $dCls  = ($dKey==='diterima') ? 'success' : (($dKey==='ditolak') ? 'danger' : 'secondary');
                   ?>
                     <div class="p-3 border rounded-3 bg-white">
                       <div class="d-flex justify-content-between align-items-start">
@@ -181,7 +182,7 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
                           </div>
                           <div class="small text-muted"><?= esc($fmtDT($r['tanggal_review'] ?? null)) ?></div>
                         </div>
-                        <span class="badge bg-<?= $dCls ?>"><?= ucfirst($dKey) ?></span>
+                        <span class="badge bg-<?= $dCls ?>"><?= esc($label) ?></span>
                       </div>
                       <?php if (!empty($r['komentar'])): ?>
                         <div class="mt-2 text-secondary"><?= nl2br(esc($r['komentar'])) ?></div>
@@ -236,13 +237,19 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
             </div>
             <div class="card-body">
               <div class="d-grid gap-2">
-                <button class="btn btn-primary" onclick="openStatusModal()">
-                  <i class="bi bi-pencil-square me-1"></i>Perbarui Status
+                <!-- Satu tombol saja: buka modal keputusan -->
+                <button class="btn btn-primary" onclick="openDecisionModal()">
+                  <i class="bi bi-clipboard-check me-1"></i>Beri Keputusan
                 </button>
 
                 <?php if ($canAssign): ?>
                   <button class="btn btn-soft-primary"
-                          onclick="openAssign(<?= $idAbstrak ?>,'<?= esc(addslashes($abstrak['judul'] ?? '-')) ?>',<?= (int)($abstrak['id_kategori'] ?? 0) ?>)">
+                          onclick="openAssign(
+                            <?= $idAbstrak ?>,
+                            '<?= esc(addslashes($abstrak['judul'] ?? '-')) ?>',
+                            <?= (int)($abstrak['id_kategori'] ?? 0) ?>,
+                            '<?= esc(addslashes($abstrak['nama_kategori'] ?? '')) ?>'
+                          )">
                     <i class="bi bi-person-plus me-1"></i>Tugaskan Reviewer
                   </button>
                 <?php endif; ?>
@@ -262,9 +269,10 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
               <?php else: ?>
                 <div class="vstack gap-2">
                   <?php foreach ($assigned as $a):
-                    $k  = strtolower($a['status'] ?? 'pending'); // status review
-                    $ts = strtolower($a['task_status'] ?? 'pending'); // status tugas (pending/accepted)
-                    $cls = ['pending'=>'secondary','diterima'=>'success','ditolak'=>'danger','revisi'=>'warning','sedang_direview'=>'info'][$k] ?? 'secondary';
+                    $k  = strtolower($a['status'] ?? ''); // status review
+                    $ts = strtolower($a['task_status'] ?? 'pending'); // status tugas
+                    $cls = ($k==='diterima') ? 'success' : (($k==='ditolak') ? 'danger' : 'secondary');
+                    $label = ($k==='diterima') ? 'Diterima' : (($k==='ditolak') ? 'Ditolak' : '—');
                     $chipText = ($ts === 'accepted') ? 'Aktif' : 'Menunggu konfirmasi';
                     $chipCls  = ($ts === 'accepted') ? 'success' : 'secondary';
                   ?>
@@ -278,7 +286,7 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
                     </div>
                     <div class="text-end">
                       <div><span class="badge bg-<?= $chipCls ?>"><?= esc($chipText) ?></span></div>
-                      <div class="mt-1"><span class="badge bg-<?= $cls ?>"><?= ucfirst($k) ?></span></div>
+                      <div class="mt-1"><span class="badge bg-<?= $cls ?>"><?= esc($label) ?></span></div>
                     </div>
                   </div>
                   <?php endforeach; ?>
@@ -291,6 +299,66 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
 
     </div>
   </main>
+</div>
+
+<!-- Modal Keputusan (1 tombol → modal ini) -->
+<div class="modal fade" id="decisionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header border-0" style="background:linear-gradient(135deg,#1e3a8a,#2563eb); color:#fff;">
+        <h5 class="modal-title d-flex align-items-center">
+          <i class="bi bi-clipboard-check me-2"></i> Beri Keputusan Admin
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="decisionForm">
+        <?= csrf_field() ?>
+        <div class="modal-body">
+          <input type="hidden" name="id_abstrak" value="<?= $idAbstrak ?>">
+
+          <div class="alert alert-warning-soft border-0 d-flex align-items-start" style="background:#fff7ed; color:#92400e;">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <div>
+              <div class="fw-semibold">Catatan:</div>
+              <div class="small">
+                Keputusan oleh admin dipakai saat <strong>darurat/eskalasi</strong> atau koreksi administratif.
+                Keputusan akan tersimpan di riwayat penilaian.
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Pilih Keputusan</label>
+            <div class="d-flex gap-3 flex-wrap">
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="status" id="st_accept" value="diterima">
+                <label class="form-check-label" for="st_accept"><i class="bi bi-check2-circle me-1"></i>Terima</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="status" id="st_reject" value="ditolak">
+                <label class="form-check-label" for="st_reject"><i class="bi bi-x-circle me-1"></i>Tolak</label>
+              </div>
+            </div>
+            <div class="form-text">Wajib pilih salah satu.</div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label fw-semibold">Catatan (opsional)</label>
+            <textarea class="form-control" name="komentar" rows="4" placeholder="Tambahkan catatan untuk penulis / arsip (opsional)"></textarea>
+          </div>
+
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-soft-dark" data-bs-dismiss="modal">
+            <i class="bi bi-arrow-left-short me-1"></i>Batal
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-send-check me-1"></i>Kirim Keputusan
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 <!-- Modal Tugaskan Reviewer -->
@@ -313,40 +381,6 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
             <option value="">Pilih reviewer…</option>
           </select>
           <div class="form-text">Daftar disesuaikan dengan kategori.</div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">Batal</button>
-        <button class="btn btn-primary" type="submit"><i class="bi bi-save me-1"></i>Simpan</button>
-      </div>
-    </form>
-  </div></div>
-</div>
-
-<!-- Modal Perbarui Status -->
-<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog"><div class="modal-content">
-    <div class="modal-header bg-primary text-white">
-      <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Perbarui Status</h5>
-      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-    </div>
-    <form id="statusForm">
-      <?= csrf_field() ?>
-      <div class="modal-body">
-        <input type="hidden" id="statusAbstrakId" name="id_abstrak" value="<?= $idAbstrak ?>">
-        <div class="mb-3">
-          <label class="form-label">Status</label>
-          <select class="form-select" id="statusSelect" name="status" required>
-            <option value="diterima"        <?= $stKey==='diterima'?'selected':''        ?>>Diterima</option>
-            <option value="ditolak"         <?= $stKey==='ditolak'?'selected':''         ?>>Ditolak</option>
-            <option value="revisi"          <?= $stKey==='revisi'?'selected':''          ?>>Revisi</option>
-            <option value="sedang_direview" <?= $stKey==='sedang_direview'?'selected':'' ?>>Sedang Ditinjau</option>
-            <option value="menunggu"        <?= $stKey==='menunggu'?'selected':''        ?>>Menunggu</option>
-          </select>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Catatan (opsional)</label>
-          <textarea class="form-control" id="statusKomentar" name="komentar" rows="3"></textarea>
         </div>
       </div>
       <div class="modal-footer">
@@ -387,7 +421,6 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
 .btn-soft-dark{ background:#f1f5f9; color:#111827; border:1px solid #e2e8f0; }
 .btn-soft-dark:hover{ background:#111827; color:#fff; border-color:#111827; }
 .btn-soft-primary{ background:#e0ecff; color:#123; border:1px solid rgba(37,99,235,.25); }
-.btn-soft-primary:hover{ background:#2563eb; color:#fff; border-color:#2563eb; }
 
 .table{ width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0; }
 .table thead th{
@@ -400,6 +433,9 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
 .pdf-frame-wrap{ height:72vh; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; }
 .pdf-frame{ width:100%; height:100%; border:0; }
 
+.alert-warning-soft{ background:#fff7ed; color:#92400e; }
+.alert-warning-soft .btn-close{ filter: invert(0); }
+
 @media (min-width: 1200px){ .row.g-3{ --bs-gutter-x: 1.25rem; } }
 @media (max-width: 768px){ .pdf-frame-wrap{ height:60vh; } }
 </style>
@@ -409,27 +445,27 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
   const csrfName = '<?= csrf_token() ?>';
   let   csrfHash = '<?= csrf_hash() ?>';
 
-  function openStatusModal(){
-    const el = document.getElementById('statusModal');
-    if (!el) return;
-    new bootstrap.Modal(el).show();
+  function openDecisionModal(){
+    const m = document.getElementById('decisionModal');
+    if(!m) return;
+    m.querySelectorAll('input[name="status"]').forEach(r=> r.checked = false);
+    const ta = m.querySelector('textarea[name="komentar"]');
+    if (ta) ta.value = '';
+    new bootstrap.Modal(m).show();
   }
 
-  (function(){
-    const form = document.getElementById('statusForm');
+  (function bindDecisionSubmit(){
+    const form = document.getElementById('decisionForm');
     if(!form) return;
-
     form.addEventListener('submit', function(e){
       e.preventDefault();
-      const sel = document.getElementById('statusSelect');
-      const statusVal = sel ? sel.value : '';
-      if (!['diterima','ditolak','revisi','sedang_direview','menunggu'].includes(statusVal)) {
-        return Swal?.fire('Tidak valid','Pilih status yang tersedia','warning');
+
+      const status = (form.querySelector('input[name="status"]:checked')||{}).value || '';
+      if(!['diterima','ditolak'].includes(status)){
+        return Swal?.fire('Belum dipilih','Silakan pilih keputusan Terima atau Tolak.','warning');
       }
-      const data = new URLSearchParams();
-      data.append('id_abstrak', document.getElementById('statusAbstrakId').value);
-      data.append('status',     statusVal);
-      data.append('komentar',   document.getElementById('statusKomentar').value || '');
+
+      const data = new URLSearchParams(new FormData(form));
       data.append(csrfName, csrfHash);
 
       fetch('<?= site_url('admin/abstrak/update-status') ?>', {
@@ -447,7 +483,8 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
     });
   })();
 
-  function openAssign(idAbstrak, judul, idKategori){
+  // UPDATED: terima namaKategori dan tampilkan alert jika tidak ada reviewer
+  function openAssign(idAbstrak, judul, idKategori, namaKategori=''){
     const title  = document.getElementById('assignTitle');
     const form   = document.getElementById('assignForm');
     const select = document.getElementById('reviewerSelect');
@@ -459,21 +496,30 @@ $backUrl   = $eventId ? site_url('admin/kelola-paper/detail/'.$eventId) : site_u
 
     fetch('<?= site_url('admin/abstrak/reviewers-by-category') ?>/'+idKategori, {
       headers:{'X-Requested-With':'XMLHttpRequest'}
-    }).then(r=>r.json())
-      .then(res=>{
-        const items = Array.isArray(res) ? res : (res.data || []);
-        if (!items || items.length === 0) {
-          throw new Error('Daftar reviewer kosong');
-        }
-        select.innerHTML = '<option value="">Pilih reviewer…</option>';
-        items.forEach(rv=>{
-          const opt = document.createElement('option');
-          opt.value = rv.id_user || rv.id || rv.id_reviewer;
-          opt.textContent = (rv.nama || rv.nama_lengkap || '—') + (rv.email ? ' — ' + rv.email : '');
-          select.appendChild(opt);
-        });
-        new bootstrap.Modal(document.getElementById('assignModal')).show();
-      })
-      .catch(()=> Swal?.fire('Error','Gagal memuat reviewer','error'));
+    })
+    .then(r=>r.json())
+    .then(res=>{
+      const items = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+
+      if (!res?.success || items.length === 0) {
+        const label = (namaKategori && namaKategori.trim() !== '') ? namaKategori : 'ini';
+        Swal?.fire('Tidak ada reviewer', `Maaf, tidak ada reviewer dengan kategori "${label}".`, 'warning');
+        select.innerHTML = '<option value="">(tidak tersedia)</option>';
+        return; // jangan buka modal
+      }
+
+      select.innerHTML = '<option value="">Pilih reviewer…</option>';
+      items.forEach(rv=>{
+        const opt = document.createElement('option');
+        opt.value = rv.id_user || rv.id || rv.id_reviewer;
+        opt.textContent = (rv.nama || rv.nama_lengkap || '—') + (rv.email ? ' — ' + rv.email : '');
+        select.appendChild(opt);
+      });
+      new bootstrap.Modal(document.getElementById('assignModal')).show();
+    })
+    .catch(()=>{
+      Swal?.fire('Error','Gagal memuat reviewer','error');
+      select.innerHTML = '<option value="">(gagal memuat)</option>';
+    });
   }
 </script>

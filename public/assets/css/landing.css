@@ -1,0 +1,99 @@
+:root{
+  --primary-blue:#1e88e5;--light-blue:#e3f2fd;--dark-blue:#0d47a1;--accent-blue:#2196f3;
+  --white:#ffffff;--text-dark:#263238;--text-muted:#607d8b;
+  --border-radius:15px;--border-radius-small:25px;--border-radius-large:50px;
+  --shadow-m:0 10px 24px rgba(30,136,229,.15);--shadow-h:0 20px 40px rgba(30,136,229,.25);
+}
+
+body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;line-height:1.6;color:var(--text-dark)}
+
+/* Navbar */
+.navbar{background:rgba(255,255,255,.95)!important;border-bottom:1px solid rgba(0,0,0,.1)}
+.navbar-brand{font-size:1.8rem;font-weight:700;color:var(--primary-blue)!important}
+.navbar-nav .nav-link{color:var(--text-dark)!important;font-weight:500;margin:0 10px}
+.navbar .btn-primary{background:var(--primary-blue);border:2px solid var(--primary-blue);color:#fff;border-radius:20px;padding:8px 20px;font-weight:600}
+.navbar .contact-email{color:var(--primary-blue)!important;text-decoration:none;font-weight:500}
+
+/* HERO */
+.hero-section{
+  background:linear-gradient(rgba(0,61,130,.7),rgba(0,86,179,.7)),url('../img/Background.jpg') center/cover fixed;
+  color:#fff;padding:120px 0 100px;position:relative;min-height:100vh;display:flex;align-items:center
+}
+.hero-title{font-size:3.5rem;font-weight:700;margin-bottom:1rem;line-height:1.1}
+.hero-year{font-size:3rem;font-weight:800;color:#FFC107;margin-bottom:2rem}
+.hero-description{font-size:1.1rem;font-weight:300;margin-bottom:2.5rem;max-width:600px}
+.hero-cta{background:#fff;color:var(--primary-blue);padding:12px 30px;border-radius:var(--border-radius-small);font-weight:600;font-size:1rem;text-decoration:none;display:inline-block;transition:transform .2s ease, box-shadow .2s ease}
+.hero-cta:hover{transform:translateY(-2px);box-shadow:var(--shadow-m)}
+
+/* POSTER lebih kecil */
+.poster-section{padding-top:56px!important;background:#fff}
+.poster-card{background:#fff;border-radius:var(--border-radius);padding:12px;border:1px solid #e7effa;box-shadow:var(--shadow-m);transition:transform .2s ease, box-shadow .2s ease}
+.poster-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-h)}
+.poster-image{width:100%;height:auto;border-radius:10px;display:block}
+.poster-slim{max-width:420px;margin:0 auto}
+
+/* REGISTRATION: lebih rapat */
+.registration-section{background:var(--light-blue);padding:56px 0}
+.section-title{color:var(--dark-blue);font-weight:700;margin-bottom:20px}
+.pricing-container{display:flex;justify-content:center;align-items:stretch;gap:20px;flex-wrap:wrap}
+.price-card{background:#fff;border-radius:var(--border-radius);padding:28px 24px;text-align:center;border:1px solid #e7effa;flex:0 0 300px;max-width:340px;min-height:360px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 4px 16px rgba(0,0,0,.04);transition:transform .2s ease, box-shadow .2s ease}
+.price-card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(0,0,0,.12)}
+.price-card.featured{border:3px solid var(--primary-blue)}
+.price{font-size:2.2rem;font-weight:bold;color:var(--primary-blue);margin:14px 0}
+.feature-icon{width:74px;height:74px;background:var(--light-blue);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:var(--primary-blue);font-size:1.8rem}
+
+/* SPEAKERS */
+.speaker-section{background:#fff;padding:72px 0;border-top:3px solid var(--light-blue);border-bottom:3px solid var(--light-blue)}
+.speaker-card{background:linear-gradient(135deg,var(--primary-blue) 0%,var(--accent-blue) 100%);border-radius:var(--border-radius);padding:26px;color:#fff;text-align:center;height:100%;transition:transform .2s ease, box-shadow .2s ease}
+.speaker-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-h)}
+.speaker-img{width:150px;height:150px;border-radius:50%;object-fit:cover;margin:0 auto 18px;border:5px solid #fff;display:block}
+.speaker-name{font-size:1.2rem;font-weight:700;margin-bottom:8px}
+.speaker-title{font-size:.95rem;margin-bottom:12px;opacity:.95}
+.speaker-bio{font-size:.9rem;line-height:1.6;opacity:.95}
+
+/* VOUCHER */
+.voucher-section{background:var(--light-blue);padding:72px 0}
+.voucher-card{background:linear-gradient(135deg,var(--primary-blue) 0%,var(--accent-blue) 100%);border-radius:var(--border-radius);padding:22px;color:#fff;position:relative;transition:transform .2s ease, box-shadow .2s ease}
+.voucher-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-h)}
+.voucher-badge{position:absolute;top:12px;right:12px;background:#ff5252;color:#fff;padding:5px 12px;border-radius:20px;font-size:.85rem;font-weight:600}
+.voucher-code{font-size:1.7rem;font-weight:800;letter-spacing:2px;margin:8px 0;font-family:'Courier New',monospace;background:rgba(255,255,255,.2);padding:8px;border-radius:10px}
+.voucher-discount{font-size:1.8rem;font-weight:700;color:#FFD54F;margin:8px 0}
+
+/* SPONSOR: satu baris, bisa di-scroll, ada jarak & hover — CENTER */
+.sponsor-section{background:#fff;padding:72px 0}
+.sponsor-row{
+  display:flex;gap:48px;align-items:center;justify-content:center; /* center */
+  flex-wrap:nowrap;overflow-x:auto;padding:14px 18px;
+  border:1px solid #e7effa;border-radius:16px;scroll-snap-type:x mandatory;
+  margin:0 auto; /* bantu center saat konten lebih sempit dari container */
+}
+.sponsor-row img{height:56px;width:auto;display:block;flex:0 0 auto;scroll-snap-align:center;filter:grayscale(100%);opacity:.9;transition:transform .2s ease, filter .2s ease, opacity .2s ease}
+.sponsor-row img:hover{transform:scale(1.06);filter:grayscale(0%);opacity:1}
+
+/* GENERIC */
+.deadline-info{background:var(--light-blue);padding:12px;border-radius:10px;margin-top:10px}
+.deadline-badge{display:inline-block;background:#ff9800;color:#fff;padding:6px 12px;border-radius:20px;font-weight:600}
+.map-container{border-radius:var(--border-radius);overflow:hidden;border:1px solid #e7effa;height:400px}
+.no-event-notice{background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:#fff;padding:56px 28px;border-radius:var(--border-radius);text-align:center;margin:72px 0}
+
+/* FOOTER readability (kalau di partial footerhome.php) */
+.footer{background:var(--dark-blue);color:rgba(255,255,255,.92);padding:50px 0 30px}
+.footer p,.footer li{color:rgba(255,255,255,.92)!important}
+.footer a{color:#fff;text-decoration:underline}
+.footer a:hover{text-decoration:none}
+
+/* Responsive */
+@media (max-width: 992px){
+  .pricing-container{flex-direction:column;align-items:center}
+  .price-card{flex:none;width:100%;max-width:400px;margin-bottom:18px}
+}
+@media (max-width: 768px){
+  .hero-title{font-size:2.2rem}
+  .hero-year{font-size:2rem}
+  .hero-description{font-size:1rem}
+  .poster-slim{max-width:340px}
+  .sponsor-row img{height:44px}
+}
+@media (min-width: 1200px){
+  .pricing-container{max-width:1100px;margin:0 auto}
+}
