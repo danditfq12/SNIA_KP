@@ -306,47 +306,47 @@ $routes->group('presenter', [
     'namespace' => 'App\Controllers\Role\Presenter',
 ], static function ($routes) {
 
-    // Redirect root presenter → dashboard
+    // Redirect
     $routes->addRedirect('/', 'presenter/dashboard');
     $routes->get('dashboard', 'Dashboard::index');
 
-    // ====== Event (opsional: sesuaikan dengan controllernya) ======
-    $routes->get ('events',                      'Event::index');
-    $routes->get ('events/detail/(:num)',        'Event::detail/$1');
-    $routes->get ('events/register/(:num)',      'Event::register/$1');
-    $routes->get ('events/cancel/(:num)',        'Event::cancel/$1');
+    // ====== Event ======
+    $routes->get ('events',                       'Event::index');
+    $routes->get ('events/detail/(:num)',         'Event::detail/$1');
+    $routes->get ('events/showRegistrationForm/(:num)', 'Event::showRegistrationForm/$1');
+    $routes->post('events/register/(:num)',       'Event::register/$1');
+    $routes->get ('events/cancel/(:num)',         'Event::cancel/$1');
 
-    // ====== Abstrak (presenter) ======
-    $routes->get ('abstrak',                           'Abstrak::index');
-    $routes->get ('abstrak/create/(:num)',             'Abstrak::create/$1'); 
-    $routes->post('abstrak/store',                     'Abstrak::store');
-    $routes->get ('abstrak/detail/(:num)',             'Abstrak::detail/$1');  
-    $routes->get ('abstrak/download/(:segment)',       'Abstrak::download/$1');
-    $routes->post('abstrak/cancel/(:num)',             'Abstrak::cancel/$1'); 
-    $routes->post('abstrak/revisi/(:num)',             'Abstrak::revisi/$1');
-    
-    $routes->get ('abstrak/file/(:num)',           'Abstrak::fileStream/$1');    // buka/preview di iframe/tab baru
-    $routes->get ('abstrak/download/(:num)',       'Abstrak::fileDownload/$1');
+    // ====== Abstrak ======
+    $routes->get ('abstrak',                      'Abstrak::index');
+    $routes->get ('abstrak/create/(:num)',        'Abstrak::create/$1');
+    $routes->post('abstrak/store',                'Abstrak::store');
+    $routes->get ('abstrak/detail/(:num)',        'Abstrak::detail/$1');
 
-        // ====== Full Paper (presenter) ======
+    $routes->get ('abstrak/file/(:num)',          'Abstrak::fileStream/$1');
+    $routes->get ('abstrak/download/(:num)',      'Abstrak::fileDownload/$1');
+
+    $routes->post('abstrak/cancel/(:num)',        'Abstrak::cancel/$1');
+    $routes->post('abstrak/revisi/(:num)',        'Abstrak::revisi/$1');
+
+    // ====== Full Paper ======
     $routes->group('fullpaper', static function ($routes) {
         $routes->get ('',                'Fullpaper::index');
         $routes->get ('create/(:num)',   'Fullpaper::create/$1');
         $routes->post('store',           'Fullpaper::store');
         $routes->get ('detail/(:num)',   'Fullpaper::detail/$1');
-        $routes->get ('download/(:any)', 'Fullpaper::download/$1'); 
+        $routes->get ('download/(:any)', 'Fullpaper::download/$1');
         $routes->post('cancel/(:num)',   'Fullpaper::cancel/$1');
         $routes->post('delete/(:num)',   'Fullpaper::delete/$1');
-});
-
-
-    // ====== Kontributor (presenter) ======
-    $routes->group('kontributor', static function ($routes) {
-        $routes->get ('start/(:num)',  'Kontributor::start/$1');
-        $routes->post('save/(:num)',   'Kontributor::save/$1'); 
     });
 
-    // ====== Pembayaran (Midtrans) ======
+    // ====== Kontributor ======
+    $routes->group('kontributor', static function ($routes) {
+        $routes->get ('start/(:num)',  'Kontributor::start/$1');
+        $routes->post('save/(:num)',   'Kontributor::save/$1');
+    });
+
+    // ====== Pembayaran ======
     $routes->get ('pembayaran',                       'Pembayaran::index');
     $routes->get ('pembayaran/instruction/(:num)',    'Pembayaran::instruction/$1');
     $routes->get ('pembayaran/create/(:num)',         'Pembayaran::create/$1');
@@ -358,19 +358,18 @@ $routes->group('presenter', [
     $routes->post('pembayaran/cancel/(:num)',         'Pembayaran::cancel/$1');
     $routes->post('pembayaran/validate-voucher',      'Pembayaran::validateVoucher');
 
-    // ====== Absensi (presenter) ======
+    // ====== Absensi ======
     $routes->get ('absensi',              'Absensi::index');
     $routes->get ('absensi/event/(:num)', 'Absensi::show/$1');
     $routes->post('absensi/scan',         'Absensi::scan');
 
-    // ====== Dokumen (presenter) ======
+    // ====== Dokumen ======
     $routes->get ('dokumen',                                'Dokumen::index');
     $routes->get ('dokumen/loa',                            'Dokumen::loa');
     $routes->get ('dokumen/sertifikat',                     'Dokumen::sertifikat');
     $routes->get ('dokumen/loa/download/(:segment)',        'Dokumen::downloadLoa/$1');
     $routes->get ('dokumen/sertifikat/download/(:segment)', 'Dokumen::downloadSertifikat/$1');
 });
-
 
 // ---------------------------------------------------
 // ENHANCED: Audience Routes with Better Payment Handling

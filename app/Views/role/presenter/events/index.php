@@ -84,8 +84,13 @@ $badgeToPill = function($b){
                 $detailUrl   = $ev['detail_url']  ?? site_url('presenter/events/detail/'.(int)($ev['id'] ?? 0));
                 $isClosed    = (bool)($ev['is_closed'] ?? false);
                 $isReg       = (bool)($ev['is_registered'] ?? false);
-                $needConfirm = stripos((string)$primaryTxt, 'daftar') !== false; // Alert konfirmasi untuk aksi "Daftar"
-                // Gunakan confirm bawaan dari controller jika ada
+
+                // gelombang (dari controller: wave_num & wave_active)
+                $waveNum     = $ev['wave_num']      ?? null;
+                $waveActive  = (bool)($ev['wave_active'] ?? false);
+
+                // Konfirmasi opsional (controller saat ini sudah menghapus confirm untuk “Daftar”)
+                $needConfirm = stripos((string)$primaryTxt, 'daftar') !== false;
                 $confirmText = $ev['primary_confirm'] ?? ($needConfirm ? 'Daftar ke event ini sekarang?' : null);
               ?>
               <div class="col js-col">
@@ -95,7 +100,8 @@ $badgeToPill = function($b){
                        ($statusLabel) . ' ' .
                        ($ev['format'] ?? '') . ' ' .
                        ($fmtDate($ev['event_date'] ?? null)) . ' ' .
-                       ($fmtDT($ev['registration_deadline'] ?? null))
+                       ($fmtDT($ev['registration_deadline'] ?? null)) . ' ' .
+                       ($waveNum ? ('gelombang '.$waveNum) : '')
                      )) ?>">
                   <div class="fp-head">
                     <h6 class="mb-0 fp-title text-truncate" title="<?= esc($ev['title'] ?? '-') ?>">
@@ -107,13 +113,22 @@ $badgeToPill = function($b){
                   <div class="chip-row mb-2">
                     <span class="chip"><i class="bi bi-laptop me-1"></i><?= esc($formatLabel($ev['format'] ?? '')) ?></span>
                     <span class="chip alt"><i class="bi bi-calendar-event me-1"></i><?= esc($fmtDate($ev['event_date'] ?? null)) ?> <?= esc($ev['event_time'] ?? '') ?></span>
+
+                    <?php if ($waveNum): ?>
+                      <span class="chip <?= $waveActive ? 'chip-info' : 'chip-muted' ?>">
+                        <i class="bi bi-bullseye me-1"></i>
+                        Gel. <?= (int)$waveNum ?><?= ((int)$waveNum === 1) ? ' ⭐' : '' ?>
+                      </span>
+                    <?php endif; ?>
+
                     <?php if (!empty($ev['registration_deadline'])): ?>
                       <span class="chip ghost <?= $isClosed ? 'chip-muted' : 'chip-info' ?>">
                         <i class="bi bi-hourglass-split me-1"></i><?= esc($fmtDT($ev['registration_deadline'])) ?>
                       </span>
                     <?php endif; ?>
+
                     <span class="chip ghost <?= $isClosed ? 'chip-muted' : 'chip-info' ?>">
-                      <i class="bi <?= $isClosed?'bi-lock':'bi-lightning-charge' ?> me-1"></i>
+                      <i class="bi <?= $isClosed ? 'bi-lock' : 'bi-lightning-charge' ?> me-1"></i>
                       <?= $isClosed ? 'Pendaftaran Ditutup' : 'Pendaftaran Dibuka' ?>
                     </span>
                   </div>
@@ -152,6 +167,9 @@ $badgeToPill = function($b){
                 $statusLabel = $h['status_label'] ?? (($h['is_over']??false) ? 'Selesai' : 'Ditutup');
                 $detailUrl   = $h['detail_url'] ?? site_url('presenter/events/detail/'.(int)($h['id'] ?? 0));
                 $endedText   = ($h['is_over']??false) ? 'Event Selesai' : 'Pendaftaran Berakhir';
+
+                $waveNumH    = $h['wave_num']      ?? null;
+                $waveActiveH = (bool)($h['wave_active'] ?? false);
               ?>
               <div class="col js-col">
                 <div class="fp-card js-card"
@@ -159,7 +177,8 @@ $badgeToPill = function($b){
                        ($h['title'] ?? '') . ' ' .
                        ($statusLabel) . ' ' .
                        ($h['format'] ?? '') . ' ' .
-                       ($fmtDate($h['event_date'] ?? null))
+                       ($fmtDate($h['event_date'] ?? null)) . ' ' .
+                       ($waveNumH ? ('gelombang '.$waveNumH) : '')
                      )) ?>">
                   <div class="fp-head">
                     <h6 class="mb-0 fp-title text-truncate" title="<?= esc($h['title'] ?? '-') ?>">
@@ -173,6 +192,14 @@ $badgeToPill = function($b){
                     <?php if (!empty($h['event_date'])): ?>
                       <span class="chip alt"><i class="bi bi-calendar-event me-1"></i><?= esc($fmtDate($h['event_date'])) ?> <?= esc($h['event_time'] ?? '') ?></span>
                     <?php endif; ?>
+
+                    <?php if ($waveNumH): ?>
+                      <span class="chip chip-muted">
+                        <i class="bi bi-bullseye me-1"></i>
+                        Gel. <?= (int)$waveNumH ?><?= ((int)$waveNumH === 1) ? ' ⭐' : '' ?>
+                      </span>
+                    <?php endif; ?>
+
                     <?php if (!empty($h['registration_deadline'])): ?>
                       <span class="chip ghost chip-muted"><i class="bi bi-hourglass-bottom me-1"></i><?= esc($fmtDT($h['registration_deadline'])) ?></span>
                     <?php endif; ?>
@@ -284,7 +311,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 </style>
 
 <script>
-/* Optional client-side filter (kalau mau pakai tanpa submit form) */
+/* Optional client-side filter (tanpa submit form) */
 (function(){
   const input = document.getElementById('searchInput');
   if(!input) return;
@@ -306,9 +333,9 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
     const a = e.target.closest('a.js-swal-confirm');
     if(!a) return;
     const msg = a.getAttribute('data-confirm');
-    if(!msg) return; // tidak perlu swal
+    if(!msg) return;
     e.preventDefault();
-    if (typeof Swal === 'undefined') { // fallback bila Swal belum ada
+    if (typeof Swal === 'undefined') {
       if (confirm(msg)) window.location.href = a.href;
       return;
     }
