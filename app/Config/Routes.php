@@ -256,6 +256,7 @@ $routes->group('admin', [
     $routes->post('absensi/bulkMarkAttendance',        'Absensi::bulkMarkAttendance');
     $routes->get ('absensi/export',                    'Absensi::export');
     $routes->get ('absensi/liveStats',                 'Absensi::liveStats');
+    $routes->get ('absensi/getEligibleUsers',          'Absensi::getEligibleUsers');
 
     // ===== DOKUMEN =====
     $routes->get ('dokumen',                           'Dokumen::index');

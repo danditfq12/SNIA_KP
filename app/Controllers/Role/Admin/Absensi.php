@@ -799,6 +799,34 @@ class Absensi extends BaseController
             ->orderBy('absensi.waktu_scan', 'ASC')
             ->get()->getResultArray();
 
+        // Calculate statistics by role and participation type
+        $stats = [
+            'audience_online' => 0,
+            'audience_offline' => 0,
+            'presenter_online' => 0,
+            'presenter_offline' => 0,
+            'total' => count($attendanceData)
+        ];
+
+        foreach ($attendanceData as $row) {
+            $role = strtolower($row['role'] ?? 'audience');
+            $participationType = strtolower($row['participation_type'] ?? 'offline');
+            
+            if ($role === 'presenter') {
+                if ($participationType === 'online') {
+                    $stats['presenter_online']++;
+                } else {
+                    $stats['presenter_offline']++;
+                }
+            } else {
+                if ($participationType === 'online') {
+                    $stats['audience_online']++;
+                } else {
+                    $stats['audience_offline']++;
+                }
+            }
+        }
+
         // Set headers for CSV download
         $filename = 'Attendance_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $event['title']) . '_' . date('Ymd_His') . '.csv';
         
@@ -813,19 +841,43 @@ class Absensi extends BaseController
         // Add BOM for proper UTF-8 encoding in Excel
         fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
         
-        // Write CSV header
+        // Write event header
+        fputcsv($output, ['LAPORAN ABSENSI EVENT']);
+        fputcsv($output, ['Event:', $event['title']]);
+        fputcsv($output, ['Tanggal:', date('d F Y', strtotime($event['event_date']))]);
+        fputcsv($output, ['Waktu:', date('H:i', strtotime($event['event_time'])) . ' WIB']);
+        fputcsv($output, ['Format:', ucfirst($event['format'])]);
+        fputcsv($output, ['Lokasi:', $event['location'] ?? '-']);
+        fputcsv($output, []);
+        
+        // Write statistics summary
+        fputcsv($output, ['RINGKASAN KEHADIRAN']);
+        fputcsv($output, ['Total Kehadiran:', $stats['total']]);
+        fputcsv($output, []);
+        fputcsv($output, ['Berdasarkan Role & Partisipasi:']);
+        fputcsv($output, ['Audience Online:', $stats['audience_online']]);
+        fputcsv($output, ['Audience Offline:', $stats['audience_offline']]);
+        fputcsv($output, ['Presenter Online:', $stats['presenter_online']]);
+        fputcsv($output, ['Presenter Offline:', $stats['presenter_offline']]);
+        fputcsv($output, []);
+        fputcsv($output, ['Total Audience:', ($stats['audience_online'] + $stats['audience_offline'])]);
+        fputcsv($output, ['Total Presenter:', ($stats['presenter_online'] + $stats['presenter_offline'])]);
+        fputcsv($output, []);
+        
+        // Write CSV header for detail data
+        fputcsv($output, ['DETAIL KEHADIRAN']);
         fputcsv($output, [
             'No',
             'Nama Lengkap',
             'Email',
             'Role',
+            'Tipe Partisipasi',
             'No. HP',
             'Institusi',
             'Waktu Absen',
             'Status',
             'QR Code',
             'Jumlah Pembayaran',
-            'Tipe Partisipasi',
             'Ditandai Oleh',
             'Catatan'
         ]);
@@ -838,23 +890,33 @@ class Absensi extends BaseController
                 $row['nama_lengkap'] ?? '',
                 $row['email'] ?? '',
                 ucfirst($row['role'] ?? ''),
+                ucfirst($row['participation_type'] ?? 'offline'),
                 $row['no_hp'] ?? '',
                 $row['institusi'] ?? '',
                 $row['waktu_scan'] ? date('d/m/Y H:i:s', strtotime($row['waktu_scan'])) : '',
                 ucfirst($row['status'] ?? ''),
                 $row['qr_code'] ?? '',
                 $row['payment_amount'] ? 'Rp ' . number_format($row['payment_amount'], 0, ',', '.') : '',
-                ucfirst($row['participation_type'] ?? ''),
                 $row['marked_by_admin_name'] ? 'Admin: ' . $row['marked_by_admin_name'] : 'QR Scan',
                 $row['notes'] ?? ''
             ]);
         }
         
+        // Add footer
+        fputcsv($output, []);
+        fputcsv($output, ['Diekspor pada:', date('d/m/Y H:i:s')]);
+        fputcsv($output, ['Diekspor oleh:', session('nama_lengkap')]);
+        
         fclose($output);
         
         // Log export activity
         $recordCount = $no - 1;
-        $this->logActivity(session('id_user'), "Exported attendance data for event: {$event['title']} ({$recordCount} records)");
+        $this->logActivity(
+            session('id_user'), 
+            "Exported attendance data for event: {$event['title']} ({$recordCount} records) - " .
+            "Audience Online: {$stats['audience_online']}, Audience Offline: {$stats['audience_offline']}, " .
+            "Presenter Online: {$stats['presenter_online']}, Presenter Offline: {$stats['presenter_offline']}"
+        );
         
         exit;
     }

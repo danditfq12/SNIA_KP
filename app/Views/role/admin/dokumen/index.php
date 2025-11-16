@@ -94,12 +94,6 @@ $current_tipe  = $current_tipe ?? '';
         <button class="btn btn-warning btn-custom" data-bs-toggle="modal" data-bs-target="#uploadSertifikatModal">
           <i class="bi bi-upload me-1"></i> Upload Sertifikat
         </button>
-        <button class="btn btn-info btn-custom" data-bs-toggle="modal" data-bs-target="#bulkLoaModal">
-          <i class="bi bi-stars me-1"></i> Generate Bulk LOA
-        </button>
-        <button class="btn btn-secondary btn-custom" data-bs-toggle="modal" data-bs-target="#bulkSertifikatModal">
-          <i class="bi bi-stars me-1"></i> Generate Bulk Sertifikat
-        </button>
       </div>
 
       <!-- TABLE -->
@@ -125,10 +119,10 @@ $current_tipe  = $current_tipe ?? '';
                     <th width="5%">No</th>
                     <th width="10%">Tipe</th>
                     <th width="25%">User</th>
-                    <th width="20%">Event</th>
+                    <th width="25%">Event</th>
                     <th width="20%">File</th>
                     <th width="10%">Upload</th>
-                    <th width="10%">Aksi</th>
+                    <th width="5%">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -165,8 +159,12 @@ $current_tipe  = $current_tipe ?? '';
                     <td><?= $uploadedAt ? date('d/m/Y H:i', strtotime($uploadedAt)) : '-' ?></td>
                     <td>
                       <div class="action-buttons">
-                        <a href="<?= site_url('admin/dokumen/download/'.$id) ?>" class="btn-action btn-soft-info" data-bs-toggle="tooltip" data-bs-title="Download"><i class="bi bi-download"></i></a>
-                        <button type="button" class="btn-action btn-soft-danger" data-bs-toggle="tooltip" data-bs-title="Hapus" onclick="deleteDocument(<?= $id ?>)"><i class="bi bi-trash3"></i></button>
+                        <a href="<?= site_url('admin/dokumen/download/'.$id) ?>" class="btn-action btn-soft-info" data-bs-toggle="tooltip" data-bs-title="Download">
+                          <i class="bi bi-download"></i>
+                        </a>
+                        <button type="button" class="btn-action btn-soft-danger" data-bs-toggle="tooltip" data-bs-title="Hapus" onclick="deleteDocument(<?= $id ?>)">
+                          <i class="bi bi-trash3"></i>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -224,6 +222,34 @@ $current_tipe  = $current_tipe ?? '';
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
 
 <script>
+  // ===== DELETE FUNCTION (HARUS DI ATAS) =====
+  function deleteDocument(id){
+    Swal.fire({
+      title:'Hapus Dokumen?', 
+      text:'File akan dihapus permanen dari server dan database.',
+      icon:'warning', 
+      showCancelButton:true, 
+      confirmButtonColor:'#d33', 
+      cancelButtonColor:'#6b7280',
+      confirmButtonText:'Ya, Hapus', 
+      cancelButtonText:'Batal'
+    }).then(r => {
+      if(r.isConfirmed){
+        const f=document.createElement('form'); 
+        f.method='POST'; 
+        f.action='<?= site_url('admin/dokumen/delete/') ?>'+encodeURIComponent(id);
+        const csrfName='<?= csrf_token() ?>', csrfVal='<?= csrf_hash() ?>';
+        const i=document.createElement('input'); 
+        i.type='hidden'; 
+        i.name=csrfName; 
+        i.value=csrfVal; 
+        f.appendChild(i);
+        document.body.appendChild(f); 
+        f.submit();
+      }
+    });
+  }
+
   function initTooltips(scope=document){
     return [].slice.call(scope.querySelectorAll('[data-bs-toggle="tooltip"]'))
       .map(el => new bootstrap.Tooltip(el));
@@ -237,34 +263,28 @@ $current_tipe  = $current_tipe ?? '';
         paging:true,lengthChange:true,searching:true,ordering:true,info:true,autoWidth:false,responsive:true,
         pageLength:25,lengthMenu:[[10,25,50,-1],[10,25,50,'Semua']],order:[[5,'desc']],
         columnDefs:[{orderable:false,targets:[6]},{searchable:false,targets:[0]}],
-        language:{search:'Cari:',lengthMenu:'Tampilkan _MENU_ data per halaman',zeroRecords:'Tidak ada data ditemukan',info:'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',infoEmpty:'Menampilkan 0 sampai 0 dari 0 data',infoFiltered:'(difilter dari _MAX_ total data)',paginate:{first:'Pertama',last:'Terakhir',next:'Selanjutnya',previous:'Sebelumnya'}],
+        language:{search:'Cari:',lengthMenu:'Tampilkan _MENU_ data per halaman',zeroRecords:'Tidak ada data ditemukan',info:'Menampilkan _START_ sampai _END_ dari _TOTAL_ data',infoEmpty:'Menampilkan 0 sampai 0 dari 0 data',infoFiltered:'(difilter dari _MAX_ total data)',paginate:{first:'Pertama',last:'Terakhir',next:'Selanjutnya',previous:'Sebelumnya'}},
         drawCallback:function(){ initTooltips(); }
       });
     }
     initTooltips();
   });
 
-  // ===== DELETE via hidden form =====
-  function deleteDocument(id){
-    Swal.fire({
-      title:'Hapus Dokumen?', text:'File akan dihapus permanen dari server dan database.',
-      icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', cancelButtonColor:'#6b7280',
-      confirmButtonText:'Ya, Hapus', cancelButtonText:'Batal'
-    }).then(r => {
-      if(r.isConfirmed){
-        const f=document.createElement('form'); f.method='POST'; f.action='<?= site_url('admin/dokumen/delete/') ?>'+encodeURIComponent(id);
-        const csrfName='<?= csrf_token() ?>', csrfVal='<?= csrf_hash() ?>';
-        const i=document.createElement('input'); i.type='hidden'; i.name=csrfName; i.value=csrfVal; f.appendChild(i);
-        document.body.appendChild(f); f.submit();
-      }
-    });
-  }
-  window.deleteDocument = deleteDocument;
+  // Flash messages
+  <?php if ($msg = session()->getFlashdata('success')): ?>
+    Swal.fire({ icon:'success', title:'Berhasil!', text:'<?= esc($msg) ?>', timer:3000, showConfirmButton:false });
+  <?php endif; ?>
+  <?php if ($msg = session()->getFlashdata('error')): ?>
+    Swal.fire({ icon:'error', title:'Error!', text:'<?= esc($msg) ?>' });
+  <?php endif; ?>
+  <?php if ($errors = session()->getFlashdata('errors')): ?>
+    Swal.fire({ icon:'error', title:'Validasi gagal', html:'<ul style="text-align:left; margin:0; padding-left:18px;"><?php foreach((array)$errors as $e){ echo "<li>".esc($e)."</li>"; } ?></ul>' });
+  <?php endif; ?>
 </script>
 
 <!-- ================= MODALS ================= -->
 
-<!-- Upload LOA (CENTERED) -->
+<!-- Upload LOA -->
 <div class="modal fade" id="uploadLoaModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <form action="<?= site_url('admin/dokumen/uploadLoa') ?>" method="POST" enctype="multipart/form-data" id="loaForm" class="modal-content">
@@ -302,7 +322,7 @@ $current_tipe  = $current_tipe ?? '';
         <div id="loaUserListWrap" class="border rounded p-2" style="max-height:330px; overflow:auto;">
           <div class="text-muted small">Pilih event terlebih dahulu.</div>
         </div>
-        <div class="form-text mt-1">User yang sudah punya LOA tetap ditampilkan dengan label <em>“Sudah dapat LOA”</em>. Mengirim ulang akan ditolak oleh sistem.</div>
+        <div class="form-text mt-1">User yang sudah punya LOA tetap ditampilkan dengan label <em>"Sudah dapat LOA"</em>. Mengirim ulang akan ditolak oleh sistem.</div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
@@ -312,7 +332,7 @@ $current_tipe  = $current_tipe ?? '';
   </div>
 </div>
 
-<!-- Upload Sertifikat (STYLE SAMA SEPERTI LOA) -->
+<!-- Upload Sertifikat -->
 <div class="modal fade" id="uploadSertifikatModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <form action="<?= site_url('admin/dokumen/uploadSertifikat') ?>" method="POST" enctype="multipart/form-data" id="sertifikatForm" class="modal-content">
@@ -351,71 +371,13 @@ $current_tipe  = $current_tipe ?? '';
           <div class="text-muted small">Pilih event terlebih dahulu.</div>
         </div>
         <div class="form-text mt-1">
-          Menampilkan semua pendaftar event. Yang <strong>belum absen</strong> akan diberi label <em>“Belum Absen”</em>.
-          Jika sudah punya sertifikat akan diberi label <em>“Sudah ada Sertifikat”</em>. Mengirim ulang akan ditolak oleh sistem.
+          Menampilkan semua pendaftar event. Yang <strong>belum absen</strong> akan diberi label <em>"Belum Absen"</em>.
+          Jika sudah punya sertifikat akan diberi label <em>"Sudah ada Sertifikat"</em>. Mengirim ulang akan ditolak oleh sistem.
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
         <button class="btn btn-warning" type="submit" id="sertifikatSubmitBtn"><i class="bi bi-upload me-1"></i><span>Upload Sertifikat</span></button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- Bulk LOA -->
-<div class="modal fade" id="bulkLoaModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <form action="<?= site_url('admin/dokumen/generateBulkLOA') ?>" method="POST" id="bulkLoaForm" class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-stars me-2"></i>Generate Bulk LOA</h5>
-        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <?= csrf_field() ?>
-        <div class="mb-3">
-          <label class="form-label">Event *</label>
-          <select class="form-select" name="event_id" required>
-            <option value="">-- Pilih Event --</option>
-            <?php foreach ($events as $e): ?>
-              <option value="<?= (int)$e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="alert alert-info mb-0"><i class="bi bi-info-circle me-1"></i>LOA digenerate untuk presenter dengan pembayaran terverifikasi.</div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
-        <button class="btn btn-info" type="submit"><i class="bi bi-stars me-1"></i>Generate LOA</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- Bulk Sertifikat -->
-<div class="modal fade" id="bulkSertifikatModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <form action="<?= site_url('admin/dokumen/generateBulkSertifikat') ?>" method="POST" id="bulkSertifikatForm" class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-stars me-2"></i>Generate Bulk Sertifikat</h5>
-        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <?= csrf_field() ?>
-        <div class="mb-3">
-          <label class="form-label">Event *</label>
-          <select class="form-select" name="event_id" required>
-            <option value="">-- Pilih Event --</option>
-            <?php foreach ($events as $e): ?>
-              <option value="<?= (int)$e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="alert alert-warning mb-0"><i class="bi bi-exclamation-triangle me-1"></i>Sertifikat dibuat untuk semua peserta yang hadir.</div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
-        <button class="btn btn-secondary" type="submit"><i class="bi bi-stars me-1"></i>Generate Sertifikat</button>
       </div>
     </form>
   </div>
@@ -448,8 +410,9 @@ $current_tipe  = $current_tipe ?? '';
         ? `<span class="badge ${pay==='VERIFIED'?'bg-success':'bg-outline-secondary'} ms-1">${pay}</span>` : '';
       const role = u.role ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${u.role}</span>` : '';
 
+      const disabled = hasLoa ? 'disabled' : '';
       const $row = $(`
-        <div class="picklist-item d-flex justify-content-between align-items-start mb-2 ${hasLoa?'disabled':''}" data-id="${u.id_user}">
+        <div class="picklist-item d-flex justify-content-between align-items-start mb-2 ${disabled}" data-id="${u.id_user}">
           <div>
             <div class="fw-semibold">${escapeHtml(u.nama_lengkap||'-')}</div>
             <div class="small text-muted">${escapeHtml(u.email||'')}</div>
@@ -460,11 +423,13 @@ $current_tipe  = $current_tipe ?? '';
         </div>
       `);
 
-      $row.on('click', function(){
-        $('.picklist-item', $loaWrap).removeClass('active');
-        $(this).addClass('active');
-        $loaHidden.val($(this).data('id'));
-      });
+      if (!hasLoa) {
+        $row.on('click', function(){
+          $('.picklist-item', $loaWrap).removeClass('active');
+          $(this).addClass('active');
+          $loaHidden.val($(this).data('id'));
+        });
+      }
 
       $loaWrap.append($row);
     });
@@ -486,7 +451,7 @@ $current_tipe  = $current_tipe ?? '';
       .fail(()=> $loaWrap.html('<div class="text-danger small">Gagal memuat user.</div>'));
   });
 
-  // ====== SERTIFIKAT PICK LIST (STYLE SAMA) ======
+  // ====== SERTIFIKAT PICK LIST ======
   const $sertEvent   = $('#sertifikatEventId');
   const $sertWrap    = $('#sertifikatUserListWrap');
   const $sertHidden  = $('#sertifikatUserIdHidden');
@@ -504,7 +469,7 @@ $current_tipe  = $current_tipe ?? '';
 
     items.forEach(u=>{
       const attended = !!u.attended;
-      const hasCert  = !!(u.has_cert ?? u.has_certificate); // kompat nama key
+      const hasCert  = !!(u.has_cert ?? u.has_certificate);
       const role     = (u.role||'').toString();
 
       const badgeAttend = attended
@@ -519,8 +484,9 @@ $current_tipe  = $current_tipe ?? '';
         ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${role}</span>`
         : '';
 
+      const disabled = hasCert ? 'disabled' : '';
       const $row = $(`
-        <div class="picklist-item d-flex justify-content-between align-items-start mb-2 ${hasCert?'disabled':''}" data-id="${u.id_user}">
+        <div class="picklist-item d-flex justify-content-between align-items-start mb-2 ${disabled}" data-id="${u.id_user}">
           <div>
             <div class="fw-semibold">${escapeHtml(u.nama_lengkap||'-')}</div>
             <div class="small text-muted">${escapeHtml(u.email||'')}</div>
@@ -531,11 +497,13 @@ $current_tipe  = $current_tipe ?? '';
         </div>
       `);
 
-      $row.on('click', function(){
-        $('.picklist-item', $sertWrap).removeClass('active');
-        $(this).addClass('active');
-        $sertHidden.val($(this).data('id'));
-      });
+      if (!hasCert) {
+        $row.on('click', function(){
+          $('.picklist-item', $sertWrap).removeClass('active');
+          $(this).addClass('active');
+          $sertHidden.val($(this).data('id'));
+        });
+      }
 
       $sertWrap.append($row);
     });
@@ -588,15 +556,4 @@ $current_tipe  = $current_tipe ?? '';
 
     const btn = $('#sertifikatSubmitBtn'); btn.prop('disabled',true).find('span').text('Memproses...');
   });
-
-  // Flash messages
-  <?php if ($msg = session()->getFlashdata('success')): ?>
-    Swal.fire({ icon:'success', title:'Berhasil!', text:'<?= esc($msg) ?>', timer:3000, showConfirmButton:false });
-  <?php endif; ?>
-  <?php if ($msg = session()->getFlashdata('error')): ?>
-    Swal.fire({ icon:'error', title:'Error!', text:'<?= esc($msg) ?>' });
-  <?php endif; ?>
-  <?php if ($errors = session()->getFlashdata('errors')): ?>
-    Swal.fire({ icon:'error', title:'Validasi gagal', html:'<ul style="text-align:left; margin:0; padding-left:18px;"><?php foreach((array)$errors as $e){ echo "<li>".esc($e)."</li>"; } ?></ul>' });
-  <?php endif; ?>
 </script>
