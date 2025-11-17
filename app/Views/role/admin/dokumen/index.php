@@ -10,6 +10,7 @@ $current_tipe  = $current_tipe ?? '';
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
 <?= $this->include('partials/alerts') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/dokumen_admin.css'); ?>">
 
 <div id="content">
   <main class="flex-fill" style="padding-top:70px;">
@@ -180,38 +181,6 @@ $current_tipe  = $current_tipe ?? '';
 </div>
 
 <?= $this->include('partials/footer') ?>
-
-<!-- ====== STYLES ====== -->
-<style>
-  :root{ --primary-color:#2563eb; --info-color:#06b6d4; --success-color:#10b981; --warning-color:#f59e0b; --danger-color:#ef4444; }
-  body{ background:linear-gradient(135deg,#f8fafc 0%,#e2e8f0 100%); font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
-  .header-section.header-blue{ background: linear-gradient(135deg, var(--primary-color) 0%, #1e40af 100%); color:#fff; padding:28px 24px; border-radius:16px; box-shadow:0 8px 28px rgba(0,0,0,.12); }
-  .header-section.header-blue .welcome-text{ color:#fff; font-weight:800; font-size:2rem; }
-  .stat-card{ background:#fff; border-radius:14px; padding:20px; box-shadow:0 8px 28px rgba(0,0,0,.08); border-left:4px solid #e9ecef; position:relative; overflow:hidden; }
-  .stat-card:before{ content:''; position:absolute; left:0; top:0; height:4px; width:100%; background:linear-gradient(90deg,var(--primary-color),var(--info-color)); }
-  .stat-icon{ width:56px; height:56px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:22px; }
-  .stat-number{ font-size:2rem; font-weight:800; color:#1e293b; line-height:1; }
-  .bg-gradient-primary{ background: linear-gradient(135deg, var(--primary-color), var(--info-color)); }
-  .btn-custom{ border-radius:10px; padding:.55rem .9rem; font-weight:600; transition:.2s; }
-  .btn-custom:hover{ transform:translateY(-1px); box-shadow:0 6px 14px rgba(15,23,42,.12); }
-  .action-buttons{ display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
-  .btn-action{ display:inline-flex; align-items:center; justify-content:center; padding:.45rem .6rem; border-radius:10px; border:1px solid #e8eef5; background:#fff; color:#334155; box-shadow:0 2px 6px rgba(15,23,42,.04); transition:.18s ease; font-weight:600; }
-  .btn-action:hover{ transform:translateY(-1px); box-shadow:0 8px 18px rgba(15,23,42,.10); }
-  .btn-soft-info{ background:rgba(6,182,212,.12); color:#0e7490; border-color:rgba(6,182,212,.25); }
-  .btn-soft-danger{ background:rgba(239,68,68,.12); color:#991b1b; border-color:rgba(239,68,68,.25); }
-  #documentsTable thead th{ background:#f8fafc; white-space:nowrap; }
-  #documentsTable { width:100%!important; }
-  #documentsTable td, #documentsTable th { padding:8px 12px; vertical-align:middle; border-bottom:1px solid #dee2e6; }
-  #documentsTable tbody tr:hover { background:#f8f9fa; }
-  .table-responsive { overflow-x:auto; }
-  .spin { animation: spin 0.8s linear infinite; }
-  @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
-  /* PICK LIST */
-  .picklist-item { cursor:pointer; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; background:#fff; transition: .15s ease; }
-  .picklist-item:hover { box-shadow:0 8px 18px rgba(15,23,42,.08); transform: translateY(-1px); }
-  .picklist-item.disabled { opacity:.55; }
-  .picklist-item.active { outline:2px solid var(--primary-color); }
-</style>
 
 <!-- ====== SCRIPTS ====== -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js"></script>
