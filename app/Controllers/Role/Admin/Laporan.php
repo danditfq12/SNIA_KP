@@ -114,9 +114,9 @@ class Laporan extends BaseController
             $month = date('Y-m', strtotime("-$i months"));
             $monthName = date('M Y', strtotime($month . '-01'));
             
-            // PostgreSQL compatible date range queries
+            // PostgreSQL compatible date range queries - FIXED
             $startDate = $month . '-01';
-            $endDate = $month . '-' . date('t', strtotime($startDate)); // Last day of month
+            $endDate = date('Y-m-t', strtotime($startDate)); // FIX: Gunakan Y-m-t untuk mendapatkan hari terakhir yang valid
             
             // Users registered this month
             $usersThisMonth = $this->userModel
@@ -660,8 +660,7 @@ class Laporan extends BaseController
             foreach ($bankStats as $bank => $stats) {
                 if ($stats['count'] > 0) {
                     fputcsv($output, [
-                        $bank,
-                        $stats['count'] . ' transaksi',
+                        $bank,$stats['count'] . ' transaksi',
                         'Rp ' . number_format($stats['total'], 0, ',', '.')
                     ]);
                 }
@@ -934,7 +933,7 @@ class Laporan extends BaseController
             
             fputcsv($output, []);
             
-            // Monthly statistics (last 6 months)
+            // Monthly statistics (last 6 months) - FIXED
             fputcsv($output, ['=== STATISTIK BULANAN (6 BULAN TERAKHIR) ===']);
             fputcsv($output, ['Bulan', 'User Baru', 'Abstrak Masuk', 'Revenue', 'Total Pembayaran']);
             
@@ -944,15 +943,19 @@ class Laporan extends BaseController
             $totalRevenueBulanan = 0;
             
             foreach ($monthlyStats as $stat) {
-                // Hitung total pembayaran per bulan
+                // Hitung total pembayaran per bulan - FIXED
                 $bulanParts = explode(' ', $stat['month']);
                 $monthNum = date('m', strtotime($bulanParts[0]));
                 $yearNum = $bulanParts[1];
                 $monthDate = $yearNum . '-' . $monthNum;
                 
+                // FIX: Gunakan Y-m-t untuk mendapatkan hari terakhir yang valid
+                $startDateBulan = $monthDate . '-01';
+                $endDateBulan = date('Y-m-t', strtotime($startDateBulan));
+                
                 $totalPembayaranBulan = $this->pembayaranModel
-                    ->where('tanggal_bayar >=', $monthDate . '-01')
-                    ->where('tanggal_bayar <=', $monthDate . '-31')
+                    ->where('tanggal_bayar >=', $startDateBulan)
+                    ->where('tanggal_bayar <=', $endDateBulan . ' 23:59:59')
                     ->countAllResults();
                 
                 fputcsv($output, [
@@ -1076,9 +1079,9 @@ class Laporan extends BaseController
             $month = date('Y-m', strtotime("-$i months"));
             $monthName = date('M Y', strtotime($month . '-01'));
             
-            // PostgreSQL compatible date range
+            // PostgreSQL compatible date range - FIXED
             $startDate = $month . '-01';
-            $endDate = $month . '-' . date('t', strtotime($startDate));
+            $endDate = date('Y-m-t', strtotime($startDate)); // FIX: Gunakan Y-m-t
             
             $count = $this->userModel
                          ->where('created_at >=', $startDate)
@@ -1101,9 +1104,9 @@ class Laporan extends BaseController
             $month = date('Y-m', strtotime("-$i months"));
             $monthName = date('M Y', strtotime($month . '-01'));
             
-            // PostgreSQL compatible date range
+            // PostgreSQL compatible date range - FIXED
             $startDate = $month . '-01';
-            $endDate = $month . '-' . date('t', strtotime($startDate));
+            $endDate = date('Y-m-t', strtotime($startDate)); // FIX: Gunakan Y-m-t
             
             $revenue = $this->pembayaranModel
                            ->selectSum('jumlah')

@@ -399,7 +399,7 @@ if ($e['event_date']) {
           <i class="bi bi-wifi"></i>
           <div>
             <strong>Mode Real-time Aktif</strong>
-            <p class="mb-0 small">QR Code valid akan langsung disimpan ke database</p>
+            <p class="mb-0 small">QR Code valid akan langsung disimpan</p>
             <div class="small mt-1"><strong>Waktu:</strong> <span id="scanner-wib-time"><?= $currentWIBString ?></span> WIB</div>
           </div>
         </div>

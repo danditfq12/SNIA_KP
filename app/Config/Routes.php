@@ -264,8 +264,6 @@ $routes->group('admin', [
     $routes->post('dokumen/uploadSertifikat',          'Dokumen::uploadSertifikat');
     $routes->get ('dokumen/download/(:num)',           'Dokumen::download/$1');
     $routes->post('dokumen/delete/(:num)',             'Dokumen::delete/$1');
-    $routes->post('dokumen/generateBulkLOA',           'Dokumen::generateBulkLOA');
-    $routes->post('dokumen/generateBulkSertifikat',    'Dokumen::generateBulkSertifikat');
     $routes->get ('dokumen/getVerifiedPresenters/(:num)','Dokumen::getVerifiedPresenters/$1');
     $routes->get ('dokumen/getAttendees/(:num)',       'Dokumen::getAttendees/$1');
     $routes->get ('dokumen/search-eligible-loa',       'Dokumen::searchEligibleLoa');
