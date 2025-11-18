@@ -94,12 +94,6 @@ $current_tipe  = $current_tipe ?? '';
         <button class="btn btn-warning btn-custom" data-bs-toggle="modal" data-bs-target="#uploadSertifikatModal">
           <i class="bi bi-upload me-1"></i> Upload Sertifikat
         </button>
-        <button class="btn btn-info btn-custom" data-bs-toggle="modal" data-bs-target="#bulkLoaModal">
-          <i class="bi bi-stars me-1"></i> Generate Bulk LOA
-        </button>
-        <button class="btn btn-secondary btn-custom" data-bs-toggle="modal" data-bs-target="#bulkSertifikatModal">
-          <i class="bi bi-stars me-1"></i> Generate Bulk Sertifikat
-        </button>
       </div>
 
       <!-- TABLE -->
