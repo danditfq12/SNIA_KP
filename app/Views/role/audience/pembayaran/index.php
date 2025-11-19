@@ -9,26 +9,55 @@ $riwayat = $riwayat ?? [];
 $fmtDate = function($s){ return $s ? date('d M Y, H:i', strtotime($s)) : '-'; };
 $fmtRp = fn($n)=> 'Rp ' . number_format((float)$n, 0, ',', '.');
 
-// Helper untuk payment method display
 $getPaymentMethodInfo = function($method, $paymentType = null) {
     if ($method === 'midtrans' && !empty($paymentType)) {
         $methodMap = [
+            // E-Wallet
             'dana' => ['icon' => 'wallet2', 'label' => 'DANA', 'color' => '#118eea'],
             'gopay' => ['icon' => 'wallet2', 'label' => 'GoPay', 'color' => '#00aa13'],
             'shopeepay' => ['icon' => 'wallet2', 'label' => 'ShopeePay', 'color' => '#ee4d2d'],
-            'bca_va' => ['icon' => 'building', 'label' => 'BCA VA', 'color' => '#003087'],
-            'bni_va' => ['icon' => 'building', 'label' => 'BNI VA', 'color' => '#ed7203'],
-            'bri_va' => ['icon' => 'building', 'label' => 'BRI VA', 'color' => '#003d7a'],
+            'linkaja' => ['icon' => 'wallet2', 'label' => 'LinkAja', 'color' => '#e01e26'],
+            'ovo' => ['icon' => 'wallet2', 'label' => 'OVO', 'color' => '#4c3494'],
+            
+            // Virtual Account - SEMUA BANK
+            'bca_va' => ['icon' => 'building', 'label' => 'BCA Virtual Account', 'color' => '#003087'],
+            'bni_va' => ['icon' => 'building', 'label' => 'BNI Virtual Account', 'color' => '#ed7203'],
+            'bri_va' => ['icon' => 'building', 'label' => 'BRI Virtual Account', 'color' => '#003d7a'],
+            'mandiri_va' => ['icon' => 'building', 'label' => 'Mandiri Bill Payment', 'color' => '#003d79'],
+            'permata_va' => ['icon' => 'building', 'label' => 'Permata VA', 'color' => '#00a854'],
+            'cimb_va' => ['icon' => 'building', 'label' => 'CIMB Niaga VA', 'color' => '#d32f2f'],
+            'bsi_va' => ['icon' => 'building', 'label' => 'BSI Virtual Account', 'color' => '#0a8641'],
+            'bjb_va' => ['icon' => 'building', 'label' => 'BJB Virtual Account', 'color' => '#1565c0'],
+            'danamon_va' => ['icon' => 'building', 'label' => 'Danamon VA', 'color' => '#1976d2'],
+            'other_va' => ['icon' => 'building', 'label' => 'Bank Lainnya', 'color' => '#6c757d'],
+            
+            // QRIS
             'qris' => ['icon' => 'qr-code', 'label' => 'QRIS', 'color' => '#d32f2f'],
+            
+            // Credit Card
+            'credit_card' => ['icon' => 'credit-card-2-front', 'label' => 'Kartu Kredit', 'color' => '#1976d2'],
+            
+            // Convenience Store
+            'indomaret' => ['icon' => 'shop', 'label' => 'Indomaret', 'color' => '#ffb300'],
+            'alfamart' => ['icon' => 'shop', 'label' => 'Alfamart', 'color' => '#e53935'],
+            'cstore' => ['icon' => 'shop', 'label' => 'Convenience Store', 'color' => '#fb8c00'],
+            
+            // Paylater
+            'akulaku' => ['icon' => 'cash-coin', 'label' => 'Akulaku', 'color' => '#00b14f'],
+            'kredivo' => ['icon' => 'cash-coin', 'label' => 'Kredivo', 'color' => '#00a9e0'],
+            
+            // Generic bank_transfer (fallback jika belum spesifik)
+            'bank_transfer' => ['icon' => 'bank', 'label' => 'Transfer Bank', 'color' => '#2563eb'],
+            'echannel' => ['icon' => 'building', 'label' => 'Mandiri Bill', 'color' => '#003d79'],
         ];
         
-        return $methodMap[$paymentType] ?? [
-            'icon' => 'credit-card',
-            'label' => 'Digital Payment',
-            'color' => '#2563eb'
-        ];
+        // Jika ada mapping, gunakan itu
+        if (isset($methodMap[$paymentType])) {
+            return $methodMap[$paymentType];
+        }
     }
     
+    // Fallback default
     return [
         'icon' => 'credit-card',
         'label' => 'Digital Payment',
