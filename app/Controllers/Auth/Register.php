@@ -163,12 +163,16 @@ class Register extends BaseController
             log_message('error', 'Exception kirim email OTP: ' . $e->getMessage());
         }
 
-        // simpan email untuk verify
-        session()->set('email_verifikasi', $email);
+        // Simpan email dan OTP di session untuk ditampilkan di member area
+        session()->set([
+            'email_verifikasi' => $email,
+            'show_otp_code' => $otp,        // OTP ditampilkan di halaman verify
+            'otp_created_at' => time()      // Untuk tracking waktu generate
+        ]);
 
         $msg = $pendingSame
-            ? 'Pendaftaran sebelumnya ditemukan. Kode OTP baru telah dikirim ke email Anda.'
-            : 'Kode OTP telah dikirim ke email Anda.';
+            ? 'Pendaftaran sebelumnya ditemukan. Kode OTP baru telah dikirim ke email Anda dan ditampilkan di bawah.'
+            : 'Kode OTP telah dikirim ke email Anda dan ditampilkan di bawah. Silakan masukkan kode untuk verifikasi.';
         return redirect()->to('/auth/verify?email=' . urlencode($email))
             ->with('success', $msg);
     }

@@ -179,17 +179,6 @@ class Midtrans extends BaseController
             return 'echannel';
         }
 
-        // ===== E-WALLETS =====
-        if ($paymentType === 'gopay') {
-            log_message('info', "GoPay detected");
-            return 'gopay';
-        }
-
-        if ($paymentType === 'shopeepay') {
-            log_message('info', "ShopeePay detected");
-            return 'shopeepay';
-        }
-
         if ($paymentType === 'qris') {
             // Check acquirer for more specific info
             $acquirer = strtolower($notification['acquirer'] ?? '');

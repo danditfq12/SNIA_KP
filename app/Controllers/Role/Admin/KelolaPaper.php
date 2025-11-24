@@ -234,7 +234,7 @@ class KelolaPaper extends BaseController
             $r['has_full']           = $latest && !empty($latest['full_paper_path']);
             $r['full_paper_name']    = $latest['full_paper_path'] ?? null;
             $r['full_paper_status']  = $latest['full_paper_status'] ?? null;
-            $r['full_row_id']        = $latest ? ($latest[$fpModel->primaryKey] ?? null) : null;
+            $r['full_row_id']        = $latest ? ($latest[$fpModel->getKeyName()] ?? null) : null;
 
             // RINGKASAN ABSTRAK
             $r['abs_assigned_count'] = $this->getAbstractAssignedCount($absId);
@@ -347,7 +347,7 @@ class KelolaPaper extends BaseController
     private function resolveSubmissionId(FullPaperModel $fpModel, ?array $latestRow): ?int
     {
         if (!$latestRow) return null;
-        foreach ([$fpModel->primaryKey, 'submission_id', 'id_submission', 'id', 'id_abstrak'] as $cand) {
+        foreach ([$fpModel->getKeyName(), 'submission_id', 'id_submission', 'id', 'id_abstrak'] as $cand) {
             if (array_key_exists($cand, $latestRow) && !empty($latestRow[$cand])) {
                 return (int)$latestRow[$cand];
             }

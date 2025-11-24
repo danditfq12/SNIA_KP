@@ -8,6 +8,7 @@ use App\Models\AbstrakModel;
 use App\Models\PembayaranModel;
 use App\Models\AbsensiModel;
 use App\Models\ReviewModel;
+use App\Models\EventModel;
 
 class Laporan extends BaseController
 {
@@ -16,6 +17,7 @@ class Laporan extends BaseController
     protected $pembayaranModel;
     protected $absensiModel;
     protected $reviewModel;
+    protected $eventModel;
 
     public function __construct()
     {
@@ -24,6 +26,7 @@ class Laporan extends BaseController
         $this->pembayaranModel = new PembayaranModel();
         $this->absensiModel = new AbsensiModel();
         $this->reviewModel = new ReviewModel();
+        $this->eventModel = new EventModel();
     }
 
     public function index()
@@ -111,9 +114,9 @@ class Laporan extends BaseController
             $month = date('Y-m', strtotime("-$i months"));
             $monthName = date('M Y', strtotime($month . '-01'));
             
-            // PostgreSQL compatible date range queries
+            // PostgreSQL compatible date range queries - FIXED
             $startDate = $month . '-01';
-            $endDate = $month . '-' . date('t', strtotime($startDate)); // Last day of month
+            $endDate = date('Y-m-t', strtotime($startDate)); // FIX: Gunakan Y-m-t untuk mendapatkan hari terakhir yang valid
             
             // Users registered this month
             $usersThisMonth = $this->userModel
@@ -393,7 +396,7 @@ class Laporan extends BaseController
             // CSV Headers
             fputcsv($output, [
                 'ID Pembayaran', 'Nama User', 'Email', 'Role', 'Event', 
-                'Metode', 'Jumlah', 'Status', 'Tanggal Bayar', 'Tanggal Verifikasi'
+                'Pricing Tier', 'Metode Pembayaran', 'Jumlah', 'Status', 'Tanggal Bayar', 'Tanggal Verifikasi'
             ]);
             
             // Inisialisasi variabel untuk total
@@ -405,15 +408,136 @@ class Laporan extends BaseController
             $countVerified = 0;
             $countRejected = 0;
             
-            // CSV Data
+            // Inisialisasi untuk metode bank (disesuaikan dengan comprehensive)
+            $bankStats = [];
+            
+            // Inisialisasi untuk Early Bird
+            $earlyBirdCount = 0;
+            $earlyBirdTotal = 0;
+            
+            // Inisialisasi untuk pricing tier lainnya
+            $pricingStats = [
+                'early_bird' => ['count' => 0, 'total' => 0],
+                'wave_1' => ['count' => 0, 'total' => 0],
+                'regular' => ['count' => 0, 'total' => 0],
+                'on_site' => ['count' => 0, 'total' => 0],
+                'unknown' => ['count' => 0, 'total' => 0]
+            ];
+            
+            // CSV Data dengan enrichment pricing tier
             foreach ($pembayarans as $pembayaran) {
+                // Determine pricing tier
+                $pricingTier = '-';
+                $pricingKey = 'unknown';
+                
+                if (!empty($pembayaran['event_id'])) {
+                    $event = $this->eventModel->find($pembayaran['event_id']);
+                    if ($event) {
+                        $waves = [];
+                        if (!empty($event['registration_waves'])) {
+                            $waves = is_string($event['registration_waves']) 
+                                ? json_decode($event['registration_waves'], true) 
+                                : $event['registration_waves'];
+                        }
+
+                        $paymentDate = strtotime($pembayaran['tanggal_bayar'] ?? 'now');
+                        $participationType = $pembayaran['participation_type'] ?? 'offline';
+                        
+                        if (!empty($waves) && is_array($waves)) {
+                            foreach ($waves as $index => $wave) {
+                                $start = strtotime($wave['registration_start'] ?? '');
+                                $end = strtotime($wave['registration_deadline'] ?? '');
+                                
+                                if ($paymentDate >= $start && $paymentDate <= $end) {
+                                    // EARLY BIRD HANYA UNTUK OFFLINE DI WAVE 1
+                                    if ($index === 0 && $participationType === 'offline') {
+                                        $pricingTier = 'Early Bird';
+                                        $pricingKey = 'early_bird';
+                                    } else {
+                                        if ($index === 1) {
+                                            $pricingTier = 'Wave 2 (Regular)';
+                                            $pricingKey = 'regular';
+                                        } elseif ($index === 2) {
+                                            $pricingTier = 'Wave 3 (On-Site)';
+                                            $pricingKey = 'on_site';
+                                        } else {
+                                            $pricingTier = 'Wave 1';
+                                            $pricingKey = 'wave_1';
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Hitung statistik pricing tier
+                $pricingStats[$pricingKey]['count']++;
+                if ($pembayaran['status'] === 'verified') {
+                    $pricingStats[$pricingKey]['total'] += $pembayaran['jumlah'];
+                    
+                    // Khusus Early Bird
+                    if ($pricingKey === 'early_bird') {
+                        $earlyBirdCount++;
+                        $earlyBirdTotal += $pembayaran['jumlah'];
+                    }
+                }
+                
+                // ===== GET PAYMENT METHOD DISPLAY NAME =====
+                $metode = strtolower($pembayaran['metode']);
+                $paymentType = strtolower($pembayaran['midtrans_payment_type'] ?? '');
+                $paymentMethodDisplay = '';
+                
+                // Jika metode Midtrans, tampilkan detail dari payment_type
+                if ($metode === 'midtrans' && !empty($paymentType)) {
+                    // Mapping payment type Midtrans ke display name
+                    $paymentMethodMap = [
+                        'bca_va' => 'BCA Virtual Account',
+                        'bni_va' => 'BNI Virtual Account',
+                        'bri_va' => 'BRI Virtual Account',
+                        'mandiri_va' => 'Mandiri Virtual Account',
+                        'permata_va' => 'Permata Virtual Account',
+                        'gopay' => 'GoPay',
+                        'shopeepay' => 'ShopeePay',
+                        'qris' => 'QRIS',
+                        'credit_card' => 'Kartu Kredit',
+                        'debit_card' => 'Kartu Debit',
+                        'dana' => 'DANA',
+                        'bank_transfer' => 'Bank Transfer'
+                    ];
+                    
+                    // Coba match exact
+                    if (isset($paymentMethodMap[$paymentType])) {
+                        $paymentMethodDisplay = $paymentMethodMap[$paymentType];
+                    } else {
+                        // Coba partial match
+                        foreach ($paymentMethodMap as $key => $displayName) {
+                            if (strpos($paymentType, $key) !== false) {
+                                $paymentMethodDisplay = $displayName;
+                                break;
+                            }
+                        }
+                        
+                        // Jika masih tidak ketemu, tampilkan payment type dengan format yang rapi
+                        if (empty($paymentMethodDisplay)) {
+                            $paymentMethodDisplay = ucwords(str_replace('_', ' ', $paymentType));
+                        }
+                    }
+                } else {
+                    // Metode non-Midtrans
+                    $paymentMethodDisplay = ucfirst($metode);
+                }
+                
+                // Output CSV row
                 fputcsv($output, [
                     $pembayaran['id_pembayaran'],
                     $pembayaran['nama_lengkap'] ?? '-',
                     $pembayaran['email'] ?? '-',
                     ucfirst($pembayaran['role'] ?? '-'),
                     $pembayaran['event_title'] ?? '-',
-                    $pembayaran['metode'],
+                    $pricingTier,
+                    $paymentMethodDisplay,
                     number_format($pembayaran['jumlah'], 0, ',', '.'),
                     ucfirst($pembayaran['status']),
                     date('d/m/Y H:i', strtotime($pembayaran['tanggal_bayar'])),
@@ -429,6 +553,79 @@ class Laporan extends BaseController
                 } elseif ($pembayaran['status'] === 'verified') {
                     $totalVerified += $pembayaran['jumlah'];
                     $countVerified++;
+                    
+                    // Hitung statistik bank (hanya untuk verified)
+                    $metode = strtolower($pembayaran['metode']);
+                    $paymentType = strtolower($pembayaran['midtrans_payment_type'] ?? '');
+                    $bankDetected = false;
+                    
+                    // Jika metode Midtrans, deteksi dari payment_type
+                    if ($metode === 'midtrans' && !empty($paymentType)) {
+                        // Deteksi bank dari payment_type
+                        $bankKey = null;
+                        
+                        if (strpos($paymentType, 'bca') !== false) {
+                            $bankKey = 'BCA';
+                        } elseif (strpos($paymentType, 'bni') !== false) {
+                            $bankKey = 'BNI';
+                        } elseif (strpos($paymentType, 'mandiri') !== false) {
+                            $bankKey = 'Mandiri';
+                        } elseif (strpos($paymentType, 'bri') !== false) {
+                            $bankKey = 'BRI';
+                        } elseif (strpos($paymentType, 'permata') !== false) {
+                            $bankKey = 'Permata';
+                        } elseif (strpos($paymentType, 'gopay') !== false) {
+                            $bankKey = 'GoPay';
+                        } elseif (strpos($paymentType, 'shopeepay') !== false) {
+                            $bankKey = 'ShopeePay';
+                        } elseif (strpos($paymentType, 'qris') !== false) {
+                            $bankKey = 'QRIS';
+                        } elseif (strpos($paymentType, 'credit_card') !== false || strpos($paymentType, 'debit_card') !== false) {
+                            $bankKey = 'Kartu Kredit/Debit';
+                        }
+                        
+                        if ($bankKey) {
+                            if (!isset($bankStats[$bankKey])) {
+                                $bankStats[$bankKey] = ['count' => 0, 'total' => 0];
+                            }
+                            $bankStats[$bankKey]['count']++;
+                            $bankStats[$bankKey]['total'] += $pembayaran['jumlah'];
+                            $bankDetected = true;
+                        }
+                    } else {
+                        // Untuk metode non-Midtrans, cek dari kolom metode langsung
+                        $metodeUpper = strtoupper($pembayaran['metode']);
+                        $bankKey = null;
+                        
+                        if (strpos($metodeUpper, 'BCA') !== false) {
+                            $bankKey = 'BCA';
+                        } elseif (strpos($metodeUpper, 'BNI') !== false) {
+                            $bankKey = 'BNI';
+                        } elseif (strpos($metodeUpper, 'MANDIRI') !== false) {
+                            $bankKey = 'Mandiri';
+                        } elseif (strpos($metodeUpper, 'BRI') !== false) {
+                            $bankKey = 'BRI';
+                        }
+                        
+                        if ($bankKey) {
+                            if (!isset($bankStats[$bankKey])) {
+                                $bankStats[$bankKey] = ['count' => 0, 'total' => 0];
+                            }
+                            $bankStats[$bankKey]['count']++;
+                            $bankStats[$bankKey]['total'] += $pembayaran['jumlah'];
+                            $bankDetected = true;
+                        }
+                    }
+                    
+                    // Jika tidak terdeteksi, masukkan ke "Lainnya"
+                    if (!$bankDetected) {
+                        if (!isset($bankStats['Lainnya'])) {
+                            $bankStats['Lainnya'] = ['count' => 0, 'total' => 0];
+                        }
+                        $bankStats['Lainnya']['count']++;
+                        $bankStats['Lainnya']['total'] += $pembayaran['jumlah'];
+                    }
+                    
                 } elseif ($pembayaran['status'] === 'rejected') {
                     $totalRejected += $pembayaran['jumlah'];
                     $countRejected++;
@@ -456,6 +653,56 @@ class Laporan extends BaseController
             fputcsv($output, ['Nominal Rejected', 'Rp ' . number_format($totalRejected, 0, ',', '.')]);
             fputcsv($output, []);
             
+            // === STATISTIK METODE BANK (VERIFIED) ===
+            fputcsv($output, ['=== STATISTIK METODE BANK (VERIFIED) ===']);
+            fputcsv($output, []);
+            
+            foreach ($bankStats as $bank => $stats) {
+                if ($stats['count'] > 0) {
+                    fputcsv($output, [
+                        $bank,$stats['count'] . ' transaksi',
+                        'Rp ' . number_format($stats['total'], 0, ',', '.')
+                    ]);
+                }
+            }
+            
+            fputcsv($output, []);
+            
+            // === STATISTIK PRICING TIER ===
+            fputcsv($output, ['=== STATISTIK PRICING TIER ===']);
+            fputcsv($output, []);
+            
+            $tierLabels = [
+                'early_bird' => 'Early Bird (Wave 1 Offline)',
+                'wave_1' => 'Wave 1 (Online)',
+                'regular' => 'Wave 2 (Regular)',
+                'on_site' => 'Wave 3 (On-Site)',
+                'unknown' => 'Tidak Teridentifikasi'
+            ];
+            
+            foreach ($pricingStats as $tier => $stats) {
+                if ($stats['count'] > 0) {
+                    fputcsv($output, [
+                        $tierLabels[$tier],
+                        $stats['count'] . ' transaksi',
+                        'Rp ' . number_format($stats['total'], 0, ',', '.') . ' (verified)'
+                    ]);
+                }
+            }
+            
+            fputcsv($output, []);
+            
+            // === HIGHLIGHT EARLY BIRD ===
+            fputcsv($output, ['=== EARLY BIRD SPECIAL ===']);
+            fputcsv($output, ['Total Peserta Early Bird', $earlyBirdCount . ' orang']);
+            fputcsv($output, ['Total Revenue Early Bird (Verified)', 'Rp ' . number_format($earlyBirdTotal, 0, ',', '.')]);
+            
+            if ($earlyBirdCount > 0 && $earlyBirdTotal > 0) {
+                $avgEarlyBird = $earlyBirdTotal / $earlyBirdCount;
+                fputcsv($output, ['Rata-rata per Peserta', 'Rp ' . number_format($avgEarlyBird, 0, ',', '.')]);
+            }
+            
+            fputcsv($output, []);
             fputcsv($output, ['Tanggal Export', date('d/m/Y H:i:s')]);
             
             fclose($output);
@@ -541,26 +788,86 @@ class Laporan extends BaseController
             fputcsv($output, ['Total Rejected', 'Rp ' . number_format($totalRejected, 0, ',', '.')]);
             fputcsv($output, []);
             
-            // Pembayaran per metode
-            fputcsv($output, ['Berdasarkan Metode Pembayaran:']);
+            // Pembayaran per metode bank
+            fputcsv($output, ['=== PEMBAYARAN PER METODE BANK (VERIFIED) ===']);
             
             try {
-                $metodePembayaran = $this->pembayaranModel
-                    ->select('metode, COUNT(*) as jumlah, SUM(jumlah) as total')
+                $pembayaransVerified = $this->pembayaranModel
                     ->where('status', 'verified')
-                    ->groupBy('metode')
                     ->findAll();
                 
-                if (!empty($metodePembayaran)) {
-                    foreach ($metodePembayaran as $metode) {
+                $bankStats = [];
+                
+                foreach ($pembayaransVerified as $p) {
+                    $metode = strtolower($p['metode']);
+                    $paymentType = strtolower($p['midtrans_payment_type'] ?? '');
+                    $bankDetected = false;
+                    
+                    // Jika metode Midtrans, deteksi dari payment_type
+                    if ($metode === 'midtrans' && !empty($paymentType)) {
+                        $bankKey = null;
+                        
+                        if (strpos($paymentType, 'bca') !== false) {
+                            $bankKey = 'BCA';
+                        } elseif (strpos($paymentType, 'bni') !== false) {
+                            $bankKey = 'BNI';
+                        } elseif (strpos($paymentType, 'mandiri') !== false) {
+                            $bankKey = 'Mandiri';
+                        } elseif (strpos($paymentType, 'bri') !== false) {
+                            $bankKey = 'BRI';
+                        }
+                        
+                        if ($bankKey) {
+                            if (!isset($bankStats[$bankKey])) {
+                                $bankStats[$bankKey] = ['count' => 0, 'total' => 0];
+                            }
+                            $bankStats[$bankKey]['count']++;
+                            $bankStats[$bankKey]['total'] += $p['jumlah'];
+                            $bankDetected = true;
+                        }
+                    } else {
+                        // Untuk metode non-Midtrans, cek dari kolom metode langsung
+                        $metodeUpper = strtoupper($p['metode']);
+                        $bankKey = null;
+                        
+                        if (strpos($metodeUpper, 'BCA') !== false) {
+                            $bankKey = 'BCA';
+                        } elseif (strpos($metodeUpper, 'BNI') !== false) {
+                            $bankKey = 'BNI';
+                        } elseif (strpos($metodeUpper, 'MANDIRI') !== false) {
+                            $bankKey = 'Mandiri';
+                        } elseif (strpos($metodeUpper, 'BRI') !== false) {
+                            $bankKey = 'BRI';
+                        }
+                        
+                        if ($bankKey) {
+                            if (!isset($bankStats[$bankKey])) {
+                                $bankStats[$bankKey] = ['count' => 0, 'total' => 0];
+                            }
+                            $bankStats[$bankKey]['count']++;
+                            $bankStats[$bankKey]['total'] += $p['jumlah'];
+                            $bankDetected = true;
+                        }
+                    }
+                    
+                    // Jika tidak terdeteksi, masukkan ke "Lainnya"
+                    if (!$bankDetected) {
+                        if (!isset($bankStats['Lainnya'])) {
+                            $bankStats['Lainnya'] = ['count' => 0, 'total' => 0];
+                        }
+                        $bankStats['Lainnya']['count']++;
+                        $bankStats['Lainnya']['total'] += $p['jumlah'];
+                    }
+                }
+                
+                foreach ($bankStats as $bank => $stats) {
+                    if ($stats['count'] > 0) {
                         fputcsv($output, [
-                            $metode['metode'],
-                            $metode['jumlah'] . ' transaksi',
-                            'Rp ' . number_format($metode['total'], 0, ',', '.')
+                            $bank,
+                            $stats['count'] . ' transaksi',
+                            'Rp ' . number_format($stats['total'], 0, ',', '.')
                         ]);
                     }
-                } else {
-                    fputcsv($output, ['Belum ada data pembayaran']);
                 }
             } catch (\Throwable $e) {
                 fputcsv($output, ['Error mengambil data metode pembayaran']);
@@ -569,7 +876,64 @@ class Laporan extends BaseController
             
             fputcsv($output, []);
             
-            // Monthly statistics (last 6 months)
+            // Early Bird Statistics
+            fputcsv($output, ['=== STATISTIK EARLY BIRD ===']);
+            
+            try {
+                $pembayaransAll = $this->pembayaranModel->getPembayaranWithUser();
+                $earlyBirdCount = 0;
+                $earlyBirdTotal = 0;
+                
+                foreach ($pembayaransAll as $pembayaran) {
+                    if (!empty($pembayaran['event_id'])) {
+                        $event = $this->eventModel->find($pembayaran['event_id']);
+                        if ($event) {
+                            $waves = [];
+                            if (!empty($event['registration_waves'])) {
+                                $waves = is_string($event['registration_waves']) 
+                                    ? json_decode($event['registration_waves'], true) 
+                                    : $event['registration_waves'];
+                            }
+
+                            $paymentDate = strtotime($pembayaran['tanggal_bayar'] ?? 'now');
+                            $participationType = $pembayaran['participation_type'] ?? 'offline';
+                            
+                            if (!empty($waves) && is_array($waves)) {
+                                foreach ($waves as $index => $wave) {
+                                    $start = strtotime($wave['registration_start'] ?? '');
+                                    $end = strtotime($wave['registration_deadline'] ?? '');
+                                    
+                                    if ($paymentDate >= $start && $paymentDate <= $end) {
+                                        // EARLY BIRD HANYA UNTUK OFFLINE DI WAVE 1
+                                        if ($index === 0 && $participationType === 'offline') {
+                                            $earlyBirdCount++;
+                                            if ($pembayaran['status'] === 'verified') {
+                                                $earlyBirdTotal += $pembayaran['jumlah'];
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                fputcsv($output, ['Total Peserta Early Bird', $earlyBirdCount . ' orang']);
+                fputcsv($output, ['Total Revenue Early Bird (Verified)', 'Rp ' . number_format($earlyBirdTotal, 0, ',', '.')]);
+                
+                if ($earlyBirdCount > 0 && $earlyBirdTotal > 0) {
+                    $avgEarlyBird = $earlyBirdTotal / $earlyBirdCount;
+                    fputcsv($output, ['Rata-rata per Peserta', 'Rp ' . number_format($avgEarlyBird, 0, ',', '.')]);
+                }
+            } catch (\Throwable $e) {
+                fputcsv($output, ['Error mengambil data Early Bird']);
+                log_message('error', 'Error getting Early Bird stats: ' . $e->getMessage());
+            }
+            
+            fputcsv($output, []);
+            
+            // Monthly statistics (last 6 months) - FIXED
             fputcsv($output, ['=== STATISTIK BULANAN (6 BULAN TERAKHIR) ===']);
             fputcsv($output, ['Bulan', 'User Baru', 'Abstrak Masuk', 'Revenue', 'Total Pembayaran']);
             
@@ -579,15 +943,19 @@ class Laporan extends BaseController
             $totalRevenueBulanan = 0;
             
             foreach ($monthlyStats as $stat) {
-                // Hitung total pembayaran per bulan
+                // Hitung total pembayaran per bulan - FIXED
                 $bulanParts = explode(' ', $stat['month']);
                 $monthNum = date('m', strtotime($bulanParts[0]));
                 $yearNum = $bulanParts[1];
                 $monthDate = $yearNum . '-' . $monthNum;
                 
+                // FIX: Gunakan Y-m-t untuk mendapatkan hari terakhir yang valid
+                $startDateBulan = $monthDate . '-01';
+                $endDateBulan = date('Y-m-t', strtotime($startDateBulan));
+                
                 $totalPembayaranBulan = $this->pembayaranModel
-                    ->where('tanggal_bayar >=', $monthDate . '-01')
-                    ->where('tanggal_bayar <=', $monthDate . '-31')
+                    ->where('tanggal_bayar >=', $startDateBulan)
+                    ->where('tanggal_bayar <=', $endDateBulan . ' 23:59:59')
                     ->countAllResults();
                 
                 fputcsv($output, [
@@ -711,9 +1079,9 @@ class Laporan extends BaseController
             $month = date('Y-m', strtotime("-$i months"));
             $monthName = date('M Y', strtotime($month . '-01'));
             
-            // PostgreSQL compatible date range
+            // PostgreSQL compatible date range - FIXED
             $startDate = $month . '-01';
-            $endDate = $month . '-' . date('t', strtotime($startDate));
+            $endDate = date('Y-m-t', strtotime($startDate)); // FIX: Gunakan Y-m-t
             
             $count = $this->userModel
                          ->where('created_at >=', $startDate)
@@ -736,9 +1104,9 @@ class Laporan extends BaseController
             $month = date('Y-m', strtotime("-$i months"));
             $monthName = date('M Y', strtotime($month . '-01'));
             
-            // PostgreSQL compatible date range
+            // PostgreSQL compatible date range - FIXED
             $startDate = $month . '-01';
-            $endDate = $month . '-' . date('t', strtotime($startDate));
+            $endDate = date('Y-m-t', strtotime($startDate)); // FIX: Gunakan Y-m-t
             
             $revenue = $this->pembayaranModel
                            ->selectSum('jumlah')

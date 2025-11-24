@@ -1,0 +1,191 @@
+
+  .pay-hero{
+    background: linear-gradient(135deg,#2563eb,#60a5fa);
+    border-radius: 16px; color:#fff; padding: 20px 24px;
+    box-shadow: 0 8px 24px rgba(37,99,235,.2);
+  }
+  .pay-title{ font-weight:800; line-height:1.25; font-size: clamp(18px, 4.2vw, 24px); }
+  .pay-tags{ display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem; }
+  .pay-tag{
+    background: rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.3);
+    color:#fff; border-radius:999px; padding:.35rem .75rem; font-size: .875rem;
+    display:inline-flex; align-items:center; gap:.45rem;
+  }
+  
+  .wave-tag {
+    background: rgba(255,255,255,.3);
+    border: 1px solid rgba(255,255,255,.4);
+    font-weight: 600;
+  }
+  
+  .payment-method-tag {
+    font-weight: 600;
+  }
+
+  .detail-group {
+    margin-bottom: 1rem;
+  }
+
+  .detail-label {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-bottom: 0.25rem;
+    display: block;
+    font-weight: 500;
+  }
+
+  .detail-value {
+    font-weight: 500;
+    color: #374151;
+  }
+  
+  .payment-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.375rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .voucher-card {
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .voucher-code {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+
+  .voucher-details {
+    text-align: right;
+    font-size: 0.875rem;
+  }
+
+  .voucher-type {
+    display: block;
+    opacity: 0.8;
+    text-transform: capitalize;
+  }
+
+  .voucher-value {
+    font-weight: 700;
+  }
+
+  .midtrans-info {
+    text-align: center;
+  }
+
+  .payment-provider img {
+    filter: grayscale(0.1);
+  }
+
+  .payment-benefits {
+    text-align: left;
+  }
+
+  .benefit-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.875rem;
+  }
+
+  /* Transaction Timeline */
+  .transaction-timeline {
+    text-align: left;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 16px;
+  }
+
+  .timeline-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+    position: relative;
+  }
+
+  .timeline-item:last-child {
+    margin-bottom: 0;
+  }
+
+  .timeline-marker {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #d1d5db;
+    background: white;
+    flex-shrink: 0;
+    margin-top: 2px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .timeline-item.completed .timeline-marker {
+    background: #10b981;
+    border-color: #10b981;
+  }
+
+  .timeline-item.current .timeline-marker {
+    background: #f59e0b;
+    border-color: #f59e0b;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+  }
+
+  .timeline-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 20px;
+    width: 2px;
+    height: calc(100% + 4px);
+    background: #e5e7eb;
+    z-index: 1;
+  }
+
+  .timeline-item.completed:not(:last-child)::after {
+    background: #10b981;
+  }
+
+  .timeline-content {
+    flex-grow: 1;
+  }
+
+  .timeline-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 2px;
+  }
+
+  .timeline-time {
+    font-size: 0.75rem;
+    color: #6b7280;
+  }
+
+  .timeline-item.completed .timeline-title {
+    color: #065f46;
+  }
+
+  .timeline-item.current .timeline-title {
+    color: #92400e;
+    font-weight: 600;
+  }
+
+  @media (max-width: 768px){
+    .pay-hero{ padding: 16px 20px; }
+  }

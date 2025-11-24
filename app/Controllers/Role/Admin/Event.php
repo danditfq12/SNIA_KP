@@ -106,6 +106,11 @@ class Event extends BaseController
         // Convert checkbox to boolean for PostgreSQL
         $isActive = $this->request->getPost('is_active') ? true : false;
 
+        // HELPER: Convert empty string to NULL for datetime fields
+        $abstractDeadline = $this->request->getPost('abstract_deadline');
+        $abstractRevisionDeadline = $this->request->getPost('abstract_revision_deadline');
+        $fullPaperDeadline = $this->request->getPost('full_paper_deadline');
+
         $data = [
             'title' => $this->request->getPost('title'),
             'description' => $this->request->getPost('description') ?? '',
@@ -114,11 +119,11 @@ class Event extends BaseController
             'event_end_date' => $eventEndDate,
             'event_end_time' => $this->request->getPost('event_end_time'),
             'format' => $this->request->getPost('format'),
-            'location' => $this->request->getPost('location') ?? null,
-            'zoom_link' => $this->request->getPost('zoom_link') ?? null,
-            'abstract_deadline' => $this->request->getPost('abstract_deadline') ?? null,
-            'abstract_revision_deadline' => $this->request->getPost('abstract_revision_deadline') ?? null,
-            'full_paper_deadline' => $this->request->getPost('full_paper_deadline') ?? null,
+            'location' => $this->request->getPost('location') ?: null,
+            'zoom_link' => $this->request->getPost('zoom_link') ?: null,
+            'abstract_deadline' => !empty($abstractDeadline) ? $abstractDeadline : null,
+            'abstract_revision_deadline' => !empty($abstractRevisionDeadline) ? $abstractRevisionDeadline : null,
+            'full_paper_deadline' => !empty($fullPaperDeadline) ? $fullPaperDeadline : null,
             'registration_active' => true,
             'abstract_submission_active' => false,
             'abstract_revision_active' => false,
@@ -132,7 +137,6 @@ class Event extends BaseController
         log_message('info', 'Data to insert: ' . json_encode($data));
 
         try {
-            // Disable model validation temporarily
             $this->eventModel->skipValidation(true);
             $eventId = $this->eventModel->insert($data);
             $this->eventModel->skipValidation(false);
@@ -197,7 +201,7 @@ class Event extends BaseController
     }
 
     /**
-     * UPDATE - Update event
+     * UPDATE 
      */
     public function update($id)
     {
@@ -252,8 +256,8 @@ class Event extends BaseController
             'event_end_date' => $eventEndDate,
             'event_end_time' => $this->request->getPost('event_end_time'),
             'format' => $this->request->getPost('format'),
-            'location' => $this->request->getPost('location') ?? null,
-            'zoom_link' => $this->request->getPost('zoom_link') ?? null,
+            'location' => $this->request->getPost('location') ?: null,
+            'zoom_link' => $this->request->getPost('zoom_link') ?: null,
             'is_active' => $isActive,
             'updated_at' => date('Y-m-d H:i:s')
         ];
@@ -281,7 +285,7 @@ class Event extends BaseController
     }
 
     /**
-     * UPDATE WAVES - Save registration waves (3 waves system)
+     * UPDATE WAVES 
      */
     public function updateWaves($id)
     {
@@ -298,154 +302,188 @@ class Event extends BaseController
         }
 
         $input = $this->request->getJSON(true);
-        
-        if (!isset($input['waves']) || !is_array($input['waves'])) {
+        $waves = $input['waves'] ?? [];
+
+        log_message('info', '=== UPDATE WAVES REQUEST ===');
+        log_message('info', 'Event ID: ' . $id);
+        log_message('info', 'Waves input: ' . json_encode($waves));
+
+        // Validasi minimal 1 gelombang
+        if (empty($waves) || !is_array($waves)) {
             return $this->response->setJSON([
                 'success' => false,
-                'message' => 'Data gelombang tidak valid'
+                'message' => 'Data gelombang tidak valid atau kosong'
             ]);
         }
 
-        $waves = $input['waves'];
+        $format = $event['format'] ?? 'both';
         
-        // Validate waves must be exactly 3
-        if (count($waves) !== 3) {
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Harus ada 3 gelombang'
-            ]);
-        }
-
-        // Validate each wave
-        $format = $event['format'];
-        
+        //  VALIDASI SETIAP GELOMBANG
         foreach ($waves as $i => $wave) {
             $waveNum = $i + 1;
-            
-            // Check required fields
+
+            // 1. Required fields
             if (empty($wave['registration_start']) || empty($wave['registration_deadline'])) {
                 return $this->response->setJSON([
                     'success' => false,
-                    'message' => "Gelombang {$waveNum}: Tanggal harus diisi"
+                    'message' => "❌ Gelombang {$waveNum}: Tanggal mulai dan deadline harus diisi"
                 ]);
             }
 
-            // Validate dates
-            $start = strtotime($wave['registration_start']);
-            $end = strtotime($wave['registration_deadline']);
+            // 2. Parse datetime dengan jam
+            $startDateTime = $wave['registration_start'];
+            $endDateTime = $wave['registration_deadline'];
             
-            if ($start >= $end) {
+            $start = strtotime($startDateTime);
+            $end = strtotime($endDateTime);
+
+            if (!$start || !$end) {
                 return $this->response->setJSON([
                     'success' => false,
-                    'message' => "Gelombang {$waveNum}: Tanggal mulai harus sebelum tanggal selesai"
+                    'message' => "❌ Gelombang {$waveNum}: Format tanggal tidak valid"
                 ]);
             }
 
-            // ✅ ENSURE ALL FEE FIELDS HAVE PROPER VALUES BASED ON FORMAT
-            if ($format === 'offline') {
-                // Offline only: online fees must be 0
-                $waves[$i]['presenter_fee_online'] = 0;
-                $waves[$i]['audience_fee_online'] = 0;
-                // Ensure offline fees exist
-                $waves[$i]['presenter_fee_offline'] = (float)($wave['presenter_fee_offline'] ?? 0);
-                $waves[$i]['audience_fee_offline'] = (float)($wave['audience_fee_offline'] ?? 0);
-            } elseif ($format === 'online') {
-                // Online only: offline fees must be 0
-                $waves[$i]['presenter_fee_offline'] = 0;
-                $waves[$i]['audience_fee_offline'] = 0;
-                // Ensure online fees exist
-                $waves[$i]['presenter_fee_online'] = (float)($wave['presenter_fee_online'] ?? 0);
-                $waves[$i]['audience_fee_online'] = (float)($wave['audience_fee_online'] ?? 0);
-            } else {
-                // Both: all fees must exist
-                $waves[$i]['presenter_fee_online'] = (float)($wave['presenter_fee_online'] ?? 0);
-                $waves[$i]['presenter_fee_offline'] = (float)($wave['presenter_fee_offline'] ?? 0);
-                $waves[$i]['audience_fee_online'] = (float)($wave['audience_fee_online'] ?? 0);
-                $waves[$i]['audience_fee_offline'] = (float)($wave['audience_fee_offline'] ?? 0);
+            // 3. Deadline harus setelah start (minimal beda 1 jam)
+            if ($end <= $start) {
+                return $this->response->setJSON([
+                    'success' => false,
+                    'message' => "❌ Gelombang {$waveNum}: Deadline harus SETELAH tanggal mulai (minimal beda 1 jam)"
+                ]);
             }
 
-            // Validate prices based on format
-            if ($format !== 'offline') {
-                if ($waves[$i]['presenter_fee_online'] < 0) {
+            // 4. Validate numeric fees
+            $fees = [
+                'presenter_fee_online',
+                'presenter_fee_offline',
+                'audience_fee_online',
+                'audience_fee_offline'
+            ];
+
+            foreach ($fees as $fee) {
+                $value = $wave[$fee] ?? 0;
+                
+                if (!is_numeric($value) || $value < 0) {
                     return $this->response->setJSON([
                         'success' => false,
-                        'message' => "Gelombang {$waveNum}: Biaya presenter online tidak valid"
+                        'message' => "❌ Gelombang {$waveNum}: Harga {$fee} harus berupa angka >= 0"
                     ]);
                 }
-                if ($waves[$i]['audience_fee_online'] < 0) {
-                    return $this->response->setJSON([
-                        'success' => false,
-                        'message' => "Gelombang {$waveNum}: Biaya audience online tidak valid"
-                    ]);
-                }
+                
+                $waves[$i][$fee] = (float)$value;
             }
 
-            if ($format !== 'online') {
-                if ($waves[$i]['presenter_fee_offline'] <= 0) {
-                    return $this->response->setJSON([
-                        'success' => false,
-                        'message' => "Gelombang {$waveNum}: Biaya presenter offline harus diisi (lebih dari 0)"
-                    ]);
-                }
-                if ($waves[$i]['audience_fee_offline'] <= 0) {
-                    return $this->response->setJSON([
-                        'success' => false,
-                        'message' => "Gelombang {$waveNum}: Biaya audience offline harus diisi (lebih dari 0)"
-                    ]);
-                }
-            }
-
-            // Validate no overlap with previous wave
+            // VALIDASI DENGAN GELOMBANG SEBELUMNYA
             if ($i > 0) {
-                $prevEnd = strtotime($waves[$i-1]['registration_deadline']);
-                if ($start <= $prevEnd) {
+                $prevWave = $waves[$i - 1];
+                $prevEnd = strtotime($prevWave['registration_deadline']);
+                $currentStart = strtotime($wave['registration_start']);
+                
+                // a) Start gelombang baru harus SETELAH end gelombang sebelumnya (minimal beda 1 jam)
+                if ($currentStart <= $prevEnd) {
+                    $prevEndFormatted = date('d M Y H:i', $prevEnd);
+                    $currentStartFormatted = date('d M Y H:i', $currentStart);
+                    
                     return $this->response->setJSON([
                         'success' => false,
-                        'message' => "Gelombang {$waveNum} harus dimulai setelah gelombang " . ($i) . " selesai"
+                        'message' => "❌ Gelombang {$waveNum} harus dimulai SETELAH gelombang " . ($i) . " selesai!\n\n" .
+                                   "Gelombang " . ($i) . " selesai: {$prevEndFormatted}\n" .
+                                   "Gelombang {$waveNum} mulai: {$currentStartFormatted}\n\n" .
+                                   "Minimal beda 1 jam!"
+                    ]);
+                }
+                
+                //  HARGA HARUS NAIK untuk format offline/both
+                if ($format !== 'online') {
+                    $prevPresOff = (float)$prevWave['presenter_fee_offline'];
+                    $currPresOff = (float)$wave['presenter_fee_offline'];
+                    $prevAudOff = (float)$prevWave['audience_fee_offline'];
+                    $currAudOff = (float)$wave['audience_fee_offline'];
+                    
+                    // Presenter Offline harus naik
+                    if ($currPresOff <= $prevPresOff && $currPresOff > 0) {
+                        return $this->response->setJSON([
+                            'success' => false,
+                            'message' => "❌ Gelombang {$waveNum} (Presenter Offline): Harga HARUS NAIK!\n\n" .
+                                       "Gelombang " . ($i) . ": Rp " . number_format($prevPresOff, 0, ',', '.') . "\n" .
+                                       "Gelombang {$waveNum}: Rp " . number_format($currPresOff, 0, ',', '.') . "\n\n" .
+                                       "Harga gelombang berikutnya harus lebih tinggi!"
+                        ]);
+                    }
+                    
+                    // Audience Offline harus naik
+                    if ($currAudOff <= $prevAudOff && $currAudOff > 0) {
+                        return $this->response->setJSON([
+                            'success' => false,
+                            'message' => "❌ Gelombang {$waveNum} (Audience Offline): Harga HARUS NAIK!\n\n" .
+                                       "Gelombang " . ($i) . ": Rp " . number_format($prevAudOff, 0, ',', '.') . "\n" .
+                                       "Gelombang {$waveNum}: Rp " . number_format($currAudOff, 0, ',', '.') . "\n\n" .
+                                       "Harga gelombang berikutnya harus lebih tinggi!"
+                        ]);
+                    }
+                }
+                
+                //  Online juga harus naik
+                $prevPresOn = (float)$prevWave['presenter_fee_online'];
+                $currPresOn = (float)$wave['presenter_fee_online'];
+                $prevAudOn = (float)$prevWave['audience_fee_online'];
+                $currAudOn = (float)$wave['audience_fee_online'];
+                
+                if ($currPresOn < $prevPresOn && $currPresOn > 0) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => "❌ Gelombang {$waveNum} (Presenter Online): Harga TIDAK BOLEH TURUN!\n\n" .
+                                   "Gelombang " . ($i) . ": Rp " . number_format($prevPresOn, 0, ',', '.') . "\n" .
+                                   "Gelombang {$waveNum}: Rp " . number_format($currPresOn, 0, ',', '.')
+                    ]);
+                }
+                
+                if ($currAudOn < $prevAudOn && $currAudOn > 0) {
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'message' => "❌ Gelombang {$waveNum} (Audience Online): Harga TIDAK BOLEH TURUN!\n\n" .
+                                   "Gelombang " . ($i) . ": Rp " . number_format($prevAudOn, 0, ',', '.') . "\n" .
+                                   "Gelombang {$waveNum}: Rp " . number_format($currAudOn, 0, ',', '.')
                     ]);
                 }
             }
 
-            // Validate Early Bird rule (Wave 1 offline must be cheapest or equal)
-            if ($waveNum === 1 && $format !== 'online') {
-                // Wave 1 presenter offline should be <= other waves
+            // VALIDASI EARLY BIRD (Gelombang 1 harus termurah untuk offline)
+            if ($waveNum === 1 && count($waves) > 1 && $format !== 'online') {
                 $wave1PresOff = (float)$waves[0]['presenter_fee_offline'];
                 $wave1AudOff = (float)$waves[0]['audience_fee_offline'];
 
-                foreach ($waves as $j => $compareWave) {
-                    if ($j === 0) continue;
-                    
-                    $comparePresOff = (float)($compareWave['presenter_fee_offline'] ?? 0);
-                    $compareAudOff = (float)($compareWave['audience_fee_offline'] ?? 0);
+                for ($j = 1; $j < count($waves); $j++) {
+                    $comparePresOff = (float)($waves[$j]['presenter_fee_offline'] ?? 0);
+                    $compareAudOff = (float)($waves[$j]['audience_fee_offline'] ?? 0);
 
-                    if ($wave1PresOff > $comparePresOff && $comparePresOff > 0) {
+                    // Gelombang 1 HARUS LEBIH MURAH
+                    if ($wave1PresOff >= $comparePresOff && $comparePresOff > 0) {
                         return $this->response->setJSON([
                             'success' => false,
-                            'message' => "Early Bird: Gelombang 1 offline (presenter) harus lebih murah atau sama dengan gelombang berikutnya"
+                            'message' => "❌ EARLY BIRD: Gelombang 1 (Presenter Offline) harus TERMURAH!\n\n" .
+                                       "Gelombang 1: Rp " . number_format($wave1PresOff, 0, ',', '.') . "\n" .
+                                       "Gelombang " . ($j + 1) . ": Rp " . number_format($comparePresOff, 0, ',', '.') . "\n\n" .
+                                       "Gelombang pertama harus lebih murah sebagai Early Bird!"
                         ]);
                     }
 
-                    if ($wave1AudOff > $compareAudOff && $compareAudOff > 0) {
+                    if ($wave1AudOff >= $compareAudOff && $compareAudOff > 0) {
                         return $this->response->setJSON([
                             'success' => false,
-                            'message' => "Early Bird: Gelombang 1 offline (audience) harus lebih murah atau sama dengan gelombang berikutnya"
+                            'message' => "❌ EARLY BIRD: Gelombang 1 (Audience Offline) harus TERMURAH!\n\n" .
+                                       "Gelombang 1: Rp " . number_format($wave1AudOff, 0, ',', '.') . "\n" .
+                                       "Gelombang " . ($j + 1) . ": Rp " . number_format($compareAudOff, 0, ',', '.') . "\n\n" .
+                                       "Gelombang pertama harus lebih murah sebagai Early Bird!"
                         ]);
                     }
                 }
             }
         }
 
+        // ✅ SAVE TO DATABASE
         try {
-            // ✅ Final cleanup: ensure all numeric values are float
-            foreach ($waves as &$wave) {
-                $wave['presenter_fee_online'] = (float)($wave['presenter_fee_online'] ?? 0);
-                $wave['presenter_fee_offline'] = (float)($wave['presenter_fee_offline'] ?? 0);
-                $wave['audience_fee_online'] = (float)($wave['audience_fee_online'] ?? 0);
-                $wave['audience_fee_offline'] = (float)($wave['audience_fee_offline'] ?? 0);
-            }
-            unset($wave); // Break reference
-
-            log_message('info', 'Saving waves to DB: ' . json_encode($waves));
+            log_message('info', 'Saving ' . count($waves) . ' waves to DB: ' . json_encode($waves));
 
             $data = [
                 'registration_waves' => json_encode($waves, JSON_UNESCAPED_UNICODE),
@@ -453,19 +491,19 @@ class Event extends BaseController
             ];
 
             if ($this->eventModel->update($id, $data)) {
-                $this->logActivity('Update gelombang pendaftaran: ' . $event['title']);
+                $this->logActivity('Update gelombang pendaftaran: ' . $event['title'] . ' (' . count($waves) . ' gelombang)');
                 
-                log_message('info', 'Waves saved successfully');
+                log_message('info', ' Waves saved successfully');
                 
                 return $this->response->setJSON([
                     'success' => true,
-                    'message' => 'Gelombang berhasil diupdate'
+                    'message' => ' ' . count($waves) . ' gelombang berhasil disimpan!'
                 ]);
             }
             
             return $this->response->setJSON([
                 'success' => false,
-                'message' => 'Gagal update gelombang'
+                'message' => 'Gagal update gelombang ke database'
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Update waves failed: ' . $e->getMessage());
@@ -495,7 +533,6 @@ class Event extends BaseController
             ]);
         }
 
-        // Convert to boolean for PostgreSQL
         $newStatus = $event['is_active'] ? false : true;
 
         try {
@@ -522,7 +559,7 @@ class Event extends BaseController
     }
 
     /**
-     * DELETE - Remove event (if no verified participants)
+     * DELETE - Force delete event
      */
     public function delete($id)
     {
@@ -538,53 +575,104 @@ class Event extends BaseController
             ]);
         }
 
-        // Check for verified participants
-        $hasParticipants = $this->db->table('pembayaran')
+        log_message('info', '=== FORCE DELETE EVENT ===');
+        log_message('info', 'Event ID: ' . $id . ' - ' . $event['title']);
+
+        // Count participants
+        $totalParticipants = $this->db->table('pembayaran')
+            ->where('event_id', $id)
+            ->countAllResults();
+
+        $verifiedParticipants = $this->db->table('pembayaran')
             ->where('event_id', $id)
             ->where('status', 'verified')
-            ->countAllResults() > 0;
+            ->countAllResults();
 
-        if ($hasParticipants) {
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Event tidak bisa dihapus, sudah ada peserta verified'
-            ]);
-        }
-
-        $this->db->transStart();
+        log_message('warning', "Attempting to delete event with {$totalParticipants} total participants ({$verifiedParticipants} verified)");
 
         try {
+            $this->db->query('SET CONSTRAINTS ALL DEFERRED');
+            
+            $deletedAbstrak = 0;
+            $deletedAbsensi = 0;
+            $deletedPembayaran = 0;
+            $deletedRegistrations = 0;
+            
             // Delete related data
-            $this->db->table('abstrak')->where('event_id', $id)->delete();
-            $this->db->table('pembayaran')->where('event_id', $id)->delete();
-            $this->db->table('absensi')->where('event_id', $id)->delete();
-            
-            // Delete event
-            $this->eventModel->delete($id);
-            
-            $this->db->transComplete();
+            if ($this->db->tableExists('event_registrations')) {
+                $columnNames = ['id_event', 'events_id', 'event_id'];
+                foreach ($columnNames as $colName) {
+                    try {
+                        $this->db->query("DELETE FROM event_registrations WHERE {$colName} = ?", [$id]);
+                        $deletedRegistrations = $this->db->affectedRows();
+                        if ($deletedRegistrations > 0) break;
+                    } catch (\Exception $e) {
+                        continue;
+                    }
+                }
+            }
 
-            if ($this->db->transStatus() === false) {
+            if ($this->db->tableExists('abstrak')) {
+                $this->db->query("DELETE FROM abstrak WHERE event_id = ?", [$id]);
+                $deletedAbstrak = $this->db->affectedRows();
+            }
+
+            if ($this->db->tableExists('absensi')) {
+                $this->db->query("DELETE FROM absensi WHERE event_id = ?", [$id]);
+                $deletedAbsensi = $this->db->affectedRows();
+            }
+
+            $this->db->query("DELETE FROM pembayaran WHERE event_id = ?", [$id]);
+            $deletedPembayaran = $this->db->affectedRows();
+            
+            $this->db->query("DELETE FROM events WHERE id = ?", [$id]);
+            $deletedEvent = $this->db->affectedRows();
+
+            $this->db->query('SET CONSTRAINTS ALL IMMEDIATE');
+
+            if ($deletedEvent === 0) {
                 return $this->response->setJSON([
                     'success' => false,
-                    'message' => 'Gagal hapus event'
+                    'message' => 'Gagal menghapus event dari database'
                 ]);
             }
 
-            $this->logActivity('Hapus event: ' . $event['title']);
+            $logMessage = " FORCE DELETE Event: {$event['title']}";
+            if ($totalParticipants > 0) {
+                $logMessage .= " | Menghapus {$totalParticipants} peserta total ({$verifiedParticipants} verified)";
+            }
+            $this->logActivity($logMessage);
+
+            $message = 'Event berhasil dihapus';
+            if ($verifiedParticipants > 0) {
+                $message .= " beserta {$verifiedParticipants} peserta verified dan {$totalParticipants} total peserta";
+            }
 
             return $this->response->setJSON([
                 'success' => true,
-                'message' => 'Event berhasil dihapus'
+                'message' => $message,
+                'deleted_stats' => [
+                    'total_participants' => $totalParticipants,
+                    'verified_participants' => $verifiedParticipants,
+                    'deleted_registrations' => $deletedRegistrations,
+                    'deleted_abstracts' => $deletedAbstrak,
+                    'deleted_payments' => $deletedPembayaran,
+                    'deleted_attendance' => $deletedAbsensi
+                ]
             ]);
 
         } catch (\Exception $e) {
-            $this->db->transRollback();
             log_message('error', 'Delete failed: ' . $e->getMessage());
+            
+            try {
+                $this->db->query('SET CONSTRAINTS ALL IMMEDIATE');
+            } catch (\Exception $e2) {
+                log_message('error', 'Failed to re-enable constraints: ' . $e2->getMessage());
+            }
             
             return $this->response->setJSON([
                 'success' => false,
-                'message' => 'Error: ' . $e->getMessage()
+                'message' => 'Error menghapus event: ' . $e->getMessage()
             ]);
         }
     }
