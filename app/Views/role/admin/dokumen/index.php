@@ -10,6 +10,7 @@ $current_tipe  = $current_tipe ?? '';
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
 <?= $this->include('partials/alerts') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/dokumen_admin.css'); ?>">
 
 <div id="content">
   <main class="flex-fill" style="padding-top:70px;">
@@ -195,6 +196,7 @@ $current_tipe  = $current_tipe ?? '';
 
 <?= $this->include('partials/footer') ?>
 
+<<<<<<< HEAD
 <!-- ====== STYLES ====== -->
 <style>
   :root{ --primary-color:#2563eb; --info-color:#06b6d4; --success-color:#10b981; --warning-color:#f59e0b; --danger-color:#ef4444; }
@@ -226,6 +228,8 @@ $current_tipe  = $current_tipe ?? '';
   .badge-fp-other    { background: #f1f5f9; color:#475569; border:1px solid #e2e8f0; }
 </style>
 
+=======
+>>>>>>> kelompok1/final
 <!-- ====== SCRIPTS ====== -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

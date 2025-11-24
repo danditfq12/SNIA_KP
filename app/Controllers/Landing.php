@@ -63,6 +63,35 @@ class Landing extends BaseController
                 $activeEvent['registration_deadline_formatted'] = !empty($activeEvent['registration_deadline'])
                     ? $this->formatDateIndonesian($activeEvent['registration_deadline'])
                     : null;
+
+                // ===== EXTRACT EARLY BIRD PRICES (WAVE 1 OFFLINE ONLY) =====
+                $waves = [];
+                if (!empty($activeEvent['registration_waves'])) {
+                    $waves = is_string($activeEvent['registration_waves']) 
+                        ? json_decode($activeEvent['registration_waves'], true) 
+                        : $activeEvent['registration_waves'];
+                }
+
+                // Default prices (if no waves configured)
+                $activeEvent['early_bird_presenter_fee'] = 0;
+                $activeEvent['early_bird_audience_fee'] = 0;
+                $activeEvent['early_bird_deadline'] = null;
+                $activeEvent['early_bird_deadline_formatted'] = null;
+
+                // Get Wave 1 prices (Early Bird - Offline Only)
+                if (!empty($waves) && is_array($waves) && isset($waves[0])) {
+                    $wave1 = $waves[0];
+                    
+                    // ONLY take offline prices for Early Bird
+                    $activeEvent['early_bird_presenter_fee'] = (float)($wave1['presenter_fee_offline'] ?? 0);
+                    $activeEvent['early_bird_audience_fee'] = (float)($wave1['audience_fee_offline'] ?? 0);
+                    
+                    // Early Bird deadline
+                    if (!empty($wave1['registration_deadline'])) {
+                        $activeEvent['early_bird_deadline'] = $wave1['registration_deadline'];
+                        $activeEvent['early_bird_deadline_formatted'] = $this->formatDateIndonesian($wave1['registration_deadline']);
+                    }
+                }
             }
 
             return view('landing/index', [

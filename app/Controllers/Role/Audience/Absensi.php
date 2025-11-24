@@ -55,27 +55,41 @@ class Absensi extends BaseController
     }
 
     /**
-     * Calculate attendance window - MODIFIED: Always open after payment verified
+     * Calculate attendance window (start & end time) - FIXED WITH WIB
      */
     private function getAttendanceWindow(array $event): array
     {
         $startStr = trim(($event['event_date'] ?? '') . ' ' . ($event['event_time'] ?? '00:00:00'));
         $start = strtotime($startStr) ?: null;
-        
+        $end = null;
+        if ($start) {
+            $end = $start + (4 * 3600); // 4 hours duration
+        }
+
         // Gunakan WIB timezone
         $nowWIB = $this->getCurrentTimeWIB();
         $nowTimestamp = $nowWIB->getTimestamp();
         
-        // MODIFIED: Selalu terbuka selama event aktif (is_open = true)
-        $open = true;
-        $reason = 'Absensi terbuka';
+        $open = ($start && $end) ? ($nowTimestamp >= ($start - 1800) && $nowTimestamp <= $end) : false; // 30 min early
+
+        $reason = '';
+        if ($start && $end && !$open) {
+            if ($nowTimestamp < ($start - 1800)) {
+                $remaining = ($start - 1800) - $nowTimestamp;
+                $hours = floor($remaining / 3600);
+                $minutes = floor(($remaining % 3600) / 60);
+                $reason = "Akan dibuka dalam {$hours}j {$minutes}m";
+            } elseif ($nowTimestamp > $end) {
+                $reason = 'Window absensi sudah ditutup';
+            }
+        }
 
         return [
             'start_ts' => $start,
-            'end_ts' => null, // No end time limit
+            'end_ts' => $end,
             'is_open' => $open,
             'reason' => $reason,
-            'current_time_wib' => $nowWIB->format('Y-m-d H:i:s'),
+            'current_time_wib' => $nowWIB->format('Y-m-d H:i:s'), // Tambahan info WIB
         ];
     }
 
@@ -157,8 +171,21 @@ class Absensi extends BaseController
                 }
             }
 
-            // MODIFIED: Date validation removed - accept any date
+            // Date validation dengan WIB
+            $nowWIB = $this->getCurrentTimeWIB();
+            $currentDate = $nowWIB->format('Ymd');
+            $yesterday = $nowWIB->modify('-1 day')->format('Ymd');
+            $nowWIB = $this->getCurrentTimeWIB(); // Reset
+            $tomorrow = $nowWIB->modify('+1 day')->format('Ymd');
             
+            if (!in_array($date, [$yesterday, $currentDate, $tomorrow])) {
+                return [
+                    'valid' => false,
+                    'message' => 'QR Code sudah kedaluwarsa atau belum valid untuk tanggal ini.',
+                    'code' => 'EXPIRED_DATE'
+                ];
+            }
+
             return [
                 'valid' => true,
                 'event_id' => $tokenEventId,
@@ -209,7 +236,7 @@ class Absensi extends BaseController
                 'event_id' => $tokenEventId,
                 'role' => 'all',
                 'participation_type' => 'all',
-                'date' => $this->getCurrentTimeWIB()->format('Ymd'),
+                'date' => $this->getCurrentTimeWIB()->format('Ymd'), // WIB date
                 'message' => 'QR Code Universal valid untuk Audience'
             ];
         }
@@ -248,7 +275,7 @@ class Absensi extends BaseController
                     'event_id' => $tokenEventId,
                     'role' => 'all',
                     'participation_type' => 'all',
-                    'date' => $this->getCurrentTimeWIB()->format('Ymd'),
+                    'date' => $this->getCurrentTimeWIB()->format('Ymd'), // WIB date
                     'message' => 'QR Code valid (format fallback)'
                 ];
             }
@@ -284,14 +311,18 @@ class Absensi extends BaseController
     }
 
     /**
-     * MODIFIED: Calculate event status - Simplified without time restrictions
      * Aturan:
+     * - Bisa scan hanya SETELAH mulai (>= start) s.d. +4 jam.
      * - Jika event dihentikan admin (attendance_status = closed/stopped) → tidak bisa scan.
      * - Event non-aktif → tidak bisa scan.
-     * - Pembayaran verified → bisa scan
+     * Catatan: jika kolom attendance_status tidak ada, dianggap 'open'.
      */
     private function calculateEventStatus(array $event): array
     {
+        if (empty($event['event_date']) || empty($event['event_time'])) {
+            return ['event_status' => 'Jadwal Tidak Lengkap', 'badge_class' => 'bg-secondary', 'can_scan' => false];
+        }
+
         if (empty($event['is_active'])) {
             return ['event_status' => 'Tidak Aktif', 'badge_class' => 'bg-secondary', 'can_scan' => false];
         }
@@ -301,8 +332,19 @@ class Absensi extends BaseController
             return ['event_status' => 'Dihentikan', 'badge_class' => 'bg-danger', 'can_scan' => false];
         }
 
-        // MODIFIED: If event is active and not stopped, it's open for attendance
-        return ['event_status' => 'Absensi Terbuka', 'badge_class' => 'bg-success', 'can_scan' => true];
+        $startStr = $this->composeStart($event['event_date'], $event['event_time']);
+        $start    = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $startStr, $this->tz)
+                  ?: new \DateTimeImmutable($startStr, $this->tz);
+
+        $now   = new \DateTimeImmutable('now', $this->tz);
+        $diffH = ($now->getTimestamp() - $start->getTimestamp()) / 3600.0;
+
+        if ($diffH < 0) {
+            return ['event_status' => 'Belum Dimulai', 'badge_class' => 'bg-secondary', 'can_scan' => false];
+        } elseif ($diffH <= 4) {
+            return ['event_status' => 'Sedang Berlangsung', 'badge_class' => 'bg-success', 'can_scan' => true];
+        }
+        return ['event_status' => 'Sudah Selesai', 'badge_class' => 'bg-secondary', 'can_scan' => false];
     }
 
     /** ===== Pages ===== */
@@ -464,7 +506,6 @@ class Absensi extends BaseController
 
     /**
      * SCAN - Process QR token submission with enhanced participation type validation
-     * MODIFIED: No time window checking
      */
     public function scan()
     {
@@ -535,8 +576,15 @@ class Absensi extends BaseController
                 redirect()->back()->with('error', $validation['message']);
         }
 
-        // MODIFIED: No time window checking - always allow if payment verified and event active
-        
+        // Check attendance window
+        $window = $this->getAttendanceWindow($event);
+        if (!$window['is_open']) {
+            $message = $window['reason'] ?: 'Window absensi belum dibuka/sudah ditutup.';
+            return $isAjax ?
+                $this->response->setJSON(['success' => false, 'message' => $message]) :
+                redirect()->back()->with('error', $message);
+        }
+
         // Check if already attended
         if ($this->absensiModel->hasUserAttended($userId, $eventId)) {
             $message = 'Anda sudah tercatat hadir pada event ini.';

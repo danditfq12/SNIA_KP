@@ -12,7 +12,6 @@ class MidtransService
 
     public function __construct()
     {
-        // Ambil dari .env tanpa fallback (jangan pernah hardcode secret)
         $this->serverKey    = env('MIDTRANS_SERVER_KEY');
         $this->clientKey    = env('MIDTRANS_CLIENT_KEY');
         $this->isProduction = filter_var(env('MIDTRANS_IS_PRODUCTION', false), FILTER_VALIDATE_BOOLEAN);
@@ -21,7 +20,6 @@ class MidtransService
             throw new \RuntimeException('Midtrans belum terkonfigurasi (server/client key kosong)');
         }
 
-        // Endpoint sesuai environment
         $this->snapUrl = $this->isProduction
             ? 'https://app.midtrans.com/snap/v1/transactions'
             : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
@@ -39,10 +37,9 @@ class MidtransService
     public function createTransaction($params)
     {
         if (!$this->isConfigured()) {
-            throw new \RuntimeException('Midtrans not properly configured - missing server key or client key');
+            throw new \RuntimeException('Midtrans not properly configured');
         }
 
-        // Log ringan (hindari logging data sensitif)
         log_message('info', 'Creating Midtrans transaction');
 
         $body = json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -64,7 +61,6 @@ class MidtransService
             ],
             CURLOPT_TIMEOUT        => 60,
             CURLOPT_CONNECTTIMEOUT => 30,
-            // Verifikasi SSL selalu true (aman untuk sandbox & production)
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS      => 3,
@@ -77,13 +73,11 @@ class MidtransService
         if (curl_errno($curl)) {
             $error = curl_error($curl);
             curl_close($curl);
-            log_message('error', 'Midtrans CURL Error (create): ' . $error);
-            throw new \RuntimeException('Network error connecting to Midtrans: ' . $error);
+            log_message('error', 'Midtrans CURL Error: ' . $error);
+            throw new \RuntimeException('Network error: ' . $error);
         }
 
         curl_close($curl);
-
-        log_message('info', 'Midtrans API Response Code (create): ' . $httpCode);
 
         $result = json_decode($response, true);
 
@@ -94,22 +88,22 @@ class MidtransService
                     $errorMsg .= ': ' . implode(', ', $result['error_messages']);
                 } elseif (!empty($result['message'])) {
                     $errorMsg .= ': ' . $result['message'];
-                } elseif (!empty($result['status_message'])) {
-                    $errorMsg .= ': ' . $result['status_message'];
                 }
             }
-            log_message('error', 'Midtrans API Error (create): ' . $errorMsg);
+            log_message('error', $errorMsg);
             throw new \RuntimeException($errorMsg);
         }
 
         if (!is_array($result) || !isset($result['token'])) {
-            log_message('error', 'Invalid Midtrans response (create): ' . $response);
-            throw new \RuntimeException('Invalid response from Midtrans - no token received');
+            throw new \RuntimeException('Invalid response - no token received');
         }
 
-        return $result; // berisi token & (kadang) redirect_url
+        return $result;
     }
 
+    /**
+     * ✅ GET Transaction Status with VA extraction
+     */
     public function getTransactionStatus($orderId)
     {
         if (!$this->isConfigured()) {
@@ -128,7 +122,7 @@ class MidtransService
             ],
             CURLOPT_TIMEOUT        => 30,
             CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_SSL_VERIFYPEER => true, // selalu verifikasi SSL
+            CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
         ]);
 
@@ -139,36 +133,158 @@ class MidtransService
             $error = curl_error($curl);
             curl_close($curl);
             log_message('error', 'Midtrans CURL Error (status): ' . $error);
-            throw new \RuntimeException('Network error checking transaction status: ' . $error);
+            throw new \RuntimeException('Network error: ' . $error);
         }
 
         curl_close($curl);
 
         if ($httpCode === 404) {
-            throw new \RuntimeException('Transaction not found in Midtrans');
+            throw new \RuntimeException('Transaction not found');
         }
 
         if ($httpCode !== 200) {
-            throw new \RuntimeException('Failed to get transaction status (HTTP ' . $httpCode . ')');
+            throw new \RuntimeException('Failed to get status (HTTP ' . $httpCode . ')');
         }
 
         $result = json_decode($response, true);
         if (!is_array($result)) {
-            throw new \RuntimeException('Invalid response from Midtrans API');
+            throw new \RuntimeException('Invalid API response');
         }
 
         return $result;
     }
 
+    /**
+     * ✅ NEW: Extract Virtual Account info from Midtrans response
+     */
+    public function extractVirtualAccountInfo($transactionData)
+    {
+        if (empty($transactionData) || !is_array($transactionData)) {
+            return null;
+        }
+
+        $paymentType = strtolower($transactionData['payment_type'] ?? '');
+        $vaInfo = [
+            'va_number' => null,
+            'bank' => null,
+            'display_name' => null
+        ];
+
+        // ===== BCA, BNI, BRI Virtual Account =====
+        if ($paymentType === 'bank_transfer' && !empty($transactionData['va_numbers'])) {
+            if (is_array($transactionData['va_numbers']) && count($transactionData['va_numbers']) > 0) {
+                $va = $transactionData['va_numbers'][0];
+                $vaInfo['va_number'] = $va['va_number'] ?? null;
+                $vaInfo['bank'] = strtoupper($va['bank'] ?? '');
+                $vaInfo['display_name'] = $vaInfo['bank'] . ' Virtual Account';
+                
+                log_message('info', "VA extracted: {$vaInfo['bank']} - {$vaInfo['va_number']}");
+                return $vaInfo;
+            }
+        }
+
+        // ===== Permata Virtual Account =====
+        if (!empty($transactionData['permata_va_number'])) {
+            $vaInfo['va_number'] = $transactionData['permata_va_number'];
+            $vaInfo['bank'] = 'PERMATA';
+            $vaInfo['display_name'] = 'Permata Virtual Account';
+            
+            log_message('info', "Permata VA extracted: {$vaInfo['va_number']}");
+            return $vaInfo;
+        }
+
+        // ===== Mandiri Bill Payment (E-Channel) =====
+        if ($paymentType === 'echannel') {
+            if (!empty($transactionData['bill_key'])) {
+                $vaInfo['va_number'] = $transactionData['bill_key'];
+                $vaInfo['bank'] = 'MANDIRI';
+                $vaInfo['display_name'] = 'Mandiri Bill Payment';
+                
+                // Add biller code as additional info
+                if (!empty($transactionData['biller_code'])) {
+                    $vaInfo['biller_code'] = $transactionData['biller_code'];
+                }
+                
+                log_message('info', "Mandiri Bill extracted: {$vaInfo['va_number']}");
+                return $vaInfo;
+            }
+        }
+
+        // ===== QRIS =====
+        if ($paymentType === 'qris' && !empty($transactionData['qr_string'])) {
+            $vaInfo['va_number'] = 'QRIS';
+            $vaInfo['bank'] = 'QRIS';
+            $vaInfo['display_name'] = 'QRIS Payment';
+            $vaInfo['qr_string'] = $transactionData['qr_string'];
+            
+            log_message('info', "QRIS extracted");
+            return $vaInfo;
+        }
+
+        // ===== E-Wallets (GoPay, ShopeePay, DANA) =====
+        if (in_array($paymentType, ['gopay', 'shopeepay', 'dana'])) {
+            $vaInfo['va_number'] = 'E-Wallet';
+            $vaInfo['bank'] = strtoupper($paymentType);
+            $vaInfo['display_name'] = ucfirst($paymentType);
+            
+            // Add deeplink if available
+            if (!empty($transactionData['actions'])) {
+                foreach ($transactionData['actions'] as $action) {
+                    if ($action['name'] === 'deeplink-redirect' || $action['name'] === 'generate-qr-code') {
+                        $vaInfo['deeplink'] = $action['url'] ?? null;
+                        break;
+                    }
+                }
+            }
+            
+            log_message('info', ucfirst($paymentType) . " extracted");
+            return $vaInfo;
+        }
+
+        // ===== Convenience Store (Indomaret, Alfamart) =====
+        if ($paymentType === 'cstore') {
+            $store = strtolower($transactionData['store'] ?? '');
+            $vaInfo['va_number'] = $transactionData['payment_code'] ?? null;
+            $vaInfo['bank'] = strtoupper($store);
+            $vaInfo['display_name'] = ucfirst($store) . ' Payment';
+            
+            log_message('info', ucfirst($store) . " payment code extracted");
+            return $vaInfo;
+        }
+
+        log_message('warning', "No VA info found for payment type: {$paymentType}");
+        return null;
+    }
+
+    /**
+     * ✅ NEW: Get formatted VA display
+     */
+    public function getFormattedVANumber($transactionData)
+    {
+        $vaInfo = $this->extractVirtualAccountInfo($transactionData);
+        
+        if (!$vaInfo || empty($vaInfo['va_number'])) {
+            return 'Menunggu pembayaran';
+        }
+
+        // Format VA number dengan spasi setiap 4 digit untuk readability
+        $vaNumber = $vaInfo['va_number'];
+        if (strlen($vaNumber) > 8 && is_numeric($vaNumber)) {
+            $vaNumber = implode(' ', str_split($vaNumber, 4));
+        }
+
+        return $vaNumber;
+    }
+
     public function verifyNotification($notification)
     {
-        $orderId      = isset($notification['order_id'])      ? $notification['order_id']      : '';
-        $statusCode   = isset($notification['status_code'])   ? $notification['status_code']   : '';
-        $grossAmount  = isset($notification['gross_amount'])  ? (string)$notification['gross_amount'] : '';
-        $signatureKey = isset($notification['signature_key']) ? $notification['signature_key'] : '';
+        $orderId      = $notification['order_id'] ?? '';
+        $statusCode   = $notification['status_code'] ?? '';
+        $grossAmount  = (string)($notification['gross_amount'] ?? '');
+        $signatureKey = $notification['signature_key'] ?? '';
 
         if ($orderId === '' || $statusCode === '' || $grossAmount === '' || $signatureKey === '') {
-            log_message('error', 'Missing signature components in Midtrans notification');
+            log_message('error', 'Missing signature components');
             return false;
         }
 
@@ -176,8 +292,7 @@ class MidtransService
         $isValid     = hash_equals($mySignature, $signatureKey);
 
         if (!$isValid) {
-            // Jangan pernah log potongan server key, cukup info mismatch
-            log_message('error', 'Midtrans signature verification failed for order_id: ' . $orderId);
+            log_message('error', 'Signature verification failed for: ' . $orderId);
         }
 
         return $isValid;
@@ -203,22 +318,130 @@ class MidtransService
         return $this->isProduction;
     }
 
+    private function truncateString($string, $maxLength = 50)
+    {
+        $string = trim($string);
+        if (mb_strlen($string) <= $maxLength) {
+            return $string;
+        }
+        return mb_substr($string, 0, $maxLength - 3) . '...';
+    }
+
+    public function getAvailablePaymentMethods()
+    {
+        return [
+            'bank_transfer' => [
+                'bca_va' => [
+                    'name' => 'BCA Virtual Account',
+                    'icon' => 'building',
+                    'color' => '#003087',
+                    'enabled' => true
+                ],
+                'bni_va' => [
+                    'name' => 'BNI Virtual Account',
+                    'icon' => 'building',
+                    'color' => '#ed7203',
+                    'enabled' => true
+                ],
+                'bri_va' => [
+                    'name' => 'BRI Virtual Account',
+                    'icon' => 'building',
+                    'color' => '#003d7a',
+                    'enabled' => true
+                ],
+                'permata_va' => [
+                    'name' => 'Permata Virtual Account',
+                    'icon' => 'building',
+                    'color' => '#00a854',
+                    'enabled' => true
+                ],
+                'mandiri_va' => [
+                    'name' => 'Mandiri Virtual Account',
+                    'icon' => 'building',
+                    'color' => '#003d79',
+                    'enabled' => true
+                ]
+            ],
+            'e_wallet' => [
+                'gopay' => [
+                    'name' => 'GoPay',
+                    'icon' => 'wallet2',
+                    'color' => '#00aa13',
+                    'enabled' => true
+                ],
+                'shopeepay' => [
+                    'name' => 'ShopeePay',
+                    'icon' => 'wallet2',
+                    'color' => '#ee4d2d',
+                    'enabled' => true
+                ],
+                'dana' => [
+                    'name' => 'DANA',
+                    'icon' => 'wallet2',
+                    'color' => '#118eea',
+                    'enabled' => true
+                ]
+            ],
+            'qris' => [
+                'qris' => [
+                    'name' => 'QRIS',
+                    'icon' => 'qr-code',
+                    'color' => '#d32f2f',
+                    'enabled' => true
+                ]
+            ]
+        ];
+    }
+
+    private function getEnabledPaymentCodes()
+    {
+        $methods = $this->getAvailablePaymentMethods();
+        $enabled = [];
+
+        foreach ($methods as $category => $categoryMethods) {
+            foreach ($categoryMethods as $code => $details) {
+                if ($details['enabled']) {
+                    $enabled[] = $code;
+                }
+            }
+        }
+
+        return $enabled;
+    }
+
     public function buildTransactionParams($orderId, $amount, $customerDetails, $itemDetails, $eventData = [])
     {
+<<<<<<< HEAD
         $baseUrl    = rtrim(base_url(), '/') . '/';
         $finishPath = $eventData['finish_path'] ?? 'presenter/pembayaran/finish';
+=======
+        $calculatedAmount = 0;
+        foreach ($itemDetails as $item) {
+            $itemPrice = (int)($item['price'] ?? 0);
+            $itemQty = (int)($item['quantity'] ?? 1);
+            $calculatedAmount += ($itemPrice * $itemQty);
+        }
+
+        $grossAmount = $calculatedAmount > 0 ? $calculatedAmount : (int)$amount;
+        $baseUrl = rtrim(base_url(), '/') . '/';
+>>>>>>> kelompok1/final
 
         $params = [
             'transaction_details' => [
                 'order_id'     => $orderId,
+<<<<<<< HEAD
                 'gross_amount' => (int) $amount, // HARUS = sum(item_details)
+=======
+                'gross_amount' => $grossAmount,
+>>>>>>> kelompok1/final
             ],
             'customer_details' => [
-                'first_name' => $customerDetails['nama_lengkap'] ?? 'Customer',
+                'first_name' => $this->truncateString($customerDetails['nama_lengkap'] ?? 'Customer', 50),
                 'email'      => $customerDetails['email'] ?? '',
                 'phone'      => $customerDetails['no_hp'] ?? '',
             ],
             'item_details' => $itemDetails,
+            'enabled_payments' => $this->getEnabledPaymentCodes(),
             'callbacks' => [
                 'finish' => $baseUrl . $finishPath . '?order_id=' . $orderId,
             ],
@@ -227,16 +450,20 @@ class MidtransService
                 'unit'       => 'hours',
                 'duration'   => 24,
             ],
-            'page_expiry' => [
-                'duration' => 30,
-                'unit'     => 'minutes',
-            ],
         ];
 
+<<<<<<< HEAD
         // Custom tracking (opsional)
         $params['custom_field1'] = (string)($eventData['event_id'] ?? '');
         $params['custom_field2'] = (string)($eventData['user_role'] ?? '');
         $params['custom_field3'] = (string)($eventData['participation_type'] ?? '');
+=======
+        if (!empty($eventData)) {
+            $params['custom_field1'] = (string)($eventData['event_id'] ?? '');
+            $params['custom_field2'] = (string)($eventData['user_role'] ?? '');
+            $params['custom_field3'] = (string)($eventData['participation_type'] ?? '');
+        }
+>>>>>>> kelompok1/final
 
         return $params;
     }
@@ -245,21 +472,22 @@ class MidtransService
     {
         try {
             if ($amount <= 0) {
-                throw new \InvalidArgumentException('Invalid payment amount');
+                throw new \InvalidArgumentException('Invalid amount: ' . $amount);
             }
+
             if (empty($userDetails['nama_lengkap']) || empty($userDetails['email'])) {
-                throw new \InvalidArgumentException('Customer details are incomplete');
+                throw new \InvalidArgumentException('Customer details incomplete');
             }
 
             $orderId = $this->generateOrderId($userId, $eventId, $userRole, $participationType);
-            log_message('info', "Creating Midtrans payment - Order ID: {$orderId}");
 
             $customerDetails = [
-                'nama_lengkap' => $userDetails['nama_lengkap'] ?? 'User',
+                'nama_lengkap' => $this->truncateString($userDetails['nama_lengkap'] ?? 'User', 50),
                 'email'        => $userDetails['email'] ?? '',
                 'no_hp'        => $userDetails['no_hp'] ?? '',
             ];
 
+<<<<<<< HEAD
             // Nama item aman: rapikan spasi & potong multibyte-safe ke 50 karakter
             $rawTitle  = (string)($eventDetails['title'] ?? 'Event Registration');
             $clean     = preg_replace('/\s+/', ' ', $rawTitle);
@@ -275,6 +503,16 @@ class MidtransService
                 'price'    => (int) $amount,
                 'quantity' => 1,
                 'category' => 'Event Registration',
+=======
+            $eventTitle = $this->truncateString($eventDetails['title'] ?? 'Event Registration', 50);
+            $itemPrice = (int)$amount;
+            
+            $itemDetails = [[
+                'id'       => 'EVENT-' . $eventId,
+                'price'    => $itemPrice,
+                'quantity' => 1,
+                'name'     => $eventTitle,
+>>>>>>> kelompok1/final
             ]];
 
             // Hitung gross dari item_details (bukan percaya input luar)
@@ -298,15 +536,17 @@ class MidtransService
                 'finish_path'        => $finishPath,
             ];
 
+<<<<<<< HEAD
             // Pakai $gross (konsisten dgn sum item_details)
             $params       = $this->buildTransactionParams($orderId, $gross, $customerDetails, $itemDetails, $eventData);
+=======
+            $params = $this->buildTransactionParams($orderId, $amount, $customerDetails, $itemDetails, $eventData);
+>>>>>>> kelompok1/final
             $snapResponse = $this->createTransaction($params);
 
             if (!isset($snapResponse['token'])) {
-                throw new \RuntimeException('No token received from Midtrans');
+                throw new \RuntimeException('No token received');
             }
-
-            log_message('info', "Midtrans payment created successfully - Token (prefix): " . substr($snapResponse['token'], 0, 6) . '***');
 
             return [
                 'order_id'            => $orderId,
@@ -316,7 +556,7 @@ class MidtransService
             ];
 
         } catch (\Exception $e) {
-            log_message('error', 'Failed to create Midtrans payment: ' . $e->getMessage());
+            log_message('error', 'Payment creation failed: ' . $e->getMessage());
             throw new \RuntimeException('Failed to create payment: ' . $e->getMessage());
         }
     }
@@ -324,7 +564,7 @@ class MidtransService
     public function handleNotification($notification)
     {
         if (!$this->verifyNotification($notification)) {
-            throw new \RuntimeException('Invalid notification signature');
+            throw new \RuntimeException('Invalid signature');
         }
 
         $orderId           = $notification['order_id'];
@@ -335,29 +575,25 @@ class MidtransService
 
         switch (strtolower($transactionStatus)) {
             case 'capture':
-                if (strtolower($fraudStatus) === 'challenge') {
-                    $paymentStatus = 'pending';
-                } elseif (strtolower($fraudStatus) === 'accept') {
-                    $paymentStatus = 'verified';
-                }
+                $paymentStatus = (strtolower($fraudStatus) === 'accept') ? 'verified' : 'pending';
                 break;
+<<<<<<< HEAD
 
         case 'settlement':
+=======
+            case 'settlement':
+>>>>>>> kelompok1/final
                 $paymentStatus = 'verified';
                 break;
-
             case 'pending':
                 $paymentStatus = 'pending';
                 break;
-
             case 'deny':
                 $paymentStatus = 'rejected';
                 break;
-
             case 'expire':
                 $paymentStatus = 'expired';
                 break;
-
             case 'cancel':
             case 'failure':
                 $paymentStatus = 'canceled';
@@ -369,9 +605,9 @@ class MidtransService
             'payment_status'     => $paymentStatus,
             'transaction_status' => $transactionStatus,
             'fraud_status'       => $fraudStatus,
-            'payment_type'       => $notification['payment_type']    ?? null,
-            'gross_amount'       => $notification['gross_amount']    ?? null,
-            'transaction_time'   => $notification['transaction_time']?? null,
+            'payment_type'       => $notification['payment_type'] ?? null,
+            'gross_amount'       => $notification['gross_amount'] ?? null,
+            'transaction_time'   => $notification['transaction_time'] ?? null,
             'settlement_time'    => $notification['settlement_time'] ?? null,
             'raw_notification'   => $notification,
         ];
@@ -380,9 +616,13 @@ class MidtransService
     public function syncPaymentStatus($orderId)
     {
         try {
+<<<<<<< HEAD
             $statusData        = $this->getTransactionStatus($orderId);
+=======
+            $statusData = $this->getTransactionStatus($orderId);
+>>>>>>> kelompok1/final
             $transactionStatus = $statusData['transaction_status'] ?? '';
-            $fraudStatus       = $statusData['fraud_status']       ?? '';
+            $fraudStatus = $statusData['fraud_status'] ?? '';
 
             $paymentStatus = 'pending';
             switch (strtolower($transactionStatus)) {
@@ -413,7 +653,7 @@ class MidtransService
             ];
 
         } catch (\Exception $e) {
-            log_message('error', 'Payment sync error for order ' . $orderId . ': ' . $e->getMessage());
+            log_message('error', 'Payment sync error: ' . $e->getMessage());
             return [
                 'success'  => false,
                 'error'    => $e->getMessage(),
@@ -421,4 +661,26 @@ class MidtransService
             ];
         }
     }
+<<<<<<< HEAD
 }
+=======
+
+    public function getPaymentMethodInfo($paymentType)
+    {
+        $methods = $this->getAvailablePaymentMethods();
+        
+        foreach ($methods as $category => $categoryMethods) {
+            if (isset($categoryMethods[$paymentType])) {
+                return $categoryMethods[$paymentType];
+            }
+        }
+
+        return [
+            'name' => 'Digital Payment',
+            'icon' => 'credit-card',
+            'color' => '#2563eb',
+            'enabled' => true
+        ];
+    }
+}
+>>>>>>> kelompok1/final

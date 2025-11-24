@@ -22,10 +22,14 @@ class Verify extends BaseController
         }
 
         $remaining = max(0, strtotime($row['otp_expired']) - time());
+        
+        // Ambil OTP dari session jika ada
+        $showOtp = session()->get('show_otp_code');
 
         return view('auth/verify', [
             'email'     => $email,
             'remaining' => $remaining,
+            'otp_code'  => $showOtp, // Pass OTP ke view
         ]);
     }
 
@@ -68,23 +72,25 @@ class Verify extends BaseController
 
         // Kalau belum ada → buat akun baru, set foto default
         if (!$user) {
-    $userId = $userModel->insert([
-        'nama_lengkap'  => $row['nama_lengkap'],
-        'email'         => strtolower(trim($row['email'])),
-        'password'      => $row['password_hash'],
-        'role'          => $row['role'],
-        'no_hp'         => $row['no_hp'],           
-        'institusi'     => $row['institusi'],       
-        'jenis_peserta' => $row['jenis_peserta'],   
-        'status'        => 'aktif',
-        'foto'          => 'default.png',
-    ]);
-    $user = $userModel->find($userId);
-}
+            $userId = $userModel->insert([
+                'nama_lengkap'  => $row['nama_lengkap'],
+                'email'         => strtolower(trim($row['email'])),
+                'password'      => $row['password_hash'],
+                'role'          => $row['role'],
+                'no_hp'         => $row['no_hp'],           
+                'institusi'     => $row['institusi'],       
+                'jenis_peserta' => $row['jenis_peserta'],   
+                'status'        => 'aktif',
+                'foto'          => 'default.png',
+            ]);
+            $user = $userModel->find($userId);
+        }
 
-        // hapus pending + session
+        // hapus pending + session OTP
         $pending->where('email', $email)->delete();
         session()->remove('email_verifikasi');
+        session()->remove('show_otp_code');
+        session()->remove('otp_created_at');
 
         // === AUTO LOGIN === (tambahkan alias 'nama')
         session()->set([
@@ -159,8 +165,14 @@ class Verify extends BaseController
             log_message('error', 'Exception kirim email OTP (resend): ' . $e->getMessage());
         }
 
-        session()->set('email_verifikasi', $email);
+        // Update session dengan OTP baru
+        session()->set([
+            'email_verifikasi' => $email,
+            'show_otp_code' => $otp,
+            'otp_created_at' => time()
+        ]);
+        
         return redirect()->to('/auth/verify?email=' . urlencode($email))
-                         ->with('success', 'Kode OTP baru telah dikirim.');
+                         ->with('success', 'Kode OTP baru telah dikirim ke email Anda dan ditampilkan di bawah.');
     }
 }

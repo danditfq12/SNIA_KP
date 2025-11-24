@@ -157,6 +157,7 @@ usort($unified_assign, function($x,$y){
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
 <?= $this->include('partials/alerts') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/dashboard_admin.css'); ?>">
 
 <div id="content">
   <main class="flex-fill page-wrap-blue">
@@ -332,6 +333,7 @@ usort($unified_assign, function($x,$y){
 
 <?= $this->include('partials/footer') ?>
 
+<<<<<<< HEAD
 <style>
 :root{
   --blue-700:#1d4ed8; --blue-800:#1e40af;
@@ -411,6 +413,8 @@ usort($unified_assign, function($x,$y){
   .panel-head .title{ font-size:.95rem; }
 }
 </style>
+=======
+>>>>>>> kelompok1/final
 
 <script>
 (function(){

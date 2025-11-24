@@ -12,8 +12,122 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
 <?= $this->include('partials/alerts') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/event_admin.css'); ?>">
 
 <meta name="csrf-token" content="<?= csrf_hash() ?>"/>
+
+<style>
+/* Warning Styles */
+.price-warning {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 8px;
+  animation: pulse 1s infinite;
+}
+
+.price-warning.same-price {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+.price-warning.price-drop {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #ef4444;
+}
+
+.price-warning.price-increase {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #10b981;
+}
+
+.price-warning.zero-price {
+  background: #fecaca;
+  color: #7f1d1d;
+  border: 1px solid #dc2626;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+.wave-form-card.has-error {
+  border-color: #ef4444 !important;
+  background: linear-gradient(to bottom, #fef2f2 0%, #ffffff 100%);
+}
+
+.input-group-text {
+  background: #f3f4f6;
+  border-right: none;
+}
+
+.input-group .form-control {
+  border-left: none;
+}
+
+.input-group .form-control:focus {
+  border-left: none;
+  box-shadow: none;
+}
+
+.date-disabled-hint {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* ✅ Form Validation Styles */
+.form-control.is-invalid,
+.form-select.is-invalid {
+  border-color: #dc3545;
+  padding-right: calc(1.5em + 0.75rem);
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right calc(0.375em + 0.1875rem) center;
+  background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+.form-control.is-invalid:focus,
+.form-select.is-invalid:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+}
+
+.invalid-feedback {
+  display: none;
+  width: 100%;
+  margin-top: 0.25rem;
+  font-size: 0.875em;
+  color: #dc3545;
+}
+
+.is-invalid ~ .invalid-feedback {
+  display: block;
+}
+
+#addEventWarning .alert {
+  border-radius: 8px;
+  font-size: 0.9rem;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+</style>
 
 <div id="content">
   <main class="flex-fill" style="padding-top:70px; padding-bottom: 40px;">
@@ -23,10 +137,10 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
       <div class="header-section mb-4">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
           <div>
-            <h3 class="mb-1"><i class="bi bi-calendar3 me-2"></i>Kelola Event</h3>
-            <small class="text-muted">
+            <h3><i class="bi bi-calendar3 me-2"></i>Kelola Event</h3>
+            <small>
               <i class="bi bi-star-fill text-warning me-1"></i>
-              Gel.1 Offline = Early Bird | Gel.2-3 = Harga Naik | Presenter Hanya Offline
+              ✅ Presenter & Audience bisa Online/Offline | Gelombang bisa ditambah/dikurangi
             </small>
           </div>
           <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEventModal">
@@ -41,8 +155,8 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
           <div class="stat-card">
             <i class="bi bi-calendar-event stat-icon text-primary"></i>
             <div>
-              <h4 class="mb-0"><?= number_format((int)$stats['total_events']) ?></h4>
-              <small class="text-muted">Total Event</small>
+              <h4><?= number_format((int)$stats['total_events']) ?></h4>
+              <small>Total Event</small>
             </div>
           </div>
         </div>
@@ -51,8 +165,8 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
           <div class="stat-card">
             <i class="bi bi-check2-circle stat-icon text-success"></i>
             <div>
-              <h4 class="mb-0"><?= number_format((int)$stats['active_events']) ?></h4>
-              <small class="text-muted">Event Aktif</small>
+              <h4><?= number_format((int)$stats['active_events']) ?></h4>
+              <small>Event Aktif</small>
             </div>
           </div>
         </div>
@@ -61,8 +175,8 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
           <div class="stat-card">
             <i class="bi bi-people stat-icon text-info"></i>
             <div>
-              <h4 class="mb-0"><?= number_format((int)$stats['verified_registrations']) ?></h4>
-              <small class="text-muted">Total Pendaftar</small>
+              <h4><?= number_format((int)$stats['verified_registrations']) ?></h4>
+              <small>Total Pendaftar</small>
             </div>
           </div>
         </div>
@@ -72,7 +186,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
             <i class="bi bi-currency-dollar stat-icon text-warning"></i>
             <div>
               <div class="revenue-text">Rp <?= number_format((float)$stats['total_revenue'], 0, ',', '.') ?></div>
-              <small class="text-muted">Total Revenue</small>
+              <small>Total Revenue</small>
             </div>
           </div>
         </div>
@@ -86,7 +200,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
             $fmt = strtolower($event['format'] ?? 'both');
             $isOn = !empty($event['is_active']); 
             
-            // Safely decode registration_waves with multiple fallbacks
+            // Safely decode registration_waves
             $waves = [];
             if (isset($event['registration_waves'])) {
                 if (is_string($event['registration_waves'])) {
@@ -129,7 +243,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
           <div class="event-card">
             <div class="event-card-header">
               <div class="d-flex justify-content-between align-items-start mb-2">
-                <h5 class="event-title mb-0"><?= esc($event['title']) ?></h5>
+                <h5 class="event-title"><?= esc($event['title']) ?></h5>
                 
                 <div class="dropdown">
                   <button class="btn btn-sm btn-light" data-bs-toggle="dropdown">
@@ -163,7 +277,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
 
               <div class="event-meta">
                 <div>
-                  <i class="bi bi-calendar me-1"></i>
+                  <i class="bi bi-calendar"></i>
                   <?php if ($isMultiDay): ?>
                     <?= date('d M Y', strtotime($event['event_date'])) ?> - <?= date('d M Y', strtotime($event['event_end_date'])) ?>
                   <?php else: ?>
@@ -172,7 +286,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
                 </div>
                 <?php if ($isMultiDay): ?>
                 <div>
-                  <i class="bi bi-clock me-1"></i>
+                  <i class="bi bi-clock"></i>
                   <?= date('H:i', strtotime($event['event_time'])) ?> - <?= date('H:i', strtotime($event['event_end_time'])) ?> WIB
                 </div>
                 <?php endif; ?>
@@ -189,189 +303,148 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
                 
                 <?php if ($isMultiDay): ?>
                   <span class="badge bg-info">
-                    <i class="bi bi-calendar-range me-1"></i><?= $duration ?> Hari
+                    <i class="bi bi-calendar2-range me-1"></i><?= $duration ?> Hari
                   </span>
                 <?php endif; ?>
                 
                 <?php if ($activeWaveNum): ?>
                   <span class="badge bg-primary">
-                    Gel. <?= $activeWaveNum ?> <?= $activeWaveNum === 1 ? '⭐' : '' ?>
+                    <i class="bi bi-bullseye me-1"></i>Gelombang <?= $activeWaveNum ?> Aktif
+                  </span>
+                <?php elseif (count($waves) > 0): ?>
+                  <span class="badge bg-secondary">
+                    <i class="bi bi-calendar-x me-1"></i>Tidak ada gelombang aktif
+                  </span>
+                <?php else: ?>
+                  <span class="badge bg-danger">
+                    <i class="bi bi-exclamation-triangle me-1"></i>Gelombang belum diatur
                   </span>
                 <?php endif; ?>
               </div>
             </div>
 
             <div class="event-card-body">
-              <!-- Participant Stats -->
+              <!-- Participants Stats -->
               <div class="participant-stats">
-                <div class="row g-2 text-center">
+                <div class="row g-2">
                   <div class="col-6">
                     <div class="stat-box">
                       <i class="bi bi-person-video3"></i>
                       <div class="stat-number"><?= $totalPresenters ?></div>
                       <div class="stat-label">Presenter</div>
-                      <small class="text-muted">
-                        <?php if ($fmt !== 'offline'): ?>
-                          On: <?= $presentersOnline ?> | 
-                        <?php endif; ?>
-                        Off: <?= $presentersOffline ?>
-                      </small>
+                      <small><?= $presentersOnline ?> online, <?= $presentersOffline ?> offline</small>
                     </div>
                   </div>
+                  
                   <div class="col-6">
                     <div class="stat-box">
                       <i class="bi bi-people"></i>
                       <div class="stat-number"><?= $totalAudience ?></div>
                       <div class="stat-label">Audience</div>
-                      <small class="text-muted">On: <?= $audienceOnline ?> | Off: <?= $audienceOffline ?></small>
+                      <small><?= $audienceOnline ?> online, <?= $audienceOffline ?> offline</small>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <!-- Waves -->
-              <?php if (!empty($waves)): ?>
+              <!-- Wave Info -->
+              <?php if (count($waves) > 0): ?>
               <div class="waves-section">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                  <strong><i class="bi bi-calendar-range me-1"></i>Gelombang Pendaftaran</strong>
-                  <button class="btn btn-sm btn-outline-primary" onclick="editWaves(<?= $id ?>)">
-                    <i class="bi bi-gear"></i>
-                  </button>
+                  <strong><i class="bi bi-calendar-range me-1"></i>Gelombang (<?= count($waves) ?>)</strong>
                 </div>
-                
-                <?php foreach ($waves as $idx => $wave): 
-                  $waveNum = $idx + 1;
-                  $regStart = strtotime($wave['registration_start'] ?? '');
-                  $regEnd = strtotime($wave['registration_deadline'] ?? '');
-                  $isActive = ($regStart && $regEnd && $now >= $regStart && $now <= $regEnd);
-                  $isClosed = ($regEnd && $now > $regEnd);
-                  $isPending = ($regStart && $now < $regStart);
-                ?>
-                <div class="wave-item <?= $isActive ? 'active' : ($isClosed ? 'closed' : 'pending') ?>">
-                  <div class="d-flex justify-content-between align-items-start">
-                    <div class="flex-grow-1">
-                      <div class="d-flex align-items-center gap-2 mb-1">
-                        <strong>Gel. <?= $waveNum ?></strong>
-                        <?php if ($waveNum === 1): ?>
-                          <span class="badge bg-warning text-dark">Early Bird Offline</span>
+                <div>
+                  <?php foreach ($waves as $idx => $w): 
+                    $wNum = $idx + 1;
+                    $wStart = strtotime($w['registration_start'] ?? '');
+                    $wEnd = strtotime($w['registration_deadline'] ?? '');
+                    $isActive = $wStart && $wEnd && $now >= $wStart && $now <= $wEnd;
+                    $isPast = $wEnd && $now > $wEnd;
+                    $isPending = $wStart && $now < $wStart;
+                  ?>
+                  <div class="wave-item <?= $isActive ? 'active' : ($isPast ? 'closed' : ($isPending ? 'pending' : '')) ?>">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                      <div>
+                        <strong>Gelombang <?= $wNum ?></strong>
+                        <?php if ($wNum === 1): ?>
+                          <span class="badge bg-warning">
+                            <i class="bi bi-star-fill me-1"></i>Early Bird
+                          </span>
                         <?php endif; ?>
                         <?php if ($isActive): ?>
-                          <span class="badge bg-success">AKTIF</span>
-                        <?php elseif ($isClosed): ?>
-                          <span class="badge bg-secondary">TUTUP</span>
+                          <span class="badge bg-primary">Aktif</span>
+                        <?php elseif ($isPast): ?>
+                          <span class="badge bg-secondary">Selesai</span>
                         <?php elseif ($isPending): ?>
-                          <span class="badge bg-info">SEGERA</span>
+                          <span class="badge bg-info">Segera</span>
                         <?php endif; ?>
                       </div>
-                      <div class="small text-muted">
-                        <i class="bi bi-calendar-check me-1"></i>
-                        <?= $regStart ? date('d/m H:i', $regStart) : '-' ?> - <?= $regEnd ? date('d/m H:i', $regEnd) : '-' ?>
+                      <small class="text-muted">
+                        <?= date('d M', $wStart) ?> - <?= date('d M Y', $wEnd) ?>
+                      </small>
+                    </div>
+                    <div class="price-display">
+                      <div class="price-row <?= $wNum === 1 ? 'early-bird' : '' ?>">
+                        <span class="price-label">
+                          <i class="bi bi-person-video3"></i> Presenter Online
+                        </span>
+                        <span class="price-value">Rp <?= number_format($w['presenter_fee_online'] ?? 0, 0, ',', '.') ?></span>
+                      </div>
+                      <div class="price-row <?= $wNum === 1 ? 'early-bird' : '' ?>">
+                        <span class="price-label">
+                          <i class="bi bi-person-badge"></i> Presenter Offline
+                        </span>
+                        <span class="price-value">Rp <?= number_format($w['presenter_fee_offline'] ?? 0, 0, ',', '.') ?></span>
+                      </div>
+                      <div class="price-row">
+                        <span class="price-label">
+                          <i class="bi bi-laptop"></i> Audience Online
+                        </span>
+                        <span class="price-value">Rp <?= number_format($w['audience_fee_online'] ?? 0, 0, ',', '.') ?></span>
+                      </div>
+                      <div class="price-row">
+                        <span class="price-label">
+                          <i class="bi bi-people"></i> Audience Offline
+                        </span>
+                        <span class="price-value">Rp <?= number_format($w['audience_fee_offline'] ?? 0, 0, ',', '.') ?></span>
                       </div>
                     </div>
-                    
-                    <?php if (!$isClosed): ?>
-                    <div class="text-end">
-                      <div class="price-display">
-                        <?php if ($fmt !== 'offline'): ?>
-                          <div class="price-row">
-                            <span class="price-label"><i class="bi bi-camera-video text-info"></i> Pres On:</span>
-                            <span class="price-value">Rp <?= number_format((float)($wave['presenter_fee_online'] ?? 0), 0, ',', '.') ?></span>
-                          </div>
-                        <?php endif; ?>
-                        
-                        <?php if ($fmt !== 'online'): ?>
-                          <div class="price-row <?= $waveNum === 1 ? 'early-bird' : '' ?>">
-                            <span class="price-label">
-                              <i class="bi bi-geo-alt text-warning"></i> Pres Off:
-                              <?php if ($waveNum === 1): ?><i class="bi bi-star-fill text-warning"></i><?php endif; ?>
-                            </span>
-                            <span class="price-value">Rp <?= number_format((float)($wave['presenter_fee_offline'] ?? 0), 0, ',', '.') ?></span>
-                          </div>
-                        <?php endif; ?>
-                        
-                        <?php if ($fmt !== 'offline'): ?>
-                          <div class="price-row">
-                            <span class="price-label"><i class="bi bi-camera-video text-info"></i> Aud On:</span>
-                            <span class="price-value">Rp <?= number_format((float)($wave['audience_fee_online'] ?? 0), 0, ',', '.') ?></span>
-                          </div>
-                        <?php endif; ?>
-                        
-                        <?php if ($fmt !== 'online'): ?>
-                          <div class="price-row <?= $waveNum === 1 ? 'early-bird' : '' ?>">
-                            <span class="price-label">
-                              <i class="bi bi-geo-alt text-warning"></i> Aud Off:
-                              <?php if ($waveNum === 1): ?><i class="bi bi-star-fill text-warning"></i><?php endif; ?>
-                            </span>
-                            <span class="price-value">Rp <?= number_format((float)($wave['audience_fee_offline'] ?? 0), 0, ',', '.') ?></span>
-                          </div>
-                        <?php endif; ?>
-                      </div>
-                    </div>
-                    <?php endif; ?>
                   </div>
+                  <?php endforeach; ?>
                 </div>
-                <?php endforeach; ?>
               </div>
               <?php else: ?>
-              <div class="text-center py-3">
-                <i class="bi bi-calendar-x text-muted" style="font-size:2rem"></i>
-                <p class="text-muted small mb-2">Belum ada gelombang</p>
-                <button class="btn btn-sm btn-primary" onclick="editWaves(<?= $id ?>)">
-                  <i class="bi bi-plus"></i> Atur Gelombang
-                </button>
+              <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                Gelombang belum diatur. Klik "Atur Gelombang" untuk mengatur.
               </div>
               <?php endif; ?>
 
-              <!-- Quick Stats -->
-              <div class="quick-stats">
-                <div class="row g-2 text-center">
-                  <div class="col-3">
-                    <div class="quick-stat-item">
-                      <div class="stat-value text-primary"><?= (int)($event['total_registrations'] ?? 0) ?></div>
-                      <small>Total</small>
-                    </div>
-                  </div>
-                  <div class="col-3">
-                    <div class="quick-stat-item">
-                      <div class="stat-value text-success"><?= (int)($event['verified_registrations'] ?? 0) ?></div>
-                      <small>Verified</small>
-                    </div>
-                  </div>
-                  <div class="col-3">
-                    <div class="quick-stat-item">
-                      <div class="stat-value text-info"><?= (int)($event['total_abstracts'] ?? 0) ?></div>
-                      <small>Abstrak</small>
-                    </div>
-                  </div>
-                  <div class="col-3">
-                    <div class="quick-stat-item">
-                      <div class="stat-value text-warning"><?= (int)($event['present_count'] ?? 0) ?></div>
-                      <small>Hadir</small>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Revenue -->
+              <!-- Revenue Badge -->
               <div class="revenue-badge">
-                <i class="bi bi-cash-coin me-2"></i>
-                <strong>Rp <?= number_format((float)($event['total_revenue'] ?? 0), 0, ',', '.') ?></strong>
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <i class="bi bi-currency-dollar me-1"></i>
+                    <small>Total Revenue</small>
+                  </div>
+                  <strong>Rp <?= number_format((float)($event['total_revenue'] ?? 0), 0, ',', '.') ?></strong>
+                </div>
               </div>
             </div>
           </div>
         </div>
         <?php endforeach; 
         else: ?>
-          <div class="col-12">
-            <div class="empty-state">
-              <i class="bi bi-calendar-x"></i>
-              <h5>Belum Ada Event</h5>
-              <p class="text-muted">Mulai buat event pertama Anda</p>
-              <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#addEventModal">
-                <i class="bi bi-plus-lg me-2"></i>Buat Event
-              </button>
-            </div>
+        <div class="col-12">
+          <div class="empty-state">
+            <i class="bi bi-calendar-x"></i>
+            <h5>Belum Ada Event</h5>
+            <p>Mulai dengan membuat event baru untuk sistem SNIA Anda</p>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEventModal">
+              <i class="bi bi-plus-lg me-2"></i>Tambah Event Pertama
+            </button>
           </div>
+        </div>
         <?php endif; ?>
       </div>
 
@@ -384,21 +457,23 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-calendar-plus me-2"></i>Tambah Event Baru</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Tambah Event Baru</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <form id="addEventForm">
         <?= csrf_field() ?>
         <div class="modal-body">
-          
           <div class="mb-3">
             <label class="form-label">Judul Event <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" name="title" required placeholder="Contoh: Seminar Nasional 2025">
+            <input type="text" class="form-control" name="title" required 
+                   placeholder="Contoh: SNIA 2025 - Seminar Nasional Informatika">
+            <div class="invalid-feedback">Judul event minimal 5 karakter</div>
           </div>
 
           <div class="mb-3">
             <label class="form-label">Deskripsi</label>
-            <textarea class="form-control" name="description" rows="3" placeholder="Deskripsi singkat tentang event..."></textarea>
+            <textarea class="form-control" name="description" rows="3" 
+                      placeholder="Deskripsi singkat tentang event..."></textarea>
           </div>
 
           <div class="row">
@@ -409,7 +484,10 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
                 <option value="online">Online Saja</option>
                 <option value="offline">Offline Saja</option>
               </select>
-              <small class="text-muted">⚠️ Presenter hanya bisa offline</small>
+              <small class="text-muted">
+                ✅ Presenter & Audience bisa pilih online/offline
+              </small>
+              <div class="invalid-feedback">Format event harus dipilih</div>
             </div>
             <div class="col-md-6 mb-3">
               <label class="form-label">Status</label>
@@ -426,37 +504,46 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
           <div class="row">
             <div class="col-md-6 mb-3">
               <label class="form-label">Tanggal Mulai <span class="text-danger">*</span></label>
-              <input type="date" class="form-control" name="event_date" id="eventStartDate" required min="<?= esc($minEventDate) ?>">
+              <input type="date" class="form-control" name="event_date" id="eventStartDate" 
+                     required min="<?= esc($minEventDate) ?>">
+              <div class="invalid-feedback">Tanggal mulai harus diisi</div>
             </div>
             <div class="col-md-6 mb-3">
               <label class="form-label">Waktu Mulai <span class="text-danger">*</span></label>
               <input type="time" class="form-control" name="event_time" required value="09:00">
+              <div class="invalid-feedback">Waktu mulai harus diisi</div>
             </div>
             <div class="col-md-6 mb-3">
               <label class="form-label">Tanggal Selesai <span class="text-danger">*</span></label>
               <input type="date" class="form-control" name="event_end_date" id="eventEndDate" required>
               <small class="text-muted">💡 Sama dengan tanggal mulai untuk event 1 hari</small>
+              <div class="invalid-feedback">Tanggal selesai harus diisi dan setelah tanggal mulai</div>
             </div>
             <div class="col-md-6 mb-3">
               <label class="form-label">Waktu Selesai <span class="text-danger">*</span></label>
               <input type="time" class="form-control" name="event_end_time" required value="17:00">
+              <div class="invalid-feedback">Waktu selesai harus diisi</div>
             </div>
           </div>
 
           <hr class="my-4">
           <h6 class="mb-3"><i class="bi bi-geo-alt me-2"></i>Lokasi & Link</h6>
 
-          <div class="conditional-field" id="locationRow">
+          <div class="conditional-field show" id="locationRow">
             <div class="mb-3">
               <label class="form-label">Lokasi Offline <span class="text-danger" id="locationRequired" style="display:none">*</span></label>
-              <input type="text" class="form-control" name="location" id="locationInput" placeholder="Contoh: Hotel Grand Indonesia, Jakarta">
+              <input type="text" class="form-control" name="location" id="locationInput" 
+                     placeholder="Contoh: Hotel Grand Indonesia, Jakarta">
+              <div class="invalid-feedback">Lokasi offline harus diisi sesuai format event</div>
             </div>
           </div>
 
-          <div class="conditional-field" id="zoomRow">
+          <div class="conditional-field show" id="zoomRow">
             <div class="mb-3">
               <label class="form-label">Link Zoom <span class="text-danger" id="zoomRequired" style="display:none">*</span></label>
-              <input type="url" class="form-control" name="zoom_link" id="zoomInput" placeholder="https://zoom.us/j/...">
+              <input type="url" class="form-control" name="zoom_link" id="zoomInput" 
+                     placeholder="https://zoom.us/j/...">
+              <div class="invalid-feedback">Link Zoom harus berupa URL yang valid (https://...)</div>
             </div>
           </div>
 
@@ -478,9 +565,9 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
             </div>
           </div>
 
-          <div class="alert alert-info small mb-0">
+          <div class="alert alert-info">
             <i class="bi bi-info-circle me-1"></i>
-            <strong>Langkah selanjutnya:</strong> Setelah event dibuat, atur 3 gelombang pendaftaran dengan harga via menu "Atur Gelombang"
+            <strong>Langkah selanjutnya:</strong> Setelah event dibuat, atur gelombang pendaftaran dengan harga via menu "Atur Gelombang"
           </div>
         </div>
 
@@ -499,23 +586,33 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
 <div class="modal fade" id="editWavesModal" tabindex="-1">
   <div class="modal-dialog modal-xl modal-fullscreen-md-down">
     <div class="modal-content">
-      <div class="modal-header bg-primary text-white">
-        <h5 class="modal-title"><i class="bi bi-calendar-range me-2"></i>Atur 3 Gelombang Pendaftaran</h5>
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-calendar-range me-2"></i>Atur Gelombang Pendaftaran</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-      <form id="editWavesForm" data-event-id="">
+      <form id="editWavesForm" data-event-id="" data-event-date="" data-event-end-date="">
         <?= csrf_field() ?>
         <div class="modal-body">
-          <div class="alert alert-warning">
-            <strong><i class="bi bi-exclamation-triangle me-2"></i>Aturan Early Bird:</strong>
+          <div class="alert alert-info">
+            <strong><i class="bi bi-info-circle me-2"></i>Aturan:</strong>
             <ul class="mb-0 mt-2">
-              <li><strong>Gelombang 1 Offline</strong> = Early Bird (harga termurah atau sama)</li>
-              <li><strong>Gelombang 2-3</strong> = Harga normal/naik</li>
-              <li><strong>Presenter</strong> = Hanya offline (online diisi 0)</li>
-              <li><strong>Online</strong> = Tidak ada Early Bird</li>
+              <li><strong>Harga TIDAK BOLEH 0</strong> = Semua harga harus diisi</li>
+              <li><strong>Gelombang 1 Offline</strong> = Early Bird (harga termurah)</li>
+              <li><strong>Gelombang 2+</strong> = Harga HARUS NAIK dari gelombang sebelumnya</li>
+              <li><strong>Tanggal:</strong> Tidak boleh overlap antar gelombang & harus sebelum event dimulai</li>
+              <li><strong>Presenter & Audience</strong> = Bisa pilih online/offline</li>
+              <li><strong>Format harga:</strong> Otomatis diformat dengan titik (contoh: 150.000)</li>
             </ul>
           </div>
-          <div id="wavesFormContent"></div>
+          
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0">Daftar Gelombang</h6>
+            <button type="button" class="btn btn-success btn-sm" onclick="addWaveRow()">
+              <i class="bi bi-plus-lg me-1"></i>Tambah Gelombang
+            </button>
+          </div>
+          
+          <div id="wavesContainer"></div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
@@ -534,7 +631,7 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit Event</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <form id="editEventForm" data-event-id="">
         <?= csrf_field() ?>
@@ -552,905 +649,829 @@ $minEventDate = Time::now($tz)->addDays(1)->toDateString();
 
 <?= $this->include('partials/footer') ?>
 
-<style>
-/* ============================================
-   MODERN BLUE EVENT MANAGER - ELEGANT & CLEAN
-   ============================================ */
-
-:root {
-  --primary: #2563eb;
-  --primary-dark: #1e40af;
-  --primary-light: #3b82f6;
-  --accent: #60a5fa;
-  --bg-main: #f8fafc;
-  --bg-card: #ffffff;
-  --text-main: #1e293b;
-  --text-muted: #64748b;
-  --border: #e2e8f0;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --info: #06b6d4;
-  --danger: #ef4444;
-  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-}
-
-body {
-  background: var(--bg-main);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  color: var(--text-main);
-}
-
-/* ============================================
-   HEADER SECTION
-   ============================================ */
-
-.header-section {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-  padding: 2rem;
-  border-radius: 16px;
-  box-shadow: var(--shadow-md);
-}
-
-.header-section h3 {
-  color: white;
-  font-weight: 600;
-  font-size: 1.75rem;
-  margin: 0;
-}
-
-.header-section small {
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 0.875rem;
-}
-
-.header-section .btn-primary {
-  background: white;
-  color: var(--primary);
-  border: none;
-  padding: 0.625rem 1.5rem;
-  border-radius: 10px;
-  font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: all 0.3s ease;
-}
-
-.header-section .btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  background: #f8fafc;
-  color: var(--primary-dark);
-}
-
-/* ============================================
-   STAT CARDS
-   ============================================ */
-
-.stat-card {
-  background: white;
-  border-radius: 12px;
-  padding: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border);
-  transition: all 0.3s ease;
-  height: 100%;
-}
-
-.stat-card:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
-}
-
-.stat-card .stat-icon {
-  font-size: 2.5rem;
-  opacity: 0.9;
-  flex-shrink: 0;
-}
-
-.stat-card h4 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin: 0;
-  color: var(--text-main);
-}
-
-.stat-card small {
-  font-size: 0.813rem;
-  color: var(--text-muted);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.revenue-text {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-main);
-}
-
-/* ============================================
-   EVENT CARD
-   ============================================ */
-
-.event-card {
-  background: white;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border);
-  transition: all 0.3s ease;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.event-card:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-4px);
-  border-color: var(--accent);
-}
-
-/* Event Card Header */
-.event-card-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: linear-gradient(to bottom, #ffffff, #f8fafc);
-}
-
-.event-title {
-  color: var(--primary);
-  font-weight: 600;
-  font-size: 1.125rem;
-  line-height: 1.4;
-  margin: 0;
-}
-
-.event-meta {
-  font-size: 0.813rem;
-  color: var(--text-muted);
-  margin-top: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.event-meta i {
-  color: var(--primary);
-  font-size: 0.875rem;
-}
-
-/* Badges */
-.badge {
-  padding: 0.375rem 0.75rem;
-  border-radius: 6px;
-  font-weight: 500;
-  font-size: 0.75rem;
-  letter-spacing: 0.3px;
-}
-
-/* Dropdown Button */
-.event-card-header .btn-light {
-  background: white;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.375rem 0.625rem;
-  transition: all 0.2s;
-}
-
-.event-card-header .btn-light:hover {
-  background: var(--bg-main);
-  border-color: var(--primary);
-}
-
-/* Event Card Body */
-.event-card-body {
-  padding: 1.5rem;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-/* ============================================
-   PARTICIPANT STATS
-   ============================================ */
-
-.participant-stats {
-  padding-bottom: 1.25rem;
-  border-bottom: 2px solid var(--bg-main);
-}
-
-.stat-box {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  padding: 1rem;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  text-align: center;
-  transition: all 0.2s;
-}
-
-.stat-box:hover {
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  border-color: var(--accent);
-}
-
-.stat-box i {
-  font-size: 1.75rem;
-  color: var(--primary);
-  margin-bottom: 0.5rem;
-  display: block;
-}
-
-.stat-number {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--primary);
-  line-height: 1;
-  margin: 0.25rem 0;
-}
-
-.stat-label {
-  font-size: 0.813rem;
-  color: var(--text-muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.stat-box small {
-  font-size: 0.688rem;
-  color: var(--text-muted);
-}
-
-/* ============================================
-   WAVES SECTION
-   ============================================ */
-
-.waves-section {
-  padding-bottom: 1.25rem;
-  border-bottom: 2px solid var(--bg-main);
-}
-
-.waves-section strong {
-  font-size: 0.875rem;
-  color: var(--text-main);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.waves-section .btn-outline-primary {
-  border-color: var(--primary);
-  color: var(--primary);
-  padding: 0.25rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
-}
-
-.waves-section .btn-outline-primary:hover {
-  background: var(--primary);
-  color: white;
-}
-
-.wave-item {
-  background: white;
-  padding: 1rem;
-  border-radius: 10px;
-  margin-bottom: 0.75rem;
-  border: 2px solid var(--border);
-  border-left: 4px solid var(--text-muted);
-  transition: all 0.3s ease;
-}
-
-.wave-item:hover {
-  border-left-color: var(--primary);
-  box-shadow: var(--shadow-sm);
-}
-
-.wave-item.active {
-  background: linear-gradient(to right, #dbeafe, #eff6ff);
-  border-color: var(--primary);
-  border-left-color: var(--primary);
-  border-left-width: 4px;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.wave-item.closed {
-  opacity: 0.6;
-  background: #f8fafc;
-}
-
-.wave-item.pending {
-  background: #fef3c7;
-  border-left-color: var(--warning);
-}
-
-.wave-item strong {
-  color: var(--primary);
-  font-size: 0.938rem;
-}
-
-/* Price Display */
-.price-display {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.price-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.5rem;
-  background: #f8fafc;
-  border-radius: 4px;
-  font-size: 0.75rem;
-}
-
-.price-row.early-bird {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border: 1px solid var(--warning);
-  font-weight: 600;
-}
-
-.price-label {
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.price-row.early-bird .price-label {
-  color: #92400e;
-}
-
-.price-value {
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-/* ============================================
-   QUICK STATS
-   ============================================ */
-
-.quick-stats {
-  padding: 1rem;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-radius: 10px;
-  border: 1px solid var(--border);
-}
-
-.quick-stat-item {
-  text-align: center;
-}
-
-.quick-stat-item .stat-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1;
-  margin-bottom: 0.25rem;
-}
-
-.quick-stat-item small {
-  font-size: 0.688rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-
-/* ============================================
-   REVENUE BADGE
-   ============================================ */
-
-.revenue-badge {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-  color: white;
-  padding: 1rem;
-  border-radius: 10px;
-  text-align: center;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-}
-
-.revenue-badge i {
-  font-size: 1.25rem;
-}
-
-.revenue-badge strong {
-  font-size: 1.125rem;
-  font-weight: 700;
-}
-
-/* ============================================
-   EMPTY STATE
-   ============================================ */
-
-.empty-state {
-  text-align: center;
-  padding: 4rem 2rem;
-  background: white;
-  border-radius: 16px;
-  border: 2px dashed var(--border);
-}
-
-.empty-state i {
-  font-size: 4rem;
-  color: var(--accent);
-  opacity: 0.5;
-  margin-bottom: 1rem;
-}
-
-.empty-state h5 {
-  color: var(--text-muted);
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-.empty-state p {
-  color: var(--text-muted);
-  margin-bottom: 1rem;
-}
-
-.empty-state .btn-primary {
-  background: var(--primary);
-  border: none;
-  padding: 0.75rem 2rem;
-  border-radius: 10px;
-  font-weight: 500;
-  box-shadow: var(--shadow-md);
-}
-
-.empty-state .btn-primary:hover {
-  background: var(--primary-dark);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-}
-
-/* ============================================
-   MODALS
-   ============================================ */
-
-.modal-header {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-  color: white;
-  border: none;
-  padding: 1.5rem;
-}
-
-.modal-header .modal-title {
-  font-weight: 600;
-  font-size: 1.25rem;
-}
-
-.modal-header .btn-close,
-.modal-header .btn-close-white {
-  opacity: 1;
-  filter: brightness(0) invert(1);
-}
-
-.modal-body {
-  padding: 1.5rem;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.modal-footer {
-  border-top: 1px solid var(--border);
-  padding: 1rem 1.5rem;
-  background: var(--bg-main);
-}
-
-/* Form Elements */
-.form-label {
-  font-weight: 600;
-  color: var(--text-main);
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.form-control,
-.form-select {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.625rem 0.875rem;
-  font-size: 0.938rem;
-  transition: all 0.2s;
-}
-
-.form-control:focus,
-.form-select:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.alert {
-  border-radius: 10px;
-  border: none;
-  padding: 1rem;
-}
-
-.alert-info {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.alert-warning {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-/* Wave Form Card */
-.wave-form-card {
-  background: white;
-  border: 2px solid var(--border);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1.25rem;
-  transition: all 0.3s;
-}
-
-.wave-form-card:hover {
-  border-color: var(--primary);
-  box-shadow: var(--shadow-md);
-}
-
-.wave-form-card h6 {
-  color: var(--primary);
-  font-weight: 600;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 2px solid var(--bg-main);
-  font-size: 1rem;
-}
-
-.wave-form-card .badge {
-  vertical-align: middle;
-}
-
-.wave-form-card .border-success {
-  border-color: var(--success) !important;
-  border-width: 2px !important;
-}
-
-/* ============================================
-   BUTTONS
-   ============================================ */
-
-.btn {
-  border-radius: 8px;
-  padding: 0.625rem 1.25rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  border: none;
-}
-
-.btn-primary {
-  background: var(--primary);
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
-}
-
-.btn-primary:hover {
-  background: var(--primary-dark);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.4);
-}
-
-.btn-secondary {
-  background: #e2e8f0;
-  color: var(--text-main);
-}
-
-.btn-secondary:hover {
-  background: #cbd5e1;
-}
-
-.btn-sm {
-  padding: 0.375rem 0.875rem;
-  font-size: 0.875rem;
-}
-
-/* ============================================
-   DROPDOWN
-   ============================================ */
-
-.dropdown-menu {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-lg);
-  padding: 0.5rem;
-}
-
-.dropdown-item {
-  border-radius: 6px;
-  padding: 0.625rem 1rem;
-  font-size: 0.875rem;
-  transition: all 0.2s;
-}
-
-.dropdown-item:hover {
-  background: var(--bg-main);
-  color: var(--primary);
-}
-
-.dropdown-item.text-danger:hover {
-  background: #fee2e2;
-  color: var(--danger);
-}
-
-.dropdown-divider {
-  margin: 0.5rem 0;
-  border-color: var(--border);
-}
-
-/* ============================================
-   CONDITIONAL FIELDS
-   ============================================ */
-
-.conditional-field {
-  display: none;
-  animation: fadeIn 0.3s ease;
-}
-
-.conditional-field.show {
-  display: block;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ============================================
-   RESPONSIVE
-   ============================================ */
-
-@media (max-width: 768px) {
-  .header-section {
-    padding: 1.5rem;
-    border-radius: 12px;
-  }
-
-  .header-section h3 {
-    font-size: 1.5rem;
-  }
-
-  .stat-card {
-    padding: 1.25rem;
-  }
-
-  .stat-card h4 {
-    font-size: 1.5rem;
-  }
-
-  .stat-card .stat-icon {
-    font-size: 2rem;
-  }
-
-  .event-card {
-    margin-bottom: 1rem;
-  }
-
-  .event-title {
-    font-size: 1rem;
-  }
-
-  .stat-number {
-    font-size: 1.5rem;
-  }
-
-  .revenue-text {
-    font-size: 0.875rem;
-  }
-
-  .price-display {
-    width: 100%;
-  }
-
-  .wave-item {
-    flex-direction: column;
-  }
-}
-
-/* ============================================
-   UTILITIES
-   ============================================ */
-
-.text-primary { color: var(--primary) !important; }
-.text-muted { color: var(--text-muted) !important; }
-.bg-primary { background: var(--primary) !important; }
-.border-primary { border-color: var(--primary) !important; }
-
-/* Smooth Transitions */
-* {
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-</style>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
-const csrfToken = '<?= csrf_hash() ?>';
+let currentEventId = null;
+let currentEventDate = null;
+let currentEventEndDate = null;
 
-document.addEventListener('DOMContentLoaded', function() {
-  try {
-    setupFormHandlers();
-    setupDateValidation();
-  } catch (error) {
-    console.error('Error initializing event page:', error);
-  }
-});
+// ===== HELPER FUNCTIONS =====
+function getCsrfToken() {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  return meta ? meta.content : '';
+}
 
 async function fetchJSON(url, options = {}) {
-  const res = await fetch(url, options);
-  if (!res.ok) throw new Error('Network error');
-  return res.json();
-}
-
-function setupFormHandlers() {
-  const addForm = document.getElementById('addEventForm');
-  const editForm = document.getElementById('editEventForm');
-  const wavesForm = document.getElementById('editWavesForm');
-  const formatSelect = document.getElementById('eventFormat');
-
-  if (addForm) {
-    addForm.addEventListener('submit', function(e) {
-      e.preventDefault();
-      if (validateEventDates()) {
-        submitForm(this, '<?= base_url("admin/event/create") ?>');
-      }
-    });
-  }
-
-  if (editForm) {
-    editForm.addEventListener('submit', function(e) {
-      e.preventDefault();
-      const eventId = this.dataset.eventId;
-      if (eventId && validateEventDates('edit')) {
-        submitForm(this, '<?= base_url("admin/event/update") ?>/' + eventId);
-      }
-    });
-  }
-
-  if (wavesForm) {
-    wavesForm.addEventListener('submit', function(e) {
-      e.preventDefault();
-      const eventId = this.dataset.eventId;
-      if (eventId) {
-        submitWaves(this, eventId);
-      }
-    });
-  }
-
-  if (formatSelect) {
-    formatSelect.addEventListener('change', handleFormatChange);
-    // Trigger initial setup
-    handleFormatChange();
+  try {
+    const response = await fetch(url, options);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Fetch error:', error);
+    throw error;
   }
 }
 
-function setupDateValidation() {
-  const startDate = document.getElementById('eventStartDate');
-  const endDate = document.getElementById('eventEndDate');
-
-  if (startDate && endDate) {
-    startDate.addEventListener('change', function() {
-      endDate.min = this.value;
-      if (endDate.value && endDate.value < this.value) {
-        endDate.value = this.value;
-      }
-    });
+// ✅ Format number dengan titik sebagai pemisah ribuan
+function formatNumber(num) {
+  if (typeof num === 'string') {
+    num = num.replace(/\./g, '');
   }
+  num = parseFloat(num) || 0;
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
-function validateEventDates(formType = 'add') {
-  const startDate = document.querySelector('[name="event_date"]')?.value;
-  const endDate = document.querySelector('[name="event_end_date"]')?.value;
+// ✅ Parse formatted number
+function parseFormattedNumber(str) {
+  if (!str) return 0;
+  const cleaned = str.toString().replace(/\./g, '');
+  return parseFloat(cleaned) || 0;
+}
 
-  if (!startDate || !endDate) {
-    Swal.fire('Error!', 'Tanggal mulai dan selesai harus diisi', 'error');
+// ✅ Validate if input is valid number (TIDAK BOLEH 0)
+function isValidNumber(str) {
+  if (!str) return false;
+  const cleaned = str.toString().replace(/\./g, '');
+  const num = parseFloat(cleaned);
+  return !isNaN(num) && cleaned.trim() !== '' && num > 0; // 
+}
+
+// ✅ Validate URL
+function isValidURL(string) {
+  try {
+    new URL(string);
+    return true;
+  } catch (_) {
     return false;
   }
+}
 
-  if (new Date(endDate) < new Date(startDate)) {
-    Swal.fire('Error!', 'Tanggal selesai harus setelah atau sama dengan tanggal mulai', 'error');
+// ✅ Auto-format input
+function formatCurrencyInput(input) {
+  const cursorPos = input.selectionStart;
+  const oldValue = input.value;
+  let value = input.value.replace(/[^\d]/g, '');
+  
+  if (value) {
+    const formatted = formatNumber(value);
+    input.value = formatted;
+    const dotsAdded = formatted.length - oldValue.replace(/\./g, '').length;
+    const newCursorPos = cursorPos + dotsAdded;
+    input.setSelectionRange(newCursorPos, newCursorPos);
+  }
+  
+  input.classList.remove('is-invalid');
+}
+
+// ✅ Validate price input (HARUS > 0, TIDAK BOLEH 0)
+function validatePriceInput(input) {
+  const value = input.value.trim();
+  
+  // ✅ Validasi: Harus diisi
+  if (!value || !isValidNumber(value)) {
+    input.classList.add('is-invalid');
+    const feedback = input.parentElement.parentElement.querySelector('.invalid-feedback');
+    if (feedback) {
+      feedback.textContent = 'Harga harus diisi dan tidak boleh 0';
+    }
     return false;
   }
-
+  
+  const num = parseFormattedNumber(value);
+  
+  // ✅ Validasi: Tidak boleh 0 atau negatif
+  if (num <= 0) {
+    input.classList.add('is-invalid');
+    const feedback = input.parentElement.parentElement.querySelector('.invalid-feedback');
+    if (feedback) {
+      feedback.textContent = 'Harga tidak boleh 0 atau negatif (minimal Rp 1.000)';
+    }
+    return false;
+  }
+  
+  // ✅ Validasi: Minimal Rp 1.000
+  if (num < 1000) {
+    input.classList.add('is-invalid');
+    const feedback = input.parentElement.parentElement.querySelector('.invalid-feedback');
+    if (feedback) {
+      feedback.textContent = 'Harus naik dari gelombang sebelumnnya';
+    }
+    return false;
+  }
+  
+  input.classList.remove('is-invalid');
   return true;
 }
 
-function handleFormatChange() {
-  const formatSelect = document.getElementById('eventFormat');
-  if (!formatSelect) return;
+// ✅ Real-time validation untuk add event form
+function validateAddEventForm() {
+  const form = document.getElementById('addEventForm');
+  if (!form) return true;
   
-  const format = formatSelect.value;
-  if (!format) return;
+  let isValid = true;
+  let errors = [];
+  
+  // Clear previous warnings
+  clearAddEventWarning();
+  
+  // 1. Title validation
+  const title = form.querySelector('input[name="title"]');
+  if (title) {
+    if (!title.value.trim()) {
+      title.classList.add('is-invalid');
+      errors.push('Judul event harus diisi');
+      isValid = false;
+    } else if (title.value.trim().length < 5) {
+      title.classList.add('is-invalid');
+      errors.push('Judul event minimal 5 karakter');
+      isValid = false;
+    } else {
+      title.classList.remove('is-invalid');
+    }
+  }
+  
+  // 2. Format validation
+  const format = form.querySelector('select[name="format"]');
+  if (format && !format.value) {
+    format.classList.add('is-invalid');
+    errors.push('Format event harus dipilih');
+    isValid = false;
+  } else if (format) {
+    format.classList.remove('is-invalid');
+  }
+  
+  // 3. Event dates validation
+  const startDate = form.querySelector('input[name="event_date"]');
+  const startTime = form.querySelector('input[name="event_time"]');
+  const endDate = form.querySelector('input[name="event_end_date"]');
+  const endTime = form.querySelector('input[name="event_end_time"]');
+  
+  if (startDate && !startDate.value) {
+    startDate.classList.add('is-invalid');
+    errors.push('Tanggal mulai event harus diisi');
+    isValid = false;
+  } else if (startDate) {
+    startDate.classList.remove('is-invalid');
+  }
+  
+  if (startTime && !startTime.value) {
+    startTime.classList.add('is-invalid');
+    errors.push('Waktu mulai event harus diisi');
+    isValid = false;
+  } else if (startTime) {
+    startTime.classList.remove('is-invalid');
+  }
+  
+  if (endDate && !endDate.value) {
+    endDate.classList.add('is-invalid');
+    errors.push('Tanggal selesai event harus diisi');
+    isValid = false;
+  } else if (endDate) {
+    endDate.classList.remove('is-invalid');
+  }
+  
+  if (endTime && !endTime.value) {
+    endTime.classList.add('is-invalid');
+    errors.push('Waktu selesai event harus diisi');
+    isValid = false;
+  } else if (endTime) {
+    endTime.classList.remove('is-invalid');
+  }
+  
+  // Validate datetime logic
+  if (startDate && startTime && endDate && endTime && 
+      startDate.value && startTime.value && endDate.value && endTime.value) {
+    const start = new Date(`${startDate.value}T${startTime.value}`);
+    const end = new Date(`${endDate.value}T${endTime.value}`);
+    
+    if (end <= start) {
+      endDate.classList.add('is-invalid');
+      endTime.classList.add('is-invalid');
+      errors.push('Waktu selesai harus setelah waktu mulai');
+      isValid = false;
+      showAddEventWarning('danger', ' Waktu selesai event harus SETELAH waktu mulai!');
+    } else {
+      endDate.classList.remove('is-invalid');
+      endTime.classList.remove('is-invalid');
+      
+      // Calculate and show duration
+      const durationMs = end - start;
+      const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
+      const durationDays = Math.floor(durationHours / 24);
+      const remainingHours = durationHours % 24;
+      
+      if (durationDays > 0) {
+        showAddEventWarning('info', ` Durasi event: ${durationDays} hari ${remainingHours} jam`);
+      } else {
+        showAddEventWarning('info', `Durasi event: ${durationHours} jam`);
+      }
+    }
+  }
+  
+  // 4. Location/Zoom validation based on format
+  if (format && format.value) {
+    const location = form.querySelector('input[name="location"]');
+    const zoomLink = form.querySelector('input[name="zoom_link"]');
+    
+    if (format.value === 'offline') {
+      // Offline: location required
+      if (location && !location.value.trim()) {
+        location.classList.add('is-invalid');
+        errors.push('Lokasi offline harus diisi untuk format Offline');
+        isValid = false;
+      } else if (location) {
+        location.classList.remove('is-invalid');
+      }
+    } else if (format.value === 'online') {
+      // Online: zoom link required
+      if (zoomLink && !zoomLink.value.trim()) {
+        zoomLink.classList.add('is-invalid');
+        errors.push('Link Zoom harus diisi untuk format Online');
+        isValid = false;
+      } else if (zoomLink && zoomLink.value.trim()) {
+        if (!isValidURL(zoomLink.value)) {
+          zoomLink.classList.add('is-invalid');
+          errors.push('Link Zoom tidak valid (harus URL lengkap https://...)');
+          isValid = false;
+        } else {
+          zoomLink.classList.remove('is-invalid');
+        }
+      }
+    } else if (format.value === 'both') {
+      // Hybrid: both should be filled (recommended)
+      if (location && !location.value.trim()) {
+        location.classList.add('is-invalid');
+        errors.push('Lokasi offline direkomendasikan untuk format Hybrid');
+        isValid = false;
+      } else if (location) {
+        location.classList.remove('is-invalid');
+      }
+      
+      if (zoomLink && !zoomLink.value.trim()) {
+        zoomLink.classList.add('is-invalid');
+        errors.push('Link Zoom direkomendasikan untuk format Hybrid');
+        isValid = false;
+      } else if (zoomLink && zoomLink.value.trim()) {
+        if (!isValidURL(zoomLink.value)) {
+          zoomLink.classList.add('is-invalid');
+          errors.push('Link Zoom tidak valid (harus URL lengkap https://...)');
+          isValid = false;
+        } else {
+          zoomLink.classList.remove('is-invalid');
+        }
+      }
+    }
+  }
+  
+  return isValid;
+}
 
-  const locationRow = document.getElementById('locationRow');
-  const zoomRow = document.getElementById('zoomRow');
-  const locInput = document.getElementById('locationInput');
-  const zoomInput = document.getElementById('zoomInput');
-  const locStar = document.getElementById('locationRequired');
-  const zoomStar = document.getElementById('zoomRequired');
+// Show warning in add event modal
+function showAddEventWarning(type, message) {
+  let warningContainer = document.getElementById('addEventWarning');
+  
+  if (!warningContainer) {
+    warningContainer = document.createElement('div');
+    warningContainer.id = 'addEventWarning';
+    warningContainer.className = 'mb-3';
+    
+    const modalBody = document.querySelector('#addEventModal .modal-body');
+    if (modalBody) {
+      modalBody.insertBefore(warningContainer, modalBody.firstChild);
+    }
+  }
+  
+  const alertClass = {
+    'danger': 'alert-danger',
+    'warning': 'alert-warning',
+    'info': 'alert-info',
+    'success': 'alert-success'
+  }[type] || 'alert-info';
+  
+  const icon = {
+    'danger': 'bi-exclamation-triangle-fill',
+    'warning': 'bi-exclamation-circle-fill',
+    'info': 'bi-info-circle-fill',
+    'success': 'bi-check-circle-fill'
+  }[type] || 'bi-info-circle-fill';
+  
+  warningContainer.innerHTML = `
+    <div class="alert ${alertClass} d-flex align-items-center mb-0 py-2" role="alert">
+      <i class="bi ${icon} me-2"></i>
+      <div class="flex-grow-1">${message}</div>
+    </div>
+  `;
+  warningContainer.style.display = 'block';
+}
 
-  // Remove 'show' class and required attributes
-  if (locationRow) locationRow.classList.remove('show');
-  if (zoomRow) zoomRow.classList.remove('show');
-  if (locInput) locInput.removeAttribute('required');
-  if (zoomInput) zoomInput.removeAttribute('required');
-  if (locStar) locStar.style.display = 'none';
-  if (zoomStar) zoomStar.style.display = 'none';
-
-  // Apply based on format
-  if (format === 'offline') {
-    if (locationRow) locationRow.classList.add('show');
-    if (locInput) locInput.setAttribute('required', 'required');
-    if (locStar) locStar.style.display = 'inline';
-  } else if (format === 'online') {
-    if (zoomRow) zoomRow.classList.add('show');
-    if (zoomInput) zoomInput.setAttribute('required', 'required');
-    if (zoomStar) zoomStar.style.display = 'inline';
-  } else if (format === 'both') {
-    if (locationRow) locationRow.classList.add('show');
-    if (zoomRow) zoomRow.classList.add('show');
-    if (locInput) locInput.setAttribute('required', 'required');
-    if (zoomInput) zoomInput.setAttribute('required', 'required');
-    if (locStar) locStar.style.display = 'inline';
-    if (zoomStar) zoomStar.style.display = 'inline';
+// ✅ Clear warning
+function clearAddEventWarning() {
+  const warningContainer = document.getElementById('addEventWarning');
+  if (warningContainer) {
+    warningContainer.style.display = 'none';
+    warningContainer.innerHTML = '';
   }
 }
 
-function submitForm(form, url) {
-  const btn = form.querySelector('button[type="submit"]');
-  if (!btn) return;
+// Attach real-time validation to add event form inputs
+document.addEventListener('DOMContentLoaded', function() {
+  const addEventForm = document.getElementById('addEventForm');
+  if (addEventForm) {
+    // Title validation
+    const titleInput = addEventForm.querySelector('input[name="title"]');
+    if (titleInput) {
+      titleInput.addEventListener('blur', function() {
+        validateAddEventForm();
+      });
+      titleInput.addEventListener('input', function() {
+        if (this.value.trim().length >= 5) {
+          this.classList.remove('is-invalid');
+        }
+      });
+    }
+    
+    // Format validation
+    const formatSelect = addEventForm.querySelector('select[name="format"]');
+    if (formatSelect) {
+      formatSelect.addEventListener('change', function() {
+        validateAddEventForm();
+      });
+    }
+    
+    // Date/time validations
+    ['event_date', 'event_time', 'event_end_date', 'event_end_time'].forEach(fieldName => {
+      const input = addEventForm.querySelector(`input[name="${fieldName}"]`);
+      if (input) {
+        input.addEventListener('change', function() {
+          validateAddEventForm();
+        });
+        input.addEventListener('blur', function() {
+          if (!this.value) {
+            this.classList.add('is-invalid');
+          }
+        });
+        input.addEventListener('focus', function() {
+          this.classList.remove('is-invalid');
+        });
+      }
+    });
+    
+    // Location validation
+    const locationInput = addEventForm.querySelector('input[name="location"]');
+    if (locationInput) {
+      locationInput.addEventListener('blur', function() {
+        validateAddEventForm();
+      });
+      locationInput.addEventListener('focus', function() {
+        this.classList.remove('is-invalid');
+      });
+    }
+    
+    // Zoom link validation
+    const zoomInput = addEventForm.querySelector('input[name="zoom_link"]');
+    if (zoomInput) {
+      zoomInput.addEventListener('blur', function() {
+        validateAddEventForm();
+      });
+      zoomInput.addEventListener('input', function() {
+        if (isValidURL(this.value)) {
+          this.classList.remove('is-invalid');
+        }
+      });
+      zoomInput.addEventListener('focus', function() {
+        this.classList.remove('is-invalid');
+      });
+    }
+  }
+});
+
+// Validasi dan tampilkan warning untuk harga 
+function validateAndShowPriceWarning(input) {
+  const waveCard = input.closest('.wave-form-card');
+  if (!waveCard) return;
   
+  const waveNum = parseInt(waveCard.id.split('-')[1]);
+  const fieldName = input.name.match(/\[([^\]]+)\]$/)?.[1];
+  
+  // Clear previous warning
+  const existingWarning = input.parentElement.querySelector('.price-warning');
+  if (existingWarning) {
+    existingWarning.remove();
+  }
+  
+  const currentPrice = parseFormattedNumber(input.value);
+  
+  // CEK HARGA 0 DULU!
+  if (currentPrice === 0) {
+    const warningHTML = `<span class="price-warning zero-price">
+      <i class="bi bi-x-circle-fill"></i> 
+      Harga TIDAK BOLEH 0!
+    </span>`;
+    input.classList.add('is-invalid');
+    waveCard.classList.add('has-error');
+    input.parentElement.insertAdjacentHTML('afterend', warningHTML);
+    return;
+  }
+  
+  if (currentPrice < 1000) {
+    const warningHTML = `<span class="price-warning zero-price">
+      <i class="bi bi-exclamation-triangle-fill"></i> 
+      Harus naik dari gelombang sebelumnnya!
+    </span>`;
+    input.classList.add('is-invalid');
+    waveCard.classList.add('has-error');
+    input.parentElement.insertAdjacentHTML('afterend', warningHTML);
+    return;
+  }
+  
+  // Jika gelombang 1, skip comparison (tapi tetap cek Early Bird)
+  if (waveNum === 1) {
+    validateEarlyBird();
+    return;
+  }
+  
+  // Get previous wave price
+  const prevWave = document.getElementById(`wave-${waveNum - 1}`);
+  if (!prevWave) return;
+  
+  const prevInput = prevWave.querySelector(`input[name*="[${fieldName}]"]`);
+  if (!prevInput) return;
+  
+  const prevPrice = parseFormattedNumber(prevInput.value);
+  
+  //  CEK HARGA GELOMBANG SEBELUMNYA JUGA HARUS > 0
+  if (prevPrice === 0) {
+    const warningHTML = `<span class="price-warning zero-price">
+      <i class="bi bi-exclamation-triangle-fill"></i> 
+      Gelombang ${waveNum-1} masih 0!
+    </span>`;
+    input.classList.add('is-invalid');
+    waveCard.classList.add('has-error');
+    input.parentElement.insertAdjacentHTML('afterend', warningHTML);
+    return;
+  }
+  
+  let warningHTML = '';
+  
+  if (currentPrice < prevPrice) {
+    // HARGA TURUN - ERROR!
+    warningHTML = `<span class="price-warning price-drop">
+      <i class="bi bi-exclamation-triangle-fill"></i> 
+      Harga TURUN! Gel. ${waveNum-1}: Rp ${formatNumber(prevPrice)}
+    </span>`;
+    input.classList.add('is-invalid');
+    waveCard.classList.add('has-error');
+  } else if (currentPrice === prevPrice) {
+    // HARGA SAMA - WARNING!
+    warningHTML = `<span class="price-warning same-price">
+      <i class="bi bi-exclamation-circle-fill"></i> 
+      Harga SAMA dengan Gelombang ${waveNum-1}!
+    </span>`;
+    input.classList.add('is-invalid');
+    waveCard.classList.add('has-error');
+  } else {
+    // HARGA NAIK - OK!
+    const diff = currentPrice - prevPrice;
+    const diffPercent = ((diff / prevPrice) * 100).toFixed(1);
+    warningHTML = `<span class="price-warning price-increase">
+      <i class="bi bi-check-circle-fill"></i> 
+      +Rp ${formatNumber(diff)} (+${diffPercent}%)
+    </span>`;
+    input.classList.remove('is-invalid');
+  }
+  
+  input.parentElement.insertAdjacentHTML('afterend', warningHTML);
+  checkWaveHasErrors(waveNum);
+}
+
+// Check if wave has errors
+function checkWaveHasErrors(waveNum) {
+  const waveCard = document.getElementById(`wave-${waveNum}`);
+  if (!waveCard) return;
+  
+  const hasInvalid = waveCard.querySelector('.is-invalid');
+  if (!hasInvalid) {
+    waveCard.classList.remove('has-error');
+  }
+}
+
+// Validasi Early Bird (DENGAN CEK HARGA 0)
+function validateEarlyBird() {
+  const wave1 = document.getElementById('wave-1');
+  if (!wave1) return;
+  
+  const allWaves = document.querySelectorAll('.wave-form-card');
+  if (allWaves.length <= 1) return;
+  
+  // Clear previous warnings untuk wave 1
+  wave1.querySelectorAll('.price-warning').forEach(w => w.remove());
+  
+  const fields = ['presenter_fee_offline', 'audience_fee_offline'];
+  
+  fields.forEach(fieldName => {
+    const wave1Input = wave1.querySelector(`input[name*="[${fieldName}]"]`);
+    if (!wave1Input) return;
+    
+    const wave1Price = parseFormattedNumber(wave1Input.value);
+    
+    //  CEK HARGA 0
+    if (wave1Price === 0) {
+      wave1Input.classList.add('is-invalid');
+      wave1Input.parentElement.insertAdjacentHTML('afterend', `
+        <span class="price-warning zero-price">
+          <i class="bi bi-x-circle-fill"></i> 
+          Harga TIDAK BOLEH 0!
+        </span>
+      `);
+      wave1.classList.add('has-error');
+      return;
+    }
+    
+    if (wave1Price < 1000) {
+      wave1Input.classList.add('is-invalid');
+      wave1Input.parentElement.insertAdjacentHTML('afterend', `
+        <span class="price-warning zero-price">
+          <i class="bi bi-exclamation-triangle-fill"></i> 
+          Minimal Rp 50.000!
+        </span>
+      `);
+      wave1.classList.add('has-error');
+      return;
+    }
+    
+    // Check against all other waves
+    let isEarlyBird = true;
+    for (let i = 2; i <= allWaves.length; i++) {
+      const compareWave = document.getElementById(`wave-${i}`);
+      if (!compareWave) continue;
+      
+      const compareInput = compareWave.querySelector(`input[name*="[${fieldName}]"]`);
+      if (!compareInput) continue;
+      
+      const comparePrice = parseFormattedNumber(compareInput.value);
+      if (comparePrice === 0) continue;
+      
+      if (wave1Price >= comparePrice) {
+        isEarlyBird = false;
+        break;
+      }
+    }
+    
+    if (!isEarlyBird) {
+      wave1Input.classList.add('is-invalid');
+      wave1Input.parentElement.insertAdjacentHTML('afterend', `
+        <span class="price-warning price-drop">
+          <i class="bi bi-exclamation-triangle-fill"></i> 
+          EARLY BIRD gagal! Harus termurah
+        </span>
+      `);
+      wave1.classList.add('has-error');
+    } else {
+      wave1Input.classList.remove('is-invalid');
+      wave1Input.parentElement.insertAdjacentHTML('afterend', `
+        <span class="price-warning price-increase">
+          <i class="bi bi-star-fill"></i> Early Bird OK!
+        </span>
+      `);
+    }
+  });
+  
+  checkWaveHasErrors(1);
+}
+
+// Update date restrictions
+function updateDateRestrictions() {
+  const allWaves = document.querySelectorAll('.wave-form-card');
+  
+  allWaves.forEach((wave, index) => {
+    const waveNum = index + 1;
+    const startInput = wave.querySelector('.wave-start-date');
+    const endInput = wave.querySelector('.wave-end-date');
+    
+    if (!startInput || !endInput) return;
+    
+    // Set maximum date (harus sebelum event DIMULAI - bukan selesai)
+    if (currentEventDate) {
+      const eventStartDate = new Date(currentEventDate);
+      eventStartDate.setDate(eventStartDate.getDate() - 1); // 1 hari sebelum event dimulai
+      const maxDate = eventStartDate.toISOString().split('T')[0];
+      endInput.max = maxDate;
+      
+      // Format event date untuk display
+      const eventDisplayDate = new Date(currentEventDate).toLocaleDateString('id-ID', { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+      });
+      
+      // Add hint dengan info event multi-hari
+      let hint = endInput.parentElement.querySelector('.date-disabled-hint');
+      if (!hint) {
+        hint = document.createElement('div');
+        hint.className = 'date-disabled-hint';
+        endInput.parentElement.appendChild(hint);
+      }
+      
+      // Check if multi-day event
+      const isMultiDay = currentEventDate !== currentEventEndDate;
+      if (isMultiDay) {
+        const eventEndDisplayDate = new Date(currentEventEndDate).toLocaleDateString('id-ID', { 
+          day: 'numeric', 
+          month: 'short', 
+          year: 'numeric' 
+        });
+        hint.innerHTML = `<i class="bi bi-info-circle"></i> Maksimal ${maxDate} | Event: ${eventDisplayDate} - ${eventEndDisplayDate}`;
+      } else {
+        hint.innerHTML = `<i class="bi bi-info-circle"></i> Maksimal ${maxDate} | Event: ${eventDisplayDate}`;
+      }
+    }
+    
+    // Set minimum start date
+    if (waveNum > 1) {
+      const prevWave = document.getElementById(`wave-${waveNum - 1}`);
+      if (prevWave) {
+        const prevEndInput = prevWave.querySelector('.wave-end-date');
+        if (prevEndInput && prevEndInput.value) {
+          const prevEndDate = new Date(prevEndInput.value);
+          prevEndDate.setDate(prevEndDate.getDate() + 1);
+          const minDate = prevEndDate.toISOString().split('T')[0];
+          startInput.min = minDate;
+          
+          let hint = startInput.parentElement.querySelector('.date-disabled-hint');
+          if (!hint) {
+            hint = document.createElement('div');
+            hint.className = 'date-disabled-hint';
+            startInput.parentElement.appendChild(hint);
+          }
+          hint.innerHTML = `<i class="bi bi-info-circle"></i> Minimal ${minDate} (setelah Gel. ${waveNum-1} selesai)`;
+        }
+      }
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      startInput.min = today;
+      
+      let hint = startInput.parentElement.querySelector('.date-disabled-hint');
+      if (!hint) {
+        hint = document.createElement('div');
+        hint.className = 'date-disabled-hint';
+        startInput.parentElement.appendChild(hint);
+      }
+      hint.innerHTML = `<i class="bi bi-info-circle"></i> Minimal hari ini`;
+    }
+    
+    if (startInput.value) {
+      endInput.min = startInput.value;
+      if (endInput.value && endInput.value < startInput.value) {
+        endInput.classList.add('is-invalid');
+      } else {
+        endInput.classList.remove('is-invalid');
+      }
+    }
+  });
+}
+
+// ===== EVENT FORMAT HANDLER =====
+document.getElementById('eventFormat')?.addEventListener('change', function() {
+  const format = this.value;
+  const locationRow = document.getElementById('locationRow');
+  const zoomRow = document.getElementById('zoomRow');
+  const locationInput = document.getElementById('locationInput');
+  const zoomInput = document.getElementById('zoomInput');
+  const locationRequired = document.getElementById('locationRequired');
+  const zoomRequired = document.getElementById('zoomRequired');
+
+  if (!locationRow || !zoomRow || !locationInput || !zoomInput) return;
+
+  if (format === 'online') {
+    locationRow.classList.remove('show');
+    zoomRow.classList.add('show');
+    locationInput.removeAttribute('required');
+    zoomInput.setAttribute('required', 'required');
+    if (locationRequired) locationRequired.style.display = 'none';
+    if (zoomRequired) zoomRequired.style.display = 'inline';
+  } else if (format === 'offline') {
+    locationRow.classList.add('show');
+    zoomRow.classList.remove('show');
+    locationInput.setAttribute('required', 'required');
+    zoomInput.removeAttribute('required');
+    if (locationRequired) locationRequired.style.display = 'inline';
+    if (zoomRequired) zoomRequired.style.display = 'none';
+  } else {
+    locationRow.classList.add('show');
+    zoomRow.classList.add('show');
+    locationInput.removeAttribute('required');
+    zoomInput.removeAttribute('required');
+    if (locationRequired) locationRequired.style.display = 'none';
+    if (zoomRequired) zoomRequired.style.display = 'none';
+  }
+});
+
+// Auto-fill end date
+document.getElementById('eventStartDate')?.addEventListener('change', function() {
+  const endDateInput = document.getElementById('eventEndDate');
+  endDateInput.min = this.value;
+  if (!endDateInput.value || endDateInput.value < this.value) {
+    endDateInput.value = this.value;
+  }
+  validateAddEventForm();
+});
+
+// ===== ADD EVENT FORM SUBMIT =====
+document.getElementById('addEventForm')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  clearAddEventWarning();
+  
+  if (!validateAddEventForm()) {
+    const invalidFields = this.querySelectorAll('.is-invalid');
+    const fieldNames = [];
+    
+    invalidFields.forEach(field => {
+      const label = field.closest('.mb-3')?.querySelector('label');
+      if (label) {
+        const labelText = label.textContent.replace('*', '').trim();
+        if (!fieldNames.includes(labelText)) {
+          fieldNames.push(labelText);
+        }
+      }
+    });
+    
+    Swal.fire({
+      icon: 'error',
+      title: 'Form Tidak Lengkap!',
+      html: `<p class="mb-2"><strong>Mohon lengkapi field berikut:</strong></p>
+             <ul class="text-start mb-0">
+               ${fieldNames.map(name => `<li>${name}</li>`).join('')}
+             </ul>`,
+      confirmButtonText: 'OK, Saya Lengkapi',
+      width: '500px'
+    });
+    return;
+  }
+  
+  const formData = new FormData(this);
+  const btn = this.querySelector('button[type="submit"]');
   const originalText = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Menyimpan...';
 
-  fetchJSON(url, {
-    method: 'POST',
-    body: new FormData(form),
-    headers: { 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
-  })
-  .then(data => {
+  try {
+    const data = await fetchJSON('<?= base_url("admin/event/create") ?>', {
+      method: 'POST',
+      body: formData,
+      headers: {'X-Requested-With': 'XMLHttpRequest','X-CSRF-TOKEN': getCsrfToken()}
+    });
+
     if (data.success) {
-      Swal.fire({ 
-        icon: 'success', 
-        title: 'Berhasil!', 
-        text: data.message, 
+      Swal.fire({
+        icon: 'success',
+        title: 'Berhasil!',
+        text: data.message,
         timer: 1500,
         showConfirmButton: false
       }).then(() => location.reload());
     } else {
-      throw new Error(data.message || 'Error');
+      throw new Error(data.message || 'Gagal menyimpan event');
     }
-  })
-  .catch(err => Swal.fire({ icon: 'error', title: 'Error!', text: err.message }))
-  .finally(() => {
+  } catch (error) {
+    Swal.fire('Error!', error.message, 'error');
+  } finally {
     btn.disabled = false;
     btn.innerHTML = originalText;
-  });
-}
+  }
+});
 
+// ===== EDIT WAVES =====
 function editWaves(eventId) {
   fetchJSON('<?= base_url("admin/event/get") ?>/' + eventId, {
     headers: { 'X-Requested-With': 'XMLHttpRequest' }
   })
   .then(data => {
     if (!data.success) throw new Error(data.message);
-    populateWavesForm(data.event);
+    
+    currentEventId = eventId;
+    currentEventDate = data.event.event_date;
+    currentEventEndDate = data.event.event_end_date || data.event.event_date;
+    
+    let waves = data.event.registration_waves || [];
+    if (waves.length === 0) {
+      waves.push({
+        registration_start: '',
+        registration_deadline: '',
+        presenter_fee_online: 0,
+        presenter_fee_offline: 0,
+        audience_fee_online: 0,
+        audience_fee_offline: 0
+      });
+    }
+    renderAllWaves(waves);
+    
     const form = document.getElementById('editWavesForm');
     if (form) {
       form.dataset.eventId = eventId;
+      form.dataset.eventDate = currentEventDate;
+      form.dataset.eventEndDate = currentEventEndDate;
       const modal = new bootstrap.Modal(document.getElementById('editWavesModal'));
       modal.show();
     }
@@ -1458,216 +1479,397 @@ function editWaves(eventId) {
   .catch(err => Swal.fire('Error!', err.message, 'error'));
 }
 
-function populateWavesForm(event) {
-  const format = event.format || 'both';
-  let waves = [];
-  
-  if (typeof event.registration_waves === 'string') {
-    try {
-      waves = JSON.parse(event.registration_waves);
-    } catch(e) {
-      waves = [];
-    }
-  } else if (Array.isArray(event.registration_waves)) {
-    waves = event.registration_waves;
-  }
-
-  while (waves.length < 3) waves.push({});
-
+function renderAllWaves(waves) {
+  const container = document.getElementById('wavesContainer');
   let html = '';
-
-  for (let i = 0; i < 3; i++) {
-    const wave = waves[i] || {};
-    const waveNum = i + 1;
+  waves.forEach((wave, index) => {
+    html += generateWaveForm(index + 1, wave);
+  });
+  container.innerHTML = html;
+  
+  setTimeout(() => {
+    document.querySelectorAll('.price-input').forEach(input => {
+      input.addEventListener('input', function() {
+        formatCurrencyInput(this);
+      });
+      
+      input.addEventListener('blur', function() {
+        if (validatePriceInput(this)) {
+          validateAndShowPriceWarning(this);
+        }
+      });
+      
+      input.addEventListener('focus', function() {
+        this.classList.remove('is-invalid');
+      });
+    });
     
-    html += `
-      <div class="wave-form-card">
-        <h6>
-          Gelombang ${waveNum} 
-          ${waveNum === 1 ? '<span class="badge bg-warning text-dark ms-2"><i class="bi bi-star-fill me-1"></i>Early Bird Offline</span>' : ''}
-          ${waveNum === 2 ? '<span class="badge bg-info ms-2">Normal</span>' : ''}
-          ${waveNum === 3 ? '<span class="badge bg-primary ms-2">Last Call</span>' : ''}
-        </h6>
-        
-        <div class="row mb-3">
-          <div class="col-md-6 mb-2">
-            <label class="form-label small">Dibuka <span class="text-danger">*</span></label>
-            <input type="datetime-local" class="form-control" 
-                   name="waves[${i}][registration_start]" 
-                   value="${wave.registration_start ? wave.registration_start.slice(0,16) : ''}" required>
-          </div>
-          <div class="col-md-6 mb-2">
-            <label class="form-label small">Ditutup <span class="text-danger">*</span></label>
-            <input type="datetime-local" class="form-control" 
-                   name="waves[${i}][registration_deadline]" 
-                   value="${wave.registration_deadline ? wave.registration_deadline.slice(0,16) : ''}" required>
-          </div>
-        </div>
-        
-        <div class="alert alert-info small mb-3">
-          <i class="bi bi-info-circle me-1"></i>
-          ${waveNum === 1 ? '<strong>Early Bird:</strong> Harga offline harus termurah atau sama dengan gelombang berikutnya' : ''}
-          ${waveNum === 2 ? '<strong>Normal:</strong> Harga bisa naik dari Early Bird' : ''}
-          ${waveNum === 3 ? '<strong>Last Call:</strong> Harga tertinggi sebelum event' : ''}
-        </div>
-        
-        <div class="row">
-          ${format !== 'offline' ? `
-          <div class="col-md-6 mb-2">
-            <label class="form-label small">
-              <i class="bi bi-camera-video text-info"></i> Presenter Online 
-              <span class="text-danger">*</span>
-            </label>
-            <div class="input-group">
-              <span class="input-group-text">Rp</span>
-              <input type="number" class="form-control" 
-                     name="waves[${i}][presenter_fee_online]" 
-                     value="${wave.presenter_fee_online || 0}" min="0" step="1000" required 
-                     placeholder="0">
-            </div>
-            <small class="text-muted">⚠️ Biasanya 0 (presenter offline saja)</small>
-          </div>` : '<input type="hidden" name="waves['+i+'][presenter_fee_online]" value="0">'}
-          
-          ${format !== 'online' ? `
-          <div class="col-md-6 mb-2">
-            <label class="form-label small">
-              <i class="bi bi-geo-alt text-warning"></i> Presenter Offline 
-              ${waveNum === 1 ? '<i class="bi bi-star-fill text-warning"></i>' : ''}
-              <span class="text-danger">*</span>
-            </label>
-            <div class="input-group">
-              <span class="input-group-text">Rp</span>
-              <input type="number" class="form-control ${waveNum === 1 ? 'border-success border-2' : ''}" 
-                     name="waves[${i}][presenter_fee_offline]" 
-                     value="${wave.presenter_fee_offline || ''}" min="0" step="1000" required 
-                     placeholder="${waveNum === 1 ? '150000 (termurah)' : (waveNum === 2 ? '200000' : '250000')}">
-            </div>
-          </div>` : '<input type="hidden" name="waves['+i+'][presenter_fee_offline]" value="0">'}
-          
-          ${format !== 'offline' ? `
-          <div class="col-md-6 mb-2">
-            <label class="form-label small">
-              <i class="bi bi-camera-video text-info"></i> Audience Online 
-              <span class="text-danger">*</span>
-            </label>
-            <div class="input-group">
-              <span class="input-group-text">Rp</span>
-              <input type="number" class="form-control" 
-                     name="waves[${i}][audience_fee_online]" 
-                     value="${wave.audience_fee_online || ''}" min="0" step="1000" required 
-                     placeholder="${waveNum === 1 ? '75000' : (waveNum === 2 ? '100000' : '125000')}">
-            </div>
-          </div>` : '<input type="hidden" name="waves['+i+'][audience_fee_online]" value="0">'}
-          
-          ${format !== 'online' ? `
-          <div class="col-md-6 mb-2">
-            <label class="form-label small">
-              <i class="bi bi-geo-alt text-warning"></i> Audience Offline 
-              ${waveNum === 1 ? '<i class="bi bi-star-fill text-warning"></i>' : ''}
-              <span class="text-danger">*</span>
-            </label>
-            <div class="input-group">
-              <span class="input-group-text">Rp</span>
-              <input type="number" class="form-control ${waveNum === 1 ? 'border-success border-2' : ''}" 
-                     name="waves[${i}][audience_fee_offline]" 
-                     value="${wave.audience_fee_offline || ''}" min="0" step="1000" required 
-                     placeholder="${waveNum === 1 ? '100000 (termurah)' : (waveNum === 2 ? '150000' : '175000')}">
-            </div>
-          </div>` : '<input type="hidden" name="waves['+i+'][audience_fee_offline]" value="0">'}
-        </div>
-      </div>`;
-  }
-
-  const content = document.getElementById('wavesFormContent');
-  if (content) content.innerHTML = html;
+    document.querySelectorAll('.wave-start-date, .wave-end-date').forEach(input => {
+      input.addEventListener('change', function() {
+        updateDateRestrictions();
+      });
+    });
+    
+    updateDateRestrictions();
+  }, 100);
 }
 
-function submitWaves(form, eventId) {
-  const fd = new FormData(form);
-  const waves = [];
+function addWaveRow() {
+  const container = document.getElementById('wavesContainer');
+  const waveCount = container.querySelectorAll('.wave-form-card').length + 1;
+  const newWaveHTML = generateWaveForm(waveCount, {
+    registration_start: '',
+    registration_deadline: '',
+    presenter_fee_online: 0,
+    presenter_fee_offline: 0,
+    audience_fee_online: 0,
+    audience_fee_offline: 0
+  });
+  container.insertAdjacentHTML('beforeend', newWaveHTML);
   
-  for (let i = 0; i < 3; i++) {
-    const wave = {
-      registration_start: fd.get(`waves[${i}][registration_start]`),
-      registration_deadline: fd.get(`waves[${i}][registration_deadline]`),
-      presenter_fee_online: parseFloat(fd.get(`waves[${i}][presenter_fee_online]`)) || 0,
-      presenter_fee_offline: parseFloat(fd.get(`waves[${i}][presenter_fee_offline]`)) || 0,
-      audience_fee_online: parseFloat(fd.get(`waves[${i}][audience_fee_online]`)) || 0,
-      audience_fee_offline: parseFloat(fd.get(`waves[${i}][audience_fee_offline]`)) || 0
-    };
-    
-    if (!wave.registration_start || !wave.registration_deadline) {
-      return Swal.fire('Error!', `Gelombang ${i+1}: Tanggal harus diisi`, 'error');
-    }
-    
-    if (new Date(wave.registration_start) >= new Date(wave.registration_deadline)) {
-      return Swal.fire('Error!', `Gelombang ${i+1}: Tanggal mulai harus lebih awal dari tanggal selesai`, 'error');
-    }
-    
-    waves.push(wave);
+  const newWave = container.querySelector('#wave-' + waveCount);
+  newWave.querySelectorAll('.price-input').forEach(input => {
+    input.addEventListener('input', function() {
+      formatCurrencyInput(this);
+    });
+    input.addEventListener('blur', function() {
+      if (validatePriceInput(this)) {
+        validateAndShowPriceWarning(this);
+      }
+    });
+    input.addEventListener('focus', function() {
+      this.classList.remove('is-invalid');
+    });
+  });
+  
+  newWave.querySelectorAll('.wave-start-date, .wave-end-date').forEach(input => {
+    input.addEventListener('change', function() {
+      updateDateRestrictions();
+    });
+  });
+  
+  updateDateRestrictions();
+  
+  Swal.fire({icon: 'success',title: 'Gelombang ditambahkan!',text: 'Gelombang ' + waveCount + ' berhasil ditambahkan',timer: 1000,showConfirmButton: false});
+}
+
+function removeWave(waveNumber) {
+  const container = document.getElementById('wavesContainer');
+  const waveCount = container.querySelectorAll('.wave-form-card').length;
+  if (waveCount <= 1) {
+    return Swal.fire('Error!', 'Minimal harus ada 1 gelombang', 'error');
   }
+  Swal.fire({
+    title: 'Hapus Gelombang ' + waveNumber + '?',
+    text: 'Data gelombang ini akan dihapus',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Ya, Hapus',
+    cancelButtonText: 'Batal',
+    confirmButtonColor: '#ef4444'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      document.getElementById('wave-' + waveNumber).remove();
+      renumberWaves();
+      updateDateRestrictions();
+      Swal.fire({icon: 'success',title: 'Terhapus!',text: 'Gelombang berhasil dihapus',timer: 1000,showConfirmButton: false});
+    }
+  });
+}
+
+function renumberWaves() {
+  const waveSections = document.querySelectorAll('.wave-form-card');
+  waveSections.forEach((section, index) => {
+    const newNumber = index + 1;
+    section.id = 'wave-' + newNumber;
+    section.querySelector('h6').innerHTML = `<i class="bi bi-calendar-week me-2"></i>Gelombang ${newNumber} ${newNumber === 1 ? '<span class="badge bg-warning ms-2"><i class="bi bi-star-fill"></i> Early Bird</span>' : ''}`;
+    section.querySelectorAll('input').forEach(input => {
+      const name = input.name.replace(/\[\d+\]/, '[' + index + ']');
+      input.name = name;
+    });
+    const removeBtn = section.querySelector('[onclick^="removeWave"]');
+    if (removeBtn) {
+      removeBtn.setAttribute('onclick', 'removeWave(' + newNumber + ')');
+    }
+  });
+}
+
+function generateWaveForm(waveNum, data = {}) {
+  const startDate = data.registration_start ? data.registration_start.split(' ')[0] : '';
+  const endDate = data.registration_deadline ? data.registration_deadline.split(' ')[0] : '';
   
-  // Validate no overlap
-  for (let i = 0; i < 2; i++) {
-    if (new Date(waves[i].registration_deadline) >= new Date(waves[i+1].registration_start)) {
-      return Swal.fire('Error!', `Gelombang ${i+2} harus dimulai setelah gelombang ${i+1} selesai`, 'error');
+  const today = new Date().toISOString().split('T')[0];
+  
+  const presOnline = formatNumber(data.presenter_fee_online || 0);
+  const presOffline = formatNumber(data.presenter_fee_offline || 0);
+  const audOnline = formatNumber(data.audience_fee_online || 0);
+  const audOffline = formatNumber(data.audience_fee_offline || 0);
+  
+  return `
+  <div class="wave-form-card ${waveNum === 1 ? 'border-success' : ''}" id="wave-${waveNum}">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h6 class="mb-0">
+        <i class="bi bi-calendar-week me-2"></i>Gelombang ${waveNum} 
+        ${waveNum === 1 ? '<span class="badge bg-warning ms-2"><i class="bi bi-star-fill"></i> Early Bird</span>' : ''}
+      </h6>
+      ${waveNum > 1 ? `<button type="button" class="btn btn-sm btn-danger" onclick="removeWave(${waveNum})"><i class="bi bi-trash me-1"></i>Hapus</button>` : '<span class="badge bg-primary">Gelombang Utama</span>'}
+    </div>
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <label class="form-label"><i class="bi bi-calendar-check"></i> Tanggal Mulai <span class="text-danger">*</span></label>
+        <input type="date" class="form-control wave-start-date" 
+               name="waves[${waveNum-1}][registration_start]" 
+               value="${startDate}" 
+               min="${today}" 
+               required>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label"><i class="bi bi-calendar-x"></i> Tanggal Deadline <span class="text-danger">*</span></label>
+        <input type="date" class="form-control wave-end-date" 
+               name="waves[${waveNum-1}][registration_deadline]" 
+               value="${endDate}" 
+               min="${startDate || today}" 
+               required>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label class="form-label"><i class="bi bi-person-video3 me-1 text-info"></i>Presenter Online (Rp) <span class="text-danger">*</span></label>
+        <div class="input-group">
+          <span class="input-group-text">Rp</span>
+          <input type="text" 
+                 class="form-control price-input" 
+                 name="waves[${waveNum-1}][presenter_fee_online]" 
+                 value="${presOnline}" 
+                 placeholder="0" 
+                 inputmode="numeric"
+                 required>
+        </div>
+        <div class="invalid-feedback">Harga harus diisi dan tidak boleh 0 </div>
+      </div>
+      <div class="col-md-6 mb-3">
+        <label class="form-label">
+          <i class="bi bi-person-badge me-1 text-warning"></i>Presenter Offline (Rp) <span class="text-danger">*</span>
+          ${waveNum === 1 ? '<span class="badge bg-warning ms-1"><i class="bi bi-star-fill"></i> Early Bird</span>' : ''}
+        </label>
+        <div class="input-group">
+          <span class="input-group-text">Rp</span>
+          <input type="text" 
+                 class="form-control price-input" 
+                 name="waves[${waveNum-1}][presenter_fee_offline]" 
+                 value="${presOffline}" 
+                 placeholder="0" 
+                 inputmode="numeric"
+                 required>
+        </div>
+        <div class="invalid-feedback">Harga harus diisi dan tidak boleh 0 </div>
+      </div>
+      <div class="col-md-6 mb-3">
+        <label class="form-label"><i class="bi bi-laptop me-1 text-primary"></i>Audience Online (Rp) <span class="text-danger">*</span></label>
+        <div class="input-group">
+          <span class="input-group-text">Rp</span>
+          <input type="text" 
+                 class="form-control price-input" 
+                 name="waves[${waveNum-1}][audience_fee_online]" 
+                 value="${audOnline}" 
+                 placeholder="0" 
+                 inputmode="numeric"
+                 required>
+        </div>
+        <div class="invalid-feedback">Harga harus diisi dan tidak boleh 0 </div>
+      </div>
+      <div class="col-md-6 mb-3">
+        <label class="form-label">
+          <i class="bi bi-people me-1 text-success"></i>Audience Offline (Rp) <span class="text-danger">*</span>
+          ${waveNum === 1 ? '<span class="badge bg-warning ms-1"><i class="bi bi-star-fill"></i> Early Bird</span>' : ''}
+        </label>
+        <div class="input-group">
+          <span class="input-group-text">Rp</span>
+          <input type="text" 
+                 class="form-control price-input" 
+                 name="waves[${waveNum-1}][audience_fee_offline]" 
+                 value="${audOffline}" 
+                 placeholder="0" 
+                 inputmode="numeric"
+                 required>
+        </div>
+        <div class="invalid-feedback">Harga harus diisi dan tidak boleh 0 </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ===== SAVE WAVES (DENGAN VALIDASI HARGA TIDAK BOLEH 0) =====
+document.getElementById('editWavesForm')?.addEventListener('submit', function(e) {
+  e.preventDefault();
+  saveWaves();
+});
+
+function saveWaves() {
+  const form = document.getElementById('editWavesForm');
+  const eventId = form.dataset.eventId;
+  const waveSections = document.querySelectorAll('.wave-form-card');
+  
+  if (waveSections.length === 0) {
+    return Swal.fire('Error!', 'Minimal harus ada 1 gelombang', 'error');
+  }
+
+  const hasErrorWaves = document.querySelectorAll('.wave-form-card.has-error');
+  if (hasErrorWaves.length > 0) {
+    return Swal.fire({
+      icon: 'error',
+      title: 'Validasi Gagal!',
+      html: 'Ada gelombang dengan harga yang tidak valid.<br>Pastikan:<br>• <strong>Harga TIDAK BOLEH 0 </strong><br>• Harga gelombang 2+ HARUS LEBIH TINGGI dari gelombang sebelumnya<br>• Gelombang 1 offline harus termurah (Early Bird)',
+      confirmButtonText: 'Perbaiki'
+    });
+  }
+
+  let hasError = false;
+  let hasZeroPrice = false;
+  
+  document.querySelectorAll('.price-input').forEach(input => {
+    if (!validatePriceInput(input)) {
+      hasError = true;
+      const num = parseFormattedNumber(input.value);
+      if (num === 0) {
+        hasZeroPrice = true;
+      }
+    }
+  });
+
+  if (hasError) {
+    if (hasZeroPrice) {
+      return Swal.fire({
+        icon: 'error',
+        title: 'Harga Tidak Boleh 0!',
+        html: '<p class="mb-2">Ada harga yang bernilai 0 atau tidak diisi.</p><p class="text-danger mb-0"><strong>Semua Harga HARUS Diisi Naik Dari Gelombang Sebelumnnya</strong></p>',
+        confirmButtonText: 'Perbaiki'
+      });
+    } else {
+      return Swal.fire('Error!', 'Ada input harga yang tidak valid. Pastikan semua harga diisi dengan angka yang benar', 'error');
     }
   }
 
-  // Validate Early Bird rule (Wave 1 offline <= Wave 2 & 3)
-  if (waves[0].presenter_fee_offline > 0) {
-    for (let i = 1; i < 3; i++) {
-      if (waves[0].presenter_fee_offline > waves[i].presenter_fee_offline && waves[i].presenter_fee_offline > 0) {
-        return Swal.fire('Error!', 
-          `Early Bird: Gelombang 1 presenter offline (Rp ${waves[0].presenter_fee_offline.toLocaleString()}) harus ≤ gelombang ${i+1} (Rp ${waves[i].presenter_fee_offline.toLocaleString()})`, 
-          'error');
+  const waves = [];
+  waveSections.forEach((section, index) => {
+    const inputs = section.querySelectorAll('input');
+    const wave = {
+      registration_start: '',
+      registration_deadline: '',
+      presenter_fee_online: 0,
+      presenter_fee_offline: 0,
+      audience_fee_online: 0,
+      audience_fee_offline: 0
+    };
+    
+    inputs.forEach(input => {
+      const name = input.name.match(/\[([^\]]+)\]$/)?.[1];
+      if (name) {
+        if (name.includes('fee')) {
+          wave[name] = parseFormattedNumber(input.value);
+        } else {
+          wave[name] = input.value;
+        }
       }
-      if (waves[0].audience_fee_offline > waves[i].audience_fee_offline && waves[i].audience_fee_offline > 0) {
-        return Swal.fire('Error!', 
-          `Early Bird: Gelombang 1 audience offline (Rp ${waves[0].audience_fee_offline.toLocaleString()}) harus ≤ gelombang ${i+1} (Rp ${waves[i].audience_fee_offline.toLocaleString()})`, 
-          'error');
+    });
+    
+    if (wave.registration_start) wave.registration_start = wave.registration_start + ' 00:00:00';
+    if (wave.registration_deadline) wave.registration_deadline = wave.registration_deadline + ' 23:59:59';
+    waves.push(wave);
+  });
+
+  //  VALIDASI: CEK SEMUA HARGA TIDAK BOLEH 0
+  for (let i = 0; i < waves.length; i++) {
+    const wave = waves[i];
+    const waveNum = i + 1;
+    
+    if (!wave.registration_start || !wave.registration_deadline) {
+      return Swal.fire('Error!', `Gelombang ${waveNum}: Tanggal harus diisi`, 'error');
+    }
+    
+    const start = new Date(wave.registration_start).getTime();
+    const end = new Date(wave.registration_deadline).getTime();
+    if (end <= start) {
+      return Swal.fire('Error!', `Gelombang ${waveNum}: Deadline harus setelah tanggal mulai`, 'error');
+    }
+    
+    //  CEK HARGA TIDAK BOLEH 0
+    const fields = ['presenter_fee_online', 'presenter_fee_offline', 'audience_fee_online', 'audience_fee_offline'];
+    for (const field of fields) {
+      if (wave[field] === 0 || wave[field] < 1000) {
+        const fieldLabel = field.replace(/_/g, ' ').replace('fee', '').trim();
+        return Swal.fire({
+          icon: 'error',
+          title: 'Harga Tidak Boleh 0!',
+          html: `<p class="mb-2">Gelombang ${waveNum}: <strong>${fieldLabel}</strong> tidak boleh 0!</p><p class="text-danger mb-0">Semua harga HARUS diisi dengan nilai minimal Rp 1.000</p>`,
+          confirmButtonText: 'Perbaiki'
+        });
+      }
+    }
+    
+    if (i > 0) {
+      const prevEnd = new Date(waves[i-1].registration_deadline).getTime();
+      if (start <= prevEnd) {
+        return Swal.fire('Error!', `Gelombang ${waveNum} harus dimulai setelah gelombang ${i} selesai`, 'error');
+      }
+      
+      for (const field of fields) {
+        if (wave[field] <= waves[i-1][field]) {
+          const fieldLabel = field.replace(/_/g, ' ').replace('fee', '').trim();
+          return Swal.fire('Error!', `Gelombang ${waveNum}: ${fieldLabel} harus LEBIH TINGGI dari gelombang ${i}`, 'error');
+        }
+      }
+    }
+    
+    if (waveNum === 1 && waves.length > 1) {
+      const wave1PresOff = waves[0].presenter_fee_offline;
+      const wave1AudOff = waves[0].audience_fee_offline;
+      
+      for (let j = 1; j < waves.length; j++) {
+        const comparePresOff = waves[j].presenter_fee_offline;
+        const compareAudOff = waves[j].audience_fee_offline;
+        
+        if (wave1PresOff >= comparePresOff) {
+          return Swal.fire('Error!', `Early Bird: Gelombang 1 presenter offline harus < gelombang ${j+1}`, 'error');
+        }
+        if (wave1AudOff >= compareAudOff) {
+          return Swal.fire('Error!', `Early Bird: Gelombang 1 audience offline harus < gelombang ${j+1}`, 'error');
+        }
       }
     }
   }
 
   const btn = form.querySelector('button[type="submit"]');
-  if (btn) {
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Menyimpan...';
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Menyimpan...';
 
-    fetchJSON('<?= base_url("admin/event/update-waves") ?>/' + eventId, {
-      method: 'POST',
-      body: JSON.stringify({ waves: waves }),
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': csrfToken,
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    })
-    .then(data => {
-      if (data.success) {
-        Swal.fire({ 
-          icon: 'success', 
-          title: 'Berhasil!', 
-          text: 'Gelombang berhasil disimpan',
-          timer: 1500,
-          showConfirmButton: false
-        }).then(() => location.reload());
-      } else {
-        throw new Error(data.message);
-      }
-    })
-    .catch(err => Swal.fire({ icon: 'error', title: 'Error!', text: err.message }))
-    .finally(() => { 
-      if(btn) {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-      }
-    });
-  }
+  fetchJSON('<?= base_url("admin/event/update-waves") ?>/' + eventId, {
+    method: 'POST',
+    body: JSON.stringify({ waves: waves }),
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': getCsrfToken(),
+      'X-Requested-With': 'XMLHttpRequest'
+    }
+  })
+  .then(data => {
+    if (data.success) {
+      Swal.fire({ icon: 'success', title: 'Berhasil!', text: data.message, timer: 1500, showConfirmButton: false}).then(() => location.reload());
+    } else {
+      throw new Error(data.message);
+    }
+  })
+  .catch(err => Swal.fire({ icon: 'error', title: 'Error!', text: err.message }))
+  .finally(() => { 
+    if(btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  });
 }
 
+// ===== EDIT EVENT =====
 function editEvent(eventId) {
   fetchJSON('<?= base_url("admin/event/get") ?>/' + eventId, {
     headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -1692,16 +1894,14 @@ function populateEditForm(event) {
       <label class="form-label">Judul <span class="text-danger">*</span></label>
       <input type="text" class="form-control" name="title" value="${event.title || ''}" required>
     </div>
-    
     <div class="mb-3">
       <label class="form-label">Deskripsi</label>
       <textarea class="form-control" name="description" rows="2">${event.description || ''}</textarea>
     </div>
-    
     <div class="row">
       <div class="col-md-6 mb-3">
         <label class="form-label">Format <span class="text-danger">*</span></label>
-        <select class="form-select" name="format" id="editFormat" required>
+        <select class="form-select" name="format" required>
           <option value="both" ${format === 'both' ? 'selected' : ''}>Hybrid</option>
           <option value="online" ${format === 'online' ? 'selected' : ''}>Online</option>
           <option value="offline" ${format === 'offline' ? 'selected' : ''}>Offline</option>
@@ -1715,10 +1915,8 @@ function populateEditForm(event) {
         </div>
       </div>
     </div>
-    
     <hr class="my-3">
     <h6 class="mb-3"><i class="bi bi-calendar-event me-2"></i>Tanggal & Waktu</h6>
-    
     <div class="row">
       <div class="col-md-6 mb-3">
         <label class="form-label">Tanggal Mulai <span class="text-danger">*</span></label>
@@ -1737,45 +1935,57 @@ function populateEditForm(event) {
         <input type="time" class="form-control" name="event_end_time" value="${(event.event_end_time || event.event_time || '').substring(0,5)}" required>
       </div>
     </div>
-    
-    ${format !== 'online' ? `
-    <div class="mb-3">
-      <label class="form-label">Lokasi ${format === 'offline' ? '<span class="text-danger">*</span>' : ''}</label>
-      <input type="text" class="form-control" name="location" value="${event.location || ''}" ${format === 'offline' ? 'required' : ''}>
-    </div>` : ''}
-    
-    ${format !== 'offline' ? `
-    <div class="mb-3">
-      <label class="form-label">Link Zoom ${format === 'online' ? '<span class="text-danger">*</span>' : ''}</label>
-      <input type="url" class="form-control" name="zoom_link" value="${event.zoom_link || ''}" ${format === 'online' ? 'required' : ''}>
-    </div>` : ''}
+    ${format !== 'online' ? `<div class="mb-3"><label class="form-label">Lokasi ${format === 'offline' ? '<span class="text-danger">*</span>' : ''}</label><input type="text" class="form-control" name="location" value="${event.location || ''}" ${format === 'offline' ? 'required' : ''}></div>` : ''}
+    ${format !== 'offline' ? `<div class="mb-3"><label class="form-label">Link Zoom ${format === 'online' ? '<span class="text-danger">*</span>' : ''}</label><input type="url" class="form-control" name="zoom_link" value="${event.zoom_link || ''}" ${format === 'online' ? 'required' : ''}></div>` : ''}
   `;
-  const content = document.getElementById('editFormContent');
-  if (content) content.innerHTML = html;
+  document.getElementById('editFormContent').innerHTML = html;
 }
 
+document.getElementById('editEventForm')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const eventId = this.dataset.eventId;
+  const formData = new FormData(this);
+  const btn = this.querySelector('button[type="submit"]');
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Menyimpan...';
+
+  try {
+    const data = await fetchJSON('<?= base_url("admin/event/update") ?>/' + eventId, {
+      method: 'POST',
+      body: formData,
+      headers: {'X-Requested-With': 'XMLHttpRequest','X-CSRF-TOKEN': getCsrfToken()}
+    });
+    if (data.success) {
+      Swal.fire({icon: 'success',title: 'Berhasil!',text: data.message,timer: 1500,showConfirmButton: false}).then(() => location.reload());
+    } else {
+      throw new Error(data.message || 'Gagal update event');
+    }
+  } catch (error) {
+    Swal.fire('Error!', error.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
+});
+
+// ===== TOGGLE STATUS & DELETE =====
 function toggleStatus(id) {
   fetchJSON('<?= base_url("admin/event/toggle-status") ?>/' + id, {
     method: 'POST',
-    headers: { 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
+    headers: { 'X-CSRF-TOKEN': getCsrfToken(), 'X-Requested-With': 'XMLHttpRequest' }
   })
   .then(d => {
     if (!d.success) throw new Error(d.message);
-    Swal.fire({ 
-      icon: 'success', 
-      title: 'Sukses', 
-      text: d.message,
-      timer: 1000,
-      showConfirmButton: false
-    }).then(() => location.reload());
+    Swal.fire({ icon: 'success', title: 'Sukses', text: d.message, timer: 1000, showConfirmButton: false}).then(() => location.reload());
   })
   .catch(err => Swal.fire('Error!', err.message, 'error'));
 }
 
 function forceDeleteEvent(id) {
   Swal.fire({
-    title: 'Hapus Event?',
-    html: '<p class="mb-2">Semua data akan dihapus permanen!</p><p class="text-danger small mb-0">⚠️ Event dengan peserta verified tidak bisa dihapus</p>',
+    title: 'Hapus Events?',
+    html: '<p class="mb-2"><strong>⚠️ PERHATIAN:</strong> Apakah anda yakin!</p><p class="text-danger small mb-0">Termasuk seluruh peserta (verified & pending) dan data pembayaran</p>',
     icon: 'warning',
     showCancelButton: true,
     confirmButtonText: 'Ya, Hapus!',
@@ -1784,20 +1994,13 @@ function forceDeleteEvent(id) {
     cancelButtonColor: '#64748b'
   }).then(res => {
     if (!res.isConfirmed) return;
-    
     fetchJSON('<?= base_url("admin/event/delete") ?>/' + id, {
       method: 'POST',
-      headers: { 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest' }
+      headers: { 'X-CSRF-TOKEN': getCsrfToken(), 'X-Requested-With': 'XMLHttpRequest' }
     })
     .then(d => {
       if (!d.success) throw new Error(d.message);
-      Swal.fire({ 
-        icon: 'success', 
-        title: 'Terhapus', 
-        text: 'Event berhasil dihapus',
-        timer: 1000,
-        showConfirmButton: false
-      }).then(() => location.reload());
+      Swal.fire({ icon: 'success', title: 'Terhapus', text: d.message, timer: 1500, showConfirmButton: false}).then(() => location.reload());
     })
     .catch(err => Swal.fire('Error!', err.message, 'error'));
   });

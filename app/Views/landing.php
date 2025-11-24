@@ -268,7 +268,7 @@
             cursor: default;
             flex: 0 0 300px;
             max-width: 350px;
-            min-height: 400px;
+            min-height: 450px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -280,8 +280,9 @@
         }
 
         .price-card.featured {
-            border: 3px solid var(--primary-blue);
+            border: 3px solid #FFC107;
             transform: scale(1.05);
+            box-shadow: 0 20px 50px rgba(255, 193, 7, 0.3);
         }
 
         .price-card.featured:hover {
@@ -289,16 +290,17 @@
         }
 
         .price-card.featured::before {
-            content: 'POPULAR';
+            content: '⭐ EARLY BIRD';
             position: absolute;
             top: 20px;
             right: -30px;
-            background: var(--primary-blue);
+            background: linear-gradient(135deg, #FFC107, #FF9800);
             color: var(--white);
             padding: 5px 50px;
             transform: rotate(45deg);
             font-size: 0.8rem;
             font-weight: bold;
+            box-shadow: 0 4px 10px rgba(255, 152, 0, 0.4);
         }
 
         .price {
@@ -475,10 +477,11 @@
         }
 
         .deadline-info {
-            background: var(--light-blue);
+            background: var(--white);
             padding: 15px;
             border-radius: 10px;
             margin-top: 20px;
+            display: inline-block;
         }
 
         .deadline-badge {
@@ -488,7 +491,7 @@
             padding: 8px 15px;
             border-radius: 20px;
             font-weight: 600;
-            margin-bottom: 10px;
+            margin-bottom: 0;
         }
 
         .map-container {
@@ -546,6 +549,57 @@
             border-radius: var(--border-radius);
             text-align: center;
             margin: 80px 0;
+        }
+
+        /* About Section Styles */
+        .about-section {
+            background: var(--white);
+            position: relative;
+        }
+
+        .about-image-wrapper img {
+            border-radius: var(--border-radius);
+            transition: var(--transition);
+        }
+
+        .about-image-wrapper:hover img {
+            transform: scale(1.02);
+            box-shadow: var(--shadow-heavy);
+        }
+
+        .feature-box {
+            text-align: center;
+            transition: var(--transition);
+        }
+
+        .feature-box:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-light);
+        }
+
+        .vision-mission-card {
+            background: var(--white);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--shadow-light);
+            transition: var(--transition);
+            height: 100%;
+        }
+
+        .vision-mission-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .card-header-custom {
+            padding: 20px 30px;
+            display: flex;
+            align-items: center;
+        }
+
+        .card-body-custom {
+            padding: 30px;
+            line-height: 1.8;
         }
 
         @media (max-width: 992px) {
@@ -652,9 +706,6 @@
                     <li class="nav-item">
                         <a class="nav-link" href="#poster">Poster</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#features">Fitur</a>
-                    </li>
                     <?php if ($activeEvent): ?>
                     <li class="nav-item">
                         <a class="nav-link" href="#register">Paket</a>
@@ -671,6 +722,9 @@
                         <a class="nav-link" href="#sponsors">Sponsor</a>
                     </li>
                     <?php endif; ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#about">Tentang</a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#location">Lokasi</a>
                     </li>
@@ -693,9 +747,9 @@
                     <div class="col-lg-8 col-xl-7">
                         <div class="animate-on-scroll" style="padding-left: 0;">
                             <h1 class="hero-title">Seminar Nasional Informatika dan Aplikasinya</h1>
-                                <div class="hero-year">(SNIA) <?= date('Y') ?></div>
-                                <p class="hero-description">Diselenggarakan oleh Jurusan Informatika Universitas Jenderal Achmad Yani (UNJANI), acara dua tahunan yang mempertemukan akademisi, peneliti, dan praktisi untuk berbagi pengetahuan dan inovasi terdepan di bidang teknologi informasi.</p>
-                                <a href="<?= base_url('auth/login') ?>" class="hero-cta">DAFTAR SEKARANG</a>
+                            <div class="hero-year">(SNIA) <?= date('Y') ?></div>
+                            <p class="hero-description">Diselenggarakan oleh Jurusan Informatika Universitas Jenderal Achmad Yani (UNJANI), acara dua tahunan yang mempertemukan akademisi, peneliti, dan praktisi untuk berbagi pengetahuan dan inovasi terdepan di bidang teknologi informasi.</p>
+                            <a href="<?= base_url('auth/login') ?>" class="hero-cta">DAFTAR SEKARANG</a>
                         </div>
                     </div>
                 </div>
@@ -723,76 +777,87 @@
     <?php endif; ?>
 
     <?php if ($activeEvent): ?>
-    <!-- Registration Section -->
+    <!-- Registration Section with Early Bird -->
     <section class="registration-section" id="register">
         <div class="container">
             <div class="text-center mb-5">
-                <h2 class="section-title animate-on-scroll">Paket Registrasi</h2>
-                <p class="lead animate-on-scroll">Pilih paket yang sesuai dengan kebutuhan Anda</p>
-                <?php if ($activeEvent['event_date']): ?>
-                <div class="deadline-info animate-on-scroll d-inline-block">
-                    <div class="deadline-badge">
-                        <i class="fas fa-calendar-alt me-2"></i>Tanggal Event: <?= $activeEvent['event_date_formatted'] ?>
+                <h2 class="section-title animate-on-scroll">Paket Registrasi Early Bird</h2>
+                <p class="lead animate-on-scroll">Dapatkan harga terbaik dengan mendaftar sekarang!</p>
+                
+                <div class="d-flex flex-wrap justify-content-center gap-3 mt-3">
+                    <?php if (!empty($activeEvent['early_bird_deadline_formatted'])): ?>
+                    <div class="deadline-info animate-on-scroll">
+                        <div class="deadline-badge" style="background: linear-gradient(135deg, #ff5722, #ff9800);">
+                            <i class="fas fa-fire me-2"></i>Early Bird Berakhir: <?= $activeEvent['early_bird_deadline_formatted'] ?>
+                        </div>
                     </div>
+                    <?php endif; ?>
+                    
+                    <?php if (!empty($activeEvent['event_date_formatted'])): ?>
+                    <div class="deadline-info animate-on-scroll">
+                        <div class="deadline-badge" style="background: #2196f3;">
+                            <i class="fas fa-calendar-alt me-2"></i>Tanggal Event: <?= $activeEvent['event_date_formatted'] ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 </div>
-                <?php endif; ?>
             </div>
             
             <div class="pricing-container mb-5">
-                <?php if ($activeEvent['format'] === 'both' || $activeEvent['format'] === 'offline'): ?>
-                <!-- Presenter -->
-                <div class="price-card animate-on-scroll">
+                <!-- Presenter Early Bird -->
+                <div class="price-card featured animate-on-scroll">
                     <div>
                         <div class="feature-icon mb-3">
                             <i class="fas fa-microphone"></i>
                         </div>
                         <h4 class="fw-bold">Presenter</h4>
-                        <div class="price">Rp <?= number_format($activeEvent['presenter_fee_offline'], 0, ',', '.') ?></div>
+                        <div class="badge bg-warning text-dark mb-2 px-3 py-2">
+                            <i class="fas fa-star me-1"></i> Early Bird Price
+                        </div>
+                        <div class="price">Rp <?= number_format($activeEvent['early_bird_presenter_fee'], 0, ',', '.') ?></div>
+                        <small class="text-muted d-block mb-3">Harga khusus untuk pendaftar awal</small>
                     </div>
                     <ul class="list-unstyled mb-4">
                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Submit Abstract</li>
-                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Present Paper</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Present Paper (Offline)</li>
                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Certificate</li>
-                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Lunch & Coffee</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Lunch & Coffee Break</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Conference Kit</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Networking Session</li>
                     </ul>
                 </div>
 
-                <!-- Audience Offline -->
-                <div class="price-card <?= ($activeEvent['format'] === 'both') ? 'featured' : '' ?> animate-on-scroll">
+                <!-- Audience Early Bird -->
+                <div class="price-card featured animate-on-scroll">
                     <div>
                         <div class="feature-icon mb-3">
                             <i class="fas fa-users"></i>
                         </div>
-                        <h4 class="fw-bold">Peserta Offline</h4>
-                        <div class="price">Rp <?= number_format($activeEvent['audience_fee_offline'], 0, ',', '.') ?></div>
-                    </div>
-                    <ul class="list-unstyled mb-4">
-                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Attend Seminar</li>
-                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Certificate</li>
-                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Lunch & Coffee</li>
-                       <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Networking</li>
-                    </ul>
-                </div>
-                <?php endif; ?>
-                
-                <?php if ($activeEvent['format'] === 'both' || $activeEvent['format'] === 'online'): ?>
-                <!-- Audience Online -->
-                <div class="price-card <?= ($activeEvent['format'] === 'online') ? 'featured' : '' ?> animate-on-scroll">
-                    <div>
-                        <div class="feature-icon mb-3">
-                            <i class="fas fa-laptop"></i>
+                        <h4 class="fw-bold">Peserta / Audience</h4>
+                        <div class="badge bg-warning text-dark mb-2 px-3 py-2">
+                            <i class="fas fa-star me-1"></i> Early Bird Price
                         </div>
-                        <h4 class="fw-bold">Peserta Online</h4>
-                        <div class="price">Rp <?= number_format($activeEvent['audience_fee_online'], 0, ',', '.') ?></div>
+                        <div class="price">Rp <?= number_format($activeEvent['early_bird_audience_fee'], 0, ',', '.') ?></div>
+                        <small class="text-muted d-block mb-3">Harga khusus untuk pendaftar awal</small>
                     </div>
                     <ul class="list-unstyled mb-4">
-                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Live Streaming</li>
-                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Digital Certificate</li>
-                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Recording Access</li>
-                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Q&A Session</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Attend Seminar (Offline)</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Certificate</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Lunch & Coffee Break</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Networking Session</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Conference Kit</li>
+                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Q&A with Speakers</li>
                     </ul>
                 </div>
-                <?php endif; ?>
+            </div>
+
+            <!-- Early Bird Info Box -->
+            <div class="text-center mt-4">
+                <div class="alert alert-info d-inline-block animate-on-scroll" style="max-width: 700px;">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Catatan Penting:</strong> Harga Early Bird berlaku untuk partisipasi <strong>offline</strong>. 
+                    Daftarkan diri Anda sekarang sebelum periode Early Bird berakhir dan dapatkan harga terbaik!
+                </div>
             </div>
         </div>
     </section>
@@ -1060,6 +1125,102 @@
         </div>
     </section>
 
+    <!-- About Us Section -->
+    <section class="about-section py-5" id="about">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="section-title animate-on-scroll">Tentang SNIA</h2>
+                <p class="lead animate-on-scroll">Seminar Nasional Informatika dan Aplikasinya</p>
+            </div>
+            
+            <div class="row g-5 align-items-center mb-5">
+                <div class="col-lg-6">
+                    <div class="about-image-wrapper animate-on-scroll">
+                        <img src="<?= base_url('assets/img/sponsors/unjani.png') ?>" alt="Universitas Jenderal Achmad Yani" class="img-fluid rounded shadow-lg">
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="animate-on-scroll">
+                        <h3 class="fw-bold mb-4 text-primary">Tentang Seminar</h3>
+                        <p class="text-muted mb-3">
+                            <strong>SNIA (Seminar Nasional Informatika dan Aplikasinya)</strong> merupakan kegiatan seminar nasional yang diselenggarakan secara berkala setiap <strong>2 tahun sekali</strong> oleh Jurusan Informatika, Fakultas MIPA, Universitas Jenderal Achmad Yani (UNJANI) Cimahi.
+                        </p>
+                        <p class="text-muted mb-3">
+                            Seminar ini bertujuan untuk menjadi wadah bagi akademisi, peneliti, praktisi, dan mahasiswa dalam berbagi pengetahuan, pengalaman, serta hasil penelitian terkini di bidang informatika dan aplikasinya.
+                        </p>
+                        <p class="text-muted mb-4">
+                            Melalui SNIA, kami berkomitmen untuk mendorong perkembangan ilmu pengetahuan dan teknologi informasi di Indonesia, serta membangun kolaborasi yang berkelanjutan antar institusi pendidikan, industri, dan pemerintah.
+                        </p>
+                        
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <div class="feature-box p-3 bg-light rounded text-center">
+                                    <i class="fas fa-users text-primary fs-2 mb-2"></i>
+                                    <h4 class="mb-1 fw-bold text-primary">500+</h4>
+                                    <small class="text-muted">Peserta</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="feature-box p-3 bg-light rounded text-center">
+                                    <i class="fas fa-file-alt text-primary fs-2 mb-2"></i>
+                                    <h4 class="mb-1 fw-bold text-primary">100+</h4>
+                                    <small class="text-muted">Paper Presented</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="feature-box p-3 bg-light rounded text-center">
+                                    <i class="fas fa-university text-primary fs-2 mb-2"></i>
+                                    <h4 class="mb-1 fw-bold text-primary">50+</h4>
+                                    <small class="text-muted">Institusi</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="feature-box p-3 bg-light rounded text-center">
+                                    <i class="fas fa-award text-primary fs-2 mb-2"></i>
+                                    <h4 class="mb-1 fw-bold text-primary">10+</h4>
+                                    <small class="text-muted">Tahun Pengalaman</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vision & Mission -->
+            <div class="row g-4 mt-5">
+                <div class="col-md-6">
+                    <div class="vision-mission-card animate-on-scroll">
+                        <div class="card-header-custom bg-primary text-white">
+                            <i class="fas fa-eye me-2"></i>
+                            <h4 class="mb-0">Visi</h4>
+                        </div>
+                        <div class="card-body-custom">
+                            <p class="mb-0">
+                                Menjadi forum nasional terdepan dalam pengembangan dan penerapan ilmu informatika yang inovatif, berkualitas, dan berdampak nyata bagi kemajuan teknologi informasi di Indonesia.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="vision-mission-card animate-on-scroll">
+                        <div class="card-header-custom bg-primary text-white">
+                            <i class="fas fa-bullseye me-2"></i>
+                            <h4 class="mb-0">Misi</h4>
+                        </div>
+                        <div class="card-body-custom">
+                            <ul class="mb-0 ps-3">
+                                <li class="mb-2">Menyediakan platform untuk publikasi dan diskusi penelitian informatika terkini</li>
+                                <li class="mb-2">Memfasilitasi kolaborasi antar akademisi, peneliti, dan praktisi</li>
+                                <li class="mb-2">Mendorong inovasi dan pengembangan teknologi informasi</li>
+                                <li>Meningkatkan kualitas pendidikan dan penelitian di bidang informatika</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Location Section -->
     <section class="py-5" id="location">
         <div class="container">
@@ -1102,12 +1263,6 @@
                             <p class="text-muted ms-4"><?= esc($activeEvent['location']) ?></p>
                         </div>
                         <?php endif; ?>
-                        <?php if ($activeEvent['zoom_link'] && ($activeEvent['format'] === 'online' || $activeEvent['format'] === 'both')): ?>
-                        <div class="mb-4">
-                            <h5><i class="fas fa-video text-primary me-2"></i>Link Online</h5>
-                            <p class="text-muted ms-4">Link akan dikirim setelah pembayaran terverifikasi</p>
-                        </div>
-                        <?php endif; ?>
                         <?php endif; ?>
                         <div class="mb-4">
                             <h5><i class="fas fa-car text-primary me-2"></i>Transportasi</h5>
@@ -1129,9 +1284,9 @@
             <div class="animate-on-scroll">
                 <h2 class="fw-bold mb-4">Siap Bergabung dengan SNIA <?= date('Y', strtotime($activeEvent['event_date'])) ?>?</h2>
                 <p class="lead mb-4">Jangan lewatkan kesempatan untuk berbagi pengetahuan dan bernetworking dengan para ahli informatika terkemuka.</p>
-                <?php if ($activeEvent['registration_deadline']): ?>
+                <?php if (!empty($activeEvent['early_bird_deadline_formatted'])): ?>
                 <div class="alert alert-warning d-inline-block mb-4">
-                    <i class="fas fa-clock me-2"></i><strong>Pendaftaran Ditutup:</strong> <?= $activeEvent['registration_deadline_formatted'] ?>
+                    <i class="fas fa-fire me-2"></i><strong>Early Bird Berakhir:</strong> <?= $activeEvent['early_bird_deadline_formatted'] ?>
                 </div>
                 <br>
                 <?php endif; ?>
@@ -1148,7 +1303,7 @@
         <div class="container">
             <div class="row">
                 <div class="col-lg-4 mb-4">
-                    <h5 class="fw-bold mb-3">SNIA <?= $activeEvent ? date('Y', strtotime($activeEvent['event_date'])) : '2025' ?></h5>
+                    <h5 class="fw-bold mb-3">SNIA <?= $activeEvent ? date('Y', strtotime($activeEvent['event_date'])) : date('Y') ?></h5>
                     <p class="text-light">Seminar Nasional Informatika & Aplikasi yang diselenggarakan oleh Jurusan Informatika UNJANI Cimahi. Kegiatan dua tahunan untuk membahas perkembangan informatika dan aplikasinya.</p>
                 </div>
                 <div class="col-lg-4 mb-4">
