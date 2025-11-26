@@ -30,11 +30,15 @@ class Dokumen extends BaseController
         
         // Get Sertifikat documents
         $sertifikat = $this->getDokumenByTipe($userId, 'sertifikat');
+        
+        // Get Dokumen Lainnya
+        $lainnya = $this->getDokumenByTipe($userId, 'lainnya');
 
         $data = [
-            'title' => 'Dokumen Saya',
-            'loa' => $loa,
-            'sertifikat' => $sertifikat
+            'title'      => 'Dokumen Saya',
+            'loa'        => $loa,
+            'sertifikat' => $sertifikat,
+            'lainnya'    => $lainnya
         ];
 
         return view('role/presenter/dokumen/index', $data);
@@ -49,6 +53,11 @@ class Dokumen extends BaseController
     {
         return $this->downloadDocument($filename, 'sertifikat');
     }
+    
+    public function downloadLainnya($filename)
+    {
+        return $this->downloadDocument($filename, 'lainnya');
+    }
 
     // Legacy redirects
     public function loa()
@@ -59,6 +68,11 @@ class Dokumen extends BaseController
     public function sertifikat()
     {
         return redirect()->to('/presenter/dokumen#sertifikat');
+    }
+    
+    public function lainnya()
+    {
+        return redirect()->to('/presenter/dokumen#lainnya');
     }
 
     // Private helper methods
@@ -76,6 +90,7 @@ class Dokumen extends BaseController
                     'd.event_id', 
                     'd.tipe',
                     'd.file_path',
+                    'd.syarat',
                     'd.uploaded_at as created_at',
                     'e.title as event_title'
                 ])
@@ -124,15 +139,22 @@ class Dokumen extends BaseController
         $event = $this->eventModel->find($document['event_id']);
         $eventTitle = $event ? preg_replace('/[^A-Za-z0-9_-]/', '_', $event['title']) : 'Event';
         
-        // Get user info
-        $user = $this->db->table('users')->where('id_user', $userId)->get()->getRowArray();
-        $userName = $user ? preg_replace('/[^A-Za-z0-9_-]/', '_', $user['nama_lengkap']) : 'User';
-        
         $extension = pathinfo($filename, PATHINFO_EXTENSION);
-        $downloadName = strtoupper($tipe) . '_' . $eventTitle . '_' . $userName . '.' . $extension;
+        
+        // Different naming for dokumen lainnya
+        if ($tipe === 'lainnya') {
+            $docName = preg_replace('/[^A-Za-z0-9_-]/', '_', $document['syarat'] ?? 'Document');
+            $downloadName = $docName . '_' . mb_substr($eventTitle, 0, 60) . '.' . $extension;
+        } else {
+            // Get user info for LOA and Sertifikat
+            $user = $this->db->table('users')->where('id_user', $userId)->get()->getRowArray();
+            $userName = $user ? preg_replace('/[^A-Za-z0-9_-]/', '_', $user['nama_lengkap']) : 'User';
+            $downloadName = strtoupper($tipe) . '_' . mb_substr($eventTitle, 0, 60) . '_' . mb_substr($userName, 0, 60) . '.' . $extension;
+        }
 
         // Log download activity
-        $this->logActivity($userId, "Downloaded {$tipe} from event: " . ($event['title'] ?? 'Unknown'));
+        $docTitle = $tipe === 'lainnya' ? ($document['syarat'] ?? 'Document') : strtoupper($tipe);
+        $this->logActivity($userId, "Downloaded {$docTitle} from event: " . ($event['title'] ?? 'Unknown'));
 
         return $this->response->download($filePath, null)->setFileName($downloadName);
     }

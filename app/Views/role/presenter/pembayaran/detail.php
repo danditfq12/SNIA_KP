@@ -21,8 +21,62 @@ $originalAmount = (int)($pay['original_amount'] ?? $pay['jumlah'] ?? 0);
 $finalAmount    = (int)($pay['jumlah'] ?? 0);
 $discount       = max(0, $originalAmount - $finalAmount);
 
+/* PAYMENT TYPE DISPLAY */
+$paymentType = strtolower(trim((string)($pay['midtrans_payment_type'] ?? '')));
+if (empty($paymentType)) {
+    $paymentType = strtolower((string)($pay['metode'] ?? ''));
+}
+
+// Helper function untuk payment type
+function getPaymentTypeDisplay(string $type): array {
+    if (empty($type) || $type === 'midtrans') {
+        return [
+            'label' => 'MIDTRANS',
+            'icon' => 'bi-credit-card-2-front',
+            'color' => 'text-primary'
+        ];
+    }
+
+    // Bank Transfer dengan bank specific
+    if (str_starts_with($type, 'bank_transfer_')) {
+        $bank = strtoupper(str_replace('bank_transfer_', '', $type));
+        return [
+            'label' => "Virtual Account {$bank}",
+            'icon' => 'bi-bank',
+            'color' => 'text-success'
+        ];
+    }
+
+    // Payment types lainnya
+    $displays = [
+        'gopay' => ['label' => 'GoPay', 'icon' => 'bi-wallet2', 'color' => 'text-info'],
+        'qris' => ['label' => 'QRIS', 'icon' => 'bi-qr-code', 'color' => 'text-primary'],
+        'shopeepay' => ['label' => 'ShopeePay', 'icon' => 'bi-wallet2', 'color' => 'text-warning'],
+        'credit_card' => ['label' => 'Credit Card', 'icon' => 'bi-credit-card-2-front', 'color' => 'text-warning'],
+        'cstore' => ['label' => 'Alfamart/Indomaret', 'icon' => 'bi-shop', 'color' => 'text-secondary'],
+        'alfamart' => ['label' => 'Alfamart', 'icon' => 'bi-shop', 'color' => 'text-secondary'],
+        'indomaret' => ['label' => 'Indomaret', 'icon' => 'bi-shop', 'color' => 'text-secondary'],
+        'akulaku' => ['label' => 'Akulaku', 'icon' => 'bi-wallet2', 'color' => 'text-primary'],
+        'mandiri_bill' => ['label' => 'Mandiri Bill Payment', 'icon' => 'bi-bank', 'color' => 'text-success'],
+        'echannel' => ['label' => 'Mandiri Bill Payment', 'icon' => 'bi-bank', 'color' => 'text-success'],
+    ];
+
+    return $displays[$type] ?? [
+        'label' => ucwords(str_replace('_', ' ', $type)),
+        'icon' => 'bi-credit-card-2-front',
+        'color' => 'text-primary'
+    ];
+}
+
+$paymentDisplay = getPaymentTypeDisplay($paymentType);
+
 /* helper tanggal */
 $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
+
+/* Mode kehadiran */
+$participationType = $pay['participation_type'] ?? 'offline';
+$modeLabel = ucfirst($participationType);
+$modeBadge = $participationType === 'online' ? 'bg-info-subtle text-info' : 'bg-primary-subtle text-primary';
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -70,20 +124,26 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
             </div>
             <div class="card-body">
               <div class="row g-3">
+                <!-- METODE PEMBAYARAN - UPDATED -->
                 <div class="col-12 col-md-6">
                   <div class="info-group">
-                    <div class="info-label">Metode</div>
+                    <div class="info-label">Metode Pembayaran</div>
                     <div class="info-value">
-                      <i class="bi bi-credit-card-2-front text-blue-900 me-2"></i>
-                      <?= $isMidtrans ? 'Pembayaran Digital' : 'Lainnya' ?>
+                      <i class="bi <?= esc($paymentDisplay['icon']) ?> <?= esc($paymentDisplay['color']) ?> me-2"></i>
+                      <span class="<?= esc($paymentDisplay['color']) ?>"><?= esc($paymentDisplay['label']) ?></span>
                     </div>
                   </div>
                 </div>
+
+                <!-- MODE KEHADIRAN -->
                 <div class="col-12 col-md-6">
                   <div class="info-group">
                     <div class="info-label">Mode Kehadiran</div>
                     <div class="info-value">
-                      <span class="badge bg-primary-subtle text-primary">Presenter (Offline)</span>
+                      <span class="badge <?= esc($modeBadge) ?>">
+                        <i class="bi <?= $participationType === 'online' ? 'bi-wifi' : 'bi-building' ?> me-1"></i>
+                        <?= esc($modeLabel) ?>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -217,10 +277,17 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
                   Anda telah resmi terdaftar sebagai presenter. Semua fitur presenter sudah aktif.
                 </div>
               <?php elseif ($status === 'pending'): ?>
-                <div class="alert alert-warning mb-0">
+                <div class="alert alert-warning mb-3">
                   <i class="bi bi-hourglass-split me-2"></i><strong>Sedang Diproses</strong><br>
                   Pembayaran sedang diverifikasi. Status akan diperbarui otomatis.
                 </div>
+                <!-- Button Check Status untuk Pending -->
+                <?php if ($isMidtrans && $hasOrderId): ?>
+                  <a href="<?= site_url('presenter/pembayaran/checkStatus/'.$pay['id_pembayaran']) ?>" 
+                     class="btn btn-primary w-100">
+                    <i class="bi bi-arrow-clockwise me-2"></i>Cek Status Pembayaran
+                  </a>
+                <?php endif; ?>
               <?php elseif ($status === 'canceled'): ?>
                 <div class="alert alert-danger mb-0">
                   <i class="bi bi-x-circle me-2"></i><strong>Pembayaran Dibatalkan</strong><br>
@@ -316,7 +383,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .amount-box{ background:#f8fafc; border:1px solid rgba(30,64,175,.10); border-radius:12px; }
 
 /* Status icon */
-.status-icon{ width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; }
+.status-icon{ width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; margin:0 auto; }
 @media (max-width: 768px){ .status-icon{ width:60px; height:60px; font-size:1.5rem; } }
 
 /* Buttons */

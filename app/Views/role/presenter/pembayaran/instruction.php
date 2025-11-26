@@ -2,6 +2,7 @@
 $title              = $title ?? 'Instruksi Pembayaran';
 $event              = $event ?? [];
 $basePrice          = (int)($basePrice ?? 0);
+$userMode           = $userMode ?? 'offline'; // Mode dari registrasi user
 $midtransClientKey  = $midtrans_client_key ?? '';
 $isProduction       = $is_production ?? false;
 
@@ -9,6 +10,11 @@ $evTitle = $event['title'] ?? '-';
 $evDate  = isset($event['event_date']) ? date('d M Y', strtotime($event['event_date'])) : '-';
 $evTime  = $event['event_time'] ?? '-';
 $amountF = number_format($basePrice, 0, ',', '.');
+
+// Label & badge untuk mode
+$modeLabel = ucfirst($userMode);
+$modeBadge = $userMode === 'online' ? 'bg-info-subtle text-info' : 'bg-success-subtle text-success';
+$modeIcon = $userMode === 'online' ? 'bi-camera-video' : 'bi-person-check';
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -39,7 +45,10 @@ $amountF = number_format($basePrice, 0, ',', '.');
           <div class="d-flex flex-wrap align-items-center gap-2">
             <span class="badge bg-info-subtle text-info px-3 py-2"><i class="bi bi-calendar-event me-1"></i><?= esc($evDate) ?></span>
             <span class="badge bg-primary-subtle text-primary px-3 py-2"><i class="bi bi-clock me-1"></i><?= esc($evTime) ?></span>
-            <span class="badge bg-success-subtle text-success px-3 py-2"><i class="bi bi-person-video3 me-1"></i>Presenter • Offline</span>
+            <span class="badge <?= $modeBadge ?> px-3 py-2">
+              <i class="bi bi-person-video3 me-1"></i>Presenter • 
+              <i class="<?= $modeIcon ?> ms-1 me-1"></i><?= esc($modeLabel) ?>
+            </span>
           </div>
         </div>
       </div>
@@ -63,8 +72,12 @@ $amountF = number_format($basePrice, 0, ',', '.');
                   <div class="fw-semibold text-ink"><?= esc($evTime) ?></div>
                 </div>
                 <div class="col-md-6">
-                  <div class="mini-label text-muted">Mode Kehadiran</div>
-                  <div class="fw-semibold"><span class="badge bg-primary-subtle text-primary">Offline</span></div>
+                  <div class="mini-label text-muted">Mode Kehadiran Anda</div>
+                  <div class="fw-semibold">
+                    <span class="badge <?= $modeBadge ?>">
+                      <i class="<?= $modeIcon ?> me-1"></i><?= esc($modeLabel) ?>
+                    </span>
+                  </div>
                 </div>
                 <div class="col-md-6">
                   <div class="mini-label text-muted">Role</div>
@@ -109,7 +122,7 @@ $amountF = number_format($basePrice, 0, ',', '.');
             </div>
             <div class="card-body">
               <div class="mb-2 d-flex justify-content-between">
-                <span>Harga Presenter (Offline)</span>
+                <span>Harga Presenter (<?= esc($modeLabel) ?>)</span>
                 <span class="fw-semibold text-ink" id="basePrice">Rp <?= $amountF ?></span>
               </div>
 
@@ -228,6 +241,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15p
 .bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.45rem .7rem; font-weight:600; font-size:.85rem; }
 .bg-success-subtle{ background:#d1fae5!important; color:#065f46!important; }
 .bg-primary-subtle{ background:#dbeafe!important; color:var(--blue-700)!important; }
+.bg-info-subtle{ background:#dbeafe!important; color:#0c4a6e!important; }
 
 /* Inputs & buttons */
 .form-control-soft{ border:2px solid #e2e8f0; border-radius:10px; }

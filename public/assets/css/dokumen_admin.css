@@ -27,3 +27,30 @@
   .picklist-item:hover { box-shadow:0 8px 18px rgba(15,23,42,.08); transform: translateY(-1px); }
   .picklist-item.disabled { opacity:.55; }
   .picklist-item.active { outline:2px solid var(--primary-color); }
+
+.picklist-item {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+}
+
+.picklist-item:not(.disabled):hover {
+  background-color: #f8f9fa;
+}
+
+.picklist-item.active {
+  background-color: #e7f3ff;
+  border: 1px solid #0d6efd;
+}
+
+.picklist-item.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #f8f9fa;
+}
+
+.selected-icon {
+  font-size: 1.2rem;
+}
+

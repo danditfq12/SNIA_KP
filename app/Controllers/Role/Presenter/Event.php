@@ -172,25 +172,104 @@ class Event extends BaseController
         ]);
     }
 
-    /* ========================= REGISTER ========================= */
+    /* ========================= REGISTER (GET - Pilih Mode) ========================= */
     public function register($id)
     {
         $userId = (int) session()->get('id_user');
+        $eventId = (int) $id;
 
-        if (!$this->eventModel->isRegistrationOpen((int)$id)) {
-            return redirect()->to('/presenter/events/detail/'.$id)
+        $event = $this->eventModel->find($eventId);
+        if (!$event) {
+            return redirect()->to('/presenter/events')->with('error', 'Event tidak ditemukan.');
+        }
+
+        if (!$this->eventModel->isRegistrationOpen($eventId)) {
+            return redirect()->to('/presenter/events/detail/'.$eventId)
                 ->with('error', 'Pendaftaran untuk event ini sudah ditutup.');
         }
 
-        $this->cleanupOrphanReg((int)$id, $userId);
-
-        $regId = $this->regModel->createPresenterRegistration((int)$id, $userId);
-        if ($regId) {
-            return redirect()->to('/presenter/kontributor/start/'.$id)
-                ->with('success', 'Terdaftar. Lengkapi data kontributor terlebih dahulu.');
+        // Cek apakah sudah terdaftar
+        $existingReg = $this->regModel->findUserReg($eventId, $userId);
+        if ($existingReg && empty($existingReg['is_dropped'])) {
+            return redirect()->to('/presenter/events/detail/'.$eventId)
+                ->with('info', 'Anda sudah terdaftar di event ini.');
         }
 
-        return redirect()->to('/presenter/events/detail/'.$id)->with('error', 'Gagal mendaftar.');
+        $this->cleanupOrphanReg($eventId, $userId);
+
+        // Tentukan opsi mode berdasarkan format event
+        $format = strtolower($event['format'] ?? '');
+        $options = [];
+        if (in_array($format, ['online','both'], true)) $options[] = 'online';
+        if (in_array($format, ['offline','both'], true)) $options[] = 'offline';
+
+        // Get pricing untuk presenter dari wave aktif
+        $pricing = [
+            'presenter' => [
+                'online'  => $this->eventModel->getEventPrice($eventId, 'presenter', 'online'),
+                'offline' => $this->eventModel->getEventPrice($eventId, 'presenter', 'offline'),
+            ]
+        ];
+
+        // Get wave info untuk ditampilkan
+        $waveInfo = null;
+        if (method_exists($this->eventModel, 'getCurrentWave')) {
+            $activeWave = $this->eventModel->getCurrentWave($eventId);
+            if ($activeWave) {
+                $waveInfo = [
+                    'wave_number' => $activeWave['wave_number'] ?? 1,
+                    'deadline'    => $activeWave['registration_deadline'] ?? ($event['registration_deadline'] ?? null),
+                ];
+            }
+        }
+
+        return view('role/presenter/events/register', [
+            'title'   => 'Pilih Mode Kehadiran - Presenter',
+            'event'   => $event,
+            'options' => $options,
+            'pricing' => $pricing,
+            'waveInfo'=> $waveInfo,
+        ]);
+    }
+
+    /* ========================= REGISTER POST (Simpan Mode & Lanjut Kontributor) ========================= */
+    public function registerPost($id)
+    {
+        $userId = (int) session()->get('id_user');
+        $eventId = (int) $id;
+
+        if (!$this->eventModel->isRegistrationOpen($eventId)) {
+            return redirect()->to('/presenter/events/detail/'.$eventId)
+                ->with('error', 'Pendaftaran untuk event ini sudah ditutup.');
+        }
+
+        $mode = strtolower(trim($this->request->getPost('mode_kehadiran') ?? ''));
+        if (!in_array($mode, ['online','offline'], true)) {
+            return redirect()->back()->withInput()
+                ->with('error', 'Mode kehadiran tidak valid.');
+        }
+
+        $this->cleanupOrphanReg($eventId, $userId);
+
+        // Simpan registrasi dengan mode yang dipilih
+        $data = [
+            'id_event'       => $eventId,
+            'id_user'        => $userId,
+            'mode_kehadiran' => $mode,
+            'status'         => 'menunggu_pembayaran',
+            'qr_token'       => bin2hex(random_bytes(16)),
+        ];
+
+        $this->regModel->insert($data);
+        $regId = $this->regModel->getInsertID();
+
+        if ($regId) {
+            return redirect()->to('/presenter/kontributor/start/'.$eventId)
+                ->with('success', 'Pendaftaran berhasil! Silakan lengkapi data kontributor.');
+        }
+
+        return redirect()->to('/presenter/events/detail/'.$eventId)
+            ->with('error', 'Gagal mendaftar. Silakan coba lagi.');
     }
 
     /* ========================= CANCEL (HARD DROP USER) ========================= */

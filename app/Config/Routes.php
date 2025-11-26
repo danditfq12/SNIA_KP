@@ -274,6 +274,8 @@ $routes->group('admin', [
     $routes->get ('dokumen/search-eligible-loa',       'Dokumen::searchEligibleLoa');
     $routes->get ('dokumen/users-for-loa/(:num)',            'Dokumen::getUsersForLoa/$1');
     $routes->get ('dokumen/users-for-certificate/(:num)',    'Dokumen::getUsersForCertificate/$1');
+    $routes->get ('dokumen/users-for-dokumen-lain/(:num)','Dokumen::getUsersForDokumenLain/$1');
+    $routes->post('dokumen/uploadDokumenLainnya', 'Dokumen::uploadDokumenLainnya');
 
     // ===== VOUCHER =====
     $routes->get ('voucher',                           'Voucher::index');
@@ -309,10 +311,11 @@ $routes->group('presenter', [
     $routes->get('dashboard', 'Dashboard::index');
 
     // ====== Event (opsional: sesuaikan dengan controllernya) ======
-    $routes->get ('events',                      'Event::index');
-    $routes->get ('events/detail/(:num)',        'Event::detail/$1');
-    $routes->get ('events/register/(:num)',      'Event::register/$1');
-    $routes->get ('events/cancel/(:num)',        'Event::cancel/$1');
+     $routes->get('events', 'Event::index');
+    $routes->get('events/detail/(:num)', 'Event::detail/$1');
+    $routes->get('events/register/(:num)', 'Event::register/$1');
+    $routes->post('events/register/(:num)', 'Event::registerPost/$1');  // ← TAMBAH INI (POST)
+    $routes->get('events/cancel/(:num)', 'Event::cancel/$1');
 
     // ====== Abstrak (presenter) ======
     $routes->get ('abstrak',                           'Abstrak::index');
@@ -362,11 +365,11 @@ $routes->group('presenter', [
     $routes->post('absensi/scan',         'Absensi::scan');
 
     // ====== Dokumen (presenter) ======
-    $routes->get ('dokumen',                                'Dokumen::index');
+    $routes->get('dokumen', 'Dokumen::index');
     $routes->get ('dokumen/loa',                            'Dokumen::loa');
-    $routes->get ('dokumen/sertifikat',                     'Dokumen::sertifikat');
-    $routes->get ('dokumen/loa/download/(:segment)',        'Dokumen::downloadLoa/$1');
-    $routes->get ('dokumen/sertifikat/download/(:segment)', 'Dokumen::downloadSertifikat/$1');
+    $routes->get('dokumen/loa/download/(:any)', 'Dokumen::downloadLoa/$1');
+    $routes->get('dokumen/sertifikat/download/(:any)', 'Dokumen::downloadSertifikat/$1');
+    $routes->get('dokumen/lainnya/download/(:any)', 'Dokumen::downloadLainnya/$1');
 });
 
 

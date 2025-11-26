@@ -411,29 +411,13 @@ class MidtransService
 
     public function buildTransactionParams($orderId, $amount, $customerDetails, $itemDetails, $eventData = [])
     {
-<<<<<<< HEAD
         $baseUrl    = rtrim(base_url(), '/') . '/';
         $finishPath = $eventData['finish_path'] ?? 'presenter/pembayaran/finish';
-=======
-        $calculatedAmount = 0;
-        foreach ($itemDetails as $item) {
-            $itemPrice = (int)($item['price'] ?? 0);
-            $itemQty = (int)($item['quantity'] ?? 1);
-            $calculatedAmount += ($itemPrice * $itemQty);
-        }
-
-        $grossAmount = $calculatedAmount > 0 ? $calculatedAmount : (int)$amount;
-        $baseUrl = rtrim(base_url(), '/') . '/';
->>>>>>> kelompok1/final
 
         $params = [
             'transaction_details' => [
                 'order_id'     => $orderId,
-<<<<<<< HEAD
                 'gross_amount' => (int) $amount, // HARUS = sum(item_details)
-=======
-                'gross_amount' => $grossAmount,
->>>>>>> kelompok1/final
             ],
             'customer_details' => [
                 'first_name' => $this->truncateString($customerDetails['nama_lengkap'] ?? 'Customer', 50),
@@ -452,18 +436,10 @@ class MidtransService
             ],
         ];
 
-<<<<<<< HEAD
         // Custom tracking (opsional)
         $params['custom_field1'] = (string)($eventData['event_id'] ?? '');
         $params['custom_field2'] = (string)($eventData['user_role'] ?? '');
         $params['custom_field3'] = (string)($eventData['participation_type'] ?? '');
-=======
-        if (!empty($eventData)) {
-            $params['custom_field1'] = (string)($eventData['event_id'] ?? '');
-            $params['custom_field2'] = (string)($eventData['user_role'] ?? '');
-            $params['custom_field3'] = (string)($eventData['participation_type'] ?? '');
-        }
->>>>>>> kelompok1/final
 
         return $params;
     }
@@ -487,7 +463,6 @@ class MidtransService
                 'no_hp'        => $userDetails['no_hp'] ?? '',
             ];
 
-<<<<<<< HEAD
             // Nama item aman: rapikan spasi & potong multibyte-safe ke 50 karakter
             $rawTitle  = (string)($eventDetails['title'] ?? 'Event Registration');
             $clean     = preg_replace('/\s+/', ' ', $rawTitle);
@@ -503,16 +478,6 @@ class MidtransService
                 'price'    => (int) $amount,
                 'quantity' => 1,
                 'category' => 'Event Registration',
-=======
-            $eventTitle = $this->truncateString($eventDetails['title'] ?? 'Event Registration', 50);
-            $itemPrice = (int)$amount;
-            
-            $itemDetails = [[
-                'id'       => 'EVENT-' . $eventId,
-                'price'    => $itemPrice,
-                'quantity' => 1,
-                'name'     => $eventTitle,
->>>>>>> kelompok1/final
             ]];
 
             // Hitung gross dari item_details (bukan percaya input luar)
@@ -536,12 +501,8 @@ class MidtransService
                 'finish_path'        => $finishPath,
             ];
 
-<<<<<<< HEAD
             // Pakai $gross (konsisten dgn sum item_details)
             $params       = $this->buildTransactionParams($orderId, $gross, $customerDetails, $itemDetails, $eventData);
-=======
-            $params = $this->buildTransactionParams($orderId, $amount, $customerDetails, $itemDetails, $eventData);
->>>>>>> kelompok1/final
             $snapResponse = $this->createTransaction($params);
 
             if (!isset($snapResponse['token'])) {
@@ -577,12 +538,8 @@ class MidtransService
             case 'capture':
                 $paymentStatus = (strtolower($fraudStatus) === 'accept') ? 'verified' : 'pending';
                 break;
-<<<<<<< HEAD
 
         case 'settlement':
-=======
-            case 'settlement':
->>>>>>> kelompok1/final
                 $paymentStatus = 'verified';
                 break;
             case 'pending':
@@ -616,11 +573,7 @@ class MidtransService
     public function syncPaymentStatus($orderId)
     {
         try {
-<<<<<<< HEAD
             $statusData        = $this->getTransactionStatus($orderId);
-=======
-            $statusData = $this->getTransactionStatus($orderId);
->>>>>>> kelompok1/final
             $transactionStatus = $statusData['transaction_status'] ?? '';
             $fraudStatus = $statusData['fraud_status'] ?? '';
 
@@ -661,26 +614,4 @@ class MidtransService
             ];
         }
     }
-<<<<<<< HEAD
 }
-=======
-
-    public function getPaymentMethodInfo($paymentType)
-    {
-        $methods = $this->getAvailablePaymentMethods();
-        
-        foreach ($methods as $category => $categoryMethods) {
-            if (isset($categoryMethods[$paymentType])) {
-                return $categoryMethods[$paymentType];
-            }
-        }
-
-        return [
-            'name' => 'Digital Payment',
-            'icon' => 'credit-card',
-            'color' => '#2563eb',
-            'enabled' => true
-        ];
-    }
-}
->>>>>>> kelompok1/final

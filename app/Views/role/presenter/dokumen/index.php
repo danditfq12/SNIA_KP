@@ -2,6 +2,7 @@
 $title      = $title ?? 'Dokumen Saya';
 $loa        = $loa ?? [];
 $sertifikat = $sertifikat ?? [];
+$lainnya    = $lainnya ?? [];
 
 /* helper tanggal */
 $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
@@ -17,7 +18,7 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
       <div class="hero-blue card-glass mb-3 p-3 p-md-4 d-flex justify-content-between align-items-start gap-3">
         <div>
           <h3 class="hero-title mb-1"><i class="bi bi-files me-2"></i>Dokumen</h3>
-          <div class="text-white-75 small">Unduh LOA & Sertifikat Anda</div>
+          <div class="text-white-75 small">Unduh LOA, Sertifikat & Dokumen Event Anda</div>
         </div>
         <div class="d-none d-md-block text-end">
           <div class="text-white-75 small">Hari ini</div>
@@ -43,6 +44,14 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
             <li class="nav-item" role="presentation">
               <button class="nav-link" id="serti-tab" data-bs-toggle="pill" data-bs-target="#serti-pane" type="button" role="tab">
                 <i class="bi bi-award me-1"></i> Sertifikat
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="lainnya-tab" data-bs-toggle="pill" data-bs-target="#lainnya-pane" type="button" role="tab">
+                <i class="bi bi-folder-symlink me-1"></i> Dokumen Lainnya
+                <?php if (!empty($lainnya)): ?>
+                  <span class="badge bg-white text-primary ms-1"><?= count($lainnya) ?></span>
+                <?php endif; ?>
               </button>
             </li>
           </ul>
@@ -113,6 +122,79 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
                 </div>
               <?php endif; ?>
             </div>
+
+            <!-- Dokumen Lainnya -->
+            <div class="tab-pane fade" id="lainnya-pane" role="tabpanel" aria-labelledby="lainnya-tab">
+              <?php if (empty($lainnya)): ?>
+                <div class="empty-state">
+                  <div class="empty-icon bg-primary-subtle text-primary"><i class="bi bi-inbox"></i></div>
+                  <div class="empty-text">Belum ada dokumen lainnya.</div>
+                  <div class="small text-muted mt-2">Dokumen event seperti rundown, materi, dan form akan muncul di sini.</div>
+                </div>
+              <?php else: ?>
+                <div class="list-group list-group-flush">
+                  <?php 
+                  // Group by event
+                  $byEvent = [];
+                  foreach ($lainnya as $d) {
+                    $eventId = $d['event_id'] ?? 0;
+                    if (!isset($byEvent[$eventId])) {
+                      $byEvent[$eventId] = [
+                        'event_title' => $d['event_title'] ?? '—',
+                        'docs' => []
+                      ];
+                    }
+                    $byEvent[$eventId]['docs'][] = $d;
+                  }
+                  
+                  foreach ($byEvent as $eventId => $eventData):
+                  ?>
+                    <div class="list-group-item">
+                      <div class="fw-bold text-blue-900 mb-3 d-flex align-items-center gap-2">
+                        <i class="bi bi-calendar-event"></i>
+                        <span><?= esc($eventData['event_title']) ?></span>
+                        <span class="badge bg-primary-subtle text-primary"><?= count($eventData['docs']) ?> dokumen</span>
+                      </div>
+                      <div class="row g-2">
+                        <?php foreach ($eventData['docs'] as $d):
+                          $file  = (string)($d['file_path'] ?? '');
+                          $fname = $file !== '' ? basename($file) : '';
+                          $syarat = $d['syarat'] ?? 'Dokumen';
+                          $ext = strtoupper(pathinfo($fname, PATHINFO_EXTENSION));
+                          
+                          // Icon based on file type
+                          $icon = 'bi-file-earmark';
+                          $iconColor = 'text-secondary';
+                          if ($ext === 'PDF') { $icon = 'bi-file-earmark-pdf'; $iconColor = 'text-danger'; }
+                          elseif (in_array($ext, ['DOC','DOCX'])) { $icon = 'bi-file-earmark-word'; $iconColor = 'text-primary'; }
+                          elseif (in_array($ext, ['PPT','PPTX'])) { $icon = 'bi-file-earmark-easel'; $iconColor = 'text-warning'; }
+                          elseif (in_array($ext, ['XLS','XLSX'])) { $icon = 'bi-file-earmark-excel'; $iconColor = 'text-success'; }
+                          elseif (in_array($ext, ['JPG','JPEG','PNG'])) { $icon = 'bi-file-earmark-image'; $iconColor = 'text-info'; }
+                          elseif (in_array($ext, ['ZIP','RAR'])) { $icon = 'bi-file-earmark-zip'; $iconColor = 'text-secondary'; }
+                        ?>
+                        <div class="col-12 col-md-6">
+                          <div class="doc-card">
+                            <div class="d-flex align-items-center gap-3">
+                              <i class="bi <?= $icon ?> fs-3 <?= $iconColor ?>"></i>
+                              <div class="flex-grow-1 overflow-hidden">
+                                <div class="fw-semibold text-truncate"><?= esc($syarat) ?></div>
+                                <div class="small text-muted"><?= $ext ?> • <?= esc($fmt($d['created_at'] ?? null)) ?></div>
+                              </div>
+                              <?php if ($fname !== ''): ?>
+                                <a class="btn btn-sm btn-primary" href="/presenter/dokumen/lainnya/download/<?= rawurlencode($fname) ?>" title="Download">
+                                  <i class="bi bi-download"></i>
+                                </a>
+                              <?php endif; ?>
+                            </div>
+                          </div>
+                        </div>
+                        <?php endforeach; ?>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
+            </div>
           </div>
 
         </div>
@@ -138,7 +220,7 @@ $fmt = fn($s,$t=false)=> $s ? date($t?'d M Y H:i':'d M Y', strtotime($s)) : '-';
 
 body{
   font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  font-size:15.5px;           /* seragam dengan halaman lain */
+  font-size:15.5px;
   line-height:1.6;
   color:var(--ink);
 }
@@ -211,6 +293,21 @@ body{
 }
 .list-group-item + .list-group-item{ border-top:1px solid rgba(30,64,175,.10); }
 
+/* ===== Doc Card (for Dokumen Lainnya) ===== */
+.doc-card{
+  background:rgba(255,255,255,.8);
+  border:1px solid rgba(30,64,175,.12);
+  border-radius:12px;
+  padding:.75rem;
+  transition:all .2s ease;
+}
+.doc-card:hover{
+  background:#fff;
+  border-color:var(--blue-300);
+  box-shadow:0 4px 12px rgba(37,99,235,.1);
+  transform:translateY(-2px);
+}
+
 /* ===== Empty state ===== */
 .empty-state{ padding:2rem 1rem; text-align:center; color:#64748b; }
 .empty-icon{
@@ -223,6 +320,7 @@ body{
 /* ===== Buttons ===== */
 .btn{ border-radius:10px; font-weight:800; font-size:.98rem; padding:.6rem 1.05rem; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
+.btn-sm{ padding:.4rem .75rem; font-size:.875rem; }
 
 /* ===== Responsive ===== */
 @media (max-width:575.98px){
@@ -230,16 +328,20 @@ body{
   .hero-blue{ border-radius:14px; padding:1.25rem!important; margin-bottom:1rem!important; }
   .hero-title{ font-size:1.25rem; }
   .list-group-item{ padding:.85rem 0; }
+  .doc-card{ padding:.6rem; }
 }
 </style>
 
 <script>
-  // aktifkan tab berdasar hash (#loa / #sertifikat) tanpa mengubah fungsi yang ada
+  // aktifkan tab berdasar hash (#loa / #sertifikat / #lainnya)
   (function(){
     const hash = (location.hash||'').toLowerCase();
-    const loaBtn   = document.getElementById('loa-tab');
-    const sertiBtn = document.getElementById('serti-tab');
+    const loaBtn     = document.getElementById('loa-tab');
+    const sertiBtn   = document.getElementById('serti-tab');
+    const lainnyaBtn = document.getElementById('lainnya-tab');
+    
     if(hash === '#sertifikat' && sertiBtn){ new bootstrap.Tab(sertiBtn).show(); }
-    if(hash === '#loa' && loaBtn){ new bootstrap.Tab(loaBtn).show(); }
+    else if(hash === '#lainnya' && lainnyaBtn){ new bootstrap.Tab(lainnyaBtn).show(); }
+    else if(hash === '#loa' && loaBtn){ new bootstrap.Tab(loaBtn).show(); }
   })();
 </script>

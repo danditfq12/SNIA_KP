@@ -42,14 +42,183 @@ class Pembayaran extends BaseController
         return (int) (session('id_user') ?? session('id') ?? 0);
     }
 
-    private function getBasePrice(array $event): int
+    /**
+     * Get price berdasarkan mode kehadiran dari registrasi
+     */
+    private function getBasePrice(array $event, string $mode = 'offline'): int
     {
-        return max(0, (int)($event['presenter_fee_offline'] ?? 0));
+        $eventId = (int)($event['id'] ?? 0);
+        
+        // Gunakan method getEventPrice dari EventModel yang sudah support wave-based pricing
+        $price = $this->eventModel->getEventPrice($eventId, 'presenter', $mode);
+        
+        return max(0, (int)$price);
+    }
+
+    /**
+     * Get mode kehadiran dari registrasi user
+     */
+    private function getUserMode(int $eventId, int $userId): string
+    {
+        $reg = $this->regModel->findUserReg($eventId, $userId);
+        if (!$reg) return 'offline'; // fallback default
+        
+        $mode = strtolower(trim((string)($reg['mode_kehadiran'] ?? 'offline')));
+        return in_array($mode, ['online','offline'], true) ? $mode : 'offline';
     }
 
     private function formatRupiah(int $n): string
     {
         return 'Rp ' . number_format($n, 0, ',', '.');
+    }
+
+    /**
+     * Get payment type label untuk display
+     */
+    private function getPaymentTypeLabel(string $paymentType): string
+    {
+        if (empty($paymentType) || $paymentType === 'midtrans') {
+            return 'MIDTRANS';
+        }
+
+        // Bank Transfer dengan bank specific
+        if (str_starts_with($paymentType, 'bank_transfer_')) {
+            $bank = strtoupper(str_replace('bank_transfer_', '', $paymentType));
+            return "VA {$bank}";
+        }
+
+        // Payment types lainnya
+        return match($paymentType) {
+            'gopay' => 'GOPAY',
+            'qris' => 'QRIS',
+            'shopeepay' => 'SHOPEEPAY',
+            'credit_card' => 'CREDIT CARD',
+            'cstore' => 'ALFAMART/INDOMARET',
+            'alfamart' => 'ALFAMART',
+            'indomaret' => 'INDOMARET',
+            'akulaku' => 'AKULAKU',
+            'mandiri_bill', 'echannel' => 'MANDIRI BILL',
+            'bca_klikpay' => 'BCA KLIKPAY',
+            'bca_klikbca' => 'BCA KLIKBCA',
+            'cimb_clicks' => 'CIMB CLICKS',
+            'danamon_online' => 'DANAMON ONLINE',
+            default => strtoupper(str_replace('_', ' ', $paymentType))
+        };
+    }
+
+    /**
+     * Get payment type icon
+     */
+    private function getPaymentTypeIcon(string $paymentType): string
+    {
+        if (empty($paymentType)) {
+            return 'bi bi-credit-card-2-front';
+        }
+
+        // GoPay
+        if (str_contains($paymentType, 'gopay')) {
+            return 'bi bi-wallet2';
+        }
+
+        // QRIS
+        if (str_contains($paymentType, 'qris')) {
+            return 'bi bi-qr-code';
+        }
+
+        // Bank Transfer / VA
+        if (str_contains($paymentType, 'bank_transfer') || 
+            str_contains($paymentType, 'bca') || 
+            str_contains($paymentType, 'bni') || 
+            str_contains($paymentType, 'bri') ||
+            str_contains($paymentType, 'mandiri') ||
+            str_contains($paymentType, 'permata') ||
+            str_contains($paymentType, 'cimb')) {
+            return 'bi bi-bank';
+        }
+
+        // Credit Card
+        if (str_contains($paymentType, 'credit_card') || str_contains($paymentType, 'card')) {
+            return 'bi bi-credit-card-2-front';
+        }
+
+        // E-wallet lainnya
+        if (str_contains($paymentType, 'shopee') || str_contains($paymentType, 'dana') || 
+            str_contains($paymentType, 'ovo') || str_contains($paymentType, 'linkaja')) {
+            return 'bi bi-wallet2';
+        }
+
+        // Convenience Store
+        if (str_contains($paymentType, 'cstore') || str_contains($paymentType, 'alfamart') || 
+            str_contains($paymentType, 'indomaret')) {
+            return 'bi bi-shop';
+        }
+
+        return 'bi bi-credit-card-2-front';
+    }
+
+    /**
+     * Get payment type badge color
+     */
+    private function getPaymentTypeBadge(string $paymentType): string
+    {
+        if (empty($paymentType)) {
+            return 'bg-primary';
+        }
+
+        // GoPay / E-wallet -> info (biru muda)
+        if (str_contains($paymentType, 'gopay') || str_contains($paymentType, 'shopee') || 
+            str_contains($paymentType, 'dana') || str_contains($paymentType, 'ovo')) {
+            return 'bg-info';
+        }
+
+        // QRIS -> primary (biru)
+        if (str_contains($paymentType, 'qris')) {
+            return 'bg-primary';
+        }
+
+        // Bank Transfer -> success (hijau)
+        if (str_contains($paymentType, 'bank_transfer') || 
+            str_contains($paymentType, 'bca') || 
+            str_contains($paymentType, 'bni') || 
+            str_contains($paymentType, 'bri') ||
+            str_contains($paymentType, 'mandiri')) {
+            return 'bg-success';
+        }
+
+        // Credit Card -> warning (kuning)
+        if (str_contains($paymentType, 'credit_card')) {
+            return 'bg-warning';
+        }
+
+        // Convenience Store -> secondary (abu)
+        if (str_contains($paymentType, 'cstore') || str_contains($paymentType, 'alfamart')) {
+            return 'bg-secondary';
+        }
+
+        return 'bg-primary';
+    }
+
+    /**
+     * Format payment type untuk disimpan ke database
+     * Dipanggil dari notification/callback
+     */
+    private function formatPaymentType(string $paymentType, ?string $bank = null): string
+    {
+        $paymentType = strtolower(trim($paymentType));
+        
+        // Format: "bank_transfer" + bank => "bank_transfer_bca"
+        if ($paymentType === 'bank_transfer' && $bank) {
+            return 'bank_transfer_' . strtolower($bank);
+        }
+
+        // Format: "echannel" (Mandiri Bill) => "mandiri_bill"
+        if ($paymentType === 'echannel') {
+            return 'mandiri_bill';
+        }
+
+        // Format lainnya tetap gunakan payment_type asli
+        // gopay, qris, credit_card, cstore, akulaku, dll
+        return $paymentType;
     }
 
     private function applyVoucherDiscount(int $basePrice, ?array $voucher): int
@@ -158,10 +327,18 @@ class Pembayaran extends BaseController
             $p['event'] = $events[$eventId] ?? null;
             $p['flow']  = $flowStatuses[$eventId] ?? null;
 
-            $method = strtolower((string)($p['metode'] ?? ''));
-            $p['method_label'] = $method ? strtoupper($method) : 'MIDTRANS';
-            $p['method_icon']  = $method === 'midtrans' ? 'bi bi-credit-card-2-front' : 'bi bi-wallet2';
-            $p['method_badge'] = $method === 'midtrans' ? 'bg-primary' : 'bg-secondary';
+            // Gunakan midtrans_payment_type sebagai metode
+            $paymentType = strtolower(trim((string)($p['midtrans_payment_type'] ?? '')));
+            
+            // Jika payment_type kosong, fallback ke metode
+            if (empty($paymentType)) {
+                $paymentType = strtolower((string)($p['metode'] ?? ''));
+            }
+            
+            // Format label dan icon berdasarkan payment type
+            $p['method_label'] = $this->getPaymentTypeLabel($paymentType);
+            $p['method_icon'] = $this->getPaymentTypeIcon($paymentType);
+            $p['method_badge'] = $this->getPaymentTypeBadge($paymentType);
 
             $amount = (int)($p['jumlah'] ?? 0);
             $p['jumlah_formatted'] = 'Rp ' . number_format($amount, 0, ',', '.');
@@ -215,6 +392,7 @@ class Pembayaran extends BaseController
      * - User terdaftar
      * - FP terbaru path != '' dan status === 'ACCEPTED'
      * - Belum ada payment pending/verified
+     * - Harga berdasarkan mode kehadiran yang dipilih saat registrasi
      */
     private function getEventsNeedingPayment(int $userId): array
     {
@@ -246,7 +424,12 @@ class Pembayaran extends BaseController
             $ev = $this->eventModel->find($eventId);
             if (!$ev) continue;
 
-            $amount    = (int)($ev['presenter_fee_offline'] ?? 0);
+            // Get mode dari registrasi user
+            $userMode = $this->getUserMode($eventId, $userId);
+            
+            // Get price berdasarkan mode user
+            $amount = $this->getBasePrice($ev, $userMode);
+            
             $eventDate = $ev['event_date'] ?? null;
 
             $rows[] = [
@@ -257,6 +440,7 @@ class Pembayaran extends BaseController
                 'amount'           => $amount,
                 'amount_formatted' => $this->formatRupiah($amount),
                 'pay_url'          => site_url('presenter/pembayaran/instruction/'.$eventId),
+                'mode'             => $userMode, // tambahkan info mode
             ];
         }
 
@@ -379,6 +563,9 @@ class Pembayaran extends BaseController
                     $statusData = $this->midtrans->getTransactionStatus($orderId);
                     $transactionStatus = strtolower($statusData['transaction_status'] ?? '');
                     $fraudStatus = strtolower($statusData['fraud_status'] ?? '');
+                    $paymentType = strtolower($statusData['payment_type'] ?? '');
+                    $bank = $statusData['bank'] ?? null;
+                    
                     $newStatus = $this->mapMidtransStatus($transactionStatus, $fraudStatus);
 
                     if ($newStatus !== 'pending') {
@@ -387,6 +574,12 @@ class Pembayaran extends BaseController
                             'midtrans_raw_response' => json_encode($statusData),
                             'keterangan' => "Auto sync: {$transactionStatus}"
                         ];
+                        
+                        // SIMPAN PAYMENT TYPE
+                        if ($paymentType) {
+                            $updateData['midtrans_payment_type'] = $this->formatPaymentType($paymentType, $bank);
+                        }
+                        
                         if ($newStatus === 'verified') {
                             $updateData['verified_at'] = $statusData['settlement_time'] ?? date('Y-m-d H:i:s');
                             $updateData['auto_verified'] = true;
@@ -446,10 +639,15 @@ class Pembayaran extends BaseController
                 ->with('message', 'Anda sudah memiliki pembayaran untuk event ini.');
         }
 
+        // Get mode dari registrasi user
+        $userMode = $this->getUserMode($eventId, $userId);
+        $basePrice = $this->getBasePrice($event, $userMode);
+
         return view('role/presenter/pembayaran/instruction', [
             'title' => 'Instruksi Pembayaran',
             'event' => $event,
-            'basePrice' => $this->getBasePrice($event),
+            'basePrice' => $basePrice,
+            'userMode' => $userMode, // kirim mode ke view
             'midtrans_client_key' => $this->midtrans->getClientKey(),
             'is_production' => $this->midtrans->isProduction(),
         ]);
@@ -470,7 +668,9 @@ class Pembayaran extends BaseController
             return $this->response->setJSON(['ok'=>false,'message'=>'Event tidak ditemukan.','token'=>csrf_hash()]);
         }
 
-        $basePrice = $this->getBasePrice($event);
+        // Get mode dari registrasi
+        $userMode = $this->getUserMode($eventId, $userId);
+        $basePrice = $this->getBasePrice($event, $userMode);
         $voucher   = $this->findValidVoucher($code, $userId, $eventId);
 
         if (!$voucher) {
@@ -517,13 +717,16 @@ class Pembayaran extends BaseController
                 ->with('message', 'Anda sudah memiliki pembayaran untuk event ini.');
         }
 
-        $basePrice = $this->getBasePrice($event);
+        // Get mode dari registrasi
+        $userMode = $this->getUserMode($eventId, $userId);
+        $basePrice = $this->getBasePrice($event, $userMode);
         $user = $this->userModel->find($userId);
 
         return view('role/presenter/pembayaran/create', [
             'title'   => 'Pilihan Pembayaran',
             'event'   => $event,
             'amount'  => $basePrice,
+            'userMode' => $userMode,
             'user'    => $user,
             'midtrans_client_key' => $this->midtrans->getClientKey(),
             'is_production'       => $this->midtrans->isProduction(),
@@ -550,7 +753,10 @@ class Pembayaran extends BaseController
         }
 
         $user       = $this->userModel->find($userId);
-        $basePrice  = $this->getBasePrice($event);
+        
+        // Get mode dari registrasi user
+        $userMode = $this->getUserMode($eventId, $userId);
+        $basePrice  = $this->getBasePrice($event, $userMode);
         $finalPrice = $basePrice;
         $voucherId  = null;
 
@@ -570,11 +776,12 @@ class Pembayaran extends BaseController
             ];
             $eventDetails = ['title' => $event['title'] ?? 'Event Registration'];
 
+            // Gunakan mode dari registrasi user
             $midtransResponse = $this->midtrans->createEventPayment(
                 $eventId,
                 $userId,
                 'presenter',
-                'offline',
+                $userMode, // gunakan mode user
                 $finalPrice,
                 $userDetails,
                 $eventDetails
@@ -584,7 +791,7 @@ class Pembayaran extends BaseController
                 'id_user'             => $userId,
                 'event_id'            => $eventId,
                 'jumlah'              => $finalPrice,
-                'participation_type'  => 'offline',
+                'participation_type'  => $userMode, // simpan mode user
                 'midtrans_order_id'   => $midtransResponse['order_id'],
                 'midtrans_snap_token' => $midtransResponse['snap_token'],
                 'id_voucher'          => $voucherId,
@@ -638,6 +845,9 @@ class Pembayaran extends BaseController
             if (isset($statusData['transaction_status'])) {
                 $transactionStatus = strtolower($statusData['transaction_status']);
                 $fraudStatus = strtolower($statusData['fraud_status'] ?? '');
+                $paymentType = strtolower($statusData['payment_type'] ?? '');
+                $bank = $statusData['bank'] ?? null;
+                
                 $newStatus = $this->mapMidtransStatus($transactionStatus, $fraudStatus);
 
                 if ($newStatus !== $payment['status']) {
@@ -646,6 +856,12 @@ class Pembayaran extends BaseController
                         'midtrans_raw_response' => json_encode($statusData),
                         'keterangan' => "Finish callback: {$transactionStatus}"
                     ];
+                    
+                    // SIMPAN PAYMENT TYPE
+                    if ($paymentType) {
+                        $updateData['midtrans_payment_type'] = $this->formatPaymentType($paymentType, $bank);
+                    }
+                    
                     if ($newStatus === 'verified') {
                         $updateData['verified_at'] = $statusData['settlement_time'] ?? date('Y-m-d H:i:s');
                         $updateData['auto_verified'] = true;
@@ -712,7 +928,11 @@ class Pembayaran extends BaseController
 
             $statusData = $this->midtrans->getTransactionStatus($payment['midtrans_order_id']);
             $transactionStatus = strtolower($statusData['transaction_status'] ?? '');
-            $newStatus = $this->mapMidtransStatus($transactionStatus, $statusData['fraud_status'] ?? '');
+            $fraudStatus = strtolower($statusData['fraud_status'] ?? '');
+            $paymentType = strtolower($statusData['payment_type'] ?? '');
+            $bank = $statusData['bank'] ?? null;
+            
+            $newStatus = $this->mapMidtransStatus($transactionStatus, $fraudStatus);
 
             if ($newStatus !== $payment['status']) {
                 $updateData = [
@@ -720,6 +940,12 @@ class Pembayaran extends BaseController
                     'midtrans_raw_response' => json_encode($statusData),
                     'keterangan' => "Auto sync: {$transactionStatus}"
                 ];
+                
+                // SIMPAN PAYMENT TYPE
+                if ($paymentType) {
+                    $updateData['midtrans_payment_type'] = $this->formatPaymentType($paymentType, $bank);
+                }
+                
                 if ($newStatus === 'verified') {
                     $updateData['verified_at'] = $statusData['settlement_time'] ?? date('Y-m-d H:i:s');
                     $updateData['auto_verified'] = true;
@@ -733,53 +959,115 @@ class Pembayaran extends BaseController
         }
     }
 
+    /**
+     * FIXED: Check Status - dengan error handling yang lebih baik
+     */
     public function checkStatus($paymentId)
     {
         $userId = $this->uid();
-        if (!$userId) return redirect()->to('/auth/login');
-
-        $payment = $this->payModel->find($paymentId);
-        if (!$payment || (int)$payment['id_user'] !== $userId) {
-            return redirect()->to('/presenter/pembayaran')->with('error', 'Data tidak ditemukan');
+        if (!$userId) {
+            return redirect()->to('/auth/login')->with('error', 'Silakan login terlebih dahulu');
         }
 
+        // Validasi payment ID
+        if (!is_numeric($paymentId) || $paymentId <= 0) {
+            return redirect()->to('/presenter/pembayaran')->with('error', 'ID pembayaran tidak valid');
+        }
+
+        $payment = $this->payModel->find($paymentId);
+        
+        // Validasi payment exists
+        if (!$payment) {
+            return redirect()->to('/presenter/pembayaran')->with('error', 'Data pembayaran tidak ditemukan');
+        }
+
+        // Validasi ownership
+        if ((int)$payment['id_user'] !== $userId) {
+            return redirect()->to('/presenter/pembayaran')->with('error', 'Anda tidak memiliki akses ke pembayaran ini');
+        }
+
+        // Validasi metode pembayaran
+        if (($payment['metode'] ?? '') !== 'midtrans') {
+            return redirect()->to('/presenter/pembayaran/detail/' . $paymentId)
+                ->with('warning', 'Cek status hanya tersedia untuk pembayaran melalui Midtrans');
+        }
+
+        // Validasi order ID
         if (empty($payment['midtrans_order_id'])) {
-            return redirect()->to('/presenter/pembayaran/detail/' . $paymentId)->with('warning', 'Pembayaran ini bukan dari Midtrans');
+            return redirect()->to('/presenter/pembayaran/detail/' . $paymentId)
+                ->with('warning', 'Order ID Midtrans tidak ditemukan');
         }
 
         try {
             $statusData = $this->midtrans->getTransactionStatus($payment['midtrans_order_id']);
+            
+            if (!$statusData || !isset($statusData['transaction_status'])) {
+                throw new \Exception('Response dari Midtrans tidak valid');
+            }
+
             $transactionStatus = strtolower($statusData['transaction_status'] ?? '');
-            $newStatus = $this->mapMidtransStatus($transactionStatus, $statusData['fraud_status'] ?? '');
+            $fraudStatus = strtolower($statusData['fraud_status'] ?? '');
+            $paymentType = strtolower($statusData['payment_type'] ?? '');
+            $bank = $statusData['bank'] ?? null;
+            
+            $newStatus = $this->mapMidtransStatus($transactionStatus, $fraudStatus);
 
             if ($newStatus !== $payment['status']) {
                 $updateData = [
                     'status' => $newStatus,
                     'midtrans_raw_response' => json_encode($statusData),
-                    'keterangan' => "Manual check: {$transactionStatus}"
+                    'keterangan' => "Manual check: {$transactionStatus}",
+                    'updated_at' => date('Y-m-d H:i:s')
                 ];
+                
+                // SIMPAN PAYMENT TYPE
+                if ($paymentType) {
+                    $updateData['midtrans_payment_type'] = $this->formatPaymentType($paymentType, $bank);
+                }
+                
                 if ($newStatus === 'verified') {
                     $updateData['verified_at'] = $statusData['settlement_time'] ?? date('Y-m-d H:i:s');
                     $updateData['auto_verified'] = true;
                     $updateData['features_unlocked_at'] = $statusData['settlement_time'] ?? date('Y-m-d H:i:s');
-                    if (!empty($payment['id_voucher'])) $this->voucherModel->reduceQuota($payment['id_voucher']);
-                    $message = 'Status berhasil diperbarui! Pembayaran telah terverifikasi.';
+                    
+                    // Reduce voucher quota jika ada
+                    if (!empty($payment['id_voucher'])) {
+                        try {
+                            $this->voucherModel->reduceQuota($payment['id_voucher']);
+                        } catch (\Exception $e) {
+                            log_message('warning', 'Failed to reduce voucher quota: ' . $e->getMessage());
+                        }
+                    }
+                    
+                    $message = '✅ Status berhasil diperbarui! Pembayaran telah terverifikasi.';
                     $alertType = 'success';
                 } elseif ($newStatus === 'pending') {
-                    $message = 'Status masih pending. Pembayaran sedang diproses.';
+                    $message = '⏳ Status masih pending. Pembayaran sedang diproses.';
                     $alertType = 'info';
-                } else {
-                    $message = "Status diperbarui menjadi: " . ucfirst($newStatus);
+                } elseif ($newStatus === 'canceled') {
+                    $message = '❌ Pembayaran dibatalkan. Silakan lakukan pembayaran ulang jika diperlukan.';
                     $alertType = 'warning';
+                } elseif ($newStatus === 'expired') {
+                    $message = '⌛ Pembayaran telah kedaluwarsa. Silakan lakukan pembayaran ulang.';
+                    $alertType = 'warning';
+                } else {
+                    $message = "📊 Status diperbarui menjadi: " . ucfirst($newStatus);
+                    $alertType = 'info';
                 }
+                
                 $this->payModel->update($paymentId, $updateData);
+                
+                // Log activity
+                log_message('info', "Manual status check - Payment ID: {$paymentId}, Old Status: {$payment['status']}, New Status: {$newStatus}");
             } else {
-                $message = 'Status pembayaran sudah up-to-date: ' . ucfirst($payment['status']);
+                $message = '✔️ Status pembayaran sudah up-to-date: ' . ucfirst($payment['status']);
                 $alertType = 'info';
             }
+            
         } catch (\Exception $e) {
-            log_message('error', 'Manual status check error: ' . $e->getMessage());
-            $message = 'Gagal memeriksa status. Coba lagi nanti.';
+            log_message('error', 'Manual status check error - Payment ID: ' . $paymentId . ', Error: ' . $e->getMessage());
+            
+            $message = '⚠️ Gagal memeriksa status pembayaran. Silakan coba lagi nanti atau hubungi admin jika masalah berlanjut.';
             $alertType = 'error';
         }
 

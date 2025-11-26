@@ -220,14 +220,14 @@ class Absensi extends BaseController
             ]);
         }
 
-        // Generate multiple QR codes for different combinations
+        // Generate only 3 QR codes
         $qrCodes = $this->generateEventQRCodes($eventId, $event);
         
         // Get accurate event status
         $eventStatus = $this->calculateEventStatus($event);
 
         // Log QR generation
-        $this->logActivity(session('id_user'), "Generated multiple QR codes for event: {$event['title']} (ID: {$eventId})");
+        $this->logActivity(session('id_user'), "Generated 3 QR codes for event: {$event['title']} (ID: {$eventId})");
 
         return $this->response->setJSON([
             'success' => true,
@@ -245,61 +245,46 @@ class Absensi extends BaseController
     }
 
     /**
-     * Generate QR codes for different role and participation type combinations
+     * Generate QR codes - MODIFIED to generate only 3 QR codes
+     * 1. Universal QR - For all roles and participation types
+     * 2. Presenter QR - For presenters (online & offline)
+     * 3. Audience QR - For audience (online & offline)
      */
     private function generateEventQRCodes($eventId, $event)
     {
         $baseUrl = site_url('qr/');
         $qrCodes = [];
         
-        // Define QR code combinations based on event format
+        // Define only 3 QR code combinations
         $combinations = [
             [
                 'role' => 'all',
                 'participation' => 'all',
                 'label' => 'Universal QR',
-                'description' => 'Untuk semua role dan tipe partisipasi',
+                'description' => 'Untuk semua role dan tipe partisipasi (online & offline)',
                 'color' => '#6366f1',
-                'icon' => 'fas fa-globe',
+                'icon' => 'bi bi-globe',
                 'priority' => 1
+            ],
+            [
+                'role' => 'presenter',
+                'participation' => 'all',
+                'label' => 'Presenter',
+                'description' => 'Khusus untuk presenter (online & offline)',
+                'color' => '#8b5cf6',
+                'icon' => 'bi bi-person-video3',
+                'priority' => 2
+            ],
+            [
+                'role' => 'audience',
+                'participation' => 'all',
+                'label' => 'Audience',
+                'description' => 'Khusus untuk audience (online & offline)',
+                'color' => '#10b981',
+                'icon' => 'bi bi-people-fill',
+                'priority' => 3
             ]
         ];
-
-        // Add role-specific QR codes
-        $combinations[] = [
-            'role' => 'presenter',
-            'participation' => 'offline',
-            'label' => 'Presenter',
-            'description' => 'Khusus untuk presenter (offline only)',
-            'color' => '#8b5cf6',
-            'icon' => 'fas fa-chalkboard-teacher',
-            'priority' => 2
-        ];
-
-        // Add audience QR codes based on event format
-        if ($event['format'] === 'online' || $event['format'] === 'both') {
-            $combinations[] = [
-                'role' => 'audience',
-                'participation' => 'online',
-                'label' => 'Audience Online',
-                'description' => 'Khusus untuk audience online',
-                'color' => '#06b6d4',
-                'icon' => 'fas fa-laptop',
-                'priority' => 3
-            ];
-        }
-
-        if ($event['format'] === 'offline' || $event['format'] === 'both') {
-            $combinations[] = [
-                'role' => 'audience',
-                'participation' => 'offline',
-                'label' => 'Audience Offline',
-                'description' => 'Khusus untuk audience offline',
-                'color' => '#10b981',
-                'icon' => 'fas fa-users',
-                'priority' => 4
-            ];
-        }
 
         // Generate QR codes
         foreach ($combinations as $combo) {

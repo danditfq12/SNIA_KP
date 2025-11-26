@@ -1,11 +1,24 @@
 <?php
 // ====== DEFAULT VARS ======
 $title         = $title ?? 'Manajemen Dokumen';
-$stats         = $stats ?? ['total_documents'=>0,'loa_count'=>0,'sertifikat_count'=>0,'recent_uploads'=>0];
+$stats         = $stats ?? [
+    'total_documents'  => 0,
+    'loa_count'        => 0,
+    'sertifikat_count' => 0,
+    'lainnya_count'    => 0,
+    'recent_uploads'   => 0
+];
 $events        = $events ?? [];
 $documents     = $documents ?? [];
 $current_event = $current_event ?? '';
 $current_tipe  = $current_tipe ?? '';
+
+// Pastikan semua key stats ada dengan default value
+$stats['total_documents']  = $stats['total_documents'] ?? 0;
+$stats['loa_count']        = $stats['loa_count'] ?? 0;
+$stats['sertifikat_count'] = $stats['sertifikat_count'] ?? 0;
+$stats['lainnya_count']    = $stats['lainnya_count'] ?? 0;
+$stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_admin') ?>
@@ -22,7 +35,7 @@ $current_tipe  = $current_tipe ?? '';
           <h3 class="welcome-text mb-1">
             <i class="bi bi-folder2-open me-2"></i><?= esc($title) ?>
           </h3>
-          <div class="text-white-50">Kelola LOA & Sertifikat untuk setiap event</div>
+          <div class="text-white-50">Kelola LOA, Sertifikat & Dokumen Event</div>
         </div>
         <div class="text-end d-none d-md-block">
           <small class="text-white-50 d-block">Terakhir update</small>
@@ -32,22 +45,50 @@ $current_tipe  = $current_tipe ?? '';
 
       <!-- KPI -->
       <div class="row g-3 mb-3">
-        <div class="col-6 col-xl-3"><div class="stat-card shadow-sm h-100"><div class="d-flex align-items-center">
-          <div class="stat-icon bg-primary"><i class="bi bi-file-earmark-text"></i></div>
-          <div class="ms-3"><div class="stat-number"><?= number_format((int)$stats['total_documents']) ?></div><div class="text-muted">Total Dokumen</div></div>
-        </div></div></div>
-        <div class="col-6 col-xl-3"><div class="stat-card shadow-sm h-100"><div class="d-flex align-items-center">
-          <div class="stat-icon bg-success"><i class="bi bi-file-earmark-arrow-up"></i></div>
-          <div class="ms-3"><div class="stat-number"><?= number_format((int)$stats['loa_count']) ?></div><div class="text-muted">LOA</div></div>
-        </div></div></div>
-        <div class="col-6 col-xl-3"><div class="stat-card shadow-sm h-100"><div class="d-flex align-items-center">
-          <div class="stat-icon bg-warning"><i class="bi bi-patch-check"></i></div>
-          <div class="ms-3"><div class="stat-number"><?= number_format((int)$stats['sertifikat_count']) ?></div><div class="text-muted">Sertifikat</div></div>
-        </div></div></div>
-        <div class="col-6 col-xl-3"><div class="stat-card shadow-sm h-100"><div class="d-flex align-items-center">
-          <div class="stat-icon bg-info"><i class="bi bi-clock-history"></i></div>
-          <div class="ms-3"><div class="stat-number"><?= number_format((int)$stats['recent_uploads']) ?></div><div class="text-muted">Upload Minggu Ini</div></div>
-        </div></div></div>
+        <div class="col-6 col-lg-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-primary"><i class="bi bi-file-earmark-text"></i></div>
+              <div class="ms-3">
+                <div class="stat-number"><?= number_format((int)$stats['total_documents']) ?></div>
+                <div class="text-muted">Total Dokumen</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-success"><i class="bi bi-file-earmark-arrow-up"></i></div>
+              <div class="ms-3">
+                <div class="stat-number"><?= number_format((int)$stats['loa_count']) ?></div>
+                <div class="text-muted">LOA</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-warning"><i class="bi bi-patch-check"></i></div>
+              <div class="ms-3">
+                <div class="stat-number"><?= number_format((int)$stats['sertifikat_count']) ?></div>
+                <div class="text-muted">Sertifikat</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="stat-card shadow-sm h-100">
+            <div class="d-flex align-items-center">
+              <div class="stat-icon bg-info"><i class="bi bi-folder-symlink"></i></div>
+              <div class="ms-3">
+                <div class="stat-number"><?= number_format((int)$stats['lainnya_count']) ?></div>
+                <div class="text-muted">Dokumen Lainnya</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- FILTER -->
@@ -72,6 +113,7 @@ $current_tipe  = $current_tipe ?? '';
                   <option value="">-- Semua Tipe --</option>
                   <option value="loa" <?= $current_tipe==='loa'?'selected':'' ?>>LOA</option>
                   <option value="sertifikat" <?= $current_tipe==='sertifikat'?'selected':'' ?>>Sertifikat</option>
+                  <option value="lainnya" <?= $current_tipe==='lainnya'?'selected':'' ?>>Dokumen Lainnya</option>
                 </select>
               </div>
               <div class="col-md-4">
@@ -95,6 +137,9 @@ $current_tipe  = $current_tipe ?? '';
         <button class="btn btn-warning btn-custom" data-bs-toggle="modal" data-bs-target="#uploadSertifikatModal">
           <i class="bi bi-upload me-1"></i> Upload Sertifikat
         </button>
+        <button class="btn btn-info btn-custom" data-bs-toggle="modal" data-bs-target="#uploadDokumenLainModal">
+          <i class="bi bi-upload me-1"></i> Upload Dokumen Lainnya
+        </button>
       </div>
 
       <!-- TABLE -->
@@ -110,7 +155,7 @@ $current_tipe  = $current_tipe ?? '';
             <div class="text-center py-5">
               <i class="bi bi-inbox fs-1 text-muted mb-3"></i>
               <h5 class="text-muted">Belum ada dokumen</h5>
-              <p class="text-muted">Upload dokumen LOA atau sertifikat untuk mulai mengelola dokumen.</p>
+              <p class="text-muted">Upload dokumen LOA, sertifikat, atau dokumen lainnya.</p>
             </div>
           <?php else: ?>
             <div class="table-responsive">
@@ -119,40 +164,56 @@ $current_tipe  = $current_tipe ?? '';
                   <tr>
                     <th width="5%">No</th>
                     <th width="10%">Tipe</th>
-                    <th width="25%">User</th>
-                    <th width="25%">Event</th>
+                    <th width="25%">Info</th>
+                    <th width="20%">Event</th>
                     <th width="20%">File</th>
                     <th width="10%">Upload</th>
-                    <th width="5%">Aksi</th>
+                    <th width="10%">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
                 <?php $no=1; foreach($documents as $d):
                     $id=(int)($d['id_dokumen']??0); $type=strtolower($d['tipe']??'loa'); $file=$d['file_path']??'';
-                    $nama=$d['nama_lengkap']??'Unknown'; $email=$d['email']??''; $role=$d['role']??'';
+                    $nama=$d['nama_lengkap']??''; $email=$d['email']??''; $role=$d['role']??'';
                     $eventTitle=$d['event_title']??''; $uploadedAt=$d['uploaded_at']??'';
+                    $syarat=$d['syarat']??''; $keterangan=$d['keterangan']??'';
                     $ext=strtolower(pathinfo($file,PATHINFO_EXTENSION));
+                    
                     $icon='bi-file-earmark'; $icColor='text-secondary';
                     if($ext==='pdf'){ $icon='bi-file-earmark-pdf'; $icColor='text-danger'; }
                     elseif(in_array($ext,['doc','docx'])){ $icon='bi-file-earmark-word'; $icColor='text-primary'; }
-                    elseif(in_array($ext,['jpg','jpeg','png'])){ $icon='bi-file-earmark-image'; $icColor='text-success'; }
+                    elseif(in_array($ext,['ppt','pptx'])){ $icon='bi-file-earmark-easel'; $icColor='text-warning'; }
+                    elseif(in_array($ext,['xls','xlsx'])){ $icon='bi-file-earmark-excel'; $icColor='text-success'; }
+                    elseif(in_array($ext,['jpg','jpeg','png'])){ $icon='bi-file-earmark-image'; $icColor='text-info'; }
+                    elseif(in_array($ext,['zip','rar'])){ $icon='bi-file-earmark-zip'; $icColor='text-secondary'; }
                 ?>
                   <tr>
                     <td><?= $no++ ?></td>
-                    <td><?= $type==='loa'
-                      ? '<span class="badge bg-success"><i class="bi bi-file-earmark-arrow-up me-1"></i> LOA</span>'
-                      : '<span class="badge bg-warning text-dark"><i class="bi bi-patch-check me-1"></i> Sertifikat</span>' ?></td>
                     <td>
-                      <div class="fw-semibold"><?= esc($nama) ?></div>
-                      <?php if ($email): ?><small class="text-muted"><?= esc($email) ?></small><?php endif; ?>
-                      <?php if ($role): ?><div><span class="badge bg-<?= $role==='presenter'?'primary':'secondary' ?>"><?= ucfirst($role) ?></span></div><?php endif; ?>
+                      <?php if($type==='loa'): ?>
+                        <span class="badge bg-success"><i class="bi bi-file-earmark-arrow-up me-1"></i> LOA</span>
+                      <?php elseif($type==='sertifikat'): ?>
+                        <span class="badge bg-warning text-dark"><i class="bi bi-patch-check me-1"></i> Sertifikat</span>
+                      <?php else: ?>
+                        <span class="badge bg-info"><i class="bi bi-folder-symlink me-1"></i> Lainnya</span>
+                      <?php endif; ?>
+                    </td>
+                    <td>
+                      <?php if ($type === 'lainnya'): ?>
+                        <div class="fw-semibold"><?= esc($syarat ?: 'Dokumen') ?></div>
+                        <div><span class="badge bg-secondary-subtle text-secondary">Dokumen Event</span></div>
+                      <?php else: ?>
+                        <div class="fw-semibold"><?= esc($nama ?: 'Unknown') ?></div>
+                        <?php if ($email): ?><small class="text-muted"><?= esc($email) ?></small><?php endif; ?>
+                        <?php if ($role): ?><div><span class="badge bg-<?= $role==='presenter'?'primary':'secondary' ?>"><?= ucfirst($role) ?></span></div><?php endif; ?>
+                      <?php endif; ?>
                     </td>
                     <td><?= $eventTitle ? '<strong>'.esc($eventTitle).'</strong>' : '<span class="text-muted">-</span>' ?></td>
                     <td>
                       <div class="d-flex align-items-center">
                         <i class="bi <?= $icon ?> fs-5 me-2 <?= $icColor ?>"></i>
                         <div>
-                          <div><?= esc(basename($file)) ?></div>
+                          <div class="text-truncate" style="max-width:180px;" title="<?= esc(basename($file)) ?>"><?= esc(basename($file)) ?></div>
                           <small class="text-muted"><?= strtoupper($ext ?: '-') ?></small>
                         </div>
                       </div>
@@ -191,7 +252,17 @@ $current_tipe  = $current_tipe ?? '';
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
 
 <script>
-  // ===== DELETE FUNCTION (HARUS DI ATAS) =====
+  // ===== HELPER FUNCTIONS =====
+  function escapeHtml(str){ 
+    return (str||'').replace(/[&<>"']/g, s=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#039;' }[s])); 
+  }
+
+  function initTooltips(scope=document){
+    const tooltipTriggerList = scope.querySelectorAll('[data-bs-toggle="tooltip"]');
+    return Array.from(tooltipTriggerList).map(el => new bootstrap.Tooltip(el));
+  }
+
+  // ===== DELETE FUNCTION =====
   function deleteDocument(id){
     Swal.fire({
       title:'Hapus Dokumen?', 
@@ -219,10 +290,6 @@ $current_tipe  = $current_tipe ?? '';
     });
   }
 
-  function initTooltips(scope=document){
-    return [].slice.call(scope.querySelectorAll('[data-bs-toggle="tooltip"]'))
-      .map(el => new bootstrap.Tooltip(el));
-  }
   $(function(){
     const $table = $('#documentsTable');
     const hasDocuments = <?= !empty($documents) ? 'true' : 'false' ?>;
@@ -282,7 +349,6 @@ $current_tipe  = $current_tipe ?? '';
 
         <hr class="my-3">
 
-        <!-- List user dinamis -->
         <input type="hidden" name="user_id" id="loaUserIdHidden" required>
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h6 class="mb-0"><i class="bi bi-people me-2"></i>Pilih User pada event</h6>
@@ -330,7 +396,6 @@ $current_tipe  = $current_tipe ?? '';
 
         <hr class="my-3">
 
-        <!-- Picklist user (semua pendaftar) -->
         <input type="hidden" name="user_id" id="sertifikatUserIdHidden" required>
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h6 class="mb-0"><i class="bi bi-people me-2"></i>Pilih User pada event</h6>
@@ -352,6 +417,91 @@ $current_tipe  = $current_tipe ?? '';
   </div>
 </div>
 
+<!-- Upload Dokumen Lainnya -->
+<div class="modal fade" id="uploadDokumenLainModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <form action="<?= site_url('admin/dokumen/uploadDokumenLainnya') ?>" method="POST" enctype="multipart/form-data" id="dokumenLainForm" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Upload Dokumen Lainnya</h5>
+        <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <?= csrf_field() ?>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Event *</label>
+            <select class="form-select" name="event_id" id="dokumenLainEventId" required>
+              <option value="">-- Pilih Event --</option>
+              <?php foreach ($events as $e): ?>
+                <option value="<?= (int)$e['id'] ?>"><?= esc($e['title'] ?? 'No Title') ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">File Dokumen *</label>
+            <input type="file" class="form-control" name="document_file[]" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar,.jpg,.jpeg,.png" multiple required>
+            <div class="form-text">PDF, Office, ZIP, Image · maks 10MB per file · bisa pilih multiple files</div>
+          </div>
+        </div>
+
+        <hr class="my-3">
+
+        <!-- MODE SELECTION -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Mode Upload *</label>
+          <div class="btn-group w-100" role="group">
+            <input type="radio" class="btn-check" name="upload_mode" id="modeSingle" value="single" checked>
+            <label class="btn btn-outline-primary" for="modeSingle">
+              <i class="bi bi-person me-1"></i> Upload ke 1 User
+            </label>
+            
+            <input type="radio" class="btn-check" name="upload_mode" id="modeBulk" value="bulk">
+            <label class="btn btn-outline-success" for="modeBulk">
+              <i class="bi bi-people-fill me-1"></i> Upload ke Semua User
+            </label>
+          </div>
+          <div class="form-text mt-2">
+            <strong>Single:</strong> Pilih 1 user dari daftar<br>
+            <strong>Bulk:</strong> Kirim dokumen ke semua user terdaftar (yang belum punya dokumen)
+          </div>
+        </div>
+
+        <!-- SINGLE USER SELECTION -->
+        <div id="singleUserSection">
+          <input type="hidden" name="user_id" id="dokumenLainUserIdHidden">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0"><i class="bi bi-person-check me-2"></i>Pilih User</h6>
+            <span id="dokumenLainCountBadge" class="badge bg-light text-dark d-none">0 ditemukan</span>
+          </div>
+          <div id="dokumenLainUserListWrap" class="border rounded p-2" style="max-height:330px; overflow:auto;">
+            <div class="text-muted small">Pilih event terlebih dahulu.</div>
+          </div>
+          <div class="form-text mt-1">User yang sudah punya dokumen akan diberi label <em>"Sudah dapat Dokumen"</em>.</div>
+        </div>
+
+        <!-- BULK CONFIRMATION -->
+        <div id="bulkConfirmSection" style="display:none;">
+          <div class="alert alert-info d-flex align-items-start">
+            <i class="bi bi-info-circle fs-5 me-2"></i>
+            <div>
+              <strong>Mode Bulk Upload</strong><br>
+              Dokumen akan dikirim ke <strong id="bulkUserCount">semua</strong> user yang terdaftar pada event ini.<br>
+              <small class="text-muted">User yang sudah memiliki dokumen akan dilewati secara otomatis.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-info" type="submit" id="dokumenLainSubmitBtn">
+          <i class="bi bi-upload me-1"></i>
+          <span id="dokumenLainBtnText">Upload Dokumen</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
   // ====== LOA PICK LIST ======
   const $loaEvent  = $('#loaEventId');
@@ -362,22 +512,21 @@ $current_tipe  = $current_tipe ?? '';
   function renderLoaUsers(items){
     $loaWrap.empty();
     $loaHidden.val('');
+    
     if(!items || !items.length){
       $loaWrap.html('<div class="text-muted small">Tidak ada user pada event ini.</div>');
       $loaCount.addClass('d-none').text('0 ditemukan');
       return;
     }
+    
     $loaCount.removeClass('d-none').text(items.length+' ditemukan');
 
     items.forEach(u=>{
       const hasLoa = !!u.has_loa;
-      const pay = (u.pay_status||'').toUpperCase();
       const badgeLoa = hasLoa
         ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Sudah dapat LOA</span>'
         : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Belum dapat LOA</span>';
-      const badgePay = pay
-        ? `<span class="badge ${pay==='VERIFIED'?'bg-success':'bg-outline-secondary'} ms-1">${pay}</span>` : '';
-      const role = u.role ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${u.role}</span>` : '';
+      const role = u.role ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${escapeHtml(u.role)}</span>` : '';
 
       const disabled = hasLoa ? 'disabled' : '';
       const $row = $(`
@@ -387,7 +536,7 @@ $current_tipe  = $current_tipe ?? '';
             <div class="small text-muted">${escapeHtml(u.email||'')}</div>
           </div>
           <div class="text-end">
-            ${badgeLoa} ${badgePay} ${role}
+            ${badgeLoa} ${role}
           </div>
         </div>
       `);
@@ -404,20 +553,29 @@ $current_tipe  = $current_tipe ?? '';
     });
   }
 
-  function escapeHtml(str){ return (str||'').replace(/[&<>"']/g, s=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#039;' }[s])); }
-
   $loaEvent.on('change', function(){
     const id = $(this).val();
     $loaWrap.html('<div class="text-muted small">Memuat user...</div>');
     $loaHidden.val('');
     $loaCount.addClass('d-none').text('0 ditemukan');
-    if(!id){ $loaWrap.html('<div class="text-muted small">Pilih event terlebih dahulu.</div>'); return; }
+    
+    if(!id){ 
+      $loaWrap.html('<div class="text-muted small">Pilih event terlebih dahulu.</div>'); 
+      return; 
+    }
+    
     $.get('<?= site_url('admin/dokumen/users-for-loa/') ?>'+encodeURIComponent(id))
       .done(res => {
-        if(res && res.status==='success'){ renderLoaUsers(res.data||[]); }
-        else { $loaWrap.html('<div class="text-danger small">Gagal memuat user.</div>'); }
+        if(res && res.status==='success'){ 
+          renderLoaUsers(res.data||[]); 
+        } else { 
+          $loaWrap.html('<div class="text-danger small">Gagal memuat user: ' + (res.message || 'Unknown error') + '</div>'); 
+        }
       })
-      .fail(()=> $loaWrap.html('<div class="text-danger small">Gagal memuat user.</div>'));
+      .fail((xhr, status, error) => {
+        console.error('LOA users fetch error:', error, xhr.responseText);
+        $loaWrap.html('<div class="text-danger small">Gagal memuat user. Cek console untuk detail.</div>');
+      });
   });
 
   // ====== SERTIFIKAT PICK LIST ======
@@ -429,11 +587,13 @@ $current_tipe  = $current_tipe ?? '';
   function renderCertificateUsers(items){
     $sertWrap.empty();
     $sertHidden.val('');
+    
     if(!items || !items.length){
       $sertWrap.html('<div class="text-muted small">Belum ada pendaftar pada event ini.</div>');
       $sertCount.addClass('d-none').text('0 ditemukan');
       return;
     }
+    
     $sertCount.removeClass('d-none').text(items.length+' ditemukan');
 
     items.forEach(u=>{
@@ -450,7 +610,7 @@ $current_tipe  = $current_tipe ?? '';
         : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">Belum ada Sertifikat</span>';
 
       const badgeRole = role
-        ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${role}</span>`
+        ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${escapeHtml(role)}</span>`
         : '';
 
       const disabled = hasCert ? 'disabled' : '';
@@ -483,13 +643,143 @@ $current_tipe  = $current_tipe ?? '';
     $sertWrap.html('<div class="text-muted small">Memuat user...</div>');
     $sertHidden.val('');
     $sertCount.addClass('d-none').text('0 ditemukan');
-    if(!id){ $sertWrap.html('<div class="text-muted small">Pilih event terlebih dahulu.</div>'); return; }
+    
+    if(!id){ 
+      $sertWrap.html('<div class="text-muted small">Pilih event terlebih dahulu.</div>'); 
+      return; 
+    }
+    
     $.get('<?= site_url('admin/dokumen/users-for-certificate/') ?>' + encodeURIComponent(id))
       .done(res => {
-        if(res && res.status === 'success'){ renderCertificateUsers(res.data||[]); }
-        else { $sertWrap.html('<div class="text-danger small">Gagal memuat peserta.</div>'); }
+        if(res && res.status === 'success'){ 
+          renderCertificateUsers(res.data||[]); 
+        } else { 
+          $sertWrap.html('<div class="text-danger small">Gagal memuat peserta: ' + (res.message || 'Unknown error') + '</div>'); 
+        }
       })
-      .fail(() => { $sertWrap.html('<div class="text-danger small">Gagal memuat peserta.</div>'); });
+      .fail((xhr, status, error) => { 
+        console.error('Certificate users fetch error:', error, xhr.responseText);
+        $sertWrap.html('<div class="text-danger small">Gagal memuat peserta. Cek console untuk detail.</div>'); 
+      });
+  });
+
+  // ====== DOKUMEN LAINNYA PICK LIST - FIXED ======
+  const $dokLainEvent  = $('#dokumenLainEventId');
+  const $dokLainWrap   = $('#dokumenLainUserListWrap');
+  const $dokLainHidden = $('#dokumenLainUserIdHidden');
+  const $dokLainCount  = $('#dokumenLainCountBadge');
+
+  function renderDokumenLainUsers(items){
+    console.log('renderDokumenLainUsers called with', items);
+    
+    $dokLainWrap.empty();
+    $dokLainHidden.val('');
+    
+    if(!items || !items.length){
+      $dokLainWrap.html('<div class="text-muted small">Tidak ada user pada event ini.</div>');
+      if ($dokLainCount && $dokLainCount.length) {
+        $dokLainCount.addClass('d-none').text('0 ditemukan');
+      }
+      return;
+    }
+    
+    if ($dokLainCount && $dokLainCount.length) {
+      $dokLainCount.removeClass('d-none').text(items.length+' ditemukan');
+    }
+
+    items.forEach(u=>{
+      const hasDokumen = !!u.has_dokumen;
+      const badgeDokumen = hasDokumen
+        ? '<span class="badge bg-info-subtle text-info border border-info-subtle">Sudah dapat Dokumen</span>'
+        : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Belum dapat Dokumen</span>';
+      const role = u.role ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${escapeHtml(u.role)}</span>` : '';
+      const paymentBadge = u.payment_verified 
+        ? '<span class="badge bg-success-subtle text-success border border-success-subtle ms-1">Verified</span>'
+        : '<span class="badge bg-warning-subtle text-warning border border-warning-subtle ms-1">Pending</span>';
+
+      const disabled = hasDokumen ? 'disabled' : '';
+      const $row = $(`
+        <div class="picklist-item d-flex justify-content-between align-items-start mb-2 ${disabled}" data-id="${u.id_user}">
+          <div>
+            <div class="fw-semibold">${escapeHtml(u.nama_lengkap||'-')}</div>
+            <div class="small text-muted">${escapeHtml(u.email||'')}</div>
+          </div>
+          <div class="text-end">
+            ${badgeDokumen} ${paymentBadge} ${role}
+          </div>
+        </div>
+      `);
+
+      if (!hasDokumen) {
+        $row.on('click', function(){
+          $('.picklist-item', $dokLainWrap).removeClass('active');
+          $(this).addClass('active');
+          $dokLainHidden.val($(this).data('id'));
+        });
+      }
+
+      $dokLainWrap.append($row);
+    });
+  }
+
+  $dokLainEvent.on('change', function(){
+    const id = $(this).val();
+    console.log('Dokumen Lain event changed to:', id);
+    
+    $dokLainWrap.html('<div class="text-muted small">Memuat user...</div>');
+    $dokLainHidden.val('');
+    
+    if ($dokLainCount && $dokLainCount.length) {
+      $dokLainCount.addClass('d-none').text('0 ditemukan');
+    }
+    
+    if(!id){ 
+      $dokLainWrap.html('<div class="text-muted small">Pilih event terlebih dahulu.</div>'); 
+      return; 
+    }
+    
+    const url = '<?= site_url('admin/dokumen/users-for-dokumen-lain/') ?>' + encodeURIComponent(id);
+    console.log('Fetching from:', url);
+    
+    $.ajax({
+      url: url,
+      method: 'GET',
+      dataType: 'json',
+      timeout: 10000,
+      success: function(res) {
+        console.log('AJAX success response:', res);
+        
+        if(res && res.status === 'success'){ 
+          console.log('Rendering users:', res.data);
+          renderDokumenLainUsers(res.data || []); 
+        } else { 
+          const errMsg = res.message || 'Unknown error';
+          console.error('API returned error:', errMsg);
+          $dokLainWrap.html('<div class="text-danger small">Gagal memuat user: ' + escapeHtml(errMsg) + '</div>'); 
+        }
+      },
+      error: function(xhr, status, error) {
+        console.error('AJAX error:', {
+          status: status,
+          error: error,
+          responseText: xhr.responseText,
+          statusCode: xhr.status
+        });
+        
+        let errMsg = 'Gagal memuat user. ';
+        if (xhr.status === 404) {
+          errMsg += 'Endpoint tidak ditemukan.';
+        } else if (xhr.status === 500) {
+          errMsg += 'Server error. Cek log server.';
+        } else if (status === 'timeout') {
+          errMsg += 'Request timeout.';
+        } else {
+          errMsg += 'Cek console untuk detail.';
+        }
+        
+        $dokLainWrap.html('<div class="text-danger small">' + errMsg + '</div>');
+      }
+    });
   });
 
   // Validasi submit LOA
@@ -506,7 +796,8 @@ $current_tipe  = $current_tipe ?? '';
     const ext = (file.name.split('.').pop()||'').toLowerCase();
     if (!['pdf','doc','docx'].includes(ext)){ e.preventDefault(); Swal.fire('Error','File harus PDF/DOC/DOCX.','error'); return; }
 
-    const btn = $('#loaSubmitBtn'); btn.prop('disabled',true).find('span').text('Memproses...');
+    const btn = $('#loaSubmitBtn'); 
+    if(btn.length) btn.prop('disabled',true).find('span').text('Memproses...');
   });
 
   // Validasi submit Sertifikat
@@ -523,6 +814,64 @@ $current_tipe  = $current_tipe ?? '';
     const ext = (file.name.split('.').pop()||'').toLowerCase();
     if (!['pdf','jpg','jpeg','png'].includes(ext)){ e.preventDefault(); Swal.fire('Error','File harus PDF/JPG/PNG.','error'); return; }
 
-    const btn = $('#sertifikatSubmitBtn'); btn.prop('disabled',true).find('span').text('Memproses...');
+    const btn = $('#sertifikatSubmitBtn'); 
+    if(btn.length) btn.prop('disabled',true).find('span').text('Memproses...');
+  });
+
+  // Validasi submit Dokumen Lainnya
+  $('#dokumenLainForm').on('submit', function(e){
+    const eventId = $('#dokumenLainEventId').val();
+    const userId  = $('#dokumenLainUserIdHidden').val();
+    const fileInp = this.querySelector('input[name="document_file[]"]');
+    const files   = fileInp && fileInp.files;
+
+    if (!eventId){ 
+      e.preventDefault(); 
+      Swal.fire('Error','Pilih event terlebih dahulu.','error'); 
+      return; 
+    }
+
+    if (!userId){ 
+      e.preventDefault(); 
+      Swal.fire('Error','Pilih user pada daftar.','error'); 
+      return; 
+    }
+
+    if (!files || files.length === 0){ 
+      e.preventDefault(); 
+      Swal.fire('Error','Pilih minimal 1 file dokumen.','error'); 
+      return; 
+    }
+    
+    const validExts = ['pdf','doc','docx','ppt','pptx','xls','xlsx','zip','rar','jpg','jpeg','png'];
+    let totalSize = 0;
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const ext = (file.name.split('.').pop()||'').toLowerCase();
+      
+      if (file.size > 10485760) { 
+        e.preventDefault(); 
+        Swal.fire('Error',`File "${file.name}" melebihi 10MB.`,'error'); 
+        return; 
+      }
+      
+      if (!validExts.includes(ext)) { 
+        e.preventDefault(); 
+        Swal.fire('Error',`Format file "${file.name}" tidak didukung.`,'error'); 
+        return; 
+      }
+      
+      totalSize += file.size;
+    }
+    
+    if (totalSize > 52428800) {
+      e.preventDefault();
+      Swal.fire('Error','Total ukuran file tidak boleh lebih dari 50MB.','error');
+      return;
+    }
+
+    const btn = $('#dokumenLainSubmitBtn'); 
+    if(btn.length) btn.prop('disabled',true).find('span').text(`Mengupload ${files.length} file...`);
   });
 </script>

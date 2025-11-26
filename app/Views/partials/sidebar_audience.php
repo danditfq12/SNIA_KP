@@ -46,7 +46,7 @@
     <div class="menu-label">Dokumen</div>
     <a class="nav-link <?= isActive(['audience/dokumen/sertifikat','audience/dokumen/*'], $path) ? 'is-active':'' ?>"
        href="<?= site_url('audience/dokumen/sertifikat') ?>">
-      <span class="ico"><i class="bi bi-award"></i></span><span>Sertifikat</span>
+      <span class="ico"><i class="bi bi-award"></i></span><span>Sertifikat & Dokumen</span>
     </a>
   </nav>
 </aside>
