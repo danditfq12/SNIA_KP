@@ -85,26 +85,33 @@ class Dokumen extends BaseController
 
             $acceptedAliases = ['accepted','accept','acc','diterima','approved'];
 
-            $data = array_map(function($r) use ($fpMap, $hasLoaMap, $acceptedAliases) {
+            $data = [];
+            foreach ($rows as $r) {
                 $uid   = (int) ($r['id_user'] ?? 0);
                 $role  = strtolower((string) ($r['role_user'] ?? ''));
                 $st    = strtolower((string) ($fpMap[$uid] ?? ''));
                 if ($st !== '' && in_array($st, $acceptedAliases, true)) $st = 'accepted';
 
                 $isPresenter = (strpos($role, 'presenter') === 0);
-                $eligible    = ($isPresenter && $st === 'accepted');
+                
+                // FILTER: Hanya tampilkan Presenter saja
+                if (!$isPresenter) {
+                    continue;
+                }
+                
+                $eligible = ($isPresenter && $st === 'accepted');
 
-                return [
+                $data[] = [
                     'id_user'      => $uid,
                     'nama_lengkap' => (string) ($r['nama_lengkap'] ?? ''),
                     'email'        => (string) ($r['email'] ?? ''),
-                    'role'         => $role ?: 'audience',
+                    'role'         => $role ?: 'presenter',
                     'fp_status'    => $st,
                     'has_loa'      => (bool) ($hasLoaMap[$uid] ?? false),
                     'eligible'     => (bool) $eligible,
                     'note'         => $eligible ? '' : 'Syarat LOA: Presenter terdaftar & Full Paper ACCEPTED',
                 ];
-            }, $rows);
+            }
 
             return $this->response->setJSON(['status' => 'success', 'data' => $data]);
         } catch (\Throwable $e) {
@@ -295,7 +302,7 @@ class Dokumen extends BaseController
                     'role'             => $role ?: 'audience',
                     'payment_verified' => (bool) ($paymentMap[$uid] ?? false),
                     'has_dokumen'      => $docCount > 0,
-                    'doc_count'        => $docCount, // Tambahan: jumlah dokumen yang dimiliki
+                    'doc_count'        => $docCount,
                 ];
             }, $rows);
 
@@ -493,7 +500,7 @@ class Dokumen extends BaseController
         }
 
         $eventId    = (int) $this->request->getPost('event_id');
-        $uploadMode = $this->request->getPost('upload_mode'); // 'single' or 'bulk'
+        $uploadMode = $this->request->getPost('upload_mode');
         $files      = $this->request->getFiles();
 
         $event = $this->eventModel->find($eventId);
@@ -501,13 +508,12 @@ class Dokumen extends BaseController
             return redirect()->to(site_url('admin/dokumen'))->with('error', 'Event tidak ditemukan.');
         }
 
-        // Validate files
         if (!isset($files['document_file']) || empty($files['document_file'])) {
             return redirect()->to(site_url('admin/dokumen'))->with('error', 'Tidak ada file yang diupload.');
         }
 
         $validExts = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip', 'rar', 'jpg', 'jpeg', 'png'];
-        $maxFileSize = 10 * 1024 * 1024; // 10MB
+        $maxFileSize = 10 * 1024 * 1024;
         
         $filesToUpload = [];
         foreach ($files['document_file'] as $file) {
@@ -537,9 +543,7 @@ class Dokumen extends BaseController
                 ->with('error', 'Tidak ada file valid untuk diupload.');
         }
 
-        // Get target users based on mode
         if ($uploadMode === 'single') {
-            // Single mode: upload to one user
             $userId = (int) $this->request->getPost('user_id');
             if ($userId <= 0) {
                 return redirect()->to(site_url('admin/dokumen'))->with('error', 'Pilih user terlebih dahulu.');
@@ -549,14 +553,9 @@ class Dokumen extends BaseController
             if (!$user) {
                 return redirect()->to(site_url('admin/dokumen'))->with('error', 'User tidak ditemukan.');
             }
-
-            // PERBAIKAN: Tidak perlu cek apakah user sudah punya dokumen
-            // Biarkan user bisa punya multiple dokumen untuk 1 event
-            // Pengecekan duplikat akan dilakukan per file, bukan per user
             
             $targetUsers = [$userId];
         } else {
-            // Bulk mode: upload to all registered users
             $er = $this->resolveEventRegColumns();
             if (!$er['table'] || !$er['uid'] || !$er['eid']) {
                 return redirect()->to(site_url('admin/dokumen'))
@@ -580,7 +579,6 @@ class Dokumen extends BaseController
             $targetUsers = array_filter($targetUsers);
         }
 
-        // Start upload process
         $this->db->transBegin();
         
         try {
@@ -592,7 +590,7 @@ class Dokumen extends BaseController
             $successCount = 0;
             $skippedCount = 0;
             $uploadedFiles = [];
-            $userSkipMap = []; // Track which users have been skipped
+            $userSkipMap = [];
 
             foreach ($filesToUpload as $file) {
                 $ext = strtolower($file->getClientExtension());
@@ -605,15 +603,12 @@ class Dokumen extends BaseController
                 $uploadedFiles[] = $fileName;
                 $originalName = pathinfo($file->getClientName(), PATHINFO_FILENAME);
                 
-                // Insert dokumen untuk setiap target user
                 foreach ($targetUsers as $uid) {
-                    // PERBAIKAN: Cek apakah user sudah punya dokumen dengan FILE yang SAMA
-                    // Bukan cek apakah user sudah punya dokumen apapun
                     $existing = $this->dokumenModel->where([
                         'id_user'   => $uid,
                         'event_id'  => $eventId,
                         'tipe'      => 'lainnya',
-                        'file_path' => $fileName, // Cek file spesifik ini
+                        'file_path' => $fileName,
                     ])->first();
 
                     if ($existing) {
@@ -666,7 +661,6 @@ class Dokumen extends BaseController
                 $totalUsers = count($targetUsers);
                 $totalInserted = $successCount;
                 
-                // Hitung actual users yang dapat dokumen (bukan total insert)
                 $actualUsers = (int)($totalInserted / $totalFiles);
                 
                 $message = "Berhasil upload {$totalFiles} dokumen ke {$actualUsers} user";
@@ -683,7 +677,6 @@ class Dokumen extends BaseController
         } catch (\Throwable $e) {
             $this->db->transRollback();
             
-            // Cleanup uploaded files
             if (!empty($uploadedFiles)) {
                 foreach ($uploadedFiles as $fname) {
                     $fpath = $uploadPath . $fname;
@@ -750,23 +743,19 @@ class Dokumen extends BaseController
 
             $tipe = strtolower($document['tipe'] ?? 'lainnya');
             
-            // PERBAIKAN: Hapus hanya record spesifik (per user), bukan semua
             if ($tipe === 'lainnya' && (int)$document['id_user'] > 0) {
                 $filePath = $document['file_path'];
                 $eventId = $document['event_id'];
                 $userId = (int)$document['id_user'];
                 
-                // Hapus hanya record untuk user ini
                 $this->dokumenModel->delete($idDokumen);
                 
-                // Cek apakah masih ada user lain yang pakai file yang sama
                 $otherUsers = $this->db->table('dokumen')
                     ->where('file_path', $filePath)
                     ->where('event_id', $eventId)
                     ->where('tipe', 'lainnya')
                     ->countAllResults();
                 
-                // Hapus file fisik HANYA jika tidak ada user lain yang pakai
                 if ($otherUsers === 0) {
                     $physicalPath = WRITEPATH . 'uploads/lainnya/' . $filePath;
                     if (is_file($physicalPath)) {
@@ -774,7 +763,6 @@ class Dokumen extends BaseController
                     }
                 }
             } else {
-                // Hapus dokumen personal (LOA/Sertifikat) - langsung hapus file
                 $filePath = WRITEPATH . 'uploads/' . $tipe . '/' . $document['file_path'];
                 if (is_file($filePath)) {
                     @unlink($filePath);
@@ -814,10 +802,6 @@ class Dokumen extends BaseController
 
     // ================== BULK DELETE FOR DOKUMEN LAINNYA ==================
     
-    /**
-     * Bulk delete dokumen lainnya - hapus dari semua user sekaligus
-     * Berguna jika admin ingin menghapus 1 dokumen dari semua user
-     */
     public function bulkDeleteDokumen()
     {
         if (!$this->request->isAJAX()) {
@@ -837,21 +821,18 @@ class Dokumen extends BaseController
 
         $this->db->transBegin();
         try {
-            // Hitung berapa user yang akan terhapus dokumennya
             $affectedUsers = $this->db->table('dokumen')
                 ->where('file_path', $filePath)
                 ->where('event_id', $eventId)
                 ->where('tipe', 'lainnya')
                 ->countAllResults();
 
-            // Hapus semua record dengan file_path yang sama
             $this->db->table('dokumen')
                 ->where('file_path', $filePath)
                 ->where('event_id', $eventId)
                 ->where('tipe', 'lainnya')
                 ->delete();
 
-            // Hapus file fisik
             $physicalPath = WRITEPATH . 'uploads/lainnya/' . $filePath;
             if (is_file($physicalPath)) {
                 @unlink($physicalPath);

@@ -1,11 +1,13 @@
 <?php
 // app/Views/role/presenter/events/register.php
-// IMPROVED VERSION - Disesuaikan dengan controller baru + FIXED Early Bird Badge
+// WITH DYNAMIC FACILITIES FROM DATABASE
 
 $event       = $event       ?? [];
 $options     = $options     ?? [];
 $pricing     = $pricing     ?? [];
 $waveInfo    = $waveInfo    ?? null;
+$fasilitasOnline  = $fasilitasOnline  ?? [];
+$fasilitasOffline = $fasilitasOffline ?? [];
 $title       = $title       ?? 'Daftar sebagai Presenter';
 
 $fmt = fn($s, $withTime = false) => $s
@@ -114,7 +116,7 @@ $activeWaveDeadline = $waveInfo['deadline']    ?? null;
         <div class="col-12 col-lg-7">
           <div class="row g-3">
 
-            <!-- OFFLINE CARD -->
+            <!-- OFFLINE CARD - DENGAN FASILITAS DINAMIS -->
             <?php if ($canOffline && $offlinePrice !== null && (float)$offlinePrice > 0): ?>
               <div class="col-12">
                 <form class="mode-card mode-offline" method="post" action="<?= esc($submitUrl) ?>" id="form-offline">
@@ -145,12 +147,24 @@ $activeWaveDeadline = $waveInfo['deadline']    ?? null;
                     <p class="mode-desc mb-2">
                       Hadir langsung di lokasi konferensi, bertemu reviewer & peserta lain secara tatap muka.
                     </p>
-                    <ul class="mode-benefit list-unstyled small mb-0">
-                      <li><i class="bi bi-check-circle-fill me-1"></i>Interaksi langsung dengan audiens</li>
-                      <li><i class="bi bi-check-circle-fill me-1"></i>Foto dokumentasi onsite</li>
-                      <li><i class="bi bi-check-circle-fill me-1"></i>Relasi & networking lebih luas</li>
-                      <li><i class="bi bi-check-circle-fill me-1"></i>Akomodasi & konsumsi tersedia</li>
-                    </ul>
+                    
+                    <!-- FASILITAS DINAMIS DARI DATABASE -->
+                    <div class="benefits-section">
+                      <div class="benefits-title small fw-semibold text-muted mb-2">
+                        <i class="bi bi-gift me-1"></i> Fasilitas yang Anda dapatkan:
+                      </div>
+                      <ul class="mode-benefit list-unstyled small mb-0">
+                        <?php if (!empty($fasilitasOffline) && is_array($fasilitasOffline)): ?>
+                          <?php foreach ($fasilitasOffline as $fasilitas): ?>
+                            <li><i class="bi bi-check-circle-fill me-1"></i><?= esc($fasilitas) ?></li>
+                          <?php endforeach; ?>
+                        <?php else: ?>
+                          <li class="text-muted fst-italic">
+                            <i class="bi bi-info-circle me-1"></i>Fasilitas belum diatur oleh admin
+                          </li>
+                        <?php endif; ?>
+                      </ul>
+                    </div>
                   </div>
 
                   <div class="mode-footer d-flex flex-wrap gap-2">
@@ -167,7 +181,7 @@ $activeWaveDeadline = $waveInfo['deadline']    ?? null;
               </div>
             <?php endif; ?>
 
-            <!-- ONLINE CARD -->
+            <!-- ONLINE CARD - DENGAN FASILITAS DINAMIS -->
             <?php if ($canOnline && $onlinePrice !== null && (float)$onlinePrice > 0): ?>
               <div class="col-12">
                 <form class="mode-card mode-online" method="post" action="<?= esc($submitUrl) ?>" id="form-online">
@@ -198,12 +212,24 @@ $activeWaveDeadline = $waveInfo['deadline']    ?? null;
                     <p class="mode-desc mb-2">
                       Presentasi dari mana saja melalui platform konferensi daring (Zoom/Meet).
                     </p>
-                    <ul class="mode-benefit list-unstyled small mb-0">
-                      <li><i class="bi bi-check-circle-fill me-1"></i>Tidak perlu datang ke lokasi</li>
-                      <li><i class="bi bi-check-circle-fill me-1"></i>Cocok untuk presenter luar kota/negara</li>
-                      <li><i class="bi bi-check-circle-fill me-1"></i>Sertifikat & LoA tetap sama</li>
-                      <li><i class="bi bi-check-circle-fill me-1"></i>Recording presentasi tersedia</li>
-                    </ul>
+                    
+                    <!-- FASILITAS DINAMIS DARI DATABASE -->
+                    <div class="benefits-section">
+                      <div class="benefits-title small fw-semibold text-muted mb-2">
+                        <i class="bi bi-gift me-1"></i> Fasilitas yang Anda dapatkan:
+                      </div>
+                      <ul class="mode-benefit list-unstyled small mb-0">
+                        <?php if (!empty($fasilitasOnline) && is_array($fasilitasOnline)): ?>
+                          <?php foreach ($fasilitasOnline as $fasilitas): ?>
+                            <li><i class="bi bi-check-circle-fill me-1"></i><?= esc($fasilitas) ?></li>
+                          <?php endforeach; ?>
+                        <?php else: ?>
+                          <li class="text-muted fst-italic">
+                            <i class="bi bi-info-circle me-1"></i>Fasilitas belum diatur oleh admin
+                          </li>
+                        <?php endif; ?>
+                      </ul>
+                    </div>
                   </div>
 
                   <div class="mode-footer d-flex flex-wrap gap-2">
@@ -299,7 +325,7 @@ $activeWaveDeadline = $waveInfo['deadline']    ?? null;
 <?= $this->include('partials/footer') ?>
 
 <script>
-// IMPROVED: Simple form handling with better UX
+// Form handling with loading state
 document.addEventListener('DOMContentLoaded', function() {
     const forms = document.querySelectorAll('form[id^="form-"]');
     
@@ -315,8 +341,6 @@ document.addEventListener('DOMContentLoaded', function() {
             btnText.classList.add('d-none');
             btnIcon.classList.add('d-none');
             btnLoading.classList.remove('d-none');
-            
-            // Form will submit normally
         });
     });
 });
@@ -513,6 +537,17 @@ document.addEventListener('DOMContentLoaded', function() {
 .mode-desc{
   color:#4b5563;
 }
+
+/* Benefits Section */
+.benefits-section{
+  margin-top:.75rem;
+  padding-top:.75rem;
+  border-top:1px dashed rgba(148,163,184,.3);
+}
+.benefits-title{
+  color:#475569;
+  font-weight:600;
+}
 .mode-benefit li{
   display:flex;
   align-items:flex-start;
@@ -523,6 +558,7 @@ document.addEventListener('DOMContentLoaded', function() {
 .mode-benefit i{
   font-size:.9rem;
   margin-top:.12rem;
+  color:#2563eb;
 }
 
 .price-main .price-value{

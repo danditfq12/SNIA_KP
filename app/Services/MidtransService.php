@@ -427,7 +427,7 @@ class MidtransService
             'item_details' => $itemDetails,
             'enabled_payments' => $this->getEnabledPaymentCodes(),
             'callbacks' => [
-                'finish' => $baseUrl . $finishPath . '?order_id=' . $orderId,
+                'finish' => $baseUrl . 'audience/pembayaran/finish?order_id=' . $orderId,
             ],
             'expiry' => [
                 'start_time' => date('Y-m-d H:i:s O'),
@@ -445,82 +445,70 @@ class MidtransService
     }
 
     public function createEventPayment($eventId, $userId, $userRole, $participationType, $amount, $userDetails, $eventDetails)
-    {
-        try {
-            if ($amount <= 0) {
-                throw new \InvalidArgumentException('Invalid amount: ' . $amount);
-            }
-
-            if (empty($userDetails['nama_lengkap']) || empty($userDetails['email'])) {
-                throw new \InvalidArgumentException('Customer details incomplete');
-            }
-
-            $orderId = $this->generateOrderId($userId, $eventId, $userRole, $participationType);
-
-            $customerDetails = [
-                'nama_lengkap' => $this->truncateString($userDetails['nama_lengkap'] ?? 'User', 50),
-                'email'        => $userDetails['email'] ?? '',
-                'no_hp'        => $userDetails['no_hp'] ?? '',
-            ];
-
-            // Nama item aman: rapikan spasi & potong multibyte-safe ke 50 karakter
-            $rawTitle  = (string)($eventDetails['title'] ?? 'Event Registration');
-            $clean     = preg_replace('/\s+/', ' ', $rawTitle);
-            $safeTitle = trim(mb_substr($clean ?? 'Event Registration', 0, 50));
-            if ($safeTitle === '') {
-                $safeTitle = 'Event Registration';
-            }
-
-            // Item standar (tanpa merchant_name). Category opsional boleh dipakai.
-            $itemDetails = [[
-                'id'       => 'EVENT-' . $eventId,
-                'name'     => $safeTitle,
-                'price'    => (int) $amount,
-                'quantity' => 1,
-                'category' => 'Event Registration',
-            ]];
-
-            // Hitung gross dari item_details (bukan percaya input luar)
-            $gross = 0;
-            foreach ($itemDetails as $it) {
-                $gross += ((int)$it['price']) * ((int)($it['quantity'] ?? 1));
-            }
-            if ($gross <= 0) {
-                throw new \InvalidArgumentException('Invalid gross amount');
-            }
-
-            // Tentukan finish path berdasarkan role
-            $finishPath = ($userRole === 'presenter')
-                ? 'presenter/pembayaran/finish'
-                : 'audience/pembayaran/finish';
-
-            $eventData = [
-                'event_id'           => $eventId,
-                'user_role'          => $userRole,
-                'participation_type' => $participationType,
-                'finish_path'        => $finishPath,
-            ];
-
-            // Pakai $gross (konsisten dgn sum item_details)
-            $params       = $this->buildTransactionParams($orderId, $gross, $customerDetails, $itemDetails, $eventData);
-            $snapResponse = $this->createTransaction($params);
-
-            if (!isset($snapResponse['token'])) {
-                throw new \RuntimeException('No token received');
-            }
-
-            return [
-                'order_id'            => $orderId,
-                'snap_token'          => $snapResponse['token'],
-                'redirect_url'        => $snapResponse['redirect_url'] ?? null,
-                'transaction_details' => $params,
-            ];
-
-        } catch (\Exception $e) {
-            log_message('error', 'Payment creation failed: ' . $e->getMessage());
-            throw new \RuntimeException('Failed to create payment: ' . $e->getMessage());
+{
+    try {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException('Invalid amount: ' . $amount);
         }
+
+        if (empty($userDetails['nama_lengkap']) || empty($userDetails['email'])) {
+            throw new \InvalidArgumentException('Customer details incomplete');
+        }
+
+        $orderId = $this->generateOrderId($userId, $eventId, $userRole, $participationType);
+
+        $customerDetails = [
+            'nama_lengkap' => $this->truncateString($userDetails['nama_lengkap'] ?? 'User', 50),
+            'email'        => $userDetails['email'] ?? '',
+            'no_hp'        => $userDetails['no_hp'] ?? '',
+        ];
+
+        // Nama item aman: rapikan spasi & potong multibyte-safe ke 50 karakter
+        $rawTitle  = (string)($eventDetails['title'] ?? 'Event Registration');
+        $clean     = preg_replace('/\s+/', ' ', $rawTitle);
+        $safeTitle = trim(mb_substr($clean ?? 'Event Registration', 0, 50));
+        if ($safeTitle === '') {
+            $safeTitle = 'Event Registration';
+        }
+
+        // Item standar (tanpa merchant_name). Category opsional boleh dipakai.
+        $itemDetails = [[
+            'id'       => 'EVENT-' . $eventId,
+            'name'     => $safeTitle,
+            'price'    => (int) $amount,
+            'quantity' => 1,
+            'category' => 'Event Registration',
+        ]];
+
+        $eventData = [
+            'event_id'           => $eventId,
+            'user_role'          => $userRole,
+            'participation_type' => $participationType,
+        ];
+
+        // ✅ FIX: Define $gross or use $amount directly
+        $gross = (int) $amount; // Calculate gross amount from items
+        
+        // Pakai $gross (konsisten dgn sum item_details)
+        $params       = $this->buildTransactionParams($orderId, $gross, $customerDetails, $itemDetails, $eventData);
+        $snapResponse = $this->createTransaction($params);
+
+        if (!isset($snapResponse['token'])) {
+            throw new \RuntimeException('No token received');
+        }
+
+        return [
+            'order_id'            => $orderId,
+            'snap_token'          => $snapResponse['token'],
+            'redirect_url'        => $snapResponse['redirect_url'] ?? null,
+            'transaction_details' => $params,
+        ];
+
+    } catch (\Exception $e) {
+        log_message('error', 'Payment creation failed: ' . $e->getMessage());
+        throw new \RuntimeException('Failed to create payment: ' . $e->getMessage());
     }
+}
 
     public function handleNotification($notification)
     {

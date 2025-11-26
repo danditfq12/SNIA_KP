@@ -10,14 +10,48 @@ $activities        = $activities        ?? [];
 $monthEvents       = $monthEvents       ?? [];
 $todayHasEvent     = !empty($todaySchedule);
 
-/* ===== Nama & sapaan ===== */
+/* ===== Nama & sapaan - IDE FRIENDLY VERSION ===== */
 $rawName = '';
-if (function_exists('user') && user()) {
-  $rawName = (string) (user()->name ?? user()->username ?? user()->email ?? '');
+
+// Priority 1: Ambil dari session (paling reliable & stable)
+$rawName = session()->get('nama') 
+        ?? session()->get('nama_lengkap') 
+        ?? session()->get('name') 
+        ?? session()->get('username') 
+        ?? '';
+
+// Priority 2: Coba dari logged_in user object (jika ada)
+if (empty($rawName)) {
+    $userId = (int) session()->get('id_user');
+    if ($userId > 0) {
+        try {
+            $db = \Config\Database::connect();
+            $userRow = $db->table('users')
+                ->select('nama, nama_lengkap, name, username, email')
+                ->where('id', $userId)
+                ->get()
+                ->getRowArray();
+            
+            if ($userRow) {
+                $rawName = $userRow['nama'] 
+                        ?? $userRow['nama_lengkap'] 
+                        ?? $userRow['name'] 
+                        ?? $userRow['username'] 
+                        ?? $userRow['email'] 
+                        ?? '';
+            }
+        } catch (\Exception $e) {
+            // Silent fail - lanjut ke fallback
+            log_message('debug', 'Failed to fetch user name: ' . $e->getMessage());
+        }
+    }
 }
-if (!$rawName) {
-  $rawName = (string) (session('nama_lengkap') ?? session('name') ?? session('username') ?? 'Presenter');
+
+// Final fallback
+if (empty($rawName)) {
+    $rawName = 'Presenter';
 }
+
 $firstName = trim(explode(' ', $rawName)[0]) ?: 'Presenter';
 
 $hour   = (int)date('G');
@@ -87,7 +121,7 @@ $mapFp = function($s){
         <div class="hero-body">
           <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>
-              <!-- GANTI: sambutan user -->
+              <!-- FIXED: sambutan user -->
               <h3 class="hero-title mb-1">Halo, <?= esc($firstName) ?> 👋</h3>
               <div class="text-white-70 small">Selamat <?= esc($waktu) ?> — semoga produktif! Ini ringkasan progres & aktivitas kamu.</div>
             </div>
@@ -249,14 +283,12 @@ $mapFp = function($s){
                         $absPill = $absToPill($absSt);
                         $fpPill  = $fpToPill($fpSt);
 
-                        // CTA utama (link tombol)
-                        $blockedPay = true; // akan di-set ulang di bawah
+                        $blockedPay = true;
 
                         $ctaHref = "/presenter/events/detail/$eventId"; $ctaText = "Lihat Detail";
                         if (!$absSt) {
                           $ctaHref = "/presenter/kontributor/start/$eventId"; $ctaText = "Lengkapi Kontributor";
                         } elseif ($absSt==='ditolak') {
-                          // ❗ Abstrak ditolak: JANGAN suruh upload abstrak lagi
                           $ctaHref = "/presenter/events/detail/$eventId";     $ctaText = "Lihat Status Event";
                         } elseif (in_array($absSt, ['menunggu','sedang_direview'], true)) {
                           $ctaHref = "/presenter/events/detail/$eventId";      $ctaText = "Cek Status Abstrak";
@@ -277,21 +309,9 @@ $mapFp = function($s){
                         $absState   = $mapAbs($absSt);
                         $fpState    = $mapFp($fpSt);
 
-                        /** ================== LOGIKA STEP SESUAI AKTIVITAS ==================
-                         * Input data → Abstrak → Full paper → LOA → Pembayaran → Selesai
-                         * - Full paper baru upload / menunggu / revisi: JANGAN maju ke LOA
-                         * - LOA hanya ketika FP = ACCEPTED
-                         * - Pembayaran hanya boleh kalau abstrak & full paper diterima
-                         */
-
-                        // Boleh lanjut pembayaran kalau abstrak & full paper diterima
                         $allowPay   = ($absSt === 'diterima' && $fpSt === 'ACCEPTED');
                         $blockedPay = !$allowPay;
 
-                        // LOA:
-                        // - FP ACCEPTED  => LOA done
-                        // - FP REJECTED  => LOA danger
-                        // - selain itu   => LOA muted (belum LOA)
                         if ($fpSt === 'ACCEPTED') {
                             $loaState = 'done';
                         } elseif ($fpSt === 'REJECTED') {
@@ -300,7 +320,6 @@ $mapFp = function($s){
                             $loaState = 'muted';
                         }
 
-                        // Pembayaran & Selesai
                         $bayarStepMeta = (string)($p['steps']['bayar'] ?? '');
                         $verifStepMeta = (string)($p['steps']['verifikasi'] ?? '');
 
@@ -308,27 +327,23 @@ $mapFp = function($s){
                         $finishState = 'muted';
 
                         if ($allowPay) {
-                            // sudah ada pembayaran?
                             if (str_contains($bayarStepMeta, 'done')) {
                                 $bayarState = 'done';
                             } else {
-                                $bayarState = 'current'; // step berikut setelah LOA
+                                $bayarState = 'current';
                             }
 
-                            // verifikasi pembayaran => selesai
                             if (str_contains($verifStepMeta, 'done')) {
                                 $finishState = 'done';
                                 $bayarState  = 'done';
                             }
                         } else {
-                            // kalau status sudah buntu (ditolak), tandai merah di bayar & selesai
                             if ($absState === 'danger' || $fpState === 'danger') {
                                 $bayarState  = 'danger';
                                 $finishState = 'danger';
                             }
                         }
 
-                        // Step visual abstrak & full paper
                         $absStepClass = (
                             $absState === 'done'   ? 'done'   :
                             ($absState === 'warn'  ? 'warn'   :
@@ -368,7 +383,6 @@ $mapFp = function($s){
                               <div class="label">Upload Berkas</div>
                             </div>
 
-                            <!-- STEP LOA -->
                             <div class="step <?= esc($loaState) ?>">
                               <div class="dot"><i class="bi bi-file-earmark-check-fill"></i></div>
                               <div class="label">LOA</div>
@@ -491,22 +505,18 @@ $mapFp = function($s){
 
 <?= $this->include('partials/footer') ?>
 
-
 <style>
 :root{
   --blue-50:#eff6ff; --blue-100:#dbeafe; --blue-200:#bfdbfe; --blue-300:#93c5fd;
   --blue-400:#60a5fa; --blue-500:#3b82f6; --blue-600:#2563eb; --blue-700:#1d4ed8; --blue-800:#1e40af; --blue-900:#1e3a8a;
   --muted:#6b7280; --ink:#0f172a; --radius:16px;
   --side-pad: clamp(1rem, 2.3vw, 2.2rem);
-
-  /* tinggi-tinggi area scroll */
   --activity-row-h: 74px;
   --activity-visible: 4.5;
   --progress-card-h: 240px;
   --progress-visible: 1.5;
 }
 
-/* Lebar container */
 .container-xxl{
   max-width: min(100%, 1560px);
   padding-left: var(--side-pad) !important;
@@ -526,7 +536,6 @@ body{
     linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
 
-/* HERO */
 .card-hero{ border:0; border-radius:var(--radius); overflow:hidden; box-shadow:0 12px 28px rgba(30,64,175,.18); }
 .card-hero .hero-body{ background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff; padding:1.8rem 1.2rem; min-height:176px; }
 .hero-title{ font-weight:900; letter-spacing:.2px; }
@@ -535,7 +544,6 @@ body{
 .hero-tabs .nav-link{ font-weight:700; border-radius:999px; padding:.45rem 1rem; }
 .hero-tabs .nav-link.active{ background:var(--blue-600); color:#fff; }
 
-/* Card seragam */
 .fp-card{
   border:1px solid rgba(30,64,175,.12);
   border-radius:16px;
@@ -548,7 +556,6 @@ body{
 .fp-head{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-bottom:.35rem; }
 .fp-title{ line-height:1.35; max-width:72%; color:var(--blue-900); }
 
-/* KPI: icon & teks */
 .kpi-icon{
   width:42px; height:42px; border-radius:12px;
   display:flex; align-items:center; justify-content:center;
@@ -565,7 +572,6 @@ body{
   font-size:28px; font-weight:900; line-height:1.15; letter-spacing:.25px; margin-top:2px; color:#0f172a;
 }
 
-/* Pills & chips */
 .status-pill{ font-weight:800; font-size:.82rem; padding:.28rem .6rem; border-radius:999px; border:1px solid rgba(0,0,0,.06); white-space:nowrap; }
 .pill-warn{ background:#fef3c7; color:#92400e; }
 .pill-success{ background:#d1fae5; color:#065f46; }
@@ -575,11 +581,9 @@ body{
 .chip{ display:inline-flex; align-items:center; padding:.26rem .55rem; font-size:.86rem; border-radius:999px; background:#eef3ff; color:#1e3a8a; border:1px solid rgba(30,64,175,.15); font-weight:700; }
 .chip.alt{ background:#f1f5ff; color:#244aa4; }
 
-/* Meta / hints */
 .mini-hint{ color:#3a2a6a; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:10px; padding:.5rem .6rem; font-weight:600; font-size:.86rem; }
 .empty-hint{ color:#567; background:#f6f9ff; border:1px dashed rgba(30,64,175,.18); border-radius:12px; padding:.8rem 1rem; font-weight:600; }
 
-/* Empty state khusus Absensi */
 .empty-state{
   text-align:center; padding:1.2rem; border:1px dashed rgba(30,64,175,.22);
   border-radius:12px; background:linear-gradient(180deg,#f8fbff, #ffffff);
@@ -592,30 +596,25 @@ body{
 .empty-title{ font-weight:800; color:#1e3a8a; }
 .empty-desc{ color:#566; font-size:.95rem; }
 
-/* Activity item */
 .activity-item{
   display:flex; gap:.6rem; align-items:flex-start; text-decoration:none; color:inherit;
   border:1px solid rgba(2,6,23,.06); border-radius:12px; padding:.65rem .7rem; margin-bottom:.5rem;
 }
 .icon-pill{ min-width:34px; text-align:center; }
 
-/* Footer action */
 .fp-foot{ display:flex; gap:.6rem; margin-top:auto; padding-top:.6rem; border-top:1px dashed rgba(30,64,175,.16); }
 .btn{ font-weight:800; border-radius:10px; font-size:.98rem; padding:.55rem 1.0rem; }
 .btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
 
-/* ===== Scroll area ===== */
 .scroll-area{ overflow:auto; padding-right:4px; scrollbar-width:thin; scrollbar-color:#9db7ff #f3f4f6; }
 .scroll-area::-webkit-scrollbar{ width:8px; }
 .scroll-area::-webkit-scrollbar-thumb{ background:#9db7ff; border-radius:6px; }
 .scroll-area::-webkit-scrollbar-track{ background:#f3f4f6; border-radius:6px; }
 
 .scroll-area--activity{ max-height: calc(var(--activity-row-h) * var(--activity-visible)); }
-/* sekitar 1–1.5 kartu terlihat */
 .progress-list .fp-card{ min-height: var(--progress-card-h); }
 .scroll-area--progress{ max-height: calc(var(--progress-card-h) * var(--progress-visible)); }
 
-/* Kalender */
 .calendar-legend{ display:flex; gap:.6rem; align-items:center; }
 .calendar-legend .chip{ padding:.22rem .6rem; border-radius:999px; font-weight:700; font-size:.8rem; background:#eef3ff; color:#223b94; border:1px solid rgba(34,59,148,.12); }
 .calendar-legend .chip.alt{ background:#e8fbf2; color:#0b6640; border-color:rgba(11,102,64,.15); }
@@ -637,7 +636,6 @@ body{
 .calendar-grid .cell.today .dot{ background:#2563eb; }
 .calendar-grid .cell .count{ position:absolute; right:6px; bottom:4px; font-size:.65rem; background:#065f4699; color:#fff; padding:0 6px; border-radius:6px; }
 
-/* Stepper */
 .stepper{ position:relative; display:flex; justify-content:space-between; gap:12px; padding:18px 14px; border:1px solid rgba(2,6,23,.06); border-radius:12px; background:#fff; }
 .step{ position:relative; flex:1 1 0; text-align:center; min-width:0; }
 .step .dot{ width:36px; height:36px; border-radius:50%; margin:0 auto 6px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#fff; background:#16a34a; box-shadow:0 0 0 3px #e8f5eb; }
@@ -651,7 +649,6 @@ body{
 .step.muted .dot{ background:#9ca3af; } .step.muted .label{ color:#475569; } .step.muted::after{ background:#9ca3af; }
 .step .bi{ line-height:1; }
 
-/* Responsive */
 @media (max-width:767.98px){
   .card-hero .hero-body{ padding:1.4rem 1rem; min-height:165px; }
   .fp-title{ max-width:68%; }
@@ -663,14 +660,12 @@ body{
   .step .dot{ width:32px; height:32px; font-size:16px; }
 }
 
-/* util */
 .text-truncate-2{
   overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
 }
 </style>
 
 <script>
-/* Tombol "Lihat Kalender" saat absensi kosong -> pindah ke tab Kalender */
 document.addEventListener('DOMContentLoaded', function(){
   const btn = document.getElementById('btnGoCalendar');
   if (!btn) return;

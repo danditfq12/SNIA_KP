@@ -262,6 +262,33 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
     return Array.from(tooltipTriggerList).map(el => new bootstrap.Tooltip(el));
   }
 
+  function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  function getFileIcon(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const iconMap = {
+      'pdf': { icon: 'bi-file-earmark-pdf', color: 'text-danger' },
+      'doc': { icon: 'bi-file-earmark-word', color: 'text-primary' },
+      'docx': { icon: 'bi-file-earmark-word', color: 'text-primary' },
+      'ppt': { icon: 'bi-file-earmark-easel', color: 'text-warning' },
+      'pptx': { icon: 'bi-file-earmark-easel', color: 'text-warning' },
+      'xls': { icon: 'bi-file-earmark-excel', color: 'text-success' },
+      'xlsx': { icon: 'bi-file-earmark-excel', color: 'text-success' },
+      'jpg': { icon: 'bi-file-earmark-image', color: 'text-info' },
+      'jpeg': { icon: 'bi-file-earmark-image', color: 'text-info' },
+      'png': { icon: 'bi-file-earmark-image', color: 'text-info' },
+      'zip': { icon: 'bi-file-earmark-zip', color: 'text-secondary' },
+      'rar': { icon: 'bi-file-earmark-zip', color: 'text-secondary' }
+    };
+    return iconMap[ext] || { icon: 'bi-file-earmark', color: 'text-secondary' };
+  }
+
   // ===== DELETE FUNCTION =====
   function deleteDocument(id){
     Swal.fire({
@@ -417,7 +444,7 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
   </div>
 </div>
 
-<!-- Upload Dokumen Lainnya -->
+<!-- Upload Dokumen Lainnya - FIXED VERSION -->
 <div class="modal fade" id="uploadDokumenLainModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <form action="<?= site_url('admin/dokumen/uploadDokumenLainnya') ?>" method="POST" enctype="multipart/form-data" id="dokumenLainForm" class="modal-content">
@@ -439,8 +466,19 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
           </div>
           <div class="col-md-6">
             <label class="form-label">File Dokumen *</label>
-            <input type="file" class="form-control" name="document_file[]" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar,.jpg,.jpeg,.png" multiple required>
+            <input type="file" 
+                   class="form-control d-none" 
+                   name="document_file[]" 
+                   id="dokumenFileInput"
+                   accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar,.jpg,.jpeg,.png" 
+                   multiple>
+            <label for="dokumenFileInput" class="file-input-label">
+              <i class="bi bi-plus-circle"></i> Pilih File
+            </label>
             <div class="form-text">PDF, Office, ZIP, Image · maks 10MB per file · bisa pilih multiple files</div>
+            
+            <!-- File Preview Container -->
+            <div id="filePreviewContainer" class="file-preview-container d-none"></div>
           </div>
         </div>
 
@@ -462,7 +500,7 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
           </div>
           <div class="form-text mt-2">
             <strong>Single:</strong> Pilih 1 user dari daftar<br>
-            <strong>Bulk:</strong> Kirim dokumen ke semua user terdaftar (yang belum punya dokumen)
+            <strong>Bulk:</strong> Kirim dokumen ke semua user terdaftar (yang belum punya dokumen ini)
           </div>
         </div>
 
@@ -476,7 +514,7 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
           <div id="dokumenLainUserListWrap" class="border rounded p-2" style="max-height:330px; overflow:auto;">
             <div class="text-muted small">Pilih event terlebih dahulu.</div>
           </div>
-          <div class="form-text mt-1">User yang sudah punya dokumen akan diberi label <em>"Sudah dapat Dokumen"</em>.</div>
+          <div class="form-text mt-1">User bisa menerima multiple dokumen. Jumlah dokumen yang sudah dimiliki ditampilkan pada badge.</div>
         </div>
 
         <!-- BULK CONFIRMATION -->
@@ -486,7 +524,7 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
             <div>
               <strong>Mode Bulk Upload</strong><br>
               Dokumen akan dikirim ke <strong id="bulkUserCount">semua</strong> user yang terdaftar pada event ini.<br>
-              <small class="text-muted">User yang sudah memiliki dokumen akan dilewati secara otomatis.</small>
+              <small class="text-muted">User yang sudah memiliki dokumen yang sama akan dilewati otomatis.</small>
             </div>
           </div>
         </div>
@@ -503,6 +541,197 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
 </div>
 
 <script>
+  // ====== FILE MANAGEMENT FOR DOKUMEN LAINNYA ======
+  let selectedFiles = [];
+  const fileInput = document.getElementById('dokumenFileInput');
+  const previewContainer = document.getElementById('filePreviewContainer');
+
+  // Handle file selection
+  fileInput.addEventListener('change', function(e) {
+    const newFiles = Array.from(e.target.files);
+    
+    // Validate and add new files
+    newFiles.forEach(file => {
+      // Check if file already exists
+      const exists = selectedFiles.some(f => f.name === file.name && f.size === file.size);
+      if (!exists) {
+        selectedFiles.push(file);
+      }
+    });
+    
+    // Update preview
+    updateFilePreview();
+    
+    // Reset input so same file can be selected again if removed
+    fileInput.value = '';
+  });
+
+  function updateFilePreview() {
+    if (selectedFiles.length === 0) {
+      previewContainer.classList.add('d-none');
+      previewContainer.innerHTML = '';
+      return;
+    }
+
+    previewContainer.classList.remove('d-none');
+    previewContainer.innerHTML = '';
+
+    selectedFiles.forEach((file, index) => {
+      const fileItem = document.createElement('div');
+      fileItem.className = 'file-preview-item';
+      
+      const iconInfo = getFileIcon(file.name);
+      
+      fileItem.innerHTML = `
+        <div class="file-info">
+          <i class="bi ${iconInfo.icon} ${iconInfo.color} file-icon"></i>
+          <div class="file-details">
+            <div class="file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
+            <div class="file-size">${formatFileSize(file.size)}</div>
+          </div>
+        </div>
+        <button type="button" class="file-remove-btn" onclick="removeFile(${index})" title="Hapus file">
+          <i class="bi bi-x-circle"></i>
+        </button>
+      `;
+      
+      previewContainer.appendChild(fileItem);
+    });
+  }
+
+  function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    updateFilePreview();
+  }
+
+  // Update form submission to use selectedFiles
+  $('#dokumenLainForm').on('submit', function(e) {
+    e.preventDefault();
+    
+    const eventId = $('#dokumenLainEventId').val();
+    const uploadMode = $('input[name="upload_mode"]:checked').val();
+    const userId = $('#dokumenLainUserIdHidden').val();
+
+    // Validation
+    if (!eventId) {
+      Swal.fire('Error', 'Pilih event terlebih dahulu.', 'error');
+      return false;
+    }
+
+    if (uploadMode === 'single' && !userId) {
+      Swal.fire('Error', 'Pilih user pada daftar.', 'error');
+      return false;
+    }
+
+    if (selectedFiles.length === 0) {
+      Swal.fire('Error', 'Pilih minimal 1 file dokumen.', 'error');
+      return false;
+    }
+
+    // Validate files
+    const validExts = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip', 'rar', 'jpg', 'jpeg', 'png'];
+    let totalSize = 0;
+
+    for (let file of selectedFiles) {
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      if (file.size > 10485760) {
+        Swal.fire('Error', `File "${file.name}" melebihi 10MB.`, 'error');
+        return false;
+      }
+
+      if (!validExts.includes(ext)) {
+        Swal.fire('Error', `Format file "${file.name}" tidak didukung.`, 'error');
+        return false;
+      }
+
+      totalSize += file.size;
+    }
+
+    if (totalSize > 52428800) {
+      Swal.fire('Error', 'Total ukuran file tidak boleh lebih dari 50MB.', 'error');
+      return false;
+    }
+
+    // Create FormData and add selected files
+    const formData = new FormData(this);
+    
+    // Remove old file input data
+    formData.delete('document_file[]');
+    
+    // Add selected files
+    selectedFiles.forEach(file => {
+      formData.append('document_file[]', file);
+    });
+
+    // Disable submit button
+    const btn = $('#dokumenLainSubmitBtn');
+    btn.prop('disabled', true).find('span').text(`Mengupload ${selectedFiles.length} file...`);
+
+    // Submit via AJAX
+    $.ajax({
+      url: $(this).attr('action'),
+      method: 'POST',
+      data: formData,
+      processData: false,
+      contentType: false,
+      success: function(response) {
+        // Redirect to refresh page with success message
+        window.location.href = '<?= site_url('admin/dokumen') ?>?success=1';
+      },
+      error: function(xhr) {
+        btn.prop('disabled', false).find('span').text('Upload Dokumen');
+        Swal.fire('Error', 'Gagal mengupload dokumen. Silakan coba lagi.', 'error');
+      }
+    });
+
+    return false;
+  });
+
+  // Reset form when modal is closed
+  $('#uploadDokumenLainModal').on('hidden.bs.modal', function() {
+    selectedFiles = [];
+    updateFilePreview();
+    $('#dokumenLainForm')[0].reset();
+    $('#dokumenLainEventId').val('').trigger('change');
+    $('#dokumenLainUserIdHidden').val('');
+    $('#dokumenLainUserListWrap').html('<div class="text-muted small">Pilih event terlebih dahulu.</div>');
+    $('#dokumenLainCountBadge').addClass('d-none').text('0 ditemukan');
+    $('input[name="upload_mode"][value="single"]').prop('checked', true).trigger('change');
+  });
+
+  // ====== MODE TOGGLE ======
+  $('input[name="upload_mode"]').on('change', function() {
+    const mode = $(this).val();
+    if (mode === 'single') {
+      $('#singleUserSection').show();
+      $('#bulkConfirmSection').hide();
+      $('#dokumenLainUserIdHidden').prop('required', true);
+      $('#dokumenLainBtnText').text('Upload Dokumen');
+    } else {
+      $('#singleUserSection').hide();
+      $('#bulkConfirmSection').show();
+      $('#dokumenLainUserIdHidden').prop('required', false).val('');
+      $('#dokumenLainBtnText').text('Upload ke Semua User');
+      
+      // Update bulk user count
+      const eventId = $('#dokumenLainEventId').val();
+      if (eventId) {
+        updateBulkUserCount(eventId);
+      }
+    }
+  });
+
+  function updateBulkUserCount(eventId) {
+    $.get('<?= site_url('admin/dokumen/users-for-dokumen-lain/') ?>' + encodeURIComponent(eventId))
+      .done(res => {
+        if (res && res.status === 'success') {
+          const count = (res.data || []).length;
+          $('#bulkUserCount').text(count + ' user');
+        }
+      });
+  }
+
   // ====== LOA PICK LIST ======
   const $loaEvent  = $('#loaEventId');
   const $loaWrap   = $('#loaUserListWrap');
@@ -663,7 +892,7 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
       });
   });
 
-  // ====== DOKUMEN LAINNYA PICK LIST - FIXED ======
+  // ====== DOKUMEN LAINNYA PICK LIST ======
   const $dokLainEvent  = $('#dokumenLainEventId');
   const $dokLainWrap   = $('#dokumenLainUserListWrap');
   const $dokLainHidden = $('#dokumenLainUserIdHidden');
@@ -688,18 +917,17 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
     }
 
     items.forEach(u=>{
-      const hasDokumen = !!u.has_dokumen;
-      const badgeDokumen = hasDokumen
-        ? '<span class="badge bg-info-subtle text-info border border-info-subtle">Sudah dapat Dokumen</span>'
-        : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Belum dapat Dokumen</span>';
+      const docCount = parseInt(u.doc_count) || 0;
+      const badgeDokumen = docCount > 0
+        ? `<span class="badge bg-info-subtle text-info border border-info-subtle">${docCount} Dokumen</span>`
+        : '<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Belum ada Dokumen</span>';
       const role = u.role ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${escapeHtml(u.role)}</span>` : '';
       const paymentBadge = u.payment_verified 
         ? '<span class="badge bg-success-subtle text-success border border-success-subtle ms-1">Verified</span>'
         : '<span class="badge bg-warning-subtle text-warning border border-warning-subtle ms-1">Pending</span>';
 
-      const disabled = hasDokumen ? 'disabled' : '';
       const $row = $(`
-        <div class="picklist-item d-flex justify-content-between align-items-start mb-2 ${disabled}" data-id="${u.id_user}">
+        <div class="picklist-item d-flex justify-content-between align-items-start mb-2" data-id="${u.id_user}">
           <div>
             <div class="fw-semibold">${escapeHtml(u.nama_lengkap||'-')}</div>
             <div class="small text-muted">${escapeHtml(u.email||'')}</div>
@@ -710,13 +938,11 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
         </div>
       `);
 
-      if (!hasDokumen) {
-        $row.on('click', function(){
-          $('.picklist-item', $dokLainWrap).removeClass('active');
-          $(this).addClass('active');
-          $dokLainHidden.val($(this).data('id'));
-        });
-      }
+      $row.on('click', function(){
+        $('.picklist-item', $dokLainWrap).removeClass('active');
+        $(this).addClass('active');
+        $dokLainHidden.val($(this).data('id'));
+      });
 
       $dokLainWrap.append($row);
     });
@@ -751,7 +977,13 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
         
         if(res && res.status === 'success'){ 
           console.log('Rendering users:', res.data);
-          renderDokumenLainUsers(res.data || []); 
+          renderDokumenLainUsers(res.data || []);
+          
+          // Update bulk user count if in bulk mode
+          if ($('input[name="upload_mode"]:checked').val() === 'bulk') {
+            const count = (res.data || []).length;
+            $('#bulkUserCount').text(count + ' user');
+          }
         } else { 
           const errMsg = res.message || 'Unknown error';
           console.error('API returned error:', errMsg);
@@ -816,62 +1048,5 @@ $stats['recent_uploads']   = $stats['recent_uploads'] ?? 0;
 
     const btn = $('#sertifikatSubmitBtn'); 
     if(btn.length) btn.prop('disabled',true).find('span').text('Memproses...');
-  });
-
-  // Validasi submit Dokumen Lainnya
-  $('#dokumenLainForm').on('submit', function(e){
-    const eventId = $('#dokumenLainEventId').val();
-    const userId  = $('#dokumenLainUserIdHidden').val();
-    const fileInp = this.querySelector('input[name="document_file[]"]');
-    const files   = fileInp && fileInp.files;
-
-    if (!eventId){ 
-      e.preventDefault(); 
-      Swal.fire('Error','Pilih event terlebih dahulu.','error'); 
-      return; 
-    }
-
-    if (!userId){ 
-      e.preventDefault(); 
-      Swal.fire('Error','Pilih user pada daftar.','error'); 
-      return; 
-    }
-
-    if (!files || files.length === 0){ 
-      e.preventDefault(); 
-      Swal.fire('Error','Pilih minimal 1 file dokumen.','error'); 
-      return; 
-    }
-    
-    const validExts = ['pdf','doc','docx','ppt','pptx','xls','xlsx','zip','rar','jpg','jpeg','png'];
-    let totalSize = 0;
-    
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const ext = (file.name.split('.').pop()||'').toLowerCase();
-      
-      if (file.size > 10485760) { 
-        e.preventDefault(); 
-        Swal.fire('Error',`File "${file.name}" melebihi 10MB.`,'error'); 
-        return; 
-      }
-      
-      if (!validExts.includes(ext)) { 
-        e.preventDefault(); 
-        Swal.fire('Error',`Format file "${file.name}" tidak didukung.`,'error'); 
-        return; 
-      }
-      
-      totalSize += file.size;
-    }
-    
-    if (totalSize > 52428800) {
-      e.preventDefault();
-      Swal.fire('Error','Total ukuran file tidak boleh lebih dari 50MB.','error');
-      return;
-    }
-
-    const btn = $('#dokumenLainSubmitBtn'); 
-    if(btn.length) btn.prop('disabled',true).find('span').text(`Mengupload ${files.length} file...`);
   });
 </script>

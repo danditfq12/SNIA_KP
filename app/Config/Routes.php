@@ -292,6 +292,17 @@ $routes->group('admin', [
     $routes->get ('voucher/usage/(:num)',              'Voucher::usageHistory/$1');
     $routes->post('voucher/generate-bulk',             'Voucher::generateBulk');
 
+    // ===== FASILITAS & BENEFIT =====
+    $routes->get ('fasilitas',                         'Fasilitas::index');
+    $routes->get ('fasilitas/get-by-event/(:num)',     'Fasilitas::getFasilitasByEvent/$1');
+    $routes->post('fasilitas/store',                   'Fasilitas::store');
+    $routes->post('fasilitas/update/(:num)',           'Fasilitas::update/$1');
+    $routes->post('fasilitas/delete/(:num)',           'Fasilitas::delete/$1');
+    $routes->post('fasilitas/toggle-status/(:num)',    'Fasilitas::toggleStatus/$1');
+    $routes->get ('fasilitas/detail/(:num)',           'Fasilitas::getDetail/$1');
+    $routes->post('fasilitas/copy-to-event',           'Fasilitas::copyToEvent');
+    
+
     // ===== LAPORAN =====
     $routes->get('laporan',                            'Laporan::index');
     $routes->get('laporan/export',                     'Laporan::export');

@@ -10,23 +10,29 @@
 </head>
 <?= $this->include('partials/navbar') ?>
 <body>
-    <!-- Hero Section -->
-    <section class="hero-section" id="home">
-        <div class="hero-content">
-            <div class="container">
-                <div class="row justify-content-center">
-                    <div class="col-lg-8 col-xl-7">
-                        <div class="animate-on-scroll" style="padding-left: 0;">
+   <!-- Hero Section -->
+<section class="hero-section" id="home">
+    <div class="hero-content">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-8 col-xl-7">
+                    <div class="animate-on-scroll text-center">
+                        <?php if ($activeEvent): ?>
+                            <h1 class="hero-title"><?= esc($activeEvent['title']) ?></h1>
+                            <div class="hero-year"><?= date('Y', strtotime($activeEvent['event_date'])) ?></div>
+                            <p class="hero-description"><?= esc($activeEvent['description']) ?></p>
+                        <?php else: ?>
                             <h1 class="hero-title">Seminar Nasional Informatika dan Aplikasinya</h1>
                             <div class="hero-year">(SNIA) <?= date('Y') ?></div>
                             <p class="hero-description">Diselenggarakan oleh Jurusan Informatika Universitas Jenderal Achmad Yani (UNJANI), acara dua tahunan yang mempertemukan akademisi, peneliti, dan praktisi untuk berbagi pengetahuan dan inovasi terdepan di bidang teknologi informasi.</p>
-                            <a href="<?= base_url('auth/login') ?>" class="hero-cta">DAFTAR SEKARANG</a>
-                        </div>
+                        <?php endif; ?>
+                        <a href="<?= base_url('auth/login') ?>" class="hero-cta">DAFTAR SEKARANG</a>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 
     <!-- Poster Section -->
     <?php if ($activeEvent): ?>
@@ -34,7 +40,6 @@
         <div class="container">
             <div class="text-center mb-4">
                 <h2 class="section-title animate-on-scroll">Poster Event</h2>
-                <p class="lead animate-on-scroll">Informasi lengkap tentang SNIA <?= date('Y', strtotime($activeEvent['event_date'])) ?></p>
             </div>
             <div class="row justify-content-center">
                 <div class="col-lg-8 col-md-10">

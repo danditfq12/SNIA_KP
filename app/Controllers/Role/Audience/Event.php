@@ -7,6 +7,7 @@ use App\Models\EventModel;
 use App\Models\EventRegistrationModel;
 use App\Models\UserModel;
 use App\Models\PembayaranModel;
+use App\Models\FasilitasBenefitModel;
 use App\Services\NotificationService;
 
 class Event extends BaseController
@@ -132,7 +133,6 @@ class Event extends BaseController
             $eventEndTime = $ev['event_end_time'] ?? '23:59:59';
             $eventEnd = strtotime($eventEndDate . ' ' . $eventEndTime);
             
-            // Cek status registrasi user untuk event ini
             $regInfo = $myRegs[$ev['id']] ?? null;
             $regStatus = null;
             $paymentStatus = null;
@@ -143,34 +143,24 @@ class Event extends BaseController
                 $regStatus = $regInfo['status'] ?? null;
                 $paymentStatus = $regInfo['payment_status'] ?? null;
                 
-                // Dianggap terdaftar jika statusnya bukan 'batal' atau 'ditolak'
                 $isRegistered = !in_array($regStatus, ['batal', 'ditolak'], true);
                 
-                // Dianggap sudah bayar jika:
-                // 1. Payment status = verified/confirmed, ATAU
-                // 2. Registration status = lunas
                 $isPaidOrVerified = in_array($paymentStatus, ['verified', 'confirmed'], true) || 
                                    $regStatus === 'lunas';
             }
             
-            // PRIORITAS KATEGORI:
-            // 1. Event sudah selesai -> finishedEvents
             if ($eventEnd && $now > $eventEnd) {
                 $finishedEvents[] = $ev;
             }
-            // 2. User sudah terdaftar DAN sudah bayar/verified -> closedEvents
             elseif ($isRegistered && $isPaidOrVerified) {
                 $closedEvents[] = $ev;
             }
-            // 3. Pendaftaran terbuka DAN (user belum terdaftar ATAU belum bayar) -> openEvents
             elseif (!empty($ev['reg_open'])) {
                 $openEvents[] = $ev;
             }
-            // 4. Ada gelombang yang akan datang -> pendingEvents
             elseif (!empty($ev['has_upcoming_wave'])) {
                 $pendingEvents[] = $ev;
             }
-            // 5. Lainnya -> closedEvents
             else {
                 $closedEvents[] = $ev;
             }
@@ -236,19 +226,43 @@ class Event extends BaseController
         
         $allWaves = $eventM->getWaves($id);
 
+        // ========== AMBIL FASILITAS DARI DATABASE ==========
+        $fasilitasModel = new FasilitasBenefitModel();
+        
+        $fasilitasOnline = [];
+        $fasilitasOffline = [];
+        
+        // Ambil fasilitas audience online
+        $facilityOnline = $fasilitasModel->getFasilitasByType($id, 'audience_online');
+        if ($facilityOnline && !empty($facilityOnline['fasilitas'])) {
+            $fasilitasOnline = is_array($facilityOnline['fasilitas']) 
+                ? $facilityOnline['fasilitas'] 
+                : json_decode($facilityOnline['fasilitas'], true);
+        }
+        
+        // Ambil fasilitas audience offline
+        $facilityOffline = $fasilitasModel->getFasilitasByType($id, 'audience_offline');
+        if ($facilityOffline && !empty($facilityOffline['fasilitas'])) {
+            $fasilitasOffline = is_array($facilityOffline['fasilitas']) 
+                ? $facilityOffline['fasilitas'] 
+                : json_decode($facilityOffline['fasilitas'], true);
+        }
+
         return view('role/audience/events/detail', [
-            'event'     => $ev,
-            'options'   => $options,
-            'pricing'   => $pricing,
-            'isOpen'    => $isOpen,
-            'myReg'     => $myReg,
-            'waveInfo'  => $waveInfo,
-            'allWaves'  => $allWaves,
+            'event'            => $ev,
+            'options'          => $options,
+            'pricing'          => $pricing,
+            'isOpen'           => $isOpen,
+            'myReg'            => $myReg,
+            'waveInfo'         => $waveInfo,
+            'allWaves'         => $allWaves,
+            'fasilitasOnline'  => $fasilitasOnline,
+            'fasilitasOffline' => $fasilitasOffline,
         ]);
     }
 
     /** 
-     * HALAMAN PILIH MODE
+     * HALAMAN PILIH MODE - WITH FACILITIES FROM DATABASE
      */
     public function showRegistrationForm(int $id)
     {
@@ -298,11 +312,35 @@ class Event extends BaseController
             ];
         }
 
+        // ========== AMBIL FASILITAS DARI DATABASE ==========
+        $fasilitasModel = new FasilitasBenefitModel();
+        
+        $fasilitasOnline = [];
+        $fasilitasOffline = [];
+        
+        // Ambil fasilitas audience online
+        $facilityOnline = $fasilitasModel->getFasilitasByType($id, 'audience_online');
+        if ($facilityOnline && !empty($facilityOnline['fasilitas'])) {
+            $fasilitasOnline = is_array($facilityOnline['fasilitas']) 
+                ? $facilityOnline['fasilitas'] 
+                : json_decode($facilityOnline['fasilitas'], true);
+        }
+        
+        // Ambil fasilitas audience offline
+        $facilityOffline = $fasilitasModel->getFasilitasByType($id, 'audience_offline');
+        if ($facilityOffline && !empty($facilityOffline['fasilitas'])) {
+            $fasilitasOffline = is_array($facilityOffline['fasilitas']) 
+                ? $facilityOffline['fasilitas'] 
+                : json_decode($facilityOffline['fasilitas'], true);
+        }
+
         return view('role/audience/events/register', [
-            'event'     => $ev,
-            'options'   => $options,
-            'pricing'   => $pricing,
-            'waveInfo'  => $waveInfo,
+            'event'            => $ev,
+            'options'          => $options,
+            'pricing'          => $pricing,
+            'waveInfo'         => $waveInfo,
+            'fasilitasOnline'  => $fasilitasOnline,
+            'fasilitasOffline' => $fasilitasOffline,
         ]);
     }
 
@@ -322,7 +360,6 @@ class Event extends BaseController
 
         $regM = new EventRegistrationModel();
         
-        // Cek registrasi aktif
         $allRegs = $regM->where('id_event', $id)
                         ->where('id_user', $idUser)
                         ->findAll();
@@ -344,7 +381,6 @@ class Event extends BaseController
                              ->with('warning','Kamu sudah terdaftar pada event ini.');
         }
 
-        // Validasi mode kehadiran
         $mode  = (string)$this->request->getPost('mode_kehadiran');
         $valid = $eventM->getParticipationOptions($id, 'audience');
         if (!in_array($mode, $valid, true)) {
@@ -354,7 +390,6 @@ class Event extends BaseController
             return redirect()->to('/audience/events/detail/'.$id)->with('error','Kuota peserta telah penuh.');
         }
 
-        // Ambil harga dari gelombang aktif
         $userRole = 'audience';
         $price = $eventM->getEventPrice($id, $userRole, $mode);
 
@@ -363,7 +398,6 @@ class Event extends BaseController
                              ->with('error','Harga tidak tersedia untuk mode kehadiran ini. Silakan hubungi admin.');
         }
 
-        // ========== REGISTRASI SAJA - TIDAK BUAT PEMBAYARAN ==========
         $oldCanceledReg = $regM->where('id_event', $id)
                                ->where('id_user', $idUser)
                                ->whereIn('status', ['batal', 'ditolak'])
@@ -371,7 +405,6 @@ class Event extends BaseController
                                ->first();
         
         if ($oldCanceledReg) {
-            // Update registrasi lama
             $regM->update($oldCanceledReg['id'], [
                 'status' => 'menunggu_pembayaran',
                 'mode_kehadiran' => $mode,
@@ -380,7 +413,6 @@ class Event extends BaseController
             ]);
             $idReg = $oldCanceledReg['id'];
             
-            // Hapus pembayaran lama yang dibatalkan
             $this->db->table('pembayaran')
                      ->where('event_id', $id)
                      ->where('id_user', $idUser)
@@ -390,7 +422,6 @@ class Event extends BaseController
             
             log_message('info', "Reactivated registration {$idReg} for user {$idUser}");
         } else {
-            // Buat registrasi baru
             $idReg = $regM->insert([
                 'id_event' => $id,
                 'id_user' => $idUser,

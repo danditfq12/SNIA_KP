@@ -54,3 +54,106 @@
   font-size: 1.2rem;
 }
 
+  /* Custom styles for file preview */
+  .file-preview-container {
+    margin-top: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 10px;
+    background-color: #f8f9fa;
+  }
+  
+  .file-preview-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background-color: white;
+    border: 1px solid #e3e6ea;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+  }
+  
+  .file-preview-item:hover {
+    border-color: #0d6efd;
+    box-shadow: 0 2px 4px rgba(13, 110, 253, 0.1);
+  }
+  
+  .file-preview-item:last-child {
+    margin-bottom: 0;
+  }
+  
+  .file-info {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .file-icon {
+    font-size: 1.5rem;
+    margin-right: 10px;
+    flex-shrink: 0;
+  }
+  
+  .file-details {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .file-name {
+    font-weight: 500;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .file-size {
+    font-size: 0.875rem;
+    color: #6c757d;
+  }
+  
+  .file-remove-btn {
+    background: none;
+    border: none;
+    color: #dc3545;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+  
+  .file-remove-btn:hover {
+    background-color: #dc3545;
+    color: white;
+  }
+  
+  .file-input-wrapper {
+    position: relative;
+  }
+  
+  .file-input-label {
+    display: inline-block;
+    padding: 8px 16px;
+    background-color: #0d6efd;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 10px;
+  }
+  
+  .file-input-label:hover {
+    background-color: #0b5ed7;
+  }
+  
+  .file-input-label i {
+    margin-right: 6px;
+  }
+

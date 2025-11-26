@@ -7,6 +7,8 @@
   $pricing   = $pricing ?? [];
   $waveInfo  = $waveInfo ?? null;
   $allWaves  = $allWaves ?? [];
+  $fasilitasOnline = $fasilitasOnline ?? [];
+  $fasilitasOffline = $fasilitasOffline ?? [];
 
   $regId     = isset($myReg['id']) ? (int)$myReg['id'] : null;
   $payId     = isset($myReg['id_pembayaran']) ? (int)$myReg['id_pembayaran'] : null;
@@ -144,7 +146,7 @@
             </div>
           </div>
 
-          <!-- Benefits -->
+          <!-- Benefits - DINAMIS DARI DATABASE -->
           <div class="modern-card mb-4">
             <div class="card-header-modern">
               <div class="header-left">
@@ -166,42 +168,19 @@
                     </div>
                   </div>
                   <div class="benefit-list">
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Menghadiri Seminar Seharian Penuh</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Merchandise Eksklusif</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Makan Siang & Snack (2x Coffee Break)</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Sesi Networking dengan Pembicara</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Materi Event</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Dokumentasi Foto & Sertifikat Digital</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Akses Rekaman Event </span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Grup WhatsApp Peserta</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Parkir Gratis & Kesempatan Doorprize</span>
-                    </div>
+                    <?php if (!empty($fasilitasOffline) && is_array($fasilitasOffline)): ?>
+                      <?php foreach ($fasilitasOffline as $fasilitas): ?>
+                        <div class="benefit-item">
+                          <i class="bi bi-check-circle-fill"></i>
+                          <span><?= esc($fasilitas) ?></span>
+                        </div>
+                      <?php endforeach; ?>
+                    <?php else: ?>
+                      <div class="empty-state-small">
+                        <i class="bi bi-gift"></i>
+                        <p class="text-muted mb-0">Fasilitas untuk peserta offline belum diatur oleh admin.</p>
+                      </div>
+                    <?php endif; ?>
                   </div>
                 </div>
 
@@ -217,42 +196,19 @@
                     </div>
                   </div>
                   <div class="benefit-list">
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Live Streaming Full HD (Zoom/YouTube)</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Sertifikat Partisipasi Digital</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Akses Rekaman Event</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Sesi Tanya Jawab Interaktif dengan Pembicara</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Materi Event Digital (PDF/PPT)</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Grup WhatsApp Peserta Online</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Fitur Live Chat & Polling</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Diskusi Ruang Breakout</span>
-                    </div>
-                    <div class="benefit-item">
-                      <i class="bi bi-check-circle-fill"></i>
-                      <span>Forum Diskusi Pasca Event</span>
-                    </div>
+                    <?php if (!empty($fasilitasOnline) && is_array($fasilitasOnline)): ?>
+                      <?php foreach ($fasilitasOnline as $fasilitas): ?>
+                        <div class="benefit-item">
+                          <i class="bi bi-check-circle-fill"></i>
+                          <span><?= esc($fasilitas) ?></span>
+                        </div>
+                      <?php endforeach; ?>
+                    <?php else: ?>
+                      <div class="empty-state-small">
+                        <i class="bi bi-gift"></i>
+                        <p class="text-muted mb-0">Fasilitas untuk peserta online belum diatur oleh admin.</p>
+                      </div>
+                    <?php endif; ?>
                   </div>
                 </div>
               </div>

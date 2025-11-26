@@ -8,6 +8,7 @@ use App\Models\EventRegistrationModel;
 use App\Models\AbstrakModel;
 use App\Models\PembayaranModel;
 use App\Models\AbsensiModel;
+use App\Models\FasilitasBenefitModel;
 
 class Event extends BaseController
 {
@@ -151,6 +152,28 @@ class Event extends BaseController
             array_unshift($contributors, $main);
         }
 
+        // --- Fetch Facilities from Database ---
+        $fasilitasModel = new \App\Models\FasilitasBenefitModel();
+        $fasilitasOnlineData = $fasilitasModel->getFasilitasByType((int)$event['id'], 'presenter_online');
+        $fasilitasOfflineData = $fasilitasModel->getFasilitasByType((int)$event['id'], 'presenter_offline');
+
+        // Parse JSON if needed
+        $fasilitasOnline = [];
+        if (!empty($fasilitasOnlineData['fasilitas'])) {
+            $parsed = is_string($fasilitasOnlineData['fasilitas']) 
+                ? json_decode($fasilitasOnlineData['fasilitas'], true) 
+                : $fasilitasOnlineData['fasilitas'];
+            $fasilitasOnline = is_array($parsed) ? $parsed : [];
+        }
+
+        $fasilitasOffline = [];
+        if (!empty($fasilitasOfflineData['fasilitas'])) {
+            $parsed = is_string($fasilitasOfflineData['fasilitas']) 
+                ? json_decode($fasilitasOfflineData['fasilitas'], true) 
+                : $fasilitasOfflineData['fasilitas'];
+            $fasilitasOffline = is_array($parsed) ? $parsed : [];
+        }
+
         // --- Actions (dipakai view) ---
         $actions = $this->buildDetailActions((int)$event['id'], $userId, $reg, $abstrak, $payment);
 
@@ -169,10 +192,12 @@ class Event extends BaseController
             'contributors'          => $contributors,
             'actions'               => $actions,
             'eligible_to_pay'       => $this->isEligibleToPay((int)$event['id'], $userId),
+            'fasilitasOnline'       => $fasilitasOnline,
+            'fasilitasOffline'      => $fasilitasOffline,
         ]);
     }
 
-    /* ========================= REGISTER (GET - Pilih Mode) ========================= */
+    /* ========================= REGISTER (GET - Pilih Mode) WITH FACILITIES ========================= */
     public function register($id)
     {
         $userId = (int) session()->get('id_user');
@@ -223,12 +248,36 @@ class Event extends BaseController
             }
         }
 
+        // ========== AMBIL FASILITAS DARI DATABASE ==========
+        $fasilitasModel = new FasilitasBenefitModel();
+        
+        $fasilitasOnline = [];
+        $fasilitasOffline = [];
+        
+        // Ambil fasilitas presenter online
+        $facilityOnline = $fasilitasModel->getFasilitasByType($eventId, 'presenter_online');
+        if ($facilityOnline && !empty($facilityOnline['fasilitas'])) {
+            $fasilitasOnline = is_array($facilityOnline['fasilitas']) 
+                ? $facilityOnline['fasilitas'] 
+                : json_decode($facilityOnline['fasilitas'], true);
+        }
+        
+        // Ambil fasilitas presenter offline
+        $facilityOffline = $fasilitasModel->getFasilitasByType($eventId, 'presenter_offline');
+        if ($facilityOffline && !empty($facilityOffline['fasilitas'])) {
+            $fasilitasOffline = is_array($facilityOffline['fasilitas']) 
+                ? $facilityOffline['fasilitas'] 
+                : json_decode($facilityOffline['fasilitas'], true);
+        }
+
         return view('role/presenter/events/register', [
-            'title'   => 'Pilih Mode Kehadiran - Presenter',
-            'event'   => $event,
-            'options' => $options,
-            'pricing' => $pricing,
-            'waveInfo'=> $waveInfo,
+            'title'            => 'Pilih Mode Kehadiran - Presenter',
+            'event'            => $event,
+            'options'          => $options,
+            'pricing'          => $pricing,
+            'waveInfo'         => $waveInfo,
+            'fasilitasOnline'  => $fasilitasOnline,
+            'fasilitasOffline' => $fasilitasOffline,
         ]);
     }
 
@@ -293,15 +342,15 @@ class Event extends BaseController
         $fpStatus  = strtolower($abstract['full_paper_status'] ?? '');
 
         $isWaiting = function(?string $v): bool {
-            if ($v === null || $v === '') return true; // baru upload / belum dinilai
+            if ($v === null || $v === '') return true;
             $v = strtolower($v);
             return in_array($v, ['menunggu','pending','sedang_direview','uploaded','revision','revisi'], true);
         };
 
         $hasAbs        = !empty($abstract);
-        $absWaiting    = $hasAbs ? $isWaiting($absStatus) : false; // harus sudah upload abstrak
+        $absWaiting    = $hasAbs ? $isWaiting($absStatus) : false;
         $hasFP         = $this->hasFullPaper($abstract);
-        $fpWaiting     = $hasFP ? $isWaiting($fpStatus) : true;    // belum upload FP = dianggap belum direview
+        $fpWaiting     = $hasFP ? $isWaiting($fpStatus) : true;
         $canHardDrop   = ($hasAbs && $absWaiting && $fpWaiting);
 
         if ($canHardDrop) {
@@ -337,14 +386,12 @@ class Event extends BaseController
                 ->with('success', 'Pendaftaran dibatalkan. Data abstrak/FP dan pembayaran (non-verified) dihapus karena belum direview.');
         }
 
-        // Jika abstrak sudah dinilai (accepted/rejected), tidak boleh hard drop
         $hasAbstractReviewed = in_array($absStatus, ['diterima','accepted','acc','approved','ditolak','rejected'], true);
         if ($hasAbstractReviewed) {
             return redirect()->to('/presenter/events/detail/'.$id)
                 ->with('error', 'Tidak bisa membatalkan karena abstrak Anda sudah direview.');
         }
 
-        // Fallback: hapus pendaftaran saja jika aman
         $this->regModel->delete((int)$reg['id']);
         return redirect()->to('/presenter/events')->with('success', 'Pendaftaran dibatalkan.');
     }
@@ -367,15 +414,10 @@ class Event extends BaseController
             ->orderBy('id_pembayaran','DESC')->first();
     }
 
-    /**
-     * Cek apakah peserta sudah diizinkan membayar (LoA keluar).
-     * Mengacu ke kolom eligible_to_pay di submissions / abstrak.
-     */
     private function isEligibleToPay(int $eventId, int $userId): bool
     {
         $db = \Config\Database::connect();
 
-        // Prioritas di submissions (flow baru full paper)
         if ($db->tableExists('submissions')) {
             $row = $db->table('submissions')
                 ->select('eligible_to_pay')
@@ -389,7 +431,6 @@ class Event extends BaseController
             }
         }
 
-        // Fallback ke tabel abstrak kalau ada kolomnya
         if ($db->tableExists('abstrak')) {
             $row = $db->table('abstrak')
                 ->select('eligible_to_pay')
@@ -470,16 +511,6 @@ class Event extends BaseController
         }
     }
 
-    /**
-     * Flow high-level:
-     * - belum_daftar
-     * - lengkapi_kontributor
-     * - upload_abstrak / abstrak_ditolak / menunggu_abstrak
-     * - upload_fullpaper / fp_menunggu_review / fp_perbaikan
-     * - menunggu_loa
-     * - bayar / pembayaran_xxx
-     * - siap_absen / sudah_absen
-     */
     private function computeFlowStatus(int $eventId, int $userId): array
     {
         $event = $this->eventModel->find($eventId);
@@ -512,12 +543,11 @@ class Event extends BaseController
 
         $absStatus = strtolower($abstract['status'] ?? '');
 
-        // === ABS DITOLAK: final, tidak bisa upload lagi di event ini ===
         if ($absStatus === 'ditolak') {
             $state = 'abstrak_ditolak';
             $label = 'Abstrak ditolak';
             $hint  = 'Anda tidak dapat melanjutkan event ini. Silakan mengikuti event lain.';
-            $can   = ['view_abstrak' => true]; // hanya lihat abstrak, tidak ada upload baru
+            $can   = ['view_abstrak' => true];
             return compact('state','label','hint','can')+['reg'=>$reg];
         }
 
@@ -531,7 +561,6 @@ class Event extends BaseController
 
             $fpStatus = strtolower($abstract['full_paper_status'] ?? 'uploaded');
 
-            // Revisi / ditolak -> perbaikan FP
             if (in_array($fpStatus, ['revision','revisi','rejected','ditolak'], true)) {
                 $state='fp_perbaikan';
                 $label=($fpStatus==='revision' || $fpStatus==='revisi')?'Revisi Full Paper':'Full Paper ditolak';
@@ -540,7 +569,6 @@ class Event extends BaseController
                 return compact('state','label','hint','can')+['reg'=>$reg];
             }
 
-            // Accepted -> cek LOA (eligible_to_pay) & pembayaran
             $isAccepted = in_array($fpStatus, ['accepted','acc','approved','diterima'], true);
 
             if ($isAccepted && empty($pay)) {
@@ -552,20 +580,17 @@ class Event extends BaseController
                     return compact('state','label','hint','can')+['reg'=>$reg];
                 }
 
-                // eligible_to_pay = true => boleh langsung bayar
                 $state='bayar'; $label='Silakan lakukan pembayaran';
                 $hint='Pembayaran dibuka setelah LoA diterbitkan.';
                 $can=['pay'=>true];
                 return compact('state','label','hint','can')+['reg'=>$reg];
             }
 
-            // masih uploaded / menunggu review
             if (!$isAccepted) {
                 $state='fp_menunggu_review';
                 $label='Menunggu review Full Paper';
                 $hint='Tunggu keputusan reviewer.';
                 $can=[];
-                // jangan return dulu: kalau sudah ada pembayaran (kasus lama) akan diproses di blok pembayaran di bawah
             }
         } else {
             $state='menunggu_abstrak'; $label='Menunggu hasil review abstrak'; $hint='Tunggu ACC';
@@ -573,7 +598,6 @@ class Event extends BaseController
             return compact('state','label','hint','can')+['reg'=>$reg];
         }
 
-        // Jika sudah ada pembayaran, status flow ditentukan oleh pembayaran
         if (!empty($pay)) {
             $pstat = strtolower($pay['status'] ?? '');
             switch ($pstat) {
@@ -645,7 +669,6 @@ class Event extends BaseController
                 $set('Lihat Abstrak', site_url('presenter/abstrak'));
                 break;
             case 'abstrak_ditolak':
-                // Tidak boleh upload ulang; hanya lihat abstrak
                 $set('Lihat Abstrak', site_url('presenter/abstrak'), 'btn-outline-danger');
                 break;
             case 'upload_fullpaper':
@@ -695,7 +718,6 @@ class Event extends BaseController
     {
         $primary = null; $secondary = null;
 
-        // flags
         $isReg = (bool)$reg;
         $kontributorDone = $this->isContributorCompleted($reg);
         $abStatus = strtolower($abstrak['status'] ?? '');
@@ -704,7 +726,6 @@ class Event extends BaseController
         $payStatus= strtolower($payment['status'] ?? '');
         $eligible = $this->isEligibleToPay($eventId, $userId);
 
-        // helper waiting
         $isWaiting = function($v){
             if ($v === null || $v === '') return true;
             $v = strtolower((string)$v);
@@ -725,7 +746,6 @@ class Event extends BaseController
                 if ($abStatus === '') {
                     $primary = ['label'=>'Upload Abstrak', 'url'=>site_url('presenter/abstrak/create/'.$eventId), 'class'=>'btn-primary'];
                 } elseif ($abStatus === 'ditolak') {
-                    // Abstrak sudah ditolak final => hanya bisa lihat
                     $absId = (int)($abstrak['id_abstrak'] ?? 0);
                     $primary = [
                         'label' => 'Lihat Abstrak',
@@ -744,10 +764,8 @@ class Event extends BaseController
                         if ($isRevision) {
                             $primary = ['label'=>'Upload Ulang Full Paper', 'url'=>site_url('presenter/fullpaper/create/'.$eventId), 'class'=>'btn-warning'];
                         } elseif ($isAccepted) {
-                            // Belum ada record pembayaran
                             if (!$payment || $payStatus === '') {
                                 if (!$eligible) {
-                                    // FP accepted tapi belum eligible_to_pay => menunggu LoA
                                     $primary = [
                                         'label' => 'Menunggu LoA',
                                         'url'   => site_url('presenter/fullpaper/detail/'.$eventId),
@@ -772,10 +790,9 @@ class Event extends BaseController
                 }
             }
 
-            // Secondary (Batalkan) — hanya jika: sudah upload abstrak & abstrak waiting & (FP waiting atau belum diupload)
             $hasAbs      = !empty($abstrak);
             $absWaiting  = $hasAbs ? $isWaiting($abStatus) : false;
-            $fpWaiting   = $hasFP ? $isWaiting($fpStatus) : true; // belum upload FP = baru/menunggu
+            $fpWaiting   = $hasFP ? $isWaiting($fpStatus) : true;
             if ($hasAbs && $absWaiting && $fpWaiting) {
                 $secondary = [
                     'label'   => 'Batalkan Pendaftaran',

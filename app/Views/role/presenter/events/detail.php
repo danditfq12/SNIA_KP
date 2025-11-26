@@ -8,11 +8,12 @@ $contributors = $contributors ?? [];
 $price        = $price ?? null;
 $actions      = $actions ?? ['primary'=>null,'secondary'=>null];
 $flow         = $flow ?? ['state'=>null,'label'=>null,'hint'=>null];
+$fasilitasOnline = $fasilitasOnline ?? [];
+$fasilitasOffline = $fasilitasOffline ?? [];
 
 /* Data gelombang dari controller (opsional) */
 $active_wave_num       = $active_wave_num       ?? ($activeWaveNum       ?? null);
 $active_wave_deadline  = $active_wave_deadline  ?? ($activeWaveDeadline  ?? null);
-/* Controller sebelumnya juga sudah mengirim: $registration_deadline */
 $registration_deadline = $registration_deadline ?? null;
 
 /* Utils */
@@ -78,14 +79,9 @@ if (in_array($flowState, ['lengkapi_kontributor','upload_abstrak','upload_fullpa
   $flowAlertCl = 'alert-success';
 }
 
-/* --- Fallback field yang sering kosong --- */
 $lokasi = trim((string)($event['location'] ?? ''));
 if ($lokasi === '') $lokasi = '-';
 
-/* Ambil deadline pendaftaran yang benar:
-   1) $registration_deadline dari controller (sudah mempertimbangkan gelombang)
-   2) $active_wave_deadline (format d M Y H:i)
-   3) $event['registration_deadline'] (raw) */
 $regDLRaw = $registration_deadline
          ?? ($active_wave_deadline ? date('Y-m-d H:i:s', strtotime($active_wave_deadline)) : null)
          ?? ($event['registration_deadline'] ?? null);
@@ -141,7 +137,6 @@ $regDLRaw = $registration_deadline
                   <div class="fw-semibold text-blue-900"><?= esc($formatLabel($event['format'] ?? '')) ?></div>
                 </div>
 
-                <!-- CHIP informasi gelombang (jika ada) -->
                 <?php if (!empty($active_wave_num)): ?>
                 <div class="col-12">
                   <div class="d-flex flex-wrap align-items-center gap-2">
@@ -207,6 +202,77 @@ $regDLRaw = $registration_deadline
             </div>
           </div>
 
+          <!-- Fasilitas & Benefit - DINAMIS DARI DATABASE -->
+          <div class="card shadow-soft card-glass-plain mb-3">
+            <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center gap-2">
+              <span class="badge bg-blue-soft"><i class="bi bi-gift-fill"></i></span>
+              <h6 class="mb-0 fw-semibold text-blue-900">Fasilitas & Benefit Presenter</h6>
+            </div>
+            <div class="card-body">
+              <div class="row g-3">
+                <!-- PRESENTER OFFLINE -->
+                <div class="col-12 col-md-6">
+                  <div class="facility-card facility-offline">
+                    <div class="facility-header">
+                      <div class="facility-icon">
+                        <i class="bi bi-building"></i>
+                      </div>
+                      <div>
+                        <h6 class="mb-0 fw-bold">Presenter Offline</h6>
+                        <small class="text-muted">Hadir Langsung di Venue</small>
+                      </div>
+                    </div>
+                    <div class="facility-list">
+                      <?php if (!empty($fasilitasOffline) && is_array($fasilitasOffline)): ?>
+                        <?php foreach ($fasilitasOffline as $fasilitas): ?>
+                          <div class="facility-item">
+                            <i class="bi bi-check-circle-fill text-primary"></i>
+                            <span><?= esc($fasilitas) ?></span>
+                          </div>
+                        <?php endforeach; ?>
+                      <?php else: ?>
+                        <div class="text-muted fst-italic small">
+                          <i class="bi bi-info-circle me-1"></i>
+                          Fasilitas offline belum diatur oleh admin
+                        </div>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- PRESENTER ONLINE -->
+                <div class="col-12 col-md-6">
+                  <div class="facility-card facility-online">
+                    <div class="facility-header">
+                      <div class="facility-icon">
+                        <i class="bi bi-wifi"></i>
+                      </div>
+                      <div>
+                        <h6 class="mb-0 fw-bold">Presenter Online</h6>
+                        <small class="text-muted">Virtual Conference</small>
+                      </div>
+                    </div>
+                    <div class="facility-list">
+                      <?php if (!empty($fasilitasOnline) && is_array($fasilitasOnline)): ?>
+                        <?php foreach ($fasilitasOnline as $fasilitas): ?>
+                          <div class="facility-item">
+                            <i class="bi bi-check-circle-fill text-primary"></i>
+                            <span><?= esc($fasilitas) ?></span>
+                          </div>
+                        <?php endforeach; ?>
+                      <?php else: ?>
+                        <div class="text-muted fst-italic small">
+                          <i class="bi bi-info-circle me-1"></i>
+                          Fasilitas online belum diatur oleh admin
+                        </div>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Daftar Kontributor -->
           <div class="card shadow-soft card-glass-plain">
             <div class="card-header bg-transparent border-0 pb-0 d-flex align-items-center justify-content-between">
@@ -261,7 +327,6 @@ $regDLRaw = $registration_deadline
             </div>
             <div class="card-body">
 
-              <!-- Status Flow dari controller -->
               <?php if ($flowState): ?>
                 <div class="alert <?= esc($flowAlertCl) ?> small py-2 px-3 mb-3">
                   <div class="fw-semibold mb-1">
@@ -276,7 +341,6 @@ $regDLRaw = $registration_deadline
                 </div>
               <?php endif; ?>
 
-              <!-- EXTRA khusus abstrak ditolak -->
               <?php if ($abStatus === 'ditolak'): ?>
                 <div class="alert alert-danger-soft small py-2 px-3 mb-3 border border-danger-subtle">
                   <div class="fw-semibold mb-1">Abstrak ditolak — event ini tidak bisa diikuti lagi.</div>
@@ -385,6 +449,56 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .card-header{ padding:1rem 1rem .45rem 1rem !important; }
 .card-body{   padding:1.05rem !important; }
 
+/* Facility Cards */
+.facility-card{
+  background: #f8fafc;
+  border: 1px solid rgba(30,64,175,.12);
+  border-radius: 12px;
+  padding: 1rem;
+  height: 100%;
+}
+
+.facility-header{
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px dashed rgba(30,64,175,.15);
+}
+
+.facility-icon{
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: var(--blue-100);
+  color: var(--blue-700);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.facility-list{
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.facility-item{
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.facility-item i{
+  font-size: 1rem;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
 /* Badges & alerts */
 .bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.5rem .7rem; font-weight:600; font-size:.9rem; }
 .text-blue-900{ color:var(--blue-900)!important; }
@@ -442,7 +556,6 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 </style>
 
 <script>
-/* === SweetAlert2 Helpers === */
 (function(){
   document.addEventListener('click', function(e){
     const a = e.target.closest('a.js-swal-confirm');
@@ -464,7 +577,6 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
     }).then(res=>{ if(res.isConfirmed){ window.location.href = a.href; }});
   });
 
-  // Flash message
   <?php
     $flashTypes = ['success','error','warning','info'];
     foreach ($flashTypes as $t):

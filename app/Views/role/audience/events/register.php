@@ -4,7 +4,9 @@ $title   = 'Pilih Mode Kehadiran';
 $event   = $event ?? [];
 $options = $options ?? [];
 $pricing = $pricing ?? [];
-$waveInfo = $waveInfo ?? null; // Wave info from controller
+$waveInfo = $waveInfo ?? null;
+$fasilitasOnline = $fasilitasOnline ?? [];
+$fasilitasOffline = $fasilitasOffline ?? [];
 $rupiah  = function($n){ return ($n===null||$n==='') ? '—' : 'Rp '.number_format((float)$n,0,',','.'); };
 
 $priceOnline  = $pricing['audience']['online']  ?? null;
@@ -198,46 +200,28 @@ $eventFormat = strtolower($event['format'] ?? '');
                     </div>
                   </div>
 
-                  <!-- Benefits List -->
+                  <!-- Benefits List - DINAMIS DARI DATABASE -->
                   <div class="option-benefits">
                     <div class="benefits-title">
                       <i class="bi bi-gift-fill"></i>
                       <span>Apa yang Anda dapatkan:</span>
                     </div>
                     <ul class="benefits-list">
-                      <?php if($opt === 'online'): ?>
+                      <?php 
+                      // Ambil fasilitas sesuai mode (online atau offline)
+                      $facilities = ($opt === 'online') ? $fasilitasOnline : $fasilitasOffline;
+                      
+                      if (!empty($facilities) && is_array($facilities)): 
+                        foreach ($facilities as $fasilitas): ?>
                         <li>
                           <i class="bi bi-check2"></i>
-                          <span><strong>Live Streaming</strong> - Akses streaming real-time</span>
+                          <span><?= esc($fasilitas) ?></span>
                         </li>
+                      <?php endforeach;
+                      else: ?>
                         <li>
-                          <i class="bi bi-check2"></i>
-                          <span><strong>Digital Certificate</strong> - E-sertifikat resmi</span>
-                        </li>
-                        <li>
-                          <i class="bi bi-check2"></i>
-                          <span><strong>Recording Access</strong> - Akses rekaman </span>
-                        </li>
-                        <li>
-                          <i class="bi bi-check2"></i>
-                          <span><strong>Q&A Session</strong> - Interaksi via chat langsung</span>
-                        </li>
-                      <?php else: ?>
-                        <li>
-                          <i class="bi bi-check2"></i>
-                          <span><strong>Attend Seminar</strong> - Hadir langsung di venue acara</span>
-                        </li>
-                        <li>
-                          <i class="bi bi-check2"></i>
-                          <span><strong>Exclusive Merchandise</strong> - Merchandise Eksklusif</span>
-                        </li>
-                        <li>
-                          <i class="bi bi-check2"></i>
-                          <span><strong>Lunch & Coffee</strong> - Makan siang dan snack</span>
-                        </li>
-                        <li>
-                          <i class="bi bi-check2"></i>
-                          <span><strong>Networking</strong> - Bertemu langsung dengan peserta lain</span>
+                          <i class="bi bi-info-circle"></i>
+                          <span class="text-muted fst-italic">Fasilitas untuk mode ini belum diatur oleh admin</span>
                         </li>
                       <?php endif; ?>
                     </ul>
