@@ -9,11 +9,18 @@ $price        = $price ?? null;
 $actions      = $actions ?? ['primary'=>null,'secondary'=>null];
 $flow         = $flow ?? ['state'=>null,'label'=>null,'hint'=>null];
 
+/* Data gelombang dari controller (opsional) */
+$active_wave_num       = $active_wave_num       ?? ($activeWaveNum       ?? null);
+$active_wave_deadline  = $active_wave_deadline  ?? ($activeWaveDeadline  ?? null);
+/* Controller sebelumnya juga sudah mengirim: $registration_deadline */
+$registration_deadline = $registration_deadline ?? null;
+
 /* Utils */
 $abStatus  = strtolower($abstrak['status'] ?? '');
 $fpStatus  = strtolower($abstrak['full_paper_status'] ?? '');
 $payStatus = strtolower($payment['status'] ?? '');
 $hasFull   = !empty($abstrak['full_paper_path']) || !empty($abstrak['full_paper_status']);
+
 $fmt = fn($s,$t=false)=> $s ? ($t?date('d M Y H:i',strtotime($s)):date('d M Y',strtotime($s))) : '-';
 $formatLabel = function($f){ $f=strtolower((string)$f); return $f==='both'?'Hybrid':ucfirst($f?:'-'); };
 $nice = function($v){
@@ -70,6 +77,18 @@ if (in_array($flowState, ['lengkapi_kontributor','upload_abstrak','upload_fullpa
 } elseif (in_array($flowState, ['siap_absen','sudah_absen'], true)) {
   $flowAlertCl = 'alert-success';
 }
+
+/* --- Fallback field yang sering kosong --- */
+$lokasi = trim((string)($event['location'] ?? ''));
+if ($lokasi === '') $lokasi = '-';
+
+/* Ambil deadline pendaftaran yang benar:
+   1) $registration_deadline dari controller (sudah mempertimbangkan gelombang)
+   2) $active_wave_deadline (format d M Y H:i)
+   3) $event['registration_deadline'] (raw) */
+$regDLRaw = $registration_deadline
+         ?? ($active_wave_deadline ? date('Y-m-d H:i:s', strtotime($active_wave_deadline)) : null)
+         ?? ($event['registration_deadline'] ?? null);
 ?>
 <?= $this->include('partials/header') ?>
 <?= $this->include('partials/sidebar_presenter') ?>
@@ -121,10 +140,29 @@ if (in_array($flowState, ['lengkapi_kontributor','upload_abstrak','upload_fullpa
                   <div class="text-muted small">Format</div>
                   <div class="fw-semibold text-blue-900"><?= esc($formatLabel($event['format'] ?? '')) ?></div>
                 </div>
+
+                <!-- CHIP informasi gelombang (jika ada) -->
+                <?php if (!empty($active_wave_num)): ?>
+                <div class="col-12">
+                  <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span class="badge rounded-pill bg-blue-soft">
+                      <i class="bi bi-bullseye me-1"></i> Gelombang Aktif: <?= (int)$active_wave_num ?>
+                    </span>
+                    <?php if (!empty($active_wave_deadline) || !empty($regDLRaw)): ?>
+                      <span class="badge rounded-pill bg-blue-soft">
+                        <i class="bi bi-hourglass-split me-1"></i>
+                        Batas Gelombang: <?= esc($fmt($active_wave_deadline ?: $regDLRaw, true)) ?>
+                      </span>
+                    <?php endif; ?>
+                  </div>
+                </div>
+                <?php endif; ?>
+
                 <div class="col-12">
                   <div class="text-muted small">Lokasi</div>
-                  <div class="fw-semibold text-blue-900"><?= esc(($event['location'] ?? '') ?: '-') ?></div>
+                  <div class="fw-semibold text-blue-900"><?= esc($lokasi) ?></div>
                 </div>
+
                 <?php if (!empty($event['zoom_link'])): ?>
                 <div class="col-12">
                   <div class="text-muted small">Link Online</div>
@@ -133,9 +171,12 @@ if (in_array($flowState, ['lengkapi_kontributor','upload_abstrak','upload_fullpa
                   </div>
                 </div>
                 <?php endif; ?>
+
                 <div class="col-12 col-md-6">
                   <div class="text-muted small">Batas Pendaftaran</div>
-                  <div class="fw-semibold text-blue-900"><?= esc($fmt($event['registration_deadline'] ?? null, true)) ?></div>
+                  <div class="fw-semibold text-blue-900">
+                    <?= esc($fmt($regDLRaw, true)) ?>
+                  </div>
                 </div>
                 <div class="col-12 col-md-6">
                   <div class="text-muted small">Batas Abstrak</div>
@@ -226,9 +267,7 @@ if (in_array($flowState, ['lengkapi_kontributor','upload_abstrak','upload_fullpa
                   <div class="fw-semibold mb-1">
                     <?= esc($flowLabel ?: 'Status terkini') ?>
                     <?php if ($flowState === 'abstrak_ditolak'): ?>
-                      <span class="badge bg-danger-subtle text-danger border border-danger border-opacity-25 ms-1">
-                        Final
-                      </span>
+                      <span class="badge bg-danger-subtle text-danger border border-danger border-opacity-25 ms-1">Final</span>
                     <?php endif; ?>
                   </div>
                   <div class="mb-0">
@@ -237,12 +276,10 @@ if (in_array($flowState, ['lengkapi_kontributor','upload_abstrak','upload_fullpa
                 </div>
               <?php endif; ?>
 
-              <!-- EXTRA khusus abstrak ditolak: tekankan tidak bisa lanjut -->
+              <!-- EXTRA khusus abstrak ditolak -->
               <?php if ($abStatus === 'ditolak'): ?>
                 <div class="alert alert-danger-soft small py-2 px-3 mb-3 border border-danger-subtle">
-                  <div class="fw-semibold mb-1">
-                    Abstrak ditolak — event ini tidak bisa diikuti lagi.
-                  </div>
+                  <div class="fw-semibold mb-1">Abstrak ditolak — event ini tidak bisa diikuti lagi.</div>
                   <div class="mb-0">
                     Anda tetap dapat melihat detail abstrak di menu <strong>Abstrak</strong>,
                     namun tidak dapat mengunggah ulang abstrak baru untuk event ini.
@@ -329,7 +366,6 @@ if (in_array($flowState, ['lengkapi_kontributor','upload_abstrak','upload_fullpa
 .container-xxl{ max-width:min(100%, 1560px); padding-left:var(--side-pad)!important; padding-right:var(--side-pad)!important; margin-inline:auto; }
 body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.5px; line-height:1.6; color:var(--ink); }
 
-/* Background */
 .page-wrap-blue{
   min-height:100vh; padding-top:72px;
   background:
@@ -338,26 +374,32 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
     linear-gradient(180deg, var(--blue-50), #fff 40%);
 }
 
-/* HERO */
 .card-hero{ border:0; border-radius:var(--radius); overflow:hidden; box-shadow:0 12px 28px rgba(30,64,175,.18); }
-.card-hero .hero-body{
-  background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff;
-  padding:1.8rem 1.2rem; min-height:176px;
-}
+.card-hero .hero-body{ background:linear-gradient(135deg,var(--blue-700),var(--blue-800)); color:#fff; padding:1.8rem 1.2rem; min-height:176px; }
 .hero-title{ font-weight:800; }
 .text-white-70{ color:rgba(255,255,255,.85)!important; }
 
-/* Glass cards */
+/* Cards */
 .card-glass-plain{ backdrop-filter:blur(6px); background:rgba(255,255,255,.96); border-radius:14px; border:1px solid rgba(30,64,175,.10); }
 .shadow-soft{ box-shadow:0 10px 24px rgba(30,64,175,.08); }
 .card-header{ padding:1rem 1rem .45rem 1rem !important; }
 .card-body{   padding:1.05rem !important; }
 
-/* Badge kecil */
+/* Badges & alerts */
 .bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.5rem .7rem; font-weight:600; font-size:.9rem; }
 .text-blue-900{ color:var(--blue-900)!important; }
 
-/* Table (kontributor) */
+.alert{ border-radius:12px; border-width:1px; }
+.alert-primary{  background:rgba(37,99,235,.08);  color:#1e3a8a; border-color:rgba(37,99,235,.25); }
+.alert-warning{  background:rgba(245,158,11,.08); color:#92400e; border-color:rgba(245,158,11,.28); }
+.alert-danger{   background:rgba(220,38,38,.08);  color:#991b1b; border-color:rgba(220,38,38,.25); }
+.alert-success{  background:rgba(16,185,129,.08); color:#065f46; border-color:rgba(16,185,129,.22); }
+.alert-secondary{background:#f8fafc; color:#334155; border-color:#e2e8f0; }
+.alert-danger-soft{ background:rgba(220,38,38,.05); color:#b91c1c; }
+.bg-danger-subtle{ background:rgba(248,113,113,.15)!important; }
+.border-danger-subtle{ border-color:rgba(248,113,113,.55)!important; }
+
+/* Table */
 .table{ font-size:.95rem; margin-bottom:0; }
 .table thead th{
   background-color:var(--blue-50)!important;
@@ -367,9 +409,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
   padding:.75rem 1rem;
 }
 .table tbody tr{ border-bottom:1px solid rgba(30,64,175,.08); }
-.table tbody td{
-  padding:.75rem 1rem; vertical-align:middle; border-top:none; font-size:.95rem;
-}
+.table tbody td{ padding:.75rem 1rem; vertical-align:middle; border-top:none; font-size:.95rem; }
 .table-responsive{ border:1px solid rgba(30,64,175,.08); border-radius:12px; overflow:hidden; }
 
 /* Progress list */
@@ -388,14 +428,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .btn-warning{ background:#d97706; border-color:#d97706; box-shadow:0 4px 12px rgba(217,119,6,.2); }
 .btn-danger{  background:#dc2626; border-color:#dc2626; box-shadow:0 4px 12px rgba(220,38,38,.2); }
 .btn-info{    background:#06b6d4; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,.2); }
-
-.alert-danger-soft{
-  background:rgba(220,38,38,.04);
-  color:#b91c1c;
-}
-
-.bg-danger-subtle{ background:rgba(248,113,113,.15)!important; }
-.border-danger-subtle{ border-color:rgba(248,113,113,.55)!important; }
+.btn-outline-secondary{ border-color:#cbd5e1; }
 
 /* Responsive */
 @media (max-width:767.98px){
@@ -411,14 +444,13 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 <script>
 /* === SweetAlert2 Helpers === */
 (function(){
-  // Konfirmasi link dengan data-confirm
   document.addEventListener('click', function(e){
     const a = e.target.closest('a.js-swal-confirm');
     if(!a) return;
     const msg = a.getAttribute('data-confirm');
     if(!msg) return;
     e.preventDefault();
-    if (typeof Swal === 'undefined') { // fallback jika Swal tidak tersedia
+    if (typeof Swal === 'undefined') {
       if (confirm(msg)) window.location.href = a.href;
       return;
     }
@@ -429,23 +461,16 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
       showCancelButton: true,
       confirmButtonText: 'Ya',
       cancelButtonText: 'Batal',
-    }).then(res=>{
-      if(res.isConfirmed){ window.location.href = a.href; }
-    });
+    }).then(res=>{ if(res.isConfirmed){ window.location.href = a.href; }});
   });
 
-  // Flash message CI4 -> SweetAlert2
+  // Flash message
   <?php
     $flashTypes = ['success','error','warning','info'];
     foreach ($flashTypes as $t):
       $msg = session()->getFlashdata($t);
       if ($msg):
-        $title = [
-          'success'=>'Berhasil',
-          'error'=>'Gagal',
-          'warning'=>'Perhatian',
-          'info'=>'Info'
-        ][$t];
+        $title = ['success'=>'Berhasil','error'=>'Gagal','warning'=>'Perhatian','info'=>'Info'][$t];
   ?>
   if (typeof Swal !== 'undefined') {
     Swal.fire({icon:'<?= $t ?>', title:'<?= $title ?>', text: '<?= esc($msg) ?>'});

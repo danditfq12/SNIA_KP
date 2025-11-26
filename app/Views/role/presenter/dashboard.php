@@ -7,7 +7,7 @@ $stats             = $stats             ?? ['total_events'=>0,'total_loa'=>0];
 $todaySchedule     = $todaySchedule     ?? [];
 $progressEvents    = $progressEvents    ?? [];
 $activities        = $activities        ?? [];
-$monthEvents       = $monthEvents       ?? []; // key: 'YYYY-MM-DD' => array of items
+$monthEvents       = $monthEvents       ?? [];
 $todayHasEvent     = !empty($todaySchedule);
 
 /* ===== Nama & sapaan ===== */
