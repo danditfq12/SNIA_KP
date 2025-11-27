@@ -137,13 +137,15 @@ class Register extends BaseController
         ];
 
         if ($pendingSame) {
+            // Update data pending yang sudah ada
             $pendingModel->update($pendingSame['id'], $payload);
         } else {
+            // Insert pendaftaran baru
             $payload['created_at'] = date('Y-m-d H:i:s');
             $pendingModel->insert($payload);
         }
 
-        // Kirim OTP (best-effort)
+        // Kirim OTP setiap kali registrasi (baik baru maupun update)
         try {
             $mail = \Config\Services::email();
             $mail->setFrom(config('Email')->fromEmail, config('Email')->fromName);
@@ -171,7 +173,7 @@ class Register extends BaseController
         ]);
 
         $msg = $pendingSame
-            ? 'Pendaftaran sebelumnya ditemukan. Kode OTP baru telah dikirim ke email Anda dan ditampilkan di bawah.'
+            ? 'Kode OTP baru telah dikirim ke email Anda dan ditampilkan di bawah.'
             : 'Kode OTP telah dikirim ke email Anda dan ditampilkan di bawah. Silakan masukkan kode untuk verifikasi.';
         return redirect()->to('/auth/verify?email=' . urlencode($email))
             ->with('success', $msg);
