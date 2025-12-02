@@ -30,11 +30,18 @@ class Event extends BaseController
 
     /* ========================= INDEX ========================= */
     public function index()
-    {
+{
+    try {
+        log_message('debug', '=== Event::index() START ===');
+        
         $userId = (int) session()->get('id_user');
-        $q      = trim((string) ($this->request->getGet('q') ?? ''));
+        log_message('debug', "User ID: {$userId}");
+        
+        $q = trim((string) ($this->request->getGet('q') ?? ''));
+        log_message('debug', "Search query: {$q}");
 
         $all = $this->eventModel->orderBy('event_date','DESC')->findAll();
+        log_message('debug', "Events found: " . count($all));
 
         if ($q !== '') {
             $needle = mb_strtolower($q);
@@ -42,60 +49,69 @@ class Event extends BaseController
                 $hay = mb_strtolower(($e['title'] ?? '').' '.($e['description'] ?? '').' '.($e['location'] ?? ''));
                 return str_contains($hay, $needle);
             }));
+            log_message('debug', "After filter: " . count($all));
         }
 
-        $todo = []; $history = [];
+        $todo = []; 
+        $history = [];
         $now = strtotime('today');
 
         foreach ($all as $ev) {
-            $this->enforceDeadlinePolicies($ev, $userId);
+            try {
+                $id = (int) $ev['id'];
+                log_message('debug', "Processing event ID: {$id}");
+                
+                $this->enforceDeadlinePolicies($ev, $userId);
 
-            $id      = (int) $ev['id'];
-            $isOpen  = $this->eventModel->isRegistrationOpen($id);
-            $evTs    = !empty($ev['event_date']) ? strtotime((string)$ev['event_date']) : null;
-            $isOver  = $evTs ? ($evTs < $now) : false;
+                $isOpen  = $this->eventModel->isRegistrationOpen($id);
+                $evTs    = !empty($ev['event_date']) ? strtotime((string)$ev['event_date']) : null;
+                $isOver  = $evTs ? ($evTs < $now) : false;
 
-            $reg     = $this->regModel->findUserReg($id, $userId);
-            $isReg   = (bool) $reg;
+                $reg     = $this->regModel->findUserReg($id, $userId);
+                $isReg   = (bool) $reg;
 
-            $flow    = $this->computeFlowStatus($id, $userId);
-            $pay     = $this->getLatestPayment($id, $userId);
-            $ui      = $this->buildIndexUi($id, $flow, $pay['id_pembayaran'] ?? null, $isOpen);
+                $flow    = $this->computeFlowStatus($id, $userId);
+                $pay     = $this->getLatestPayment($id, $userId);
+                $ui      = $this->buildIndexUi($id, $flow, $pay['id_pembayaran'] ?? null, $isOpen);
 
-            // Tambah confirm untuk aksi daftar di index
-            if (($ui['cta']['label'] ?? '') === 'Daftar') {
-                $ui['cta']['confirm'] = 'Daftar ke event ini sekarang?';
+                // Rest of card building...
+                $card = [
+                    'id'                    => $id,
+                    'title'                 => $ev['title'] ?? '-',
+                    'format'                => $ev['format'] ?? '',
+                    'event_date'            => $ev['event_date'] ?? null,
+                    'event_time'            => $ev['event_time'] ?? null,
+                    'registration_deadline' => $ev['registration_deadline'] ?? null,
+                    'is_registered' => $isReg,
+                    'is_closed'     => !$isOpen,
+                    'is_over'       => $isOver,
+                    'status_label'  => $flow['label'] ?? '',
+                    'status_badge'  => $this->stateToBadge($flow['state'] ?? 'secondary'),
+                    'hint'          => $flow['hint'] ?? '',
+                    'primary_url'   => $ui['cta']['url']   ?? site_url('presenter/events/detail/'.$id),
+                    'primary_text'  => $ui['cta']['label'] ?? 'Detail Event',
+                    'primary_class' => $ui['cta']['class'] ?? 'btn-outline-primary',
+                    'primary_confirm'=> $ui['cta']['confirm'] ?? null,
+                    'primary_disabled' => !empty($ui['cta']['disabled']),
+                    'detail_url'    => site_url('presenter/events/detail/'.$id),
+                ];
+
+                if (($flow['state'] ?? '') === 'sudah_absen') { $history[] = $card; continue; }
+                if ($isOver) { $history[] = $card; continue; }
+                if ($isReg)  { $todo[]    = $card; continue; }
+                if (!$isOpen){ $history[] = $card; } else { $todo[] = $card; }
+                
+                log_message('debug', "Event {$id} processed successfully");
+                
+            } catch (\Exception $e) {
+                log_message('error', "Error processing event {$id}: " . $e->getMessage());
+                // Skip event yang error, lanjut ke event berikutnya
+                continue;
             }
-
-            $card = [
-                'id'                    => $id,
-                'title'                 => $ev['title'] ?? '-',
-                'format'                => $ev['format'] ?? '',
-                'event_date'            => $ev['event_date'] ?? null,
-                'event_time'            => $ev['event_time'] ?? null,
-                'registration_deadline' => $ev['registration_deadline'] ?? null,
-
-                'is_registered' => $isReg,
-                'is_closed'     => !$isOpen,
-                'is_over'       => $isOver,
-
-                'status_label'  => $flow['label'] ?? '',
-                'status_badge'  => $this->stateToBadge($flow['state'] ?? 'secondary'),
-                'hint'          => $flow['hint'] ?? '',
-
-                'primary_url'   => $ui['cta']['url']   ?? site_url('presenter/events/detail/'.$id),
-                'primary_text'  => $ui['cta']['label'] ?? 'Detail Event',
-                'primary_class' => $ui['cta']['class'] ?? 'btn-outline-primary',
-                'primary_confirm'=> $ui['cta']['confirm'] ?? null,
-                'primary_disabled' => !empty($ui['cta']['disabled']),
-                'detail_url'    => site_url('presenter/events/detail/'.$id),
-            ];
-
-            if (($flow['state'] ?? '') === 'sudah_absen') { $history[] = $card; continue; }
-            if ($isOver) { $history[] = $card; continue; }
-            if ($isReg)  { $todo[]    = $card; continue; }
-            if (!$isOpen){ $history[] = $card; } else { $todo[] = $card; }
         }
+
+        log_message('debug', "Todo: " . count($todo) . ", History: " . count($history));
+        log_message('debug', '=== Event::index() END ===');
 
         return view('role/presenter/events/index', [
             'title'         => 'Event',
@@ -103,7 +119,21 @@ class Event extends BaseController
             'historyEvents' => $history,
             'q'             => $q,
         ]);
+
+    } catch (\Exception $e) {
+        log_message('error', '=== FATAL ERROR in Event::index() ===');
+        log_message('error', 'Message: ' . $e->getMessage());
+        log_message('error', 'File: ' . $e->getFile() . ':' . $e->getLine());
+        log_message('error', 'Trace: ' . $e->getTraceAsString());
+        
+        return $this->response->setJSON([
+            'error' => true,
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ])->setStatusCode(500);
     }
+}
 
     /* ========================= DETAIL ========================= */
     public function detail($id)

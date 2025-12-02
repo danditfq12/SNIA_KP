@@ -1,10 +1,10 @@
 <?php
-/** Detail Absensi Event - Enhanced for Audience with Fixed Event Info Display */
+/** Detail Absensi Event - Enhanced for Audience */
 $title = 'Detail Absensi Event';
 
 $e = $event ?? [];
 $payment = $payment ?? [];
-$window = $window ?? ['is_open'=>false,'start_ts'=>null,'end_ts'=>null,'reason'=>'','current_time_wib'=>''];
+$window = $window ?? ['is_open'=>false,'window_start_ts'=>null,'window_end_ts'=>null,'reason'=>'','current_time_wib'=>''];
 
 // Set timezone ke WIB untuk konsistensi
 date_default_timezone_set('Asia/Jakarta');
@@ -18,9 +18,8 @@ function toWIBFormat($timestamp, $format = 'd M Y H:i') {
     return $dt->format($format);
 }
 
-// Format waktu dengan WIB
-$startText = toWIBFormat($window['start_ts']);
-$endText   = toWIBFormat($window['end_ts']);
+$windowStartText = toWIBFormat($window['window_start_ts'] ?? null);
+$windowEndText   = toWIBFormat($window['window_end_ts'] ?? null);
 
 // Ambil waktu WIB saat ini untuk display
 $currentWIB = new DateTime('now', new DateTimeZone('Asia/Jakarta'));
@@ -40,12 +39,6 @@ $attendanceAt = $attendance_at ?? null;
 // Jika sudah absen, paksa nonaktifkan tombol
 if ($already) { $can = false; }
 
-// Convert BOTH to HYBRID for display
-$eventFormat = strtoupper($e['format'] ?? 'HYBRID');
-if ($eventFormat === 'BOTH') {
-    $eventFormat = 'HYBRID';
-}
-
 // Determine participation type display
 $participationDisplay = ucfirst($participationType);
 $participationBadgeClass = 'badge-primary';
@@ -55,12 +48,42 @@ if ($participationType === 'online') {
     $participationBadgeClass = 'badge-success';
 }
 
-// Format event date time untuk display
-$eventDateTime = null;
-if ($e['event_date']) {
-    $eventDateTimeString = $e['event_date'] . ' ' . ($e['event_time'] ?? '00:00:00');
-    $eventDateTime = new DateTime($eventDateTimeString, new DateTimeZone('Asia/Jakarta'));
+// PERBAIKAN: Event times untuk display - GUNAKAN DATA DARI CONTROLLER
+$eventStartText = '-';
+$eventEndText = '-';
+$eventStartTime = '-';
+$eventEndTime = '-';
+
+if (!empty($e['event_date']) && !empty($e['event_time'])) {
+    try {
+        // Event Start
+        $eventStartDT = new DateTime($e['event_date'] . ' ' . $e['event_time'], new DateTimeZone('Asia/Jakarta'));
+        $eventStartText = $eventStartDT->format('d M Y H:i');
+        $eventStartTime = $eventStartDT->format('H:i');
+        
+        // Event End - PERBAIKAN: Gunakan end_time dari database atau dari window calculation
+        if (!empty($e['end_time'])) {
+            $eventEndDT = new DateTime($e['event_date'] . ' ' . $e['end_time'], new DateTimeZone('Asia/Jakarta'));
+            $eventEndText = $eventEndDT->format('d M Y H:i');
+            $eventEndTime = $eventEndDT->format('H:i');
+        } elseif (!empty($window['event_end_ts'])) {
+            // Fallback: gunakan dari window calculation
+            $eventEndText = toWIBFormat($window['event_end_ts'], 'd M Y H:i');
+            $eventEndTime = toWIBFormat($window['event_end_ts'], 'H:i');
+        } else {
+            // Default 8 jam setelah start
+            $eventEndDT = clone $eventStartDT;
+            $eventEndDT->modify('+8 hours');
+            $eventEndText = $eventEndDT->format('d M Y H:i');
+            $eventEndTime = $eventEndDT->format('H:i');
+        }
+    } catch (Exception $ex) {
+        log_message('error', 'Error parsing event times: ' . $ex->getMessage());
+    }
 }
+
+// Format untuk Info Box Event
+$eventFullTimeRange = $eventStartText . ' - ' . $eventEndTime . ' WIB';
 ?>
 
 <?= $this->include('partials/header') ?>
@@ -100,10 +123,10 @@ if ($e['event_date']) {
                   <div class="status-title-abs">Sudah Absen</div>
                   <div class="status-desc-abs">Anda telah tercatat hadir sebagai Audience <?= $participationDisplay ?></div>
                 <?php elseif ($window['is_open']): ?>
-                  <div class="status-title-abs">Absensi Dibuka</div>
-                  <div class="status-desc-abs">Silahkan lakukan absensi sekarang</div>
+                  <div class="status-title-abs">Window Absensi Terbuka</div>
+                  <div class="status-desc-abs">Silahkan lakukan absensi sekarang (2 jam terakhir sebelum event berakhir)</div>
                 <?php else: ?>
-                  <div class="status-title-abs">Absensi Ditutup</div>
+                  <div class="status-title-abs">Window Absensi Belum/Sudah Ditutup</div>
                   <div class="status-desc-abs"><?= $window['reason'] ? esc($window['reason']) : 'Belum waktunya absensi' ?></div>
                 <?php endif; ?>
               </div>
@@ -112,11 +135,11 @@ if ($e['event_date']) {
             <div class="event-meta-abs">
               <div class="meta-item-abs">
                 <i class="bi bi-geo-alt"></i>
-                <span><?= $participationType === 'online' ? 'Online Event' : esc($e['location'] ?? '-') ?></span>
+                <span><?= esc($e['location'] ?? '-') ?></span>
               </div>
               <div class="meta-item-abs">
                 <i class="bi bi-diagram-3"></i>
-                <span><?= $eventFormat ?></span>
+                <span><?= !empty($e['format']) ? strtoupper(esc($e['format'])) : 'N/A' ?></span>
               </div>
               <div class="meta-item-abs">
                 <span class="badge-abs badge-warning">Audience</span>
@@ -153,20 +176,30 @@ if ($e['event_date']) {
       <div class="window-card-abs mb-4">
         <div class="window-header-abs">
           <i class="bi bi-clock-history"></i>
-          <span>Waktu Absensi (WIB)</span>
+          <span>Window Absensi - 2 Jam Terakhir (WIB)</span>
         </div>
         <div class="window-body-abs">
+          <!-- Info Event Full Time -->
+          <div class="alert alert-info mb-3" style="border-radius: 0.5rem; padding: 0.75rem;">
+            <strong><i class="bi bi-info-circle"></i> Info Event:</strong><br>
+            Event berlangsung: <strong><?= $eventStartText ?> - <?= $eventEndTime ?> WIB</strong><br>
+            <small>Window absensi hanya dibuka di <strong>2 jam terakhir</strong> sebelum event berakhir</small>
+          </div>
+          
+          <!-- Window Time Display -->
           <div class="window-time-abs">
             <div class="time-block-abs">
-              <div class="time-label-small-abs">Mulai</div>
-              <div class="time-value-large-abs"><?= $startText ?></div>
+              <div class="time-label-small-abs">Window Dibuka</div>
+              <div class="time-value-large-abs"><?= $windowStartText ?></div>
+              <small class="text-muted">2 jam sebelum selesai</small>
             </div>
             <div class="time-separator-abs">
               <i class="bi bi-arrow-right"></i>
             </div>
             <div class="time-block-abs">
-              <div class="time-label-small-abs">Selesai</div>
-              <div class="time-value-large-abs"><?= $endText ?></div>
+              <div class="time-label-small-abs">Window Ditutup</div>
+              <div class="time-value-large-abs"><?= $windowEndText ?></div>
+              <small class="text-muted">Saat event selesai</small>
             </div>
           </div>
         </div>
@@ -188,34 +221,26 @@ if ($e['event_date']) {
               <?php endif; ?>
               
               <div class="event-details-grid">
-                <!-- TANGGAL - Selalu ditampilkan -->
                 <div class="detail-item-abs">
                   <div class="detail-icon-abs">
                     <i class="bi bi-calendar3"></i>
                   </div>
                   <div class="detail-content-abs">
                     <div class="detail-label-abs">Tanggal</div>
-                    <div class="detail-value-abs">
-                      <?= $eventDateTime ? $eventDateTime->format('d M Y') : '-' ?>
-                    </div>
+                    <div class="detail-value-abs"><?= $tgl ?></div>
                   </div>
                 </div>
 
-                <!-- WAKTU - Selalu ditampilkan -->
                 <div class="detail-item-abs">
                   <div class="detail-icon-abs">
                     <i class="bi bi-clock"></i>
                   </div>
                   <div class="detail-content-abs">
-                    <div class="detail-label-abs">Waktu</div>
-                    <div class="detail-value-abs">
-                      <?= $eventDateTime ? $eventDateTime->format('H:i') . ' WIB' : '-' ?>
-                    </div>
+                    <div class="detail-label-abs">Waktu Event</div>
+                    <div class="detail-value-abs"><?= $eventStartTime ?> - <?= $eventEndTime ?> WIB</div>
                   </div>
                 </div>
 
-                <!-- LOKASI - Hanya untuk OFFLINE atau ALL -->
-                <?php if ($participationType === 'offline' || $participationType === 'all'): ?>
                 <div class="detail-item-abs">
                   <div class="detail-icon-abs">
                     <i class="bi bi-geo-alt-fill"></i>
@@ -225,10 +250,8 @@ if ($e['event_date']) {
                     <div class="detail-value-abs"><?= esc($e['location'] ?? '-') ?></div>
                   </div>
                 </div>
-                <?php endif; ?>
 
-                <!-- LINK MEETING - Hanya untuk ONLINE atau ALL (jika ada zoom_link) -->
-                <?php if (($participationType === 'online' || $participationType === 'all') && !empty($e['zoom_link'])): ?>
+                <?php if (!empty($e['zoom_link']) && ($participationType === 'online' || $participationType === 'all')): ?>
                 <div class="detail-item-abs">
                   <div class="detail-icon-abs">
                     <i class="bi bi-camera-video"></i>
@@ -236,42 +259,11 @@ if ($e['event_date']) {
                   <div class="detail-content-abs">
                     <div class="detail-label-abs">Link Meeting</div>
                     <div class="detail-value-abs">
-                      <a href="<?= esc($e['zoom_link']) ?>" target="_blank" class="link-abs">
-                        <i class="bi bi-box-arrow-up-right me-1"></i>Buka Tautan
-                      </a>
+                      <a href="<?= esc($e['zoom_link']) ?>" target="_blank" class="link-abs">Buka Tautan</a>
                     </div>
                   </div>
                 </div>
                 <?php endif; ?>
-
-                <!-- FORMAT EVENT - Optional info -->
-                <?php if (!empty($e['format'])): ?>
-                <div class="detail-item-abs">
-                  <div class="detail-icon-abs">
-                    <i class="bi bi-diagram-3"></i>
-                  </div>
-                  <div class="detail-content-abs">
-                    <div class="detail-label-abs">Format</div>
-                    <div class="detail-value-abs"><?= $eventFormat ?></div>
-                  </div>
-                </div>
-                <?php endif; ?>
-              </div>
-
-              <!-- PARTICIPATION TYPE INFO -->
-              <div class="participation-info-abs mt-3">
-                <div class="participation-banner-abs participation-<?= $participationType ?>">
-                  <i class="bi bi-info-circle"></i>
-                  <div>
-                    <?php if ($participationType === 'online'): ?>
-                      <strong>Partisipasi Online:</strong> Anda terdaftar untuk mengikuti event secara online. Gunakan link meeting di atas untuk bergabung.
-                    <?php elseif ($participationType === 'offline'): ?>
-                      <strong>Partisipasi Offline:</strong> Anda terdaftar untuk hadir secara fisik di lokasi. Pastikan datang tepat waktu.
-                    <?php else: ?>
-                      <strong>Partisipasi Hybrid:</strong> Anda dapat memilih untuk hadir secara online atau offline sesuai preferensi Anda.
-                    <?php endif; ?>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -334,18 +326,22 @@ if ($e['event_date']) {
         <div class="modal-body modal-body-abs">
           <input type="hidden" name="event_id" value="<?= (int)($e['id'] ?? 0) ?>">
           
+          <div class="alert-abs alert-info-abs mb-3">
+            <i class="bi bi-info-circle"></i>
+            <div>
+              <strong>Window Absensi Terbatas:</strong>
+              <p class="mb-0 small">
+                Absensi hanya dapat dilakukan di <strong>2 jam terakhir</strong> sebelum event berakhir
+              </p>
+            </div>
+          </div>
+
           <div class="alert-abs alert-warning-abs mb-3">
             <i class="bi bi-shield-exclamation"></i>
             <div>
               <strong>Khusus Audience <?= $participationDisplay ?>:</strong>
               <p class="mb-0 small">
-                <?php if ($participationType === 'online'): ?>
-                  Pastikan QR Code adalah <strong>Audience Online</strong> atau <strong>Universal</strong>
-                <?php elseif ($participationType === 'offline'): ?>
-                  Pastikan QR Code adalah <strong>Audience Offline</strong> atau <strong>Universal</strong>
-                <?php else: ?>
-                  Pastikan QR Code adalah <strong>Audience</strong> atau <strong>Universal</strong>
-                <?php endif; ?>
+                Gunakan QR Code <strong>Audience</strong> atau <strong>Universal</strong> saja
               </p>
             </div>
           </div>
@@ -360,7 +356,7 @@ if ($e['event_date']) {
             <div class="info-box-content-abs">
               <div class="info-box-text-abs">
                 <strong>Window Absensi (WIB):</strong><br>
-                <?= $startText ?> - <?= $endText ?><br>
+                <?= $windowStartText ?> - <?= $windowEndText ?><br>
                 <small>Sekarang: <?= $currentWIBString ?> WIB</small>
               </div>
               <div class="info-box-badges-abs">
@@ -400,8 +396,19 @@ if ($e['event_date']) {
           <i class="bi bi-wifi"></i>
           <div>
             <strong>Mode Real-time Aktif</strong>
-            <p class="mb-0 small">QR Code valid akan langsung disimpan</p>
+            <p class="mb-0 small">QR Code valid akan langsung disimpan ke database</p>
             <div class="small mt-1"><strong>Waktu:</strong> <span id="scanner-wib-time"><?= $currentWIBString ?></span> WIB</div>
+          </div>
+        </div>
+
+        <!-- Window Info -->
+        <div class="scanner-alert-abs scanner-info-abs mb-3">
+          <i class="bi bi-clock-history"></i>
+          <div>
+            <strong>Window Absensi Terbatas</strong>
+            <p class="mb-0 small">
+              Hanya bisa absen di 2 jam terakhir: <strong><?= $windowStartText ?> - <?= $windowEndText ?></strong>
+            </p>
           </div>
         </div>
 
@@ -409,16 +416,10 @@ if ($e['event_date']) {
         <div class="scanner-alert-abs scanner-warning-abs mb-3">
           <i class="bi bi-shield-exclamation"></i>
           <div>
-            <strong>Validasi Tipe Partisipasi</strong>
+            <strong>Validasi Audience</strong>
             <p class="mb-0 small">
               Terdaftar: <span class="badge-abs <?= $participationBadgeClass ?>"><?= $participationDisplay ?></span>
-              <?php if ($participationType === 'online'): ?>
-                · Hanya QR <span class="badge-abs badge-info">Online</span> atau <span class="badge-abs badge-primary">Universal</span>
-              <?php elseif ($participationType === 'offline'): ?>
-                · Hanya QR <span class="badge-abs badge-success">Offline</span> atau <span class="badge-abs badge-primary">Universal</span>
-              <?php else: ?>
-                · Semua QR Audience dapat digunakan
-              <?php endif; ?>
+              · Gunakan QR <span class="badge-abs badge-warning">Audience</span> atau <span class="badge-abs badge-primary">Universal</span>
             </p>
           </div>
         </div>
@@ -510,18 +511,14 @@ let scanSuccessful = false;
 
 const userParticipationType = '<?= $participationType ?>';
 
-// WIB Time Helper - Convert local time to WIB (UTC+7)
+// WIB Time Helper
 function getWIBTime() {
   const now = new Date();
-  
-  // Convert to WIB timezone (UTC+7)
-  const wibOffset = 7 * 60; // WIB is UTC+7 in minutes
-  const localOffset = now.getTimezoneOffset(); // Local timezone offset in minutes (negative for east of UTC)
-  const totalOffset = wibOffset + localOffset; // Total difference in minutes
-  
+  const wibOffset = 7 * 60;
+  const localOffset = now.getTimezoneOffset();
+  const totalOffset = wibOffset + localOffset;
   const wibTime = new Date(now.getTime() + (totalOffset * 60 * 1000));
   
-  // Format as YYYY-MM-DD HH:MM:SS
   const year = wibTime.getFullYear();
   const month = String(wibTime.getMonth() + 1).padStart(2, '0');
   const day = String(wibTime.getDate()).padStart(2, '0');
@@ -532,7 +529,6 @@ function getWIBTime() {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-// Update WIB time display
 function updateWIBTimeDisplay() {
   const elements = ['current-time-display', 'scanner-wib-time'];
   elements.forEach(id => {
@@ -543,70 +539,47 @@ function updateWIBTimeDisplay() {
 
 setInterval(updateWIBTimeDisplay, 1000);
 
-// QR Code role detection
+// QR Code role detection - SIMPLIFIED untuk Audience
 function detectQRRole(qrData) {
   const patterns = {
-    audienceOnline: /EVENT_\d+_audience_online_/i,
-    audienceOffline: /EVENT_\d+_audience_offline_/i,
     universal: /EVENT_\d+_all_/i,
+    audience: /EVENT_\d+_audience_/i,
     presenter: /EVENT_\d+_presenter_/i,
-    reviewer: /EVENT_\d+_reviewer_/i,
     simple: /EVENT_\d+_\d{8}$/i,
     numeric: /^\d+$/,
     admin: /^(ADMIN|MANUAL|BULK)_\d+/i
   };
 
   let qrType = 'unknown';
-  let qrParticipationType = 'all';
-  
-  if (patterns.audienceOnline.test(qrData)) {
-    qrType = 'audience';
-    qrParticipationType = 'online';
-  } else if (patterns.audienceOffline.test(qrData)) {
-    qrType = 'audience';
-    qrParticipationType = 'offline';
-  } else if (patterns.universal.test(qrData)) {
-    qrType = 'universal';
-    qrParticipationType = 'all';
-  } else if (patterns.presenter.test(qrData)) {
-    qrType = 'presenter';
-    qrParticipationType = 'offline';
-  } else if (patterns.reviewer.test(qrData)) {
-    qrType = 'reviewer';
-    qrParticipationType = 'all';
-  } else if (patterns.simple.test(qrData) || patterns.numeric.test(qrData) || patterns.admin.test(qrData)) {
-    qrType = 'universal';
-    qrParticipationType = 'all';
-  }
-
   let allowed = false;
   let message = '';
   let badge = 'badge-abs';
 
-  if (qrType === 'universal') {
+  if (patterns.universal.test(qrData) || patterns.simple.test(qrData) || patterns.numeric.test(qrData) || patterns.admin.test(qrData)) {
+    qrType = 'universal';
     allowed = true;
     badge += ' badge-primary';
-    message = 'Universal QR - Valid';
-  } else if (qrType === 'audience') {
-    if (userParticipationType === 'all' || qrParticipationType === userParticipationType) {
-      allowed = true;
-      badge += qrParticipationType === 'online' ? ' badge-info' : ' badge-success';
-      message = `Audience ${qrParticipationType.charAt(0).toUpperCase() + qrParticipationType.slice(1)} - Valid`;
-    } else {
-      allowed = false;
-      badge += ' badge-warning';
-      message = `Tidak cocok dengan tipe Anda`;
-    }
-  } else {
-    allowed = false;
+    message = 'Universal QR - Valid untuk Audience';
+  } else if (patterns.audience.test(qrData)) {
+    qrType = 'audience';
+    allowed = true;
     badge += ' badge-warning';
-    message = qrType === 'presenter' ? 'QR Presenter' : qrType === 'reviewer' ? 'QR Reviewer' : 'Format tidak dikenali';
+    message = 'Audience QR - Valid';
+  } else if (patterns.presenter.test(qrData)) {
+    qrType = 'presenter';
+    allowed = false;
+    badge += ' badge-danger';
+    message = 'QR Presenter - Tidak dapat digunakan oleh Audience';
+  } else {
+    qrType = 'unknown';
+    allowed = false;
+    badge += ' badge-secondary';
+    message = 'Format QR tidak dikenali';
   }
 
-  return { type: qrType, participation_type: qrParticipationType, allowed, badge, text: message };
+  return { type: qrType, allowed, badge, text: message };
 }
 
-// Initialize cameras
 async function initializeCameras() {
   try {
     cameras = await Html5Qrcode.getCameras();
@@ -618,7 +591,6 @@ async function initializeCameras() {
   }
 }
 
-// Initialize QR scanner
 async function initQRScanner() {
   try {
     if (html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.SCANNING) {
@@ -638,10 +610,8 @@ async function initQRScanner() {
   }
 }
 
-// Start scanner
 async function startScanner() {
   if (isScanning) return;
-
   const messageDiv = document.getElementById('scanner-message');
   messageDiv.innerHTML = '<span style="color: var(--info);">Memulai kamera...</span>';
 
@@ -672,7 +642,6 @@ async function startScanner() {
   }
 }
 
-// Stop scanner
 async function stopScanner() {
   if (!isScanning) return;
   try {
@@ -688,7 +657,6 @@ async function stopScanner() {
   }
 }
 
-// Switch camera
 async function switchCamera() {
   if (cameras.length <= 1) {
     Swal.fire({ icon: 'info', title: 'Hanya ada satu kamera tersedia' });
@@ -700,7 +668,6 @@ async function switchCamera() {
   if (wasScanning) setTimeout(() => startScanner(), 1000);
 }
 
-// Handle scan success
 async function onScanSuccess(decodedText) {
   if (isProcessing || scanSuccessful) return;
 
@@ -781,22 +748,20 @@ async function onScanSuccess(decodedText) {
     } else {
       document.getElementById('processing-status').innerHTML = '<span class="badge-abs" style="background: var(--danger); color: white;">Gagal</span>';
       Swal.fire({ icon: 'error', title: 'Gagal', text: result.message });
+      isProcessing = false;
     }
   } catch (error) {
     console.error('Error:', error);
     Swal.fire({ icon: 'error', title: 'Error Koneksi', text: 'Gagal terhubung ke server' });
-  } finally {
     isProcessing = false;
   }
 }
 
-// Show error
 function showError(message) {
   document.getElementById('error-message').textContent = message;
   document.getElementById('scanner-error').style.display = 'flex';
 }
 
-// Continue scanning
 function continueScanning() {
   scanSuccessful = false;
   isProcessing = false;
@@ -805,6 +770,7 @@ function continueScanning() {
   document.getElementById('success-result').style.display = 'none';
   document.getElementById('continueScanning').style.display = 'none';
   document.getElementById('scanner-error').style.display = 'none';
+  startScanner();
 }
 
 // Event listeners

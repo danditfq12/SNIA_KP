@@ -105,6 +105,9 @@ $active = function (string $slug) use ($seg1, $seg2, $kelolaPaperGroup): bool {
       <span class="ico"><i class="bi bi-folder2-open"></i></span><span>Kelola Dokumen</span>
     </a>
     <a class="nav-link <?= $active('fasilitas') ? 'is-active':'' ?>" href="<?= site_url('admin/fasilitas') ?>">
+      <span class="ico"><i class="bi bi-star-fill"></i></span><span>Kelola Landing</span>
+    </a>
+    <a class="nav-link <?= $active('fasilitas') ? 'is-active':'' ?>" href="<?= site_url('admin/fasilitas') ?>">
       <span class="ico"><i class="bi bi-star-fill"></i></span><span>Fasilitas & Benefit</span>
     </a>
 

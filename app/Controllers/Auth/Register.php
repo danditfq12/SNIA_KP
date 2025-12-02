@@ -145,9 +145,16 @@ class Register extends BaseController
             $pendingModel->insert($payload);
         }
 
-        // Kirim OTP setiap kali registrasi (baik baru maupun update)
+        // Kirim OTP setiap kali registrasi (baik baru maupun update) dengan error handling lebih detail
+        $emailSent = false;
+        $emailError = '';
+        
         try {
+            // Clear previous email instance
             $mail = \Config\Services::email();
+            $mail->clear();
+            
+            // Set email configuration
             $mail->setFrom(config('Email')->fromEmail, config('Email')->fromName);
             $mail->setTo($email);
             $mail->setSubject('Kode OTP Verifikasi - SNIA');
@@ -160,21 +167,42 @@ class Register extends BaseController
             $mail->setMailType('html');
             $mail->setNewline("\r\n");
             $mail->setCRLF("\r\n");
-            $mail->send();
+            
+            // Attempt to send
+            $emailSent = $mail->send();
+            
+            if (!$emailSent) {
+                $emailError = $mail->printDebugger(['headers', 'subject', 'body']);
+                log_message('error', 'Email OTP gagal dikirim: ' . $emailError);
+            } else {
+                log_message('info', 'Email OTP berhasil dikirim ke: ' . $email);
+            }
+            
         } catch (\Throwable $e) {
-            log_message('error', 'Exception kirim email OTP: ' . $e->getMessage());
+            $emailError = $e->getMessage();
+            log_message('error', 'Exception kirim email OTP: ' . $emailError);
+            log_message('error', 'Stack trace: ' . $e->getTraceAsString());
         }
 
         // Simpan email dan OTP di session untuk ditampilkan di member area
         session()->set([
             'email_verifikasi' => $email,
             'show_otp_code' => $otp,        // OTP ditampilkan di halaman verify
-            'otp_created_at' => time()      // Untuk tracking waktu generate
+            'otp_created_at' => time(),     // Untuk tracking waktu generate
+            'email_sent_status' => $emailSent // Status pengiriman email
         ]);
 
-        $msg = $pendingSame
-            ? 'Kode OTP baru telah dikirim ke email Anda dan ditampilkan di bawah.'
-            : 'Kode OTP telah dikirim ke email Anda dan ditampilkan di bawah. Silakan masukkan kode untuk verifikasi.';
+        // Pesan disesuaikan dengan status pengiriman email
+        if ($pendingSame) {
+            $msg = $emailSent 
+                ? 'Kode OTP baru telah dikirim ke email Anda dan ditampilkan di bawah.'
+                : 'Kode OTP ditampilkan di bawah. Email gagal dikirim, silakan gunakan kode yang tersedia.';
+        } else {
+            $msg = $emailSent
+                ? 'Kode OTP telah dikirim ke email Anda dan ditampilkan di bawah. Silakan masukkan kode untuk verifikasi.'
+                : 'Kode OTP ditampilkan di bawah. Email gagal dikirim, silakan gunakan kode yang tersedia.';
+        }
+        
         return redirect()->to('/auth/verify?email=' . urlencode($email))
             ->with('success', $msg);
     }

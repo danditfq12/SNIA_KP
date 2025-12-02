@@ -50,7 +50,7 @@ $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
               ?>
               <div class="col-12 col-md-6 col-xl-4">
                 <div class="event-card h-100 p-3">
-                  <div class="d-flex justify-content-between align-items-start mb-1">
+                  <div class="d-flex justify-content-between align-items-start mb-2">
                     <h6 class="mb-0 text-blue-900"><?= esc($title) ?></h6>
                     <?php if ($attended): ?>
                       <span class="badge bg-success-subtle text-success">Sudah Absen</span>
@@ -67,16 +67,15 @@ $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
                     </div>
                   <?php endif; ?>
 
-                  <div class="d-flex align-items-center gap-2">
+                  <div class="d-grid gap-2">
                     <?php if ($isOpen): ?>
-                      <a href="<?= $detailUrl ?>" class="btn btn-primary flex-fill">
-                        <i class="bi bi-check2-circle me-1"></i> Absen
+                      <a href="<?= $detailUrl ?>" class="btn btn-primary">
+                        <i class="bi bi-check2-circle me-1"></i> Absen Sekarang
                       </a>
                     <?php else: ?>
-                      <a href="<?= $detailUrl ?>" class="btn btn-outline-secondary flex-fill">
-                        <i class="bi bi-info-circle me-1"></i> Detail
+                      <a href="<?= $detailUrl ?>" class="btn btn-outline-secondary">
+                        <i class="bi bi-info-circle me-1"></i> Lihat Detail
                       </a>
-                      <span class="badge bg-warning-subtle text-warning fw-semibold"><?= esc($reason) ?></span>
                     <?php endif; ?>
                   </div>
                 </div>
@@ -112,8 +111,9 @@ $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
               ?>
               <div class="col-12 col-md-6 col-xl-4">
                 <div class="event-card h-100 p-3">
-                  <div class="d-flex justify-content-between align-items-start mb-1">
+                  <div class="d-flex justify-content-between align-items-start mb-2">
                     <h6 class="mb-0 text-blue-900"><?= esc($title) ?></h6>
+                    <span class="badge bg-secondary-subtle text-secondary">Mendatang</span>
                   </div>
                   <div class="small text-muted mb-2">
                     <i class="bi bi-calendar-event"></i> <?= esc($date) ?>,
@@ -125,11 +125,10 @@ $fmtDate = fn($s)=> $s ? date('d M Y', strtotime($s)) : '-';
                     </div>
                   <?php endif; ?>
 
-                  <div class="d-flex align-items-center gap-2">
-                    <a href="<?= $detailUrl ?>" class="btn btn-outline-secondary flex-fill">
-                      <i class="bi bi-info-circle me-1"></i> Detail
+                  <div class="d-grid gap-2">
+                    <a href="<?= $detailUrl ?>" class="btn btn-outline-secondary">
+                      <i class="bi bi-info-circle me-1"></i> Lihat Detail
                     </a>
-                    <span class="badge bg-secondary-subtle text-secondary fw-semibold">Belum Dimulai</span>
                   </div>
                 </div>
               </div>
@@ -191,11 +190,21 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 
 /* Badges subtle */
 .bg-blue-soft{ background:var(--blue-200); color:var(--blue-800); border-radius:12px; padding:.4rem .6rem; font-weight:600; font-size:.85rem; }
-.bg-success-subtle{   background:#d1fae5!important; color:#065f46!important; }
-.bg-warning-subtle{   background:#fef3c7!important; color:#92400e!important; }
-.bg-secondary-subtle{ background:#f1f5f9!important; color:#475569!important; }
+.bg-success-subtle{   background:#d1fae5!important; color:#065f46!important; font-size:.8rem; padding:.35rem .65rem; }
+.bg-warning-subtle{   background:#fef3c7!important; color:#92400e!important; font-size:.8rem; padding:.35rem .65rem; }
+.bg-secondary-subtle{ background:#f1f5f9!important; color:#475569!important; font-size:.8rem; padding:.35rem .65rem; }
 .bg-primary-subtle{   background:#dbeafe!important; color:var(--blue-700)!important; }
 .text-blue-900{ color:var(--blue-900)!important; }
+
+/* Custom Alert untuk status */
+.alert-warning-custom{
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #fbbf24;
+  border-radius: 10px;
+  color: #78350f;
+  font-weight: 500;
+}
+.alert-warning-custom i{ color: #d97706; }
 
 /* Event card */
 .event-card{
@@ -204,8 +213,13 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
   border-radius:14px;
   box-shadow:0 10px 22px rgba(30,64,175,.08);
   padding:14px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.event-card .btn{ border-radius:10px; }
+.event-card:hover{
+  transform: translateY(-2px);
+  box-shadow:0 14px 28px rgba(30,64,175,.12);
+}
+.event-card .btn{ border-radius:10px; font-weight:600; }
 
 /* Empty state */
 .empty-state{ padding:1.25rem; text-align:center; color:#64748b; }
@@ -216,9 +230,27 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
 .empty-text{ font-weight:700; }
 
 /* Buttons */
-.btn{ font-weight:800; border-radius:10px; font-size:.98rem; padding:.6rem 1.05rem; }
-.btn-primary{ background:var(--blue-600); border-color:var(--blue-600); box-shadow:0 4px 12px rgba(37,99,235,.2); }
-.btn-outline-secondary{ border-color:#cbd5e1; }
+.btn{ font-weight:700; border-radius:10px; font-size:.95rem; padding:.6rem 1.05rem; transition: all 0.2s ease; }
+.btn-primary{ 
+  background:var(--blue-600); 
+  border-color:var(--blue-600); 
+  box-shadow:0 4px 12px rgba(37,99,235,.2); 
+}
+.btn-primary:hover{
+  background:var(--blue-700);
+  border-color:var(--blue-700);
+  box-shadow:0 6px 16px rgba(37,99,235,.3);
+  transform: translateY(-1px);
+}
+.btn-outline-secondary{ 
+  border-color:#cbd5e1; 
+  color:#475569;
+}
+.btn-outline-secondary:hover{
+  background:#f1f5f9;
+  border-color:#94a3b8;
+  transform: translateY(-1px);
+}
 
 /* Responsive */
 @media (max-width:575.98px){
@@ -227,5 +259,7 @@ body{ font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size:15.
   .hero-title{ font-size:1.25rem; }
   .card-header{ padding:.9rem .9rem .4rem .9rem!important; }
   .card-body{ padding:.9rem!important; }
+  .event-card{ padding:12px; }
+  .alert-warning-custom{ font-size:.85rem; }
 }
 </style>

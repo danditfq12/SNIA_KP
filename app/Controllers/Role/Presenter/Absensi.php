@@ -48,41 +48,76 @@ class Absensi extends BaseController
     }
 
     /**
-     * Calculate attendance window (start & end time) - FIXED WITH WIB
+     * Calculate attendance window (2 jam sebelum event berakhir) - UPDATED
      */
     private function getAttendanceWindow(array $event): array
     {
+        // Parse event start time dan end time
         $startStr = trim(($event['event_date'] ?? '') . ' ' . ($event['event_time'] ?? '00:00:00'));
-        $start = strtotime($startStr) ?: null;
-        $end = null;
-        if ($start) {
-            $end = $start + (4 * 3600); // 4 hours duration
+        $eventStart = strtotime($startStr) ?: null;
+        
+        // Parse event end time jika ada, jika tidak ada gunakan durasi default
+        $eventEnd = null;
+        if (!empty($event['event_end_time'])) {
+            $endStr = trim(($event['event_date'] ?? '') . ' ' . $event['event_end_time']);
+            $eventEnd = strtotime($endStr) ?: null;
         }
+        
+        // Jika tidak ada end time, hitung dari durasi (default 10 jam)
+        if (!$eventEnd && $eventStart) {
+            $eventDuration = 10 * 3600; // 10 jam dalam detik
+            $eventEnd = $eventStart + $eventDuration;
+        }
+        
+        if (!$eventStart || !$eventEnd) {
+            return [
+                'start_ts' => null,
+                'end_ts' => null,
+                'is_open' => false,
+                'reason' => 'Jadwal event tidak valid',
+                'current_time_wib' => $this->getCurrentTimeWIB()->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        // Window absensi dibuka 2 jam sebelum event berakhir
+        $absensiWindowStart = $eventEnd - (2 * 3600); // 2 jam sebelum akhir
+        $absensiWindowEnd = $eventEnd; // Tutup saat event berakhir
 
         // Gunakan WIB timezone
         $nowWIB = $this->getCurrentTimeWIB();
         $nowTimestamp = $nowWIB->getTimestamp();
         
-        $open = ($start && $end) ? ($nowTimestamp >= ($start - 1800) && $nowTimestamp <= $end) : false; // 30 min early
+        // Cek apakah window terbuka
+        $open = ($nowTimestamp >= $absensiWindowStart && $nowTimestamp <= $absensiWindowEnd);
 
         $reason = '';
-        if ($start && $end && !$open) {
-            if ($nowTimestamp < ($start - 1800)) {
-                $remaining = ($start - 1800) - $nowTimestamp;
+        if (!$open) {
+            if ($nowTimestamp < $absensiWindowStart) {
+                // Belum dibuka
+                $remaining = $absensiWindowStart - $nowTimestamp;
                 $hours = floor($remaining / 3600);
                 $minutes = floor(($remaining % 3600) / 60);
-                $reason = "Akan dibuka dalam {$hours}j {$minutes}m";
-            } elseif ($nowTimestamp > $end) {
-                $reason = 'Window absensi sudah ditutup';
+                
+                $absensiStartTimeFormatted = $this->toWIBDateTime($absensiWindowStart)->format('H:i');
+                $eventEndTimeFormatted = $this->toWIBDateTime($eventEnd)->format('H:i');
+                
+                $reason = "Absensi dibuka 2 jam sebelum event berakhir (pukul {$absensiStartTimeFormatted} - {$eventEndTimeFormatted}). Akan dibuka dalam {$hours}j {$minutes}m";
+            } elseif ($nowTimestamp > $absensiWindowEnd) {
+                // Sudah ditutup
+                $reason = 'Window absensi sudah ditutup (event telah berakhir)';
             }
         }
 
         return [
-            'start_ts' => $start,
-            'end_ts' => $end,
+            'start_ts' => $absensiWindowStart,
+            'end_ts' => $absensiWindowEnd,
+            'event_start_ts' => $eventStart,
+            'event_end_ts' => $eventEnd,
             'is_open' => $open,
             'reason' => $reason,
-            'current_time_wib' => $nowWIB->format('Y-m-d H:i:s'), // Tambahan info WIB
+            'current_time_wib' => $nowWIB->format('Y-m-d H:i:s'),
+            'absensi_start_time' => $this->toWIBDateTime($absensiWindowStart)->format('H:i'),
+            'absensi_end_time' => $this->toWIBDateTime($absensiWindowEnd)->format('H:i'),
         ];
     }
 
@@ -193,7 +228,7 @@ class Absensi extends BaseController
                 'event_id' => $tokenEventId,
                 'role' => 'all',
                 'participation_type' => 'all',
-                'date' => $this->getCurrentTimeWIB()->format('Ymd'), // WIB date
+                'date' => $this->getCurrentTimeWIB()->format('Ymd'),
                 'message' => 'QR Code Universal valid untuk Presenter'
             ];
         }
@@ -232,7 +267,7 @@ class Absensi extends BaseController
                     'event_id' => $tokenEventId,
                     'role' => 'all',
                     'participation_type' => 'all',
-                    'date' => $this->getCurrentTimeWIB()->format('Ymd'), // WIB date
+                    'date' => $this->getCurrentTimeWIB()->format('Ymd'),
                     'message' => 'QR Code valid (format fallback)'
                 ];
             }
@@ -312,7 +347,7 @@ class Absensi extends BaseController
             'count_today' => count($boxesToday),
             'count_next' => count($boxesNext),
             'count_hadir' => $this->absensiModel->countUserAttendance($userId),
-            'current_time_wib' => $this->getCurrentTimeWIB()->format('Y-m-d H:i:s') // Tambahan info
+            'current_time_wib' => $this->getCurrentTimeWIB()->format('Y-m-d H:i:s')
         ];
 
         return view('role/presenter/absensi/index', [
@@ -421,7 +456,7 @@ class Absensi extends BaseController
                 redirect()->back()->with('error', $message);
         }
 
-        // Check attendance window
+        // Check attendance window (2 jam sebelum event berakhir)
         $window = $this->getAttendanceWindow($event);
         if (!$window['is_open']) {
             $message = $window['reason'] ?: 'Window absensi belum dibuka/sudah ditutup.';
@@ -455,7 +490,7 @@ class Absensi extends BaseController
                 'event_id' => $eventId,
                 'qr_code' => $attendanceQRCode,
                 'status' => 'hadir',
-                'waktu_scan' => $wibTime->format('Y-m-d H:i:s'), // WIB timestamp
+                'waktu_scan' => $wibTime->format('Y-m-d H:i:s'),
                 'marked_by_admin' => null,
                 'notes' => "QR scan by Presenter ({$user['nama_lengkap']}) - Role: {$validation['role']}, Type: {$validation['participation_type']}" . 
                           (isset($validation['admin_generated']) ? ' [Admin Generated]' : '') .
@@ -524,7 +559,7 @@ class Absensi extends BaseController
      */
     public function scanAjax()
     {
-        return $this->scan(); // Reuse the enhanced scan method
+        return $this->scan();
     }
 
     /**
@@ -537,7 +572,7 @@ class Absensi extends BaseController
             $this->db->table('log_aktivitas')->insert([
                 'id_user' => $userId,
                 'aktivitas' => $activity,
-                'waktu' => $wibTime->format('Y-m-d H:i:s') // WIB timestamp
+                'waktu' => $wibTime->format('Y-m-d H:i:s')
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Failed to log presenter activity: ' . $e->getMessage());

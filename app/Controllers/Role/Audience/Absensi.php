@@ -44,52 +44,100 @@ class Absensi extends BaseController
     }
 
     /**
-     * Convert timestamp to WIB DateTime
-     */
-    private function toWIBDateTime($timestamp)
-    {
-        $dt = new \DateTime();
-        $dt->setTimestamp($timestamp);
-        $dt->setTimezone(new \DateTimeZone('Asia/Jakarta'));
-        return $dt;
-    }
-
-    /**
-     * Calculate attendance window (start & end time) - FIXED WITH WIB
+     * Calculate attendance window - MODIFIED: Bisa absen KAPAN SAJA selama event berlangsung
+     * Window: Dari event mulai sampai event selesai
+     * 
+     * Contoh: Event 09:00-17:00
+     * - Window buka: 09:00 (saat event mulai)
+     * - Window tutup: 17:00 (saat event selesai)
+     * - Bisa absen: 09:00 - 17:00 (selama event berlangsung)
      */
     private function getAttendanceWindow(array $event): array
     {
-        $startStr = trim(($event['event_date'] ?? '') . ' ' . ($event['event_time'] ?? '00:00:00'));
-        $start = strtotime($startStr) ?: null;
-        $end = null;
-        if ($start) {
-            $end = $start + (4 * 3600); // 4 hours duration
+        $eventDate = $event['event_date'] ?? '';
+        $eventTime = $event['event_time'] ?? '00:00:00';
+        $endTime = $event['end_time'] ?? null;
+        
+        // Normalize time format (handle HH:MM or HH:MM:SS)
+        $eventTime = $this->normalizeTime($eventTime);
+        if ($endTime) {
+            $endTime = $this->normalizeTime($endTime);
         }
+        
+        $startStr = trim($eventDate . ' ' . $eventTime);
+        $start = strtotime($startStr);
+        
+        if (!$start) {
+            return [
+                'start_ts' => null,
+                'end_ts' => null,
+                'is_open' => false,
+                'reason' => 'Jadwal event tidak valid',
+                'current_time_wib' => $this->getCurrentTimeWIB()->format('Y-m-d H:i:s'),
+            ];
+        }
+        
+        // Hitung event end time
+        $eventEnd = null;
+        if ($endTime) {
+            // Jika ada end_time di database
+            $endStr = trim($eventDate . ' ' . $endTime);
+            $eventEnd = strtotime($endStr);
+            
+            // Debug log
+            log_message('debug', "Event times - Start: {$startStr}, End: {$endStr}");
+        }
+        
+        // Jika tidak ada end_time atau invalid, gunakan default 8 jam
+        if (!$eventEnd || $eventEnd <= $start) {
+            $eventEnd = $start + (8 * 3600); // default 8 jam
+            log_message('debug', "Using default 8 hour duration");
+        }
+        
+        // Hitung durasi dalam jam
+        $durationHours = ($eventEnd - $start) / 3600;
+        
+        // MODIFIED: Window BUKA dari awal event sampai event selesai
+        $windowStart = $start; // Mulai dari event dimulai
+        $windowEnd = $eventEnd; // Sampai event selesai
 
         // Gunakan WIB timezone
         $nowWIB = $this->getCurrentTimeWIB();
         $nowTimestamp = $nowWIB->getTimestamp();
         
-        $open = ($start && $end) ? ($nowTimestamp >= ($start - 1800) && $nowTimestamp <= $end) : false; // 30 min early
+        // Window: Selama event berlangsung
+        $open = ($nowTimestamp >= $windowStart && $nowTimestamp <= $windowEnd);
 
         $reason = '';
-        if ($start && $end && !$open) {
-            if ($nowTimestamp < ($start - 1800)) {
-                $remaining = ($start - 1800) - $nowTimestamp;
+        if (!$open) {
+            if ($nowTimestamp < $windowStart) {
+                $remaining = $windowStart - $nowTimestamp;
                 $hours = floor($remaining / 3600);
                 $minutes = floor(($remaining % 3600) / 60);
-                $reason = "Akan dibuka dalam {$hours}j {$minutes}m";
-            } elseif ($nowTimestamp > $end) {
-                $reason = 'Window absensi sudah ditutup';
+                $windowStartTime = date('H:i', $windowStart);
+                $reason = "Window absensi dibuka pukul {$windowStartTime} WIB (akan dibuka dalam {$hours}j {$minutes}m)";
+            } elseif ($nowTimestamp > $windowEnd) {
+                $windowEndTime = date('H:i', $windowEnd);
+                $reason = "Window absensi sudah ditutup (ditutup pukul {$windowEndTime} WIB)";
             }
         }
 
+        log_message('debug', "Window calculation - Window Start: " . date('Y-m-d H:i:s', $windowStart) . 
+                             ", Window End: " . date('Y-m-d H:i:s', $windowEnd) . 
+                             ", Event Start: " . date('Y-m-d H:i:s', $start) .
+                             ", Event End: " . date('Y-m-d H:i:s', $eventEnd) .
+                             ", Duration: {$durationHours}h, Open: " . ($open ? 'YES' : 'NO'));
+
         return [
             'start_ts' => $start,
-            'end_ts' => $end,
+            'end_ts' => $windowEnd,
+            'event_end_ts' => $eventEnd,
+            'window_start_ts' => $windowStart,
+            'window_end_ts' => $windowEnd,
             'is_open' => $open,
             'reason' => $reason,
-            'current_time_wib' => $nowWIB->format('Y-m-d H:i:s'), // Tambahan info WIB
+            'current_time_wib' => $nowWIB->format('Y-m-d H:i:s'),
+            'event_duration' => $durationHours,
         ];
     }
 
@@ -109,21 +157,20 @@ class Absensi extends BaseController
     }
 
     /**
-     * Enhanced QR Token validation with participation type validation for audience
+     * SIMPLIFIED QR Token validation - Sesuai dengan 3 QR yang di-generate Admin
      */
-    private function validateQRToken($token, $eventId, $userParticipationType)
+    private function validateQRToken($token, $eventId, $userRole = 'audience')
     {
         $token = $this->cleanQRToken($token);
-        log_message('debug', "Validating QR token for audience: {$token}, user participation: {$userParticipationType}");
+        log_message('debug', "Validating QR token: {$token}, user role: {$userRole}, event: {$eventId}");
 
-        // Standard format EVENT_{event_id}_{role}_{participation_type}_{date}_{hash}
+        // Format standard: EVENT_{event_id}_{role}_{participation_type}_{date}_{hash}
         $standardPattern = '/^EVENT_(\d+)_([a-z]+)_([a-z]+)_(\d{8})_([a-f0-9]+)$/i';
         if (preg_match($standardPattern, $token, $matches)) {
             $tokenEventId = (int) $matches[1];
             $role = strtolower($matches[2]);
             $participationType = strtolower($matches[3]);
             $date = $matches[4];
-            $providedHash = strtolower($matches[5]);
 
             // Check event ID match
             if ($tokenEventId !== $eventId) {
@@ -134,49 +181,22 @@ class Absensi extends BaseController
                 ];
             }
 
-            // Role validation for audience
-            if ($role !== 'audience' && $role !== 'all') {
-                $roleDisplayNames = [
-                    'presenter' => 'Presenter',
-                    'reviewer' => 'Reviewer'
-                ];
-                $roleName = $roleDisplayNames[$role] ?? ucfirst($role);
-                
-                return [
-                    'valid' => false,
-                    'message' => "QR Code ini khusus untuk {$roleName}. Sebagai Audience, Anda hanya dapat menggunakan QR Code Audience atau Universal.",
-                    'code' => 'WRONG_ROLE',
-                    'detected_role' => $role
-                ];
-            }
-
-            // Participation type validation (key feature for audience)
-            if ($role === 'audience' && $participationType !== 'all') {
-                // Check if user's participation type matches QR code participation type
-                if ($userParticipationType !== $participationType) {
-                    $participationNames = [
-                        'online' => 'Online',
-                        'offline' => 'Offline'
-                    ];
-                    $qrTypeName = $participationNames[$participationType] ?? ucfirst($participationType);
-                    $userTypeName = $participationNames[$userParticipationType] ?? ucfirst($userParticipationType);
-                    
+            // Role validation - SIMPLIFIED
+            if ($userRole === 'audience') {
+                if ($role === 'presenter') {
                     return [
                         'valid' => false,
-                        'message' => "QR Code ini khusus untuk peserta {$qrTypeName}. Anda terdaftar sebagai peserta {$userTypeName}.",
-                        'code' => 'WRONG_PARTICIPATION_TYPE',
-                        'detected_participation' => $participationType,
-                        'user_participation' => $userParticipationType
+                        'message' => 'QR Code ini khusus untuk Presenter. Sebagai Audience, gunakan QR Code Universal atau Audience.',
+                        'code' => 'WRONG_ROLE'
                     ];
                 }
             }
 
-            // Date validation dengan WIB
+            // Date validation dengan WIB - toleransi ±1 hari
             $nowWIB = $this->getCurrentTimeWIB();
             $currentDate = $nowWIB->format('Ymd');
-            $yesterday = $nowWIB->modify('-1 day')->format('Ymd');
-            $nowWIB = $this->getCurrentTimeWIB(); // Reset
-            $tomorrow = $nowWIB->modify('+1 day')->format('Ymd');
+            $yesterday = (clone $nowWIB)->modify('-1 day')->format('Ymd');
+            $tomorrow = (clone $nowWIB)->modify('+1 day')->format('Ymd');
             
             if (!in_array($date, [$yesterday, $currentDate, $tomorrow])) {
                 return [
@@ -186,17 +206,25 @@ class Absensi extends BaseController
                 ];
             }
 
+            $qrTypeLabel = 'Universal';
+            if ($role === 'audience') {
+                $qrTypeLabel = 'Audience';
+            } elseif ($role === 'presenter') {
+                $qrTypeLabel = 'Presenter';
+            }
+
             return [
                 'valid' => true,
                 'event_id' => $tokenEventId,
                 'role' => $role,
                 'participation_type' => $participationType,
                 'date' => $date,
-                'message' => "QR Code valid untuk Audience ({$participationType})"
+                'message' => "QR Code {$qrTypeLabel} valid",
+                'qr_type' => $qrTypeLabel
             ];
         }
 
-        // Simple format EVENT_{event_id}_{date} - Universal
+        // Format simple: EVENT_{event_id}_{date} - Universal
         $simplePattern = '/^EVENT_(\d+)_(\d{8})$/i';
         if (preg_match($simplePattern, $token, $matches)) {
             $tokenEventId = (int) $matches[1];
@@ -215,11 +243,12 @@ class Absensi extends BaseController
                 'role' => 'all',
                 'participation_type' => 'all',
                 'date' => $matches[2],
-                'message' => 'QR Code Universal valid untuk Audience'
+                'message' => 'QR Code Universal valid',
+                'qr_type' => 'Universal'
             ];
         }
 
-        // Numeric format (just event ID) - Universal
+        // Format numeric (hanya event ID) - Universal
         if (is_numeric($token)) {
             $tokenEventId = (int) $token;
             
@@ -236,12 +265,13 @@ class Absensi extends BaseController
                 'event_id' => $tokenEventId,
                 'role' => 'all',
                 'participation_type' => 'all',
-                'date' => $this->getCurrentTimeWIB()->format('Ymd'), // WIB date
-                'message' => 'QR Code Universal valid untuk Audience'
+                'date' => $this->getCurrentTimeWIB()->format('Ymd'),
+                'message' => 'QR Code Universal valid',
+                'qr_type' => 'Universal'
             ];
         }
 
-        // Admin generated format - Universal
+        // Format admin: ADMIN|MANUAL|BULK_{event_id}_{date}_...
         $adminPattern = '/^(ADMIN|MANUAL|BULK)_(\d+)_(\d{8})/i';
         if (preg_match($adminPattern, $token, $matches)) {
             $tokenEventId = (int) $matches[2];
@@ -260,12 +290,13 @@ class Absensi extends BaseController
                 'role' => 'all',
                 'participation_type' => 'all',
                 'date' => $matches[3],
-                'message' => "QR Code Admin valid untuk Audience",
+                'message' => 'QR Code Admin valid',
+                'qr_type' => 'Admin',
                 'admin_generated' => true
             ];
         }
 
-        // Try to extract event ID as fallback
+        // Fallback: extract event ID dari token
         if (preg_match('/EVENT_(\d+)/i', $token, $matches)) {
             $tokenEventId = (int) $matches[1];
             
@@ -275,15 +306,16 @@ class Absensi extends BaseController
                     'event_id' => $tokenEventId,
                     'role' => 'all',
                     'participation_type' => 'all',
-                    'date' => $this->getCurrentTimeWIB()->format('Ymd'), // WIB date
-                    'message' => 'QR Code valid (format fallback)'
+                    'date' => $this->getCurrentTimeWIB()->format('Ymd'),
+                    'message' => 'QR Code valid (format fallback)',
+                    'qr_type' => 'Universal'
                 ];
             }
         }
         
         return [
             'valid' => false,
-            'message' => 'Format QR Code tidak dikenali atau tidak valid untuk Audience.',
+            'message' => 'Format QR Code tidak dikenali. Gunakan QR Code Universal atau Audience.',
             'code' => 'INVALID_FORMAT'
         ];
     }
@@ -294,15 +326,18 @@ class Absensi extends BaseController
         $token = urldecode($token);
         $token = ltrim($token, '/');
         
+        // Jika token berupa URL lengkap
         if (strpos($token, 'http') === 0 || strpos($token, '/') !== false) {
             $urlParts = parse_url($token);
             if (isset($urlParts['path'])) {
                 $pathParts = explode('/', trim($urlParts['path'], '/'));
+                // Cari part yang mengandung EVENT_
                 foreach ($pathParts as $part) {
                     if (strpos($part, 'EVENT_') === 0) {
                         return $part;
                     }
                 }
+                // Jika tidak ada EVENT_, ambil bagian terakhir
                 return end($pathParts);
             }
         }
@@ -311,40 +346,103 @@ class Absensi extends BaseController
     }
 
     /**
-     * Aturan:
-     * - Bisa scan hanya SETELAH mulai (>= start) s.d. +4 jam.
-     * - Jika event dihentikan admin (attendance_status = closed/stopped) → tidak bisa scan.
-     * - Event non-aktif → tidak bisa scan.
-     * Catatan: jika kolom attendance_status tidak ada, dianggap 'open'.
+     * Calculate event status - MODIFIED: Window absensi dari awal sampai akhir event
      */
     private function calculateEventStatus(array $event): array
     {
         if (empty($event['event_date']) || empty($event['event_time'])) {
-            return ['event_status' => 'Jadwal Tidak Lengkap', 'badge_class' => 'bg-secondary', 'can_scan' => false];
+            return [
+                'event_status' => 'Jadwal Tidak Lengkap', 
+                'badge_class' => 'bg-secondary', 
+                'can_scan' => false
+            ];
         }
 
         if (empty($event['is_active'])) {
-            return ['event_status' => 'Tidak Aktif', 'badge_class' => 'bg-secondary', 'can_scan' => false];
+            return [
+                'event_status' => 'Tidak Aktif', 
+                'badge_class' => 'bg-secondary', 
+                'can_scan' => false
+            ];
         }
 
         $attn = strtolower((string)($event['attendance_status'] ?? 'open'));
         if (in_array($attn, ['closed','stopped','ended'], true)) {
-            return ['event_status' => 'Dihentikan', 'badge_class' => 'bg-danger', 'can_scan' => false];
+            return [
+                'event_status' => 'Dihentikan', 
+                'badge_class' => 'bg-danger', 
+                'can_scan' => false
+            ];
         }
 
-        $startStr = $this->composeStart($event['event_date'], $event['event_time']);
-        $start    = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $startStr, $this->tz)
-                  ?: new \DateTimeImmutable($startStr, $this->tz);
-
-        $now   = new \DateTimeImmutable('now', $this->tz);
-        $diffH = ($now->getTimestamp() - $start->getTimestamp()) / 3600.0;
-
-        if ($diffH < 0) {
-            return ['event_status' => 'Belum Dimulai', 'badge_class' => 'bg-secondary', 'can_scan' => false];
-        } elseif ($diffH <= 4) {
-            return ['event_status' => 'Sedang Berlangsung', 'badge_class' => 'bg-success', 'can_scan' => true];
+        try {
+            $eventDate = $event['event_date'];
+            $eventTime = $this->normalizeTime($event['event_time']);
+            $endTime = isset($event['end_time']) ? $this->normalizeTime($event['end_time']) : null;
+            
+            $startStr = $eventDate . ' ' . $eventTime;
+            $eventDateTime = new \DateTime($startStr, $this->tz);
+            $currentDateTime = $this->getCurrentTimeWIB();
+            
+            $eventStart = $eventDateTime->getTimestamp();
+            $now = $currentDateTime->getTimestamp();
+            
+            // Hitung event end time
+            $eventEnd = null;
+            if ($endTime) {
+                $endStr = $eventDate . ' ' . $endTime;
+                $eventEndDT = new \DateTime($endStr, $this->tz);
+                $eventEnd = $eventEndDT->getTimestamp();
+            }
+            
+            // Jika tidak ada end_time atau invalid, default 8 jam
+            if (!$eventEnd || $eventEnd <= $eventStart) {
+                $eventEnd = $eventStart + (8 * 3600);
+            }
+            
+            $durationHours = ($eventEnd - $eventStart) / 3600;
+            
+            // MODIFIED: Window absensi = seluruh durasi event
+            $windowStart = $eventStart;
+            $windowEnd = $eventEnd;
+            
+            $hoursDiff = ($now - $eventStart) / 3600;
+            $hoursToEventEnd = ($eventEnd - $now) / 3600;
+            
+            log_message('debug', "Event Status - Current time vs event start: " . round($hoursDiff, 2) . 
+                                "h, Duration: {$durationHours}h, Hours to event end: " . round($hoursToEventEnd, 2) . "h");
+            
+            if ($now < $windowStart) {
+                // Event belum dimulai
+                return [
+                    'event_status' => 'Belum Dimulai',
+                    'badge_class' => 'bg-secondary',
+                    'can_scan' => false
+                ];
+            } elseif ($now >= $windowStart && $now <= $windowEnd) {
+                // Event sedang berlangsung - bisa absen kapan saja
+                return [
+                    'event_status' => 'Sedang Berlangsung - Bisa Absen',
+                    'badge_class' => 'bg-success',
+                    'can_scan' => true
+                ];
+            } else {
+                // Event sudah selesai
+                return [
+                    'event_status' => 'Sudah Selesai',
+                    'badge_class' => 'bg-danger',
+                    'can_scan' => false
+                ];
+            }
+            
+        } catch (\Exception $e) {
+            log_message('error', 'Error calculating event status: ' . $e->getMessage());
+            return [
+                'event_status' => 'Error',
+                'badge_class' => 'bg-secondary',
+                'can_scan' => false
+            ];
         }
-        return ['event_status' => 'Sudah Selesai', 'badge_class' => 'bg-secondary', 'can_scan' => false];
     }
 
     /** ===== Pages ===== */
@@ -390,7 +488,7 @@ class Absensi extends BaseController
         // Kumpulkan event_id
         $eventIds = array_map(fn($r)=> (int)$r['id'], $paid);
 
-        // Ambil last attendance per event (sekali query)
+        // Ambil last attendance per event
         $attMap = [];
         if (!empty($eventIds)) {
             $rows = $this->db->table('absensi')
@@ -423,17 +521,13 @@ class Absensi extends BaseController
                 'event_status'       => $status['event_status'],
                 'badge_class'        => $status['badge_class'],
                 'can_scan'           => $status['can_scan'],
-
-                // tambahan utk tampilan "Sudah Absen"
                 'already_attend'     => $already,
                 'attendance_at'      => $attendanceAt,
-
-                // link meeting (jika ada kolomnya)
                 'zoom_link'          => $row['zoom_link'] ?? null,
             ];
         }
 
-        // Riwayat (tanpa perubahan)
+        // Riwayat
         $history = $this->absensiModel->select('
                             absensi.waktu_scan,
                             absensi.status,
@@ -505,11 +599,10 @@ class Absensi extends BaseController
     }
 
     /**
-     * SCAN - Process QR token submission with enhanced participation type validation
+     * SCAN - Process QR token submission
      */
     public function scan()
     {
-        // Support both POST and AJAX requests
         if (!$this->request->is('post')) {
             return $this->response->setJSON([
                 'success' => false,
@@ -562,8 +655,8 @@ class Absensi extends BaseController
 
         $userParticipationType = $payment['participation_type'] ?? 'all';
 
-        // Validate QR token with participation type
-        $validation = $this->validateQRToken($rawToken, $eventId, $userParticipationType);
+        // Validate QR token
+        $validation = $this->validateQRToken($rawToken, $eventId, 'audience');
         
         if (!$validation['valid']) {
             log_message('warning', "QR validation failed for audience - {$validation['message']}");
@@ -576,7 +669,7 @@ class Absensi extends BaseController
                 redirect()->back()->with('error', $validation['message']);
         }
 
-        // Check attendance window
+        // Check attendance window (selama event berlangsung)
         $window = $this->getAttendanceWindow($event);
         if (!$window['is_open']) {
             $message = $window['reason'] ?: 'Window absensi belum dibuka/sudah ditutup.';
@@ -593,28 +686,24 @@ class Absensi extends BaseController
                 redirect()->back()->with('info', $message);
         }
 
-        // Get user info for logging
+        // Get user info
         $user = $this->userModel->find($userId);
 
         // Begin transaction
         $this->db->transStart();
 
         try {
-            // Generate unique attendance QR code dengan WIB timestamp
             $wibTime = $this->getCurrentTimeWIB();
             $attendanceQRCode = 'AUDIENCE_SCAN_' . $eventId . '_' . $userId . '_' . $wibTime->format('YmdHis');
             
-            // Insert absensi record dengan WIB timestamp
             $attendanceData = [
                 'id_user' => $userId,
                 'event_id' => $eventId,
                 'qr_code' => $attendanceQRCode,
                 'status' => 'hadir',
-                'waktu_scan' => $wibTime->format('Y-m-d H:i:s'), // WIB timestamp
+                'waktu_scan' => $wibTime->format('Y-m-d H:i:s'),
                 'marked_by_admin' => null,
-                'notes' => "QR scan by Audience ({$user['nama_lengkap']}) - Role: {$validation['role']}, QR Type: {$validation['participation_type']}, User Type: {$userParticipationType}" . 
-                          (isset($validation['admin_generated']) ? ' [Admin Generated]' : '') .
-                          " - Token: " . substr($rawToken, 0, 50) . " - WIB: " . $wibTime->format('Y-m-d H:i:s')
+                'notes' => "QR scan by Audience ({$user['nama_lengkap']}) - QR Type: {$validation['qr_type']}, User Participation: {$userParticipationType} - WIB: " . $wibTime->format('Y-m-d H:i:s')
             ];
 
             $insertId = $this->absensiModel->insert($attendanceData);
@@ -623,8 +712,7 @@ class Absensi extends BaseController
                 throw new \Exception('Gagal mencatat kehadiran dalam database.');
             }
 
-            // Log activity dengan WIB timestamp
-            $this->logActivity($userId, "Audience QR attendance - Event: {$event['title']}, QR Role: {$validation['role']}, QR Type: {$validation['participation_type']}, User Type: {$userParticipationType} - WIB: " . $wibTime->format('Y-m-d H:i:s'));
+            $this->logActivity($userId, "Audience QR attendance - Event: {$event['title']}, QR Type: {$validation['qr_type']} - WIB: " . $wibTime->format('Y-m-d H:i:s'));
 
             $this->db->transComplete();
 
@@ -632,7 +720,7 @@ class Absensi extends BaseController
                 throw new \Exception('Database transaction failed.');
             }
 
-            log_message('info', "Audience attendance successful - User: {$userId}, Event: {$eventId}, QR Role: {$validation['role']}, QR Type: {$validation['participation_type']}, User Type: {$userParticipationType} - WIB: " . $wibTime->format('Y-m-d H:i:s'));
+            log_message('info', "Audience attendance successful - User: {$userId}, Event: {$eventId}, QR Type: {$validation['qr_type']}");
 
             $participationDisplayName = ucfirst($userParticipationType);
             $successMessage = "Absensi berhasil dicatat! Terima kasih telah hadir sebagai Audience ({$participationDisplayName}).";
@@ -649,8 +737,7 @@ class Absensi extends BaseController
                         'attendance_time' => $wibTime->format('H:i:s'),
                         'attendance_date' => $wibTime->format('d/m/Y'),
                         'attendance_datetime_wib' => $wibTime->format('Y-m-d H:i:s'),
-                        'qr_role' => $validation['role'],
-                        'qr_participation_type' => $validation['participation_type'],
+                        'qr_type' => $validation['qr_type'],
                         'user_participation_type' => $userParticipationType
                     ]
                 ]);
@@ -677,15 +764,15 @@ class Absensi extends BaseController
     }
 
     /**
-     * NEW: AJAX endpoint for QR scanner integration
+     * AJAX endpoint for QR scanner integration
      */
     public function scanAjax()
     {
-        return $this->scan(); // Reuse the enhanced scan method
+        return $this->scan();
     }
 
     /**
-     * Log user activity dengan WIB timestamp
+     * Log user activity
      */
     private function logActivity($userId, $activity)
     {
@@ -694,7 +781,7 @@ class Absensi extends BaseController
             $this->db->table('log_aktivitas')->insert([
                 'id_user' => $userId,
                 'aktivitas' => $activity,
-                'waktu' => $wibTime->format('Y-m-d H:i:s') // WIB timestamp
+                'waktu' => $wibTime->format('Y-m-d H:i:s')
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Failed to log audience activity: ' . $e->getMessage());
