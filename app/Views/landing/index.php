@@ -424,43 +424,101 @@ foreach ($sponsors as $sp) {
             </div>
         <?php endif; ?>
 
-        <!-- Vision & Mission -->
-        <div class="row g-4 mt-4">
-            <div class="col-md-6">
-                <div class="vision-mission-card animate-on-scroll">
-                    <div class="card-header-custom bg-primary text-white">
-                        <i class="fas fa-eye me-2"></i>
-                        <h4 class="mb-0">Visi</h4>
+        <!-- About Us Section -->
+    <section class="about-section py-5" id="about">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="section-title animate-on-scroll">Tentang SNIA</h2>
+                <p class="lead animate-on-scroll">Seminar Nasional Informatika dan Aplikasinya</p>
+            </div>
+            
+            <div class="row g-5 align-items-center mb-5">
+                <div class="col-lg-6">
+                    <div class="about-image-wrapper animate-on-scroll">
+                        <img src="<?= base_url('assets/img/sponsors/unjani.png') ?>" alt="Universitas Jenderal Achmad Yani" class="img-fluid rounded shadow-lg">
                     </div>
-                    <div class="card-body-custom">
-                        <p class="mb-0">
-                            Menjadi forum nasional terdepan dalam pengembangan dan penerapan ilmu informatika
-                            yang inovatif, berkualitas, dan berdampak nyata bagi kemajuan teknologi informasi
-                            di Indonesia.
+                </div>
+                <div class="col-lg-6">
+                    <div class="animate-on-scroll">
+                        <h3 class="fw-bold mb-4 text-primary">Tentang Seminar</h3>
+                        <p class="text-muted mb-3">
+                            <strong>SNIA (Seminar Nasional Informatika dan Aplikasinya)</strong> merupakan kegiatan seminar nasional yang diselenggarakan secara berkala setiap <strong>2 tahun sekali</strong> oleh Jurusan Informatika, Fakultas MIPA, Universitas Jenderal Achmad Yani (UNJANI) Cimahi.
                         </p>
+                        <p class="text-muted mb-3">
+                            Seminar ini bertujuan untuk menjadi wadah bagi akademisi, peneliti, praktisi, dan mahasiswa dalam berbagi pengetahuan, pengalaman, serta hasil penelitian terkini di bidang informatika dan aplikasinya.
+                        </p>
+                        <p class="text-muted mb-4">
+                            Melalui SNIA, kami berkomitmen untuk mendorong perkembangan ilmu pengetahuan dan teknologi informasi di Indonesia, serta membangun kolaborasi yang berkelanjutan antar institusi pendidikan, industri, dan pemerintah.
+                        </p>
+                        
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <div class="feature-box p-3 bg-light rounded text-center">
+                                    <i class="fas fa-users text-primary fs-2 mb-2"></i>
+                                    <h4 class="mb-1 fw-bold text-primary">500+</h4>
+                                    <small class="text-muted">Peserta</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="feature-box p-3 bg-light rounded text-center">
+                                    <i class="fas fa-file-alt text-primary fs-2 mb-2"></i>
+                                    <h4 class="mb-1 fw-bold text-primary">100+</h4>
+                                    <small class="text-muted">Paper Presented</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="feature-box p-3 bg-light rounded text-center">
+                                    <i class="fas fa-university text-primary fs-2 mb-2"></i>
+                                    <h4 class="mb-1 fw-bold text-primary">50+</h4>
+                                    <small class="text-muted">Institusi</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="feature-box p-3 bg-light rounded text-center">
+                                    <i class="fas fa-award text-primary fs-2 mb-2"></i>
+                                    <h4 class="mb-1 fw-bold text-primary">10+</h4>
+                                    <small class="text-muted">Tahun Pengalaman</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6">
-                <div class="vision-mission-card animate-on-scroll">
-                    <div class="card-header-custom bg-primary text-white">
-                        <i class="fas fa-bullseye me-2"></i>
-                        <h4 class="mb-0">Misi</h4>
+
+            <!-- Vision & Mission -->
+            <div class="row g-4 mt-5">
+                <div class="col-md-6">
+                    <div class="vision-mission-card animate-on-scroll">
+                        <div class="card-header-custom bg-primary text-white">
+                            <i class="fas fa-eye me-2"></i>
+                            <h4 class="mb-0">Visi</h4>
+                        </div>
+                        <div class="card-body-custom">
+                            <p class="mb-0">
+                                Menjadi forum nasional terdepan dalam pengembangan dan penerapan ilmu informatika yang inovatif, berkualitas, dan berdampak nyata bagi kemajuan teknologi informasi di Indonesia.
+                            </p>
+                        </div>
                     </div>
-                    <div class="card-body-custom">
-                        <ul class="mb-0 ps-3">
-                            <li class="mb-2">Menyediakan platform untuk publikasi dan diskusi penelitian informatika terkini</li>
-                            <li class="mb-2">Memfasilitasi kolaborasi antar akademisi, peneliti, dan praktisi</li>
-                            <li class="mb-2">Mendorong inovasi dan pengembangan teknologi informasi</li>
-                            <li>Meningkatkan kualitas pendidikan dan penelitian di bidang informatika</li>
-                        </ul>
+                </div>
+                <div class="col-md-6">
+                    <div class="vision-mission-card animate-on-scroll">
+                        <div class="card-header-custom bg-primary text-white">
+                            <i class="fas fa-bullseye me-2"></i>
+                            <h4 class="mb-0">Misi</h4>
+                        </div>
+                        <div class="card-body-custom">
+                            <ul class="mb-0 ps-3">
+                                <li class="mb-2">Menyediakan platform untuk publikasi dan diskusi penelitian informatika terkini</li>
+                                <li class="mb-2">Memfasilitasi kolaborasi antar akademisi, peneliti, dan praktisi</li>
+                                <li class="mb-2">Mendorong inovasi dan pengembangan teknologi informasi</li>
+                                <li>Meningkatkan kualitas pendidikan dan penelitian di bidang informatika</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-
-    </div>
-</section>
+    </section>
 
 <!-- Location Section -->
 <section class="py-5" id="location">
