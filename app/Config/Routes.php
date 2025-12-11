@@ -302,6 +302,26 @@ $routes->group('admin', [
     $routes->get ('fasilitas/detail/(:num)',           'Fasilitas::getDetail/$1');
     $routes->post('fasilitas/copy-to-event',           'Fasilitas::copyToEvent');
     
+    // ===== KELOLA LANDING PAGE =====
+    $routes->group('landing', static function ($routes) {
+    $routes->get('/', 'KelolaLanding::index');
+
+    // set / unset event landing + clear
+    $routes->post('set-event/(:num)',   'KelolaLanding::setEvent/$1');
+    $routes->post('unset-event/(:num)', 'KelolaLanding::unsetEvent/$1');
+    $routes->post('clear',              'KelolaLanding::clearLanding');
+
+    // halaman detail pengaturan landing
+    $routes->get('detail/(:num)',       'KelolaLanding::detail/$1');
+
+    // aksi poster / speaker / sponsor
+    $routes->post('poster/save/(:num)',           'KelolaLanding::savePoster/$1');
+    $routes->post('speaker/save/(:num)',          'KelolaLanding::saveSpeaker/$1');
+
+    $routes->post('sponsor/save/(:num)',          'KelolaLanding::saveSponsor/$1');
+    $routes->post('sponsor/update/(:num)/(:num)', 'KelolaLanding::updateSponsor/$1/$2');
+    $routes->post('sponsor/delete/(:num)/(:num)', 'KelolaLanding::deleteSponsor/$1/$2');
+    });
 
     // ===== LAPORAN =====
     $routes->get('laporan',                            'Laporan::index');

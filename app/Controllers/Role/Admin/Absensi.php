@@ -36,6 +36,7 @@ class Absensi extends BaseController
         
         // Get attendance data
         $absensiData = [];
+        $absentData = [];
         $currentEvent = null;
         $eventStats = [];
         
@@ -44,7 +45,7 @@ class Absensi extends BaseController
             $currentEvent = $this->eventModel->find($selectedEventId);
             
             if ($currentEvent) {
-                // Get attendance with user and payment info
+                // Get attendance with user and payment info (YANG SUDAH HADIR)
                 $absensiData = $this->db->table('absensi')
                     ->select('
                         absensi.id_absensi,
@@ -53,6 +54,7 @@ class Absensi extends BaseController
                         absensi.marked_by_admin,
                         absensi.notes,
                         absensi.qr_code,
+                        users.id_user,
                         users.nama_lengkap,
                         users.email,
                         users.role,
@@ -71,6 +73,31 @@ class Absensi extends BaseController
                     ->orderBy('absensi.waktu_scan', 'DESC')
                     ->get()->getResultArray();
 
+                // Get users who are registered but haven't attended (YANG BELUM HADIR)
+                // FIXED: Removed bukti_path column
+                $absentData = $this->db->table('pembayaran')
+                    ->select('
+                        users.id_user,
+                        users.nama_lengkap,
+                        users.email,
+                        users.role,
+                        users.institusi,
+                        users.no_hp,
+                        pembayaran.participation_type,
+                        pembayaran.jumlah as payment_amount
+                    ')
+                    ->join('users', 'users.id_user = pembayaran.id_user')
+                    ->where('pembayaran.event_id', $selectedEventId)
+                    ->where('pembayaran.status', 'verified')
+                    ->where('users.status', 'aktif')
+                    ->whereNotIn('pembayaran.id_user', function($builder) use ($selectedEventId) {
+                        return $builder->select('id_user')
+                                      ->from('absensi')
+                                      ->where('event_id', $selectedEventId);
+                    })
+                    ->orderBy('users.nama_lengkap', 'ASC')
+                    ->get()->getResultArray();
+
                 // Get event statistics
                 $totalRegistered = $this->pembayaranModel
                     ->where('event_id', $selectedEventId)
@@ -81,6 +108,36 @@ class Absensi extends BaseController
                     ->where('event_id', $selectedEventId)
                     ->where('status', 'hadir')
                     ->countAllResults();
+
+                // Count absent by role
+                $absentByRole = $this->db->table('pembayaran')
+                    ->select('users.role, COUNT(*) as count')
+                    ->join('users', 'users.id_user = pembayaran.id_user')
+                    ->where('pembayaran.event_id', $selectedEventId)
+                    ->where('pembayaran.status', 'verified')
+                    ->where('users.status', 'aktif')
+                    ->whereNotIn('pembayaran.id_user', function($builder) use ($selectedEventId) {
+                        return $builder->select('id_user')
+                                      ->from('absensi')
+                                      ->where('event_id', $selectedEventId);
+                    })
+                    ->groupBy('users.role')
+                    ->get()->getResultArray();
+
+                // Count absent by participation type
+                $absentByParticipation = $this->db->table('pembayaran')
+                    ->select('pembayaran.participation_type, COUNT(*) as count')
+                    ->join('users', 'users.id_user = pembayaran.id_user')
+                    ->where('pembayaran.event_id', $selectedEventId)
+                    ->where('pembayaran.status', 'verified')
+                    ->where('users.status', 'aktif')
+                    ->whereNotIn('pembayaran.id_user', function($builder) use ($selectedEventId) {
+                        return $builder->select('id_user')
+                                      ->from('absensi')
+                                      ->where('event_id', $selectedEventId);
+                    })
+                    ->groupBy('pembayaran.participation_type')
+                    ->get()->getResultArray();
 
                 $attendanceByRole = $this->db->table('absensi')
                     ->select('users.role, COUNT(*) as count')
@@ -93,8 +150,11 @@ class Absensi extends BaseController
                 $eventStats = [
                     'total_registered' => $totalRegistered,
                     'total_attended' => $totalAttended,
+                    'total_absent' => count($absentData),
                     'attendance_rate' => $totalRegistered > 0 ? round(($totalAttended / $totalRegistered) * 100, 2) : 0,
-                    'by_role' => array_column($attendanceByRole, 'count', 'role')
+                    'by_role' => array_column($attendanceByRole, 'count', 'role'),
+                    'absent_by_role' => array_column($absentByRole, 'count', 'role'),
+                    'absent_by_participation' => array_column($absentByParticipation, 'count', 'participation_type')
                 ];
 
                 // Enhanced event status calculation
@@ -115,6 +175,7 @@ class Absensi extends BaseController
             'selectedEventId' => $selectedEventId,
             'currentEvent' => $currentEvent,
             'absensiData' => $absensiData,
+            'absentData' => $absentData,
             'eventStats' => $eventStats
         ];
 
@@ -135,25 +196,20 @@ class Absensi extends BaseController
         }
 
         try {
-            // Set timezone
             date_default_timezone_set('Asia/Jakarta');
             
-            // Create event datetime
             $eventDateTime = new \DateTime($event['event_date'] . ' ' . $event['event_time']);
             $currentDateTime = new \DateTime();
             
-            // Calculate time differences in seconds
             $timeDiff = $currentDateTime->getTimestamp() - $eventDateTime->getTimestamp();
             $hoursDiff = $timeDiff / 3600;
             
-            // Debug logging
             log_message('info', 'Event Status Calculation - Event: ' . $event['title']);
             log_message('info', 'Event DateTime: ' . $eventDateTime->format('Y-m-d H:i:s'));
             log_message('info', 'Current DateTime: ' . $currentDateTime->format('Y-m-d H:i:s'));
             log_message('info', 'Hours Difference: ' . round($hoursDiff, 2));
             
             if ($hoursDiff < -1) {
-                // More than 1 hour before event
                 return [
                     'is_ongoing' => false,
                     'event_status' => 'Belum Dimulai',
@@ -161,7 +217,6 @@ class Absensi extends BaseController
                     'can_scan' => false
                 ];
             } elseif ($hoursDiff < 0) {
-                // Less than 1 hour before event
                 return [
                     'is_ongoing' => false,
                     'event_status' => 'Segera Dimulai',
@@ -169,7 +224,6 @@ class Absensi extends BaseController
                     'can_scan' => true
                 ];
             } elseif ($hoursDiff <= 4) {
-                // Within 4 hours after start
                 return [
                     'is_ongoing' => true,
                     'event_status' => 'Sedang Berlangsung',
@@ -177,7 +231,6 @@ class Absensi extends BaseController
                     'can_scan' => true
                 ];
             } else {
-                // More than 4 hours after start
                 return [
                     'is_ongoing' => false,
                     'event_status' => 'Sudah Selesai',
@@ -194,6 +247,453 @@ class Absensi extends BaseController
                 'badge_class' => 'bg-secondary',
                 'can_scan' => false
             ];
+        }
+    }
+
+    public function export()
+{
+    $eventId = $this->request->getGet('event_id');
+    
+    if (!$eventId) {
+        return redirect()->back()->with('error', 'Event ID is required for export');
+    }
+
+    $event = $this->eventModel->find($eventId);
+    
+    if (!$event) {
+        return redirect()->back()->with('error', 'Event not found');
+    }
+
+    // Get attendance data (YANG SUDAH HADIR)
+    $attendanceData = $this->db->table('absensi')
+        ->select('
+            users.nama_lengkap,
+            users.email,
+            users.role,
+            users.no_hp,
+            users.institusi,
+            absensi.waktu_scan,
+            absensi.status,
+            absensi.qr_code,
+            absensi.notes,
+            pembayaran.jumlah as payment_amount,
+            pembayaran.participation_type,
+            admin.nama_lengkap as marked_by_admin_name
+        ')
+        ->join('users', 'users.id_user = absensi.id_user')
+        ->join('pembayaran', 'pembayaran.id_user = absensi.id_user AND pembayaran.event_id = absensi.event_id', 'left')
+        ->join('users as admin', 'admin.id_user = absensi.marked_by_admin', 'left')
+        ->where('absensi.event_id', $eventId)
+        ->orderBy('absensi.waktu_scan', 'ASC')
+        ->get()->getResultArray();
+
+    // Get absent data (YANG BELUM HADIR)
+    $absentData = $this->db->table('pembayaran')
+        ->select('
+            users.nama_lengkap,
+            users.email,
+            users.role,
+            users.no_hp,
+            users.institusi,
+            pembayaran.participation_type,
+            pembayaran.jumlah as payment_amount
+        ')
+        ->join('users', 'users.id_user = pembayaran.id_user')
+        ->where('pembayaran.event_id', $eventId)
+        ->where('pembayaran.status', 'verified')
+        ->where('users.status', 'aktif')
+        ->whereNotIn('pembayaran.id_user', function($builder) use ($eventId) {
+            return $builder->select('id_user')
+                          ->from('absensi')
+                          ->where('event_id', $eventId);
+        })
+        ->orderBy('users.nama_lengkap', 'ASC')
+        ->get()->getResultArray();
+
+    // Separate data by role and participation type
+    $attendedGroups = [
+        'audience_online' => [],
+        'audience_offline' => [],
+        'presenter_online' => [],
+        'presenter_offline' => []
+    ];
+
+    $absentGroups = [
+        'audience_online' => [],
+        'audience_offline' => [],
+        'presenter_online' => [],
+        'presenter_offline' => []
+    ];
+
+    // Categorize attended data
+    foreach ($attendanceData as $row) {
+        $role = strtolower($row['role'] ?? 'audience');
+        $participationType = strtolower($row['participation_type'] ?? 'offline');
+        
+        $key = $role . '_' . $participationType;
+        if (isset($attendedGroups[$key])) {
+            $attendedGroups[$key][] = $row;
+        }
+    }
+
+    // Categorize absent data
+    foreach ($absentData as $row) {
+        $role = strtolower($row['role'] ?? 'audience');
+        $participationType = strtolower($row['participation_type'] ?? 'offline');
+        
+        $key = $role . '_' . $participationType;
+        if (isset($absentGroups[$key])) {
+            $absentGroups[$key][] = $row;
+        }
+    }
+
+    // Calculate statistics
+    $stats = [
+        'audience_online_attended' => count($attendedGroups['audience_online']),
+        'audience_offline_attended' => count($attendedGroups['audience_offline']),
+        'presenter_online_attended' => count($attendedGroups['presenter_online']),
+        'presenter_offline_attended' => count($attendedGroups['presenter_offline']),
+        'audience_online_absent' => count($absentGroups['audience_online']),
+        'audience_offline_absent' => count($absentGroups['audience_offline']),
+        'presenter_online_absent' => count($absentGroups['presenter_online']),
+        'presenter_offline_absent' => count($absentGroups['presenter_offline']),
+        'total_attended' => count($attendanceData),
+        'total_absent' => count($absentData),
+        'total_registered' => count($attendanceData) + count($absentData)
+    ];
+
+    // Set headers for CSV download
+    $filename = 'Attendance_Report_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $event['title']) . '_' . date('Ymd_His') . '.csv';
+    
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Cache-Control: no-cache, must-revalidate');
+    header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
+    
+    $output = fopen('php://output', 'w');
+    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+    
+    // Write event header
+    fputcsv($output, ['LAPORAN ABSENSI EVENT']);
+    fputcsv($output, ['Event:', $event['title']]);
+    fputcsv($output, ['Tanggal:', date('d F Y', strtotime($event['event_date']))]);
+    fputcsv($output, ['Waktu:', date('H:i', strtotime($event['event_time'])) . ' WIB']);
+    fputcsv($output, ['Format:', ucfirst($event['format'])]);
+    fputcsv($output, ['Lokasi:', $event['location'] ?? '-']);
+    fputcsv($output, []);
+    
+    // Write statistics summary
+    fputcsv($output, ['RINGKASAN KEHADIRAN']);
+    fputcsv($output, ['Total Terdaftar:', $stats['total_registered']]);
+    fputcsv($output, ['Total Hadir:', $stats['total_attended']]);
+    fputcsv($output, ['Total Belum Hadir:', $stats['total_absent']]);
+    fputcsv($output, ['Tingkat Kehadiran:', round(($stats['total_attended'] / max($stats['total_registered'], 1)) * 100, 2) . '%']);
+    fputcsv($output, []);
+    fputcsv($output, ['Detail Kehadiran:']);
+    fputcsv($output, ['Audience Online - Hadir:', $stats['audience_online_attended'], '| Belum Hadir:', $stats['audience_online_absent']]);
+    fputcsv($output, ['Audience Offline - Hadir:', $stats['audience_offline_attended'], '| Belum Hadir:', $stats['audience_offline_absent']]);
+    fputcsv($output, ['Presenter Online - Hadir:', $stats['presenter_online_attended'], '| Belum Hadir:', $stats['presenter_online_absent']]);
+    fputcsv($output, ['Presenter Offline - Hadir:', $stats['presenter_offline_attended'], '| Belum Hadir:', $stats['presenter_offline_absent']]);
+    fputcsv($output, []);
+    fputcsv($output, []);
+    
+    // === SECTION 1: PESERTA YANG SUDAH HADIR ===
+    fputcsv($output, ['============================================']);
+    fputcsv($output, ['PESERTA YANG SUDAH HADIR']);
+    fputcsv($output, ['============================================']);
+    fputcsv($output, []);
+    
+    // 1.1 Audience Online - Hadir
+    fputcsv($output, ['=== AUDIENCE ONLINE (HADIR) ===']);
+    fputcsv($output, ['Total:', $stats['audience_online_attended']]);
+    fputcsv($output, []);
+    if (!empty($attendedGroups['audience_online'])) {
+        fputcsv($output, ['No', 'Nama Lengkap', 'Email', 'No. HP', 'Institusi', 'Waktu Absen', 'Status', 'QR Code', 'Jumlah Pembayaran', 'Ditandai Oleh', 'Catatan']);
+        $no = 1;
+        foreach ($attendedGroups['audience_online'] as $row) {
+            fputcsv($output, [
+                $no++,
+                $row['nama_lengkap'] ?? '',
+                $row['email'] ?? '',
+                $row['no_hp'] ?? '',
+                $row['institusi'] ?? '',
+                $row['waktu_scan'] ? date('d/m/Y H:i:s', strtotime($row['waktu_scan'])) : '',
+                ucfirst($row['status'] ?? ''),
+                $row['qr_code'] ?? '',
+                $row['payment_amount'] ? 'Rp ' . number_format($row['payment_amount'], 0, ',', '.') : '',
+                $row['marked_by_admin_name'] ? 'Admin: ' . $row['marked_by_admin_name'] : 'QR Scan',
+                $row['notes'] ?? ''
+            ]);
+        }
+    } else {
+        fputcsv($output, ['Tidak ada data']);
+    }
+    fputcsv($output, []);
+    fputcsv($output, []);
+    
+    // 1.2 Audience Offline - Hadir
+    fputcsv($output, ['=== AUDIENCE OFFLINE (HADIR) ===']);
+    fputcsv($output, ['Total:', $stats['audience_offline_attended']]);
+    fputcsv($output, []);
+    if (!empty($attendedGroups['audience_offline'])) {
+        fputcsv($output, ['No', 'Nama Lengkap', 'Email', 'No. HP', 'Institusi', 'Waktu Absen', 'Status', 'QR Code', 'Jumlah Pembayaran', 'Ditandai Oleh', 'Catatan']);
+        $no = 1;
+        foreach ($attendedGroups['audience_offline'] as $row) {
+            fputcsv($output, [
+                $no++,
+                $row['nama_lengkap'] ?? '',
+                $row['email'] ?? '',
+                $row['no_hp'] ?? '',
+                $row['institusi'] ?? '',
+                $row['waktu_scan'] ? date('d/m/Y H:i:s', strtotime($row['waktu_scan'])) : '',
+                ucfirst($row['status'] ?? ''),
+                $row['qr_code'] ?? '',
+                $row['payment_amount'] ? 'Rp ' . number_format($row['payment_amount'], 0, ',', '.') : '',
+                $row['marked_by_admin_name'] ? 'Admin: ' . $row['marked_by_admin_name'] : 'QR Scan',
+                $row['notes'] ?? ''
+            ]);
+        }
+    } else {
+        fputcsv($output, ['Tidak ada data']);
+    }
+    fputcsv($output, []);
+    fputcsv($output, []);
+    
+    // 1.3 Presenter Online - Hadir
+    fputcsv($output, ['=== PRESENTER ONLINE (HADIR) ===']);
+    fputcsv($output, ['Total:', $stats['presenter_online_attended']]);
+    fputcsv($output, []);
+    if (!empty($attendedGroups['presenter_online'])) {
+        fputcsv($output, ['No', 'Nama Lengkap', 'Email', 'No. HP', 'Institusi', 'Waktu Absen', 'Status', 'QR Code', 'Jumlah Pembayaran', 'Ditandai Oleh', 'Catatan']);
+        $no = 1;
+        foreach ($attendedGroups['presenter_online'] as $row) {
+            fputcsv($output, [
+                $no++,
+                $row['nama_lengkap'] ?? '',
+                $row['email'] ?? '',
+                $row['no_hp'] ?? '',
+                $row['institusi'] ?? '',
+                $row['waktu_scan'] ? date('d/m/Y H:i:s', strtotime($row['waktu_scan'])) : '',
+                ucfirst($row['status'] ?? ''),
+                $row['qr_code'] ?? '',
+                $row['payment_amount'] ? 'Rp ' . number_format($row['payment_amount'], 0, ',', '.') : '',
+                $row['marked_by_admin_name'] ? 'Admin: ' . $row['marked_by_admin_name'] : 'QR Scan',
+                $row['notes'] ?? ''
+            ]);
+        }
+    } else {
+        fputcsv($output, ['Tidak ada data']);
+    }
+    fputcsv($output, []);
+    fputcsv($output, []);
+    
+    // 1.4 Presenter Offline - Hadir
+    fputcsv($output, ['=== PRESENTER OFFLINE (HADIR) ===']);
+    fputcsv($output, ['Total:', $stats['presenter_offline_attended']]);
+    fputcsv($output, []);
+    if (!empty($attendedGroups['presenter_offline'])) {
+        fputcsv($output, ['No', 'Nama Lengkap', 'Email', 'No. HP', 'Institusi', 'Waktu Absen', 'Status', 'QR Code', 'Jumlah Pembayaran', 'Ditandai Oleh', 'Catatan']);
+        $no = 1;
+        foreach ($attendedGroups['presenter_offline'] as $row) {
+            fputcsv($output, [
+                $no++,
+                $row['nama_lengkap'] ?? '',
+                $row['email'] ?? '',
+                $row['no_hp'] ?? '',
+                $row['institusi'] ?? '',
+                $row['waktu_scan'] ? date('d/m/Y H:i:s', strtotime($row['waktu_scan'])) : '',
+                ucfirst($row['status'] ?? ''),
+                $row['qr_code'] ?? '',
+                $row['payment_amount'] ? 'Rp ' . number_format($row['payment_amount'], 0, ',', '.') : '',
+                $row['marked_by_admin_name'] ? 'Admin: ' . $row['marked_by_admin_name'] : 'QR Scan',
+                $row['notes'] ?? ''
+            ]);
+        }
+    } else {
+        fputcsv($output, ['Tidak ada data']);
+    }
+    fputcsv($output, []);
+    fputcsv($output, []);
+    
+    // === SECTION 2: PESERTA YANG BELUM HADIR ===
+    fputcsv($output, ['============================================']);
+    fputcsv($output, ['PESERTA YANG BELUM HADIR']);
+    fputcsv($output, ['============================================']);
+    fputcsv($output, []);
+    
+    // 2.1 Audience Online - Belum Hadir
+    fputcsv($output, ['=== AUDIENCE ONLINE (BELUM HADIR) ===']);
+    fputcsv($output, ['Total:', $stats['audience_online_absent']]);
+    fputcsv($output, []);
+    if (!empty($absentGroups['audience_online'])) {
+        fputcsv($output, ['No', 'Nama Lengkap', 'Email', 'No. HP', 'Institusi', 'Jumlah Pembayaran', 'Status']);
+        $no = 1;
+        foreach ($absentGroups['audience_online'] as $row) {
+            fputcsv($output, [
+                $no++,
+                $row['nama_lengkap'] ?? '',
+                $row['email'] ?? '',
+                $row['no_hp'] ?? '',
+                $row['institusi'] ?? '',
+                $row['payment_amount'] ? 'Rp ' . number_format($row['payment_amount'], 0, ',', '.') : '',
+                'Belum Hadir'
+            ]);
+        }
+    } else {
+        fputcsv($output, ['Tidak ada data']);
+    }
+    fputcsv($output, []);
+    fputcsv($output, []);
+    
+    // 2.2 Audience Offline - Belum Hadir
+    fputcsv($output, ['=== AUDIENCE OFFLINE (BELUM HADIR) ===']);
+    fputcsv($output, ['Total:', $stats['audience_offline_absent']]);
+    fputcsv($output, []);
+    if (!empty($absentGroups['audience_offline'])) {
+        fputcsv($output, ['No', 'Nama Lengkap', 'Email', 'No. HP', 'Institusi', 'Jumlah Pembayaran', 'Status']);
+        $no = 1;
+        foreach ($absentGroups['audience_offline'] as $row) {
+            fputcsv($output, [
+                $no++,
+                $row['nama_lengkap'] ?? '',
+                $row['email'] ?? '',
+                $row['no_hp'] ?? '',
+                $row['institusi'] ?? '',
+                $row['payment_amount'] ? 'Rp ' . number_format($row['payment_amount'], 0, ',', '.') : '',
+                'Belum Hadir'
+            ]);
+        }
+    } else {
+        fputcsv($output, ['Tidak ada data']);
+    }
+    fputcsv($output, []);
+    fputcsv($output, []);
+    
+    // 2.3 Presenter Online - Belum Hadir
+    fputcsv($output, ['=== PRESENTER ONLINE (BELUM HADIR) ===']);
+    fputcsv($output, ['Total:', $stats['presenter_online_absent']]);
+    fputcsv($output, []);
+    if (!empty($absentGroups['presenter_online'])) {
+        fputcsv($output, ['No', 'Nama Lengkap', 'Email', 'No. HP', 'Institusi', 'Jumlah Pembayaran', 'Status']);
+        $no = 1;
+        foreach ($absentGroups['presenter_online'] as $row) {
+            fputcsv($output, [
+                $no++,
+                $row['nama_lengkap'] ?? '',
+                $row['email'] ?? '',
+                $row['no_hp'] ?? '',
+                $row['institusi'] ?? '',
+                $row['payment_amount'] ? 'Rp ' . number_format($row['payment_amount'], 0, ',', '.') : '',
+                'Belum Hadir'
+            ]);
+        }
+    } else {
+        fputcsv($output, ['Tidak ada data']);
+    }
+    fputcsv($output, []);
+    fputcsv($output, []);
+    
+    // 2.4 Presenter Offline - Belum Hadir
+    fputcsv($output, ['=== PRESENTER OFFLINE (BELUM HADIR) ===']);
+    fputcsv($output, ['Total:', $stats['presenter_offline_absent']]);
+    fputcsv($output, []);
+    if (!empty($absentGroups['presenter_offline'])) {
+        fputcsv($output, ['No', 'Nama Lengkap', 'Email', 'No. HP', 'Institusi', 'Jumlah Pembayaran', 'Status']);
+        $no = 1;
+        foreach ($absentGroups['presenter_offline'] as $row) {
+            fputcsv($output, [
+                $no++,
+                $row['nama_lengkap'] ?? '',
+                $row['email'] ?? '',
+                $row['no_hp'] ?? '',
+                $row['institusi'] ?? '',
+                $row['payment_amount'] ? 'Rp ' . number_format($row['payment_amount'], 0, ',', '.') : '',
+                'Belum Hadir'
+            ]);
+        }
+    } else {
+        fputcsv($output, ['Tidak ada data']);
+    }
+    fputcsv($output, []);
+    fputcsv($output, []);
+    
+    // Add footer
+    fputcsv($output, ['============================================']);
+    fputcsv($output, ['Diekspor pada:', date('d/m/Y H:i:s')]);
+    fputcsv($output, ['Diekspor oleh:', session('nama_lengkap')]);
+    
+    fclose($output);
+    
+    // Log export activity
+    $this->logActivity(
+        session('id_user'), 
+        "Exported attendance report for event: {$event['title']} - " .
+        "Total Registered: {$stats['total_registered']}, Attended: {$stats['total_attended']}, Absent: {$stats['total_absent']}"
+    );
+    
+    exit;
+}
+
+    public function liveStats()
+    {
+        $eventId = $this->request->getGet('event_id');
+        
+        if (!$eventId) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Event ID is required'
+            ]);
+        }
+
+        try {
+            $totalRegistered = $this->pembayaranModel
+                ->where('event_id', $eventId)
+                ->where('status', 'verified')
+                ->countAllResults();
+
+            $totalAttended = $this->absensiModel
+                ->where('event_id', $eventId)
+                ->where('status', 'hadir')
+                ->countAllResults();
+
+            $recentAttendance = $this->absensiModel
+                ->where('event_id', $eventId)
+                ->where('waktu_scan >=', date('Y-m-d H:i:s', strtotime('-10 minutes')))
+                ->countAllResults();
+
+            $qrScans = $this->absensiModel
+                ->where('event_id', $eventId)
+                ->where('marked_by_admin IS NULL')
+                ->countAllResults();
+
+            $manualMarks = $this->absensiModel
+                ->where('event_id', $eventId)
+                ->where('marked_by_admin IS NOT NULL')
+                ->countAllResults();
+
+            $totalAbsent = $totalRegistered - $totalAttended;
+
+            return $this->response->setJSON([
+                'success' => true,
+                'stats' => [
+                    'total_registered' => $totalRegistered,
+                    'total_attended' => $totalAttended,
+                    'total_absent' => $totalAbsent,
+                    'attendance_rate' => $totalRegistered > 0 ? round(($totalAttended / $totalRegistered) * 100, 2) : 0,
+                    'recent_attendance' => $recentAttendance,
+                    'qr_scans' => $qrScans,
+                    'manual_marks' => $manualMarks,
+                    'last_updated' => date('H:i:s')
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', 'Live stats error: ' . $e->getMessage());
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Failed to get live statistics'
+            ]);
         }
     }
 
@@ -220,13 +720,9 @@ class Absensi extends BaseController
             ]);
         }
 
-        // Generate only 3 QR codes
         $qrCodes = $this->generateEventQRCodes($eventId, $event);
-        
-        // Get accurate event status
         $eventStatus = $this->calculateEventStatus($event);
 
-        // Log QR generation
         $this->logActivity(session('id_user'), "Generated 3 QR codes for event: {$event['title']} (ID: {$eventId})");
 
         return $this->response->setJSON([
@@ -245,17 +741,13 @@ class Absensi extends BaseController
     }
 
     /**
-     * Generate QR codes - MODIFIED to generate only 3 QR codes
-     * 1. Universal QR - For all roles and participation types
-     * 2. Presenter QR - For presenters (online & offline)
-     * 3. Audience QR - For audience (online & offline)
+     * Generate QR codes - 3 QR codes only
      */
     private function generateEventQRCodes($eventId, $event)
     {
         $baseUrl = site_url('qr/');
         $qrCodes = [];
         
-        // Define only 3 QR code combinations
         $combinations = [
             [
                 'role' => 'all',
@@ -286,7 +778,6 @@ class Absensi extends BaseController
             ]
         ];
 
-        // Generate QR codes
         foreach ($combinations as $combo) {
             $qrToken = $this->generateQRToken($eventId, $combo['role'], $combo['participation']);
             
@@ -304,7 +795,6 @@ class Absensi extends BaseController
             ];
         }
 
-        // Sort by priority
         usort($qrCodes, function($a, $b) {
             return $a['priority'] - $b['priority'];
         });
@@ -312,16 +802,12 @@ class Absensi extends BaseController
         return $qrCodes;
     }
 
-    /**
-     * Generate QR token with enhanced security
-     */
     private function generateQRToken($eventId, $role = 'all', $participationType = 'all', $date = null)
     {
         if (!$date) {
             $date = date('Ymd');
         }
 
-        // Generate security hash
         $secretKey = getenv('app.encryption.key') ?: 'SNIA_QR_SECRET_KEY_2024';
         $data = $eventId . $role . $participationType . $date . $secretKey;
         $securityHash = substr(hash('sha256', $data), 0, 16);
@@ -329,19 +815,11 @@ class Absensi extends BaseController
         return "EVENT_{$eventId}_{$role}_{$participationType}_{$date}_{$securityHash}";
     }
 
-    /**
-     * Generate QR code as data URL for immediate display
-     */
     private function generateQRDataURL($token, $color = '#2563eb')
     {
-        // This is a placeholder - in real implementation, you'd use a QR library
-        // For now, we'll return a placeholder that the frontend can replace
         return "data:image/svg+xml;base64," . base64_encode($this->generateQRSVG($token, $color));
     }
 
-    /**
-     * Generate simple QR-like SVG as placeholder
-     */
     private function generateQRSVG($token, $color)
     {
         return "<svg width='200' height='200' xmlns='http://www.w3.org/2000/svg'>
@@ -356,9 +834,6 @@ class Absensi extends BaseController
         </svg>";
     }
 
-    /**
-     * Get current event status via AJAX
-     */
     public function getEventStatus()
     {
         $eventId = $this->request->getGet('event_id');
@@ -390,6 +865,57 @@ class Absensi extends BaseController
         ]);
     }
 
+    /**
+     * Get eligible users for bulk/manual marking via AJAX
+     */
+    public function getEligibleUsers()
+    {
+        $eventId = $this->request->getGet('event_id');
+        
+        if (!$eventId) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Event ID is required'
+            ]);
+        }
+
+        try {
+            // Get users with verified payment who haven't attended
+            $eligibleUsers = $this->db->table('pembayaran')
+                ->select('
+                    users.id_user,
+                    users.nama_lengkap,
+                    users.email,
+                    users.role,
+                    users.institusi,
+                    pembayaran.participation_type
+                ')
+                ->join('users', 'users.id_user = pembayaran.id_user')
+                ->where('pembayaran.event_id', $eventId)
+                ->where('pembayaran.status', 'verified')
+                ->where('users.status', 'aktif')
+                ->whereNotIn('pembayaran.id_user', function($builder) use ($eventId) {
+                    return $builder->select('id_user')
+                                  ->from('absensi')->where('event_id', $eventId);
+                })
+                ->orderBy('users.nama_lengkap', 'ASC')
+                ->get()->getResultArray();
+
+            return $this->response->setJSON([
+                'success' => true,
+                'users' => $eligibleUsers
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', 'Get eligible users error: ' . $e->getMessage());
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Failed to fetch eligible users: ' . $e->getMessage()
+            ]);
+        }
+    }
+
     public function markAttendance()
     {
         $userId = $this->request->getPost('user_id');
@@ -397,7 +923,6 @@ class Absensi extends BaseController
         $notes = $this->request->getPost('notes');
         $adminId = session('id_user');
 
-        // Validate inputs
         if (!$userId || !$eventId) {
             return $this->response->setJSON([
                 'success' => false,
@@ -405,7 +930,6 @@ class Absensi extends BaseController
             ]);
         }
 
-        // Get user details for better error messages
         $user = $this->userModel->find($userId);
         if (!$user) {
             return $this->response->setJSON([
@@ -414,7 +938,6 @@ class Absensi extends BaseController
             ]);
         }
 
-        // Check if user has verified payment for this event
         $verifiedPayment = $this->pembayaranModel
             ->where('id_user', $userId)
             ->where('event_id', $eventId)
@@ -428,7 +951,6 @@ class Absensi extends BaseController
             ]);
         }
 
-        // Check if already attended
         $existingAttendance = $this->absensiModel
             ->where('id_user', $userId)
             ->where('event_id', $eventId)
@@ -441,15 +963,12 @@ class Absensi extends BaseController
             ]);
         }
 
-        // Get event details
         $event = $this->eventModel->find($eventId);
         $qrCode = 'ADMIN_' . $eventId . '_' . date('Ymd') . '_MANUAL_' . $userId;
 
-        // Begin transaction
         $this->db->transStart();
 
         try {
-            // Mark attendance
             $data = [
                 'id_user' => $userId,
                 'event_id' => $eventId,
@@ -466,7 +985,6 @@ class Absensi extends BaseController
                 throw new \Exception('Failed to insert attendance record');
             }
 
-            // Log activity
             $this->logActivity($adminId, "Manually marked attendance for {$user['nama_lengkap']} in event: {$event['title']}");
             
             $this->db->transComplete();
@@ -512,15 +1030,12 @@ class Absensi extends BaseController
             ]);
         }
 
-        // Get user info for logging
         $user = $this->userModel->find($attendance['id_user']);
         $event = $this->eventModel->find($attendance['event_id']);
 
-        // Begin transaction
         $this->db->transStart();
 
         try {
-            // Store attendance data for audit log
             $auditData = [
                 'deleted_attendance_data' => json_encode($attendance),
                 'deleted_by' => $adminId,
@@ -528,7 +1043,6 @@ class Absensi extends BaseController
                 'reason' => 'Manual deletion by admin'
             ];
 
-            // Try to insert audit log
             try {
                 if ($this->db->tableExists('attendance_audit_log')) {
                     $this->db->table('attendance_audit_log')->insert($auditData);
@@ -537,12 +1051,10 @@ class Absensi extends BaseController
                 log_message('info', 'Audit log not available: ' . $e->getMessage());
             }
 
-            // Delete the attendance record
             if (!$this->absensiModel->delete($attendanceId)) {
                 throw new \Exception('Failed to delete attendance record');
             }
 
-            // Log activity
             $userName = $user ? $user['nama_lengkap'] : 'Unknown User';
             $eventName = $event ? $event['title'] : 'Unknown Event';
             $this->logActivity($adminId, "Removed attendance record for {$userName} in event: {$eventName}");
@@ -606,14 +1118,12 @@ class Absensi extends BaseController
         $errors = [];
         $successNames = [];
 
-        // Begin transaction
         $this->db->transStart();
 
         try {
             foreach ($userIds as $userId) {
                 $userId = (int) $userId;
                 
-                // Get user details
                 $user = $this->userModel->find($userId);
                 if (!$user) {
                     $errorCount++;
@@ -621,7 +1131,6 @@ class Absensi extends BaseController
                     continue;
                 }
 
-                // Check payment verification
                 $verifiedPayment = $this->pembayaranModel
                     ->where('id_user', $userId)
                     ->where('event_id', $eventId)
@@ -634,7 +1143,6 @@ class Absensi extends BaseController
                     continue;
                 }
 
-                // Check existing attendance
                 $existingAttendance = $this->absensiModel
                     ->where('id_user', $userId)
                     ->where('event_id', $eventId)
@@ -646,7 +1154,6 @@ class Absensi extends BaseController
                     continue;
                 }
 
-                // Mark attendance
                 $data = [
                     'id_user' => $userId,
                     'event_id' => $eventId,
@@ -672,7 +1179,6 @@ class Absensi extends BaseController
                 throw new \Exception('Transaction failed');
             }
 
-            // Log activity
             $successNamesStr = implode(', ', array_slice($successNames, 0, 5));
             if (count($successNames) > 5) {
                 $successNamesStr .= ' and ' . (count($successNames) - 5) . ' others';
@@ -699,272 +1205,6 @@ class Absensi extends BaseController
             return $this->response->setJSON([
                 'success' => false,
                 'message' => 'Bulk operation failed: ' . $e->getMessage()
-            ]);
-        }
-    }
-
-    public function getEligibleUsers()
-    {
-        $eventId = $this->request->getGet('event_id');
-        
-        if (!$eventId) {
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Event ID is required'
-            ]);
-        }
-
-        try {
-            // Get users with verified payments who haven't attended yet
-            $eligibleUsers = $this->db->table('pembayaran')
-                ->select('users.id_user, users.nama_lengkap, users.email, users.role, users.institusi, pembayaran.participation_type')
-                ->join('users', 'users.id_user = pembayaran.id_user')
-                ->where('pembayaran.event_id', $eventId)
-                ->where('pembayaran.status', 'verified')
-                ->where('users.status', 'aktif')
-                ->whereNotIn('pembayaran.id_user', function($builder) use ($eventId) {
-                    return $builder->select('id_user')
-                                  ->from('absensi')
-                                  ->where('event_id', $eventId);
-                })
-                ->orderBy('users.nama_lengkap', 'ASC')
-                ->get()->getResultArray();
-
-            return $this->response->setJSON([
-                'success' => true,
-                'users' => $eligibleUsers,
-                'count' => count($eligibleUsers)
-            ]);
-
-        } catch (\Exception $e) {
-            log_message('error', 'Get eligible users error: ' . $e->getMessage());
-            
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Failed to fetch eligible users: ' . $e->getMessage(),
-                'users' => []
-            ]);
-        }
-    }
-
-    public function export()
-    {
-        $eventId = $this->request->getGet('event_id');
-        
-        if (!$eventId) {
-            return redirect()->back()->with('error', 'Event ID is required for export');
-        }
-
-        $event = $this->eventModel->find($eventId);
-        
-        if (!$event) {
-            return redirect()->back()->with('error', 'Event not found');
-        }
-
-        // Get attendance data with all details
-        $attendanceData = $this->db->table('absensi')
-            ->select('
-                users.nama_lengkap,
-                users.email,
-                users.role,
-                users.no_hp,
-                users.institusi,
-                absensi.waktu_scan,
-                absensi.status,
-                absensi.qr_code,
-                absensi.notes,
-                pembayaran.jumlah as payment_amount,
-                pembayaran.participation_type,
-                admin.nama_lengkap as marked_by_admin_name
-            ')
-            ->join('users', 'users.id_user = absensi.id_user')
-            ->join('pembayaran', 'pembayaran.id_user = absensi.id_user AND pembayaran.event_id = absensi.event_id', 'left')
-            ->join('users as admin', 'admin.id_user = absensi.marked_by_admin', 'left')
-            ->where('absensi.event_id', $eventId)
-            ->orderBy('absensi.waktu_scan', 'ASC')
-            ->get()->getResultArray();
-
-        // Calculate statistics by role and participation type
-        $stats = [
-            'audience_online' => 0,
-            'audience_offline' => 0,
-            'presenter_online' => 0,
-            'presenter_offline' => 0,
-            'total' => count($attendanceData)
-        ];
-
-        foreach ($attendanceData as $row) {
-            $role = strtolower($row['role'] ?? 'audience');
-            $participationType = strtolower($row['participation_type'] ?? 'offline');
-            
-            if ($role === 'presenter') {
-                if ($participationType === 'online') {
-                    $stats['presenter_online']++;
-                } else {
-                    $stats['presenter_offline']++;
-                }
-            } else {
-                if ($participationType === 'online') {
-                    $stats['audience_online']++;
-                } else {
-                    $stats['audience_offline']++;
-                }
-            }
-        }
-
-        // Set headers for CSV download
-        $filename = 'Attendance_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $event['title']) . '_' . date('Ymd_His') . '.csv';
-        
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Cache-Control: no-cache, must-revalidate');
-        header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
-        
-        // Open output stream
-        $output = fopen('php://output', 'w');
-        
-        // Add BOM for proper UTF-8 encoding in Excel
-        fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
-        
-        // Write event header
-        fputcsv($output, ['LAPORAN ABSENSI EVENT']);
-        fputcsv($output, ['Event:', $event['title']]);
-        fputcsv($output, ['Tanggal:', date('d F Y', strtotime($event['event_date']))]);
-        fputcsv($output, ['Waktu:', date('H:i', strtotime($event['event_time'])) . ' WIB']);
-        fputcsv($output, ['Format:', ucfirst($event['format'])]);
-        fputcsv($output, ['Lokasi:', $event['location'] ?? '-']);
-        fputcsv($output, []);
-        
-        // Write statistics summary
-        fputcsv($output, ['RINGKASAN KEHADIRAN']);
-        fputcsv($output, ['Total Kehadiran:', $stats['total']]);
-        fputcsv($output, []);
-        fputcsv($output, ['Berdasarkan Role & Partisipasi:']);
-        fputcsv($output, ['Audience Online:', $stats['audience_online']]);
-        fputcsv($output, ['Audience Offline:', $stats['audience_offline']]);
-        fputcsv($output, ['Presenter Online:', $stats['presenter_online']]);
-        fputcsv($output, ['Presenter Offline:', $stats['presenter_offline']]);
-        fputcsv($output, []);
-        fputcsv($output, ['Total Audience:', ($stats['audience_online'] + $stats['audience_offline'])]);
-        fputcsv($output, ['Total Presenter:', ($stats['presenter_online'] + $stats['presenter_offline'])]);
-        fputcsv($output, []);
-        
-        // Write CSV header for detail data
-        fputcsv($output, ['DETAIL KEHADIRAN']);
-        fputcsv($output, [
-            'No',
-            'Nama Lengkap',
-            'Email',
-            'Role',
-            'Tipe Partisipasi',
-            'No. HP',
-            'Institusi',
-            'Waktu Absen',
-            'Status',
-            'QR Code',
-            'Jumlah Pembayaran',
-            'Ditandai Oleh',
-            'Catatan'
-        ]);
-        
-        // Write data rows
-        $no = 1;
-        foreach ($attendanceData as $row) {
-            fputcsv($output, [
-                $no++,
-                $row['nama_lengkap'] ?? '',
-                $row['email'] ?? '',
-                ucfirst($row['role'] ?? ''),
-                ucfirst($row['participation_type'] ?? 'offline'),
-                $row['no_hp'] ?? '',
-                $row['institusi'] ?? '',
-                $row['waktu_scan'] ? date('d/m/Y H:i:s', strtotime($row['waktu_scan'])) : '',
-                ucfirst($row['status'] ?? ''),
-                $row['qr_code'] ?? '',
-                $row['payment_amount'] ? 'Rp ' . number_format($row['payment_amount'], 0, ',', '.') : '',
-                $row['marked_by_admin_name'] ? 'Admin: ' . $row['marked_by_admin_name'] : 'QR Scan',
-                $row['notes'] ?? ''
-            ]);
-        }
-        
-        // Add footer
-        fputcsv($output, []);
-        fputcsv($output, ['Diekspor pada:', date('d/m/Y H:i:s')]);
-        fputcsv($output, ['Diekspor oleh:', session('nama_lengkap')]);
-        
-        fclose($output);
-        
-        // Log export activity
-        $recordCount = $no - 1;
-        $this->logActivity(
-            session('id_user'), 
-            "Exported attendance data for event: {$event['title']} ({$recordCount} records) - " .
-            "Audience Online: {$stats['audience_online']}, Audience Offline: {$stats['audience_offline']}, " .
-            "Presenter Online: {$stats['presenter_online']}, Presenter Offline: {$stats['presenter_offline']}"
-        );
-        
-        exit;
-    }
-
-    public function liveStats()
-    {
-        $eventId = $this->request->getGet('event_id');
-        
-        if (!$eventId) {
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Event ID is required'
-            ]);
-        }
-
-        try {
-            // Get real-time attendance statistics
-            $totalRegistered = $this->pembayaranModel
-                ->where('event_id', $eventId)
-                ->where('status', 'verified')
-                ->countAllResults();
-
-            $totalAttended = $this->absensiModel
-                ->where('event_id', $eventId)
-                ->where('status', 'hadir')
-                ->countAllResults();
-
-            // Get recent attendance (last 10 minutes)
-            $recentAttendance = $this->absensiModel
-                ->where('event_id', $eventId)
-                ->where('waktu_scan >=', date('Y-m-d H:i:s', strtotime('-10 minutes')))
-                ->countAllResults();
-
-            // Get attendance by scan method
-            $qrScans = $this->absensiModel
-                ->where('event_id', $eventId)
-                ->where('marked_by_admin IS NULL')
-                ->countAllResults();
-
-            $manualMarks = $this->absensiModel
-                ->where('event_id', $eventId)
-                ->where('marked_by_admin IS NOT NULL')
-                ->countAllResults();
-
-            return $this->response->setJSON([
-                'success' => true,
-                'stats' => [
-                    'total_registered' => $totalRegistered,
-                    'total_attended' => $totalAttended,
-                    'attendance_rate' => $totalRegistered > 0 ? round(($totalAttended / $totalRegistered) * 100, 2) : 0,
-                    'recent_attendance' => $recentAttendance,
-                    'qr_scans' => $qrScans,
-                    'manual_marks' => $manualMarks,
-                    'last_updated' => date('H:i:s')
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            log_message('error', 'Live stats error: ' . $e->getMessage());
-            
-            return $this->response->setJSON([
-                'success' => false,
-                'message' => 'Failed to get live statistics'
             ]);
         }
     }

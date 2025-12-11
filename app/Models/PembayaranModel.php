@@ -8,7 +8,7 @@ class PembayaranModel extends Model
     protected $primaryKey = 'id_pembayaran';
 
     protected $allowedFields = [
-        'id_user', 'event_id', 'id_registrasi', 'metode', 'jumlah', 'bukti_bayar',
+        'id_user', 'event_id', 'metode', 'jumlah', 'bukti_bayar',
         'status', 'tanggal_bayar', 'id_voucher', 'verified_by',
         'verified_at', 'keterangan', 'participation_type',
         'midtrans_order_id', 'midtrans_snap_token', 'midtrans_transaction_id',

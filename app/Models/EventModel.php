@@ -33,6 +33,8 @@ class EventModel extends Model
         'registration_active',
         'abstract_submission_active',
         'is_active',
+        'is_landing',
+
         'created_at',
         'updated_at',
     ];
@@ -61,6 +63,9 @@ class EventModel extends Model
         'abstract_revision_active'   => 'permit_empty|in_list[0,1,true,false]',
         'full_paper_deadline'          => 'permit_empty|valid_date',
         'full_paper_submission_active' => 'permit_empty|in_list[0,1,true,false]',
+
+        // ✅ optional: validasi ringan untuk is_landing
+        'is_landing'           => 'permit_empty|in_list[0,1,true,false]',
     ];
 
     protected $validationMessages   = [];
